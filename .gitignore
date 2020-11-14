@@ -1,0 +1,9 @@
+venv
+__pycache__
+tmp
+todo
+logs
+
+DATA
+old
+NOTEN

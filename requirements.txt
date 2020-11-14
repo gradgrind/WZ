@@ -1,0 +1,14 @@
+# This file collects all required third-party packages that are needed
+# to run this project. Later you can install all these apps in a row
+# using pip. Example::
+#
+#     venv/bin/pip install -r requirements.txt
+
+# But first you must set up the virtual environment. Use at least python3.7
+# and do this in the Zeugs base folder:
+#     python3 -m venv venv
+
+pikepdf
+openpyxl
+pyside2
+qtpy
