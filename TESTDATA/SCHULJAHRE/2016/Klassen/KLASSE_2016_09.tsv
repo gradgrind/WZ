@@ -1,0 +1,14 @@
+#	Schüler
++++	Schuljahr	2016
++++	Klasse	09
+
+PID	PSORT	FIRSTNAME	LASTNAME	STREAM	FIRSTNAMES	DOB_D	POB	SEX	HOME	ENTRY_D	EXIT_D	QUALI_D
+
+200701	AErger Anton	Anton	Ärger	RS	Anton David	2001-01-01	Gifhorn	m	Hannover	2007-08-01
+200703	Gruenberg von Albert	Albert	von Grünberg	Gym	Ludwig Albert	2000-12-24	Hannover	m	Lehrte	2007-08-01
+200704	Koestlich Kevin	Kevin	Köstlich	Gym	Kevin	2000-06-06	Hannover	m	Hannover	2007-08-01
+200705	Lammfeld zu Bernd	Bernd	zu Lammfeld	RS	Bernd Alexander	2001-02-27	Hannover	m	Hannover	2007-08-01
+200952	Schwips Stefan	Stefan	Schwips	RS	Stefan	2001-03-02	Worms	m	Hannover	2009-08-01
+201051	Taufrisch Tanja	Tanja	Taufrisch	RS	Tanja Susanna	2000-11-06	Bremen	w	Hannover	2010-04-01
+200702	Dornbusch Cecilia	Cecilia	Dornbusch	Gym	Cecilia	2000-10-03	Lehrte	w	Lehrte	2007-08-01
+200706	Lose Luzie	Luzie	Lose	Gym	Luzie	2000-12-07	Gifhorn	w	Langenhagen	2015-09-10

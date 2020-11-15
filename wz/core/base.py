@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2020-10-14
+Last updated:  2020-10-15
 
 Basic configuration and structural stuff.
 
@@ -60,17 +60,6 @@ builtins.DB_TABLES = {
     # If required, include the table name in this set
     '__PK__': set()
 }
-#TODO !!!!!!!!!!!!!!!!!
-# This was in the db module
-def year_path(schoolyear, fpath = None):
-    """Return a path within the data folder for a school year.
-    <fpath> is a '/' separated path relative to the year folder.
-    """
-    if fpath:
-        return os.path.join(DATA, 'SCHOOLYEARS', str(schoolyear),
-                *fpath.split('/'))
-    return os.path.join(DATA, 'SCHOOLYEARS', str(schoolyear))
-
 
 
 
@@ -224,7 +213,7 @@ class Dates:
     def get_calendar(cls, schoolyear):
         """Read the calendar file for the given school year.
         """
-        fpath = year_path(schoolyear, CONFIG.CALENDAR_FILE)
+        fpath = CONFIG.year_path(schoolyear, CONFIG.CALENDAR_FILE)
         calendar = {}
         with open(fpath, encoding = 'utf-8') as fi:
             for l in fi:

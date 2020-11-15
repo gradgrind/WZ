@@ -1,8 +1,7 @@
-### python >= 3.7
 # -*- coding: utf-8 -*-
 
 """
-tables/dictuple.py - last updated 2020-09-02
+tables/dictuple.py - last updated 2020-11-15
 
 A factory function for tuples with named fields and dict-like access to
 the individual fields using the <get> method.
@@ -45,14 +44,14 @@ def dictuple(name, fields):
         __name__ = _classname
 #        __qualname__ = _classname
         _keylist = tuple(fields)
-
+#-
         @classmethod
         def fieldnames(cls):
             return cls._keylist
-
+#-
         def get(self, item):
             return self[self._keylist.index(item)]
-
+#-
         def __new__(cls, items):
             if isinstance(items, list) or isinstance(items, tuple):
                 if len(items) != len(cls._keylist):
@@ -60,14 +59,14 @@ def dictuple(name, fields):
             else:
                 raise TypeError("Dictuple requires a list or tuple")
             return tuple.__new__(cls, items)
-
+#-
         def __repr__(self):
             """A print-representation showing field names and values.
             """
             kvlist = ["%s: %s" % (repr(k), str(v))
                     for k, v in self.items()]
             return "<%s>(%s)" % (self.__name__, ", ".join(kvlist))
-
+#-
         def items(self):
             """Return an iterator, as if the object were a <dict>.
             """
@@ -75,12 +74,31 @@ def dictuple(name, fields):
             for k in self._keylist:
                 yield(k, self[i])
                 i += 1
-
+#-
         def _dict(self):
             """Return the data as a true <dict>
             """
             return dict(self.items())
-
+#-
+        def compare(self, dt2, ignore_null = True):
+            """Compare the fields of this instance with those of <dt2>.
+            Return a list of pairs detailing the deviating fields:
+                [(field, dt2-value), ...]
+            If <ignore_null> is true, fields in <dt2> which are set to
+            <None> will not be included.
+            """
+            delta = []
+            i = -1
+            for k in self._keylist:
+                i += 1
+                if self[i] == dt2[i]:
+                    continue
+                if ignore_null and dt2[i] == None:
+                    continue
+                if self[i] or dt2[i]:
+                    delta.append((k, dt2[i] or None))
+            return delta
+#
     return type(_classname, (Dictuple,), {})
 
 

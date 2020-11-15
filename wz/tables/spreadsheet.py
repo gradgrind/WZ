@@ -1,9 +1,8 @@
-### python >= 3.7
 # -*- coding: utf-8 -*-
 """
 tables/spreadsheet.py
 
-Last updated:  2020-11-11
+Last updated:  2020-11-15
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -101,7 +100,7 @@ class TsvReader(dict):
         rows = []
         maxlen = 0
         for row_b in lines:
-            print(repr(row_b))
+#            print(repr(row_b))
             row = [cell.decode('utf-8').strip() or None
                     for cell in row_b.split(b'\t')]
             l = len(row)
