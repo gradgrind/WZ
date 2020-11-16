@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-tables/dictuple.py - last updated 2020-11-15
+tables/dictuple.py - last updated 2020-11-16
 
 A factory function for tuples with named fields and dict-like access to
 the individual fields using the <get> method.
@@ -98,6 +98,21 @@ def dictuple(name, fields):
                 if self[i] or dt2[i]:
                     delta.append((k, dt2[i] or None))
             return delta
+#-
+        def tweak(self, changes):
+            """Return a new instance with one or more fields changed.
+            <changes> is a list of pairs: [(field, new value), ...]
+            """
+            i = -1
+            delta = {key: val for key, val in changes}
+            items = []
+            for k in self._keylist:
+                i += 1
+                try:
+                    items.append(delta[k])
+                except KeyError:
+                    items.append(self[i])
+            return self.__new__(type(self), items)
 #
     return type(_classname, (Dictuple,), {})
 
@@ -127,6 +142,8 @@ if __name__ == '__main__':
     print("\nAs dict:", dt1a._dict())
     for k, v in dt1a.items():
         print (k, "-->", v)
+
+    print("CHANGED:", dt1a.tweak((("B", "NEW"),)))
 
     """
     import random

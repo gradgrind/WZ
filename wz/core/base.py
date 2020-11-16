@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2020-10-15
+Last updated:  2020-10-16
 
 Basic configuration and structural stuff.
 
@@ -31,7 +31,7 @@ _BAD_CALENDAR_LINE = "Ungültige Zeile im Kalender: {line}"
 _DOUBLE_DATE_TAG = "Mehrfacher Kalendereintrag: {tag} = ..."
 
 
-import sys, os, builtins, datetime
+import sys, os, re, builtins, datetime
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
@@ -248,6 +248,94 @@ class Dates:
                         continue
                 raise DateError(_BAD_DATE.format(line = l))
         return calendar
+
+###
+
+####### Name Sorting #######
+# In Dutch there is a word for those little lastname prefixes like "von",
+# "zu", "van" "de": "tussenvoegsel". For sorting purposes these can be a
+# bit annoying because they are often ignored, e.g. "van Gogh" would be
+# sorted under "G".
+
+def name_filter(firstnames, lastname, firstname):
+    """Given raw firstnames, lastname and short firstname.
+    Ensure that any "tussenvoegsel" is at the beginning of the lastname
+    (and not at the end of the first name) and that spaces are normalized.
+    Also generate a "sorting" name, a field which combines name components
+    to sort the entries alphabetically in a fairly consistent way,
+    considering "tussenvoegsel".
+    """
+    firstnames1, tv, lastname1 = tvSplit(firstnames, lastname)
+    firstname1 = tvSplit(firstname, 'X')[0]
+    sortname = sortingName(firstname1, tv, lastname1)
+    if tv:
+        lastname1 = tv + ' ' + lastname1
+    return (firstnames1, lastname1, firstname1, sortname)
+
+###
+
+def sortingName(firstname, tv, lastname):
+    """Given first name, "tussenvoegsel" and last name, produce an ascii
+    string which can be used for sorting the people alphabetically.
+    """
+    if tv:
+        sortname = lastname + ' ' + tv + ' ' + firstname
+    else:
+        sortname = lastname + ' ' + firstname
+    return asciify(sortname)
+
+###
+
+def tvSplit(fnames, lname):
+    """Split off a "tussenvoegsel" from the end of the first-names,
+    <fnames>, or the start of the surname, <lname>.
+    Also ensure normalized spacing between names.
+    Return a tuple: (
+            first names without tussenvoegsel,
+            tussenvoegsel or <None>,
+            lastname without tussenvoegsel
+        ).
+    """
+    fn = []
+    tv = fnames.split()
+    while tv[0][0].isupper():
+        fn.append(tv.pop(0))
+        if not len(tv):
+            break
+    if not fn:
+        raise ValueError(_BADNAME.format(name = fnames + ' / ' + lname))
+    ln = lname.split()
+    while ln[0].islower():
+        if len(ln) == 1:
+            break
+        tv.append(ln.pop(0))
+    return (' '.join(fn), ' '.join(tv) or None, ' '.join(ln))
+
+###
+
+def asciify(string):
+    """This converts a utf-8 string to ASCII, e.g. to ensure portable
+    filenames are used when creating files.
+    Also spaces are replaced by underlines.
+    Of course that means that the result might look quite different from
+    the input string!
+    A few explicit character conversions are given in the config file
+    'ASCII_SUB'.
+    """
+    # regex for characters which should be substituted:
+    _invalid_re = r'[^A-Za-z0-9_.~-]'
+    def rsub (m):
+        c = m.group (0)
+        if c == ' ':
+            return '_'
+        try:
+            return lookup [c]
+        except:
+            return '^'
+
+    lookup = CONFIG.ASCII_SUB
+    return re.sub (_invalid_re, rsub, string)
+
 
 
 

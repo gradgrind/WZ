@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2020-11-15
+Last updated:  2020-11-16
 
 General configuration items.
 ============================
@@ -59,6 +59,7 @@ def class_year(klass):
 
 
 class PupilsBase:
+    TITLE = "Schülerliste"
     FIELDS = {
         'PID'       : 'ID',
 #        'CLASS'     : 'Klasse',
@@ -91,8 +92,37 @@ class PupilsBase:
         return sorted([f.rsplit('_', 1)[-1].split('.', 1)[0]
                 for f in files])
     #
-    def read_class_path(self, klass):
+    def read_class_path(self, klass = None):
         """Return the path to the table for the class.
+        If <klass> is not given, return the directory path.
         """
-        return year_path(self.schoolyear, self.TABLE_NAME.format(
-                year = self.schoolyear, klass = klass))
+        if klass != None:
+            xpath = self.TABLE_NAME.format(
+                    year = self.schoolyear, klass = klass)
+        else:
+            xpath = os.path.dirname(self.TABLE_NAME)
+        return year_path(self.schoolyear, xpath)
+###
+
+# Ersatz-Zeichen für Dateinamen, die vom Programm erstellt werden, damit nur
+# ASCII-Zeichen verwendet werden. Andere Nicht-ASCII-Zeichen werden durch
+# '^' ersetzt.
+ASCII_SUB = {
+    'ä': 'ae',
+    'ö': 'oe',
+    'ü': 'ue',
+    'ß': 'ss',
+    'Ä': 'AE',
+    'Ö': 'OE',
+    'Ü': 'UE',
+    'ø': 'oe',
+    'ô': 'o',
+    'ó': 'o',
+    'é': 'e',
+    'è': 'e',
+    # Latin:
+    'ë': 'e',
+    # Cyrillic (sieht wie das letzte Zeichen aus, ist aber anders!):
+    'ё': 'e',
+    'ñ': 'n'
+}

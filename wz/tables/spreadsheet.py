@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2020-11-15
+Last updated:  2020-11-16
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -48,7 +48,9 @@ if __name__ == '__main__':
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
 
-from openpyxl import load_workbook
+import io
+
+from openpyxl import load_workbook, Workbook
 from openpyxl.utils import get_column_letter
 
 from tables.simple_ods_reader import OdsReader
@@ -421,13 +423,71 @@ class DBtable:
     def fieldnames(self):
         return self.header.fieldnames()
 
+###
+
+def make_db_table(title, fields, items, info = None):
+    """Build a table with title, info lines, header line and records.
+    """
+    table = NewSpreadsheet()
+    table.add_row(('#', title))
+    table.add_row(None)
+    if info:
+        for key, val in info:
+            table.add_row(('+++', key, val))
+    table.add_row(None)
+    table.add_row(fields)
+    for line in items:
+        table.add_row(line)
+    return table.save()
+#
+class NewSpreadsheet:
+    def __init__(self, sheetName = None):
+        # Create the workbook and worksheet we'll be working with
+        self._wb = Workbook()
+        self._ws = self._wb.active
+        if sheetName:
+            self._ws.title = sheetName
+        self._row = 0   # row counter, for serial row addition
+#
+    def set_cell(self, row, col, value):
+        """Set a cell value (string only), using 0-based indexing.
+        """
+        self._ws.cell(row = row + 1, column = col + 1, value = str(value))
+#
+    def add_row(self, items):
+        """Add a row with the values listed in <items>. The values will
+        all be read as strings.
+        """
+        if items:
+            col = 0
+            for item in items:
+                self.set_cell(self._row, col, item)
+                col += 1
+        self._row += 1
+#
+    def save(self, filepath = None):
+        """If <filepath> is given, the resulting table will be written
+        to a file. The ending '.xlsx' is added automatically if it is
+        not present already. Then return the full filepath.
+        Without <filepath>, a <bytes> object is returned.
+        """
+        if filepath:
+            if not filepath.endswith('.xlsx'):
+                filepath += '.xlsx'
+            self._wb.save(filepath)
+            return filepath
+        else:
+            virtual_workbook = io.BytesIO()
+            self._wb.save(virtual_workbook)
+            return virtual_workbook.getvalue()
+
+
 
 if __name__ == '__main__':
     import core.db
     from core.base import init
     init('TESTDATA')
 
-    import io
     filepath = os.path.join(DATA, 'testing', 'Test1.tsv')
     fname = os.path.basename(filepath)
     tsv = TsvReader(filepath)
