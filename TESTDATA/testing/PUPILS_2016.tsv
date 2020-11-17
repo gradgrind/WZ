@@ -1,0 +1,41 @@
+ID	Klasse	Rufname	Name	Maßstab	Vornamen	Geburtsdatum	Geburtsort	Geschlecht	Ort	Eintrittsdatum	Austrittsdatum	EintrittQ
+
+200701	09	Anton	Ärger	RS	Anton David	2001-01-01	Gifhorn	m	Hannover	2007-08-01
+200703	09	Albert	von Grünberg	Gym	Ludwig Albert	2000-12-24	Hannover	m	Lehrte	2007-08-01
+200704	09	Kevin	Köstlich	Gym	Kevin	2000-06-06	Hannover	m	Hannover	2007-08-01
+200705	09	Bernd	zu Lammfeld	RS	Bernd Alexander	2001-02-27	Hannover	m	Hannover	2007-08-01
+200952	09	Stefan	Schwips	RS	Stefan	2001-03-02	Worms	m	Hannover	2009-08-01
+201051	09	Tanja	Taufrisch	RS	Tanja Susanna	2000-11-06	Bremen	w	Hannover	2010-04-01
+200601	10	Annegret	Adelig	Gym	Annegret Amalia	1999-12-07	Hannover	w	Hannover	2006-08-01
+200602	10	Bertha	Bunte	Gym	Bertha	1999-09-26	Wunstorf	w	Hannover	2006-08-01
+200603	10	Christian	Carstensen	Gym	Christian Eric	1999-05-05	Hannover	m	Laatzen	2006-08-01
+200604	10	David	Dämmermann	Gym	David	1999-11-18	Hannover	m	Hannover	2006-08-01
+200951	10	Ole	zu den Erlen	RS	Marc Ole	1999-08-13	München	m	Burgdorf	2009-08-01
+200605	10	Martin	Minsky	RS	Edgar Martin	2000-02-27	Hannover	m	Hannover	2006-08-01
+200606	10	Nele	Nümann	RS	Nele Maria	1999-07-21	Hamburg	w	Hannover	2006-08-01
+200851	10	Penelope	Plaß	RS	Penelope Susan	1999-11-06	London	w	Hannover	2008-05-01
+200607	10	Irmgard	Unstet	Gym	Irmgard	2000-01-06	Springe	w	Hannover	2006-08-01	2016-01-31
+200501	11	Anna	Amundsen	Gym	Anna Berta Caterina	1998-12-07	Hannover	w	Hannover	2005-08-01
+200502	11	Bettina	Blumig	Gym	Bettina	1998-09-26	Wunstorf	w	Hannover	2005-08-01
+200503	11	Carsten	Christiansen	Gym	Carsten Friedrich	1998-05-05	Hannover	m	Hannover	2005-08-01
+200504	11	Daniel	Donau	Gym	Daniel Demian	1998-11-18	Hannover	m	Garbsen	2005-08-01
+200505	11	Ernst	Passau	RS	Ernst Ludwig	1999-02-27	Hannover	m	Hannover	2005-08-01
+200506	11	Ida	Rathenau	RS	Ida Maria	1998-07-21	Hamburg	w	Hannover	2005-08-01
+200953	11	Martin	Starke	RS	Martin Leon	1998-08-13	München	m	Hannover	2009-08-01
+200852	11	Susanne	Streng	RS	Susanne	1998-11-06	Köln	w	Hannover	2008-05-01
+200401	12	Rufus	Arnold	RS	Rufus	1997-12-07	Hannover	m	Hannover	2004-08-01
+201052	12	Robin	Dürre	Gym	Robin Ortwin	1997-05-05	Hannover	m	Hannover	2010-08-01		2015-09-03
+200403	12	Stefanie	Glanzlicht	RS	Stefanie	1997-11-18	Rothenburg ob der Tauber	w	Hannover	2004-08-01
+200404	12	Hermione	Harnisch	Gym	Hermione	1998-02-27	Hannover	w	Hannover	2004-08-01		2015-09-03
+200407	12	Lieselotte	Lohmeier	HS	Lieselotte	1997-07-21	Hamburg	w	Hannover	2004-08-01
+200408	12	Kevin	Mandelbrot	Gym	Kevin Friedemann	1997-08-13	Hannover	m	Hannover	2004-08-01		2015-09-03
+200853	12	Stefan	von Stelzingen	Gym	Augustus Balthasar Friedhelm Stefan	1997-11-06	Göttingen	m	Hannover	2008-05-01		2015-09-03
+200301	13	Stefan	Böllermann	Gym	Stefan	1997-04-07	Hannover	m	Hannover	2003-08-01		2014-09-11
+200302	13	Lucie	Lieblich	Gym	Lucie Marie	1997-01-16	Gehrden	w	Hannover	2003-08-01		2014-09-11
+200305	13	Martin	Musterschüler	Gym	Martin	1996-11-05	Rothenburg ob der Tauber	m	Hannover	2003-08-01		2014-09-11
+200854	13	Lara	Riemann	Gym	Lara	1997-03-18	Stuttgart	w	Hannover	2008-12-11		2014-09-11
+200307	13	Olivia	van der Veldt	Gym	Olivia Persephone	1996-08-27	Hannover	w	Hannover	2003-08-01		2014-09-11
+200651	12	Renate	Astrein	Gym	Renate Maren	1997-09-26	Peine	w	Uetze	2006-08-01		2015-09-03
+200702	09	Cecilia	Dornbusch	Gym	Cecilia	2000-10-03	Lehrte	w	Lehrte	2007-08-01
+200706	09	Luzie	Lose	Gym	Luzie	2000-12-07	Gifhorn	w	Langenhagen	2015-09-10
+200888	12	Rudolf	Rändier	RS	Rudolf Serädnös	1998-04-01	Lappland	m	Nordpol	2012-12-24

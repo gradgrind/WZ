@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2020-11-16
+Last updated:  2020-11-17
 
 General configuration items.
 ============================
@@ -20,18 +20,10 @@ SCHOOLYEAR_MONTH_1 = 8
 # Format for printed dates (as used by <datetime.datetime.strftime>):
 DATEFORMAT = '%d.%m.%Y'
 
-#TODO: Maybe rather in db? Both?
 CALENDAR_FILE = 'Kalender'
 
-# Localized field names.
-# This also determines the fields for the INFO table.
-#INFO_FIELDS = {
-#    'K'         : 'Element',
-#    'V'         : 'Wert'
-#}
-#
-#DB_TABLES['INFO'] = INFO_FIELDS
-#DB_TABLES['__INDEX__']['INFO'] = ('K',)
+USE_XLSX = False
+
 
 import os, glob
 
@@ -102,6 +94,7 @@ class PupilsBase:
         else:
             xpath = os.path.dirname(self.TABLE_NAME)
         return year_path(self.schoolyear, xpath)
+
 ###
 
 # Ersatz-Zeichen für Dateinamen, die vom Programm erstellt werden, damit nur

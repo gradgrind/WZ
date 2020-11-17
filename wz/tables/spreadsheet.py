@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2020-11-16
+Last updated:  2020-11-17
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -53,33 +53,9 @@ import io
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils import get_column_letter
 
+from local.base_config import USE_XLSX
 from tables.simple_ods_reader import OdsReader
 from tables.dictuple import dictuple
-
-
-def tsvWriter(dbtable):
-    """Write a tab-separated-value table from a list of rows,
-    each row is a list of cell values (string only, or <None>).
-    Return the table as a <bytes> object (utf-8).
-    The elements may not contain tabs or newlines. These will just be
-    stripped out.
-    """
-    def bfilter(text):
-        return (re.sub(b'\t\n\r', b'', text.encode('utf-8'))
-                if text else b'')
-
-    rowlist = []
-    # INFO lines
-    for row in dbtable.info:
-        rowlist.append(b'\t'.join([bfilter(f) for f in row]))
-    # HEADER line
-    rowlist.append(b'\t'.join([b'' if f[0] == '$' else bfilter(f)
-            for f in dbtable.fieldnames()]))
-    # DATA lines
-    for row in dbtable:
-        rowlist.append(b'\t'.join([bfilter(f) for f in row]))
-    return b'\n'.join(rowlist) + b'\n'
-
 
 
 class TsvReader(dict):
@@ -383,14 +359,14 @@ class DBtable:
             if cell:
                 return False
         return True
-
+#
     def __iter__(self):
         for row in self.rows:
             yield(row)
-
+#
     def __getitem__(self, i):
         return self.rows[i]
-
+#
     def __init__(self, table):
         self.rows = []
         self.info = []
@@ -419,7 +395,7 @@ class DBtable:
                         i += 1
                         cols.append('$%02d' % i)
                 self.header = dictuple('DBROW', cols)
-
+#
     def fieldnames(self):
         return self.header.fieldnames()
 
@@ -428,7 +404,7 @@ class DBtable:
 def make_db_table(title, fields, items, info = None):
     """Build a table with title, info lines, header line and records.
     """
-    table = NewSpreadsheet()
+    table = NewSpreadsheet() if USE_XLSX else NewTable()
     table.add_row(('#', title))
     table.add_row(None)
     if info:
@@ -439,20 +415,61 @@ def make_db_table(title, fields, items, info = None):
     for line in items:
         table.add_row(line)
     return table.save()
+
+###
+
+class NewTable:
+    """Build a tsv-table.
+    """
+    def __init__(self):
+        self._rowlist = []
 #
+    @staticmethod
+    def _filter(text):
+        return re.sub('\t\n\r', '', str(text)) if text else ''
+#
+    def add_row(self, items):
+        """Add a row with the values listed in <items>. The values will
+        all be read as strings.
+        """
+        if items:
+            self._rowlist.append('\t'.join([self._filter(item)
+                    for item in items]))
+        else:
+            self._rowlist.append('')
+#
+    def save(self, filepath = None):
+        """If <filepath> is given, the resulting table will be written
+        to a file. The ending '.tsv' is added automatically if it is
+        not present already. Then return the full filepath.
+        Without <filepath>, a <bytes> object is returned.
+        """
+        tbytes = '\n'.join(self._rowlist).encode('utf-8') + b'\n'
+        if filepath:
+            if not filepath.endswith('.tsv'):
+                filepath += '.tsv'
+            with open(filepath, 'wb') as fh:
+                fh.write(tbytes)
+            return filepath
+        else:
+            return tbytes
+
+###
+
 class NewSpreadsheet:
-    def __init__(self, sheetName = None):
+    """Build a simple xlsx table from scratch.
+    """
+    def __init__(self):
         # Create the workbook and worksheet we'll be working with
         self._wb = Workbook()
         self._ws = self._wb.active
-        if sheetName:
-            self._ws.title = sheetName
         self._row = 0   # row counter, for serial row addition
 #
     def set_cell(self, row, col, value):
         """Set a cell value (string only), using 0-based indexing.
         """
-        self._ws.cell(row = row + 1, column = col + 1, value = str(value))
+        self._ws.cell(row = row + 1, column = col + 1,
+                value = '' if value == None else str(value))
 #
     def add_row(self, items):
         """Add a row with the values listed in <items>. The values will
@@ -482,9 +499,9 @@ class NewSpreadsheet:
             return virtual_workbook.getvalue()
 
 
+#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    import core.db
     from core.base import init
     init('TESTDATA')
 
@@ -513,9 +530,6 @@ if __name__ == '__main__':
         print(" :::", row)
     print("\n*** 4th row:", dbt[3])
 #    print("\n*** 20th row:", dbt[19])
-
-    print("\nRemake tsv:")
-    print(tsvWriter(dbt).decode('utf-8'))
 
     print("\nGRADES 10:")
     ss = Spreadsheet(os.path.join(DATA, 'testing', 'Noten_2', 'Noten_10'))
