@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-11-04
+Last updated:  2020-11-17
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -80,7 +80,7 @@ class BoldLabel (QLabel):
 
 #TODO: Might one want to reset the entries?
 class KeySelect(QComboBox):
-    def __init__(self, value_mapping, changed_callback = None):
+    def __init__(self, value_mapping = None, changed_callback = None):
         """A selection widget for key-description pairs. The key is the
         actual selection item, but the description is displayed for
         human consumption.
@@ -89,22 +89,34 @@ class KeySelect(QComboBox):
         (the new key) as <changed_callback>.
         """
         super().__init__()
-        self.value_mapping = value_mapping
         self.changed_callback = changed_callback
-        self.addItems([text for _, text in value_mapping])
+        self.set_items(value_mapping)
 # If connecting after adding the items, there seems to be no signal;
 # if before, then the first item is signalled.
         self.currentIndexChanged.connect(self._new)
-        self.key = self.value_mapping[self.currentIndex()][0]
 
     def _new(self, index):
-        self.key = self.value_mapping[index][0]
-        if self.changed_callback:
-            self.changed_callback(self.key)
+        if self.value_mapping:
+            self.key = self.value_mapping[index][0]
+            if self.changed_callback:
+                self.changed_callback(self.key)
 
     def trigger(self):
         self._new(self.currentIndex())
 
+    def set_items(self, value_mapping):
+        """Set / reset the items.
+        <value_mapping> is a list: ((key, display text), ...)
+        """
+        self.value_mapping = value_mapping
+        self.clear()
+        if value_mapping:
+            self.addItems([text for _, text in value_mapping])
+            self.key = self.value_mapping[self.currentIndex()][0]
+        else:
+            self.key = None
+
+###
 
 class ZIcon(QIcon):
     def __init__(self, filename):

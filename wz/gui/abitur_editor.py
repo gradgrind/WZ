@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-11-14
+Last updated:  2020-11-17
 
 Editor for Abitur results.
 
@@ -71,13 +71,13 @@ from qtpy.QtCore import Qt
 
 from gui.grid import Grid, CellStyle, PopupDate, PopupTable
 from gui.gui_support import VLine, KeySelect, ZIcon
-from core.base import year_path#, Dates
 from grades.gradetable import GradeTable#, Grades
 #from core.courses import Subjects
 #from core.pupils import Pupils
-from local.base_config import FONT, print_schoolyear, SCHOOL_NAME
+from local.base_config import FONT, print_schoolyear, SCHOOL_NAME, year_path
 #from local.grade_template import REPORT_TYPES
-
+from local.grade_config import UNCHOSEN
+from local.abitur_config import check_subjects
 
 #TODO
 class AbiturGrid(Grid):
@@ -227,16 +227,7 @@ class AbiturGrid(Grid):
 
 #TODO: deal with changes
     def valueChanged(self, tag, text):
-        if tag == "GRADE_D":
-            # date changed
-            print("New date:", text)
-
-        elif not tag.startswith('GRADE_'):
-            raise Bug("Unexpected field change: %s (%s)" % (tag, text))
-        else:
-            # grade changed
-            subject_n = tag.split('_', 1)[1]
-            print("New grade in Subject %s: %s" % (tag, repr(text)))
+        print("SET TILE %s: %s" % (tag, text))
 
 ###########################################
 
@@ -294,13 +285,12 @@ class _GradeEdit(QDialog):
         self.group_select
 
         ### List of pupils
-# Rather use another KeySelect?:
-        self.select = QListWidget()
-        self.select.setMaximumWidth(150)
-        self.select.itemClicked.connect(self.changeSelection)
+        self.pselect = KeySelect(changed_callback = self.change_pupil)
+        self.pselect.setMaximumWidth(150)
 #        cbox.addWidget(self.yearSelect)
         cbox.addWidget(self.group_select)
-        cbox.addWidget(self.select)
+        cbox.addWidget(self.pselect)
+        cbox.addStretch(1)
         pbPdf = QPushButton('PDF')
         cbox.addWidget(pbPdf)
         pbPdf.clicked.connect(self.gradeView.toPdf)
@@ -328,7 +318,7 @@ class _GradeEdit(QDialog):
 
 
 #        self.choices = GRADE_REPORT_CATEGORY[key]
-        self.select.clear()
+        self.pselect.clear()
 
         if key == 'A':
             # Abitur, examination results
@@ -347,15 +337,21 @@ class _GradeEdit(QDialog):
 
 
     def set_table(self, fpath):
+        self.grade_table = GradeTable(fpath)
 #TODO
-        gt = GradeTable(fpath)
         print("\n*** READING: %s.%s, class %s, teacher: %s" % (
-                gt.schoolyear, gt.term or '-',
-                gt.klass, gt.tid))
-        print("~~~ ISSUE_D: %s, GRADES_D: %s" %(gt.issue_d, gt.grades_d))
-        print("~~~ Subjects:", gt.subjects)
-        for pid, grades in gt.items():
-            print("\n ::: %s (%s):" % (gt.name[pid], gt.stream[pid]), grades)
+                self.grade_table.schoolyear, self.grade_table.term or '-',
+                self.grade_table.klass, self.grade_table.tid))
+        print("~~~ ISSUE_D: %s, GRADES_D: %s" % (self.grade_table.issue_d,
+                self.grade_table.grades_d))
+        print("~~~ Subjects:", self.grade_table.subjects)
+        for pid, grades in self.grade_table.items():
+            print("\n ::: %s (%s):" % (self.grade_table.name[pid],
+                    self.grade_table.stream[pid]), grades)
+
+        self.pselect.set_items([(pid, self.grade_table.name[pid])
+                for pid, grades in self.grade_table.items()])
+
 # Perhaps divide Abi-groups according to final exam? / file-name?
 # Wouldn't name be better (perhaps with group, if there is more than one
 # group)?
@@ -378,10 +374,30 @@ class _GradeEdit(QDialog):
 #        self.classSelect.setCurrentRow (0)
 
 
-    def changeSelection(self, listItem):
-        group = listItem.text()
-        rtypes = self.choices[group]
-        print("Selected:", group, rtypes)
+    def change_pupil(self, pid):
+        print("Selected:", pid)
+        gdata = self.grade_table[pid]
+#TODO: get the subjects and grades ...
+
+        grades = [(sid, g) for sid, g in gdata.items() if g != UNCHOSEN]
+        print("GRADES:", grades)
+        cc = check_subjects(grades)
+        if cc:
+            REPORT("ERROR: %s" % cc)
+        i = 0
+        for sid, g in grades:
+            if sid.endswith('.x'):
+                g_tile_m = self.gradeView.tagmap["GRADE_%d_m" % i]
+                g_tile_m.newValue(g)
+                continue
+            i += 1
+            s_tile = self.gradeView.tagmap["SUBJECT_%d" % i]
+            g_tile = self.gradeView.tagmap["GRADE_%d" % i]
+            g_tile.newValue(g)
+            sbj = self.grade_table.subjects[sid].split('|', 1)[0].rstrip()
+            s_tile.newValue(sbj)
+# ...
+
         return
 
         klass_stream = listItem.text()
