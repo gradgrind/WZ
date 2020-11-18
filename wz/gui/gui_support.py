@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-11-17
+Last updated:  2020-11-18
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -24,14 +24,14 @@ Copyright 2019-2020 Michael Towers
 
 =-LICENCE========================================
 """
-#TODO: This needs a lot of editing ...
+#TODO: This needs a LOT of tidying up / editing ...
+# grid.py doesn't use any of this at the moment
+# abitur_editor.py currently uses VLine, KeySelect
 
 #TODO: Maybe a lock mechanism to prevent two instances of the program from
 # running?
 
 import os
-#from glob import glob
-#from collections import OrderedDict
 
 from qtpy.QtWidgets import (QApplication, QStyle,
         QHBoxLayout, QVBoxLayout,
@@ -40,11 +40,9 @@ from qtpy.QtWidgets import (QApplication, QStyle,
         QButtonGroup, QBoxLayout,
         QDialog, QCalendarWidget, QMessageBox,
         QProgressDialog,
-        QTableWidget, QTableWidgetItem)
+        QTableWidget, QTableWidgetItem, QListWidgetItem)
 from qtpy.QtGui import QIcon #, QFont
 from qtpy.QtCore import Qt, QDate, QObject, Signal, Slot
-
-#from wz_core.configuration import Dates, Paths
 
 
 # Dialog buttons
@@ -116,7 +114,8 @@ class KeySelect(QComboBox):
         else:
             self.key = None
 
-###
+### ------------------------------------------------------------- ###
+# Everything below here is not currently used ...
 
 class ZIcon(QIcon):
     def __init__(self, filename):
@@ -152,6 +151,15 @@ class RadioGroup (QBoxLayout):
             self.addWidget (b)
             self.appSwitch.addButton (b)
         self.addStretch ()
+
+
+class ListItem(QListWidgetItem):
+    def __init__ (self, text, tag=None):
+        super().__init__(text)
+        self.tag = tag
+
+    def val (self):
+        return self.text ()
 
 
 def PopupInfo (title, message):

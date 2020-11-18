@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2020-11-14
+Last updated:  2020-11-18
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -63,7 +63,7 @@ from qtpy.QtGui import (QFont, QPen, QColor, QBrush, QTransform,
         QPainter, QPdfWriter, QPageLayout)
 from qtpy.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
         QLocale
-from gui.gui_support import PopupError
+
 
 class GridError(Exception):
     pass
@@ -76,6 +76,10 @@ class Grid(QGraphicsView):
     def __init__(self):
         self._scale = 1.0
         super ().__init__()
+        # Change update mode: The default, MinimalViewportUpdate, seems
+        # to cause artefacts to be left, i.e. it updates too little.
+        #self.setViewportUpdateMode(self.SmartViewportUpdate)
+        self.setViewportUpdateMode(self.BoundingRectViewportUpdate)
         self.ldpi = self.logicalDpiX()
         if self.logicalDpiY() != self.ldpi:
             REPORT("WARNING: LOGICAL DPI different for x and y")
@@ -412,11 +416,13 @@ class Tile(QGraphicsRectItem):
         # Alignment and rotation
         self.halign, self.valign, self.rotation = style.alignment
         # Text
-        self.textItem = QGraphicsSimpleTextItem(self)
-        self.textItem.setFont(style.font)
-        if style.fontColour != None:
-            self.textItem.setBrush(style.fontColour)
-        if text != None:
+        if text == None:
+            self.textItem = None
+        else:
+            self.textItem = QGraphicsSimpleTextItem(self)
+            self.textItem.setFont(style.font)
+            if style.fontColour != None:
+                self.textItem.setBrush(style.fontColour)
             self.setText(text)
 
 
