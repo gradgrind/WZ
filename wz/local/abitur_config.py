@@ -3,7 +3,7 @@
 """
 local/abitur_config.py
 
-Last updated:  2020-11-18
+Last updated:  2020-11-19
 
 Configuration for Abitur-grade handling.
 ====================================
@@ -18,6 +18,7 @@ _X_ALONE = "Keine entsprechende schriftliche Prüfung für Fach {sid}"
 _MULTISID = "Fach {sid} doppelt vorhanden"
 _BAD_SID = "Unerwartetes Fach: {sid}"
 
+from local.grade_config import UNCHOSEN
 
 class AbiturError(Exception):
     pass
@@ -34,25 +35,30 @@ class AbiCalc:
 #
     JA = {True: 'Ja', False: 'Nein'}
 #
-    def __init__(self, grade_pairs, snames):
-        """<grade_pairs> is a list of pairs: [(sid, grade), ...].
+    def __init__(self, grade_table, pid):
+        """<grade_table> is the <GradeTable> instance, <pid> the pupil id.
+
+        a list of pairs: [(sid, grade), ...].
         <snames> is a subject-name mapping: {sid -> name}.
         The name can have a qualifier suffix ('| ...').
         """
         def get_name(sid):
-            return snames[sid].split('|', 1)[0].rstrip()
-        # List of grades, initially empty:
-        self.grade_list = [None] * 12
+            """Return subject name without possible suffix.
+            """
+            return grade_table.subjects[sid].split('|', 1)[0].rstrip()
+#-
+        self.grade_map = grade_table[pid]   # {sid -> grade}
         # Indexes for subjects and grades:
         e, g, m = 0, 3, 4
         xsids = []
         # Grade tags:
         self.sid2tag = {}
-        sid2n = {}             # stripped sid (only e and g)
+        sid2n = {}              # stripped sid (only e and g)
         self.tag2sid = {}
-        # {tag -> value}:
-        self.tags = {}
-        for sid, grade in grade_pairs:
+        self.tags = {}          # {tag -> value}
+        for sid, grade in self.grade_map.items():
+            if grade == UNCHOSEN:
+                continue
             if sid.endswith('.e'):
                 e += 1
                 self.tags['SUBJECT_%d' % e] = get_name(sid)
@@ -62,7 +68,6 @@ class AbiCalc:
                     raise AbiturError(_MULTISID.format(sid = sid0))
                 sid2n[sid0] = e
                 self.tags[gtag] = grade
-                self.grade_list[(e - 1) * 2] = grade
                 self.sid2tag[sid] = gtag
                 self.tag2sid[gtag] = sid
             elif sid.endswith('.g'):
@@ -74,7 +79,6 @@ class AbiCalc:
                     raise AbiturError(_MULTISID.format(sid = sid0))
                 sid2n[sid0] = g
                 self.tags[gtag] = grade
-                self.grade_list[(g - 1) * 2] = grade
                 self.sid2tag[sid] = gtag
                 self.tag2sid[gtag] = sid
             elif sid.endswith('.m'):
@@ -82,7 +86,6 @@ class AbiCalc:
                 self.tags['SUBJECT_%d' % m] = get_name(sid)
                 gtag = 'GRADE_%d' % m
                 self.tags[gtag] = grade
-                self.grade_list[m + 3] = grade
                 self.sid2tag[sid] = gtag
                 self.tag2sid[gtag] = sid
             elif sid.endswith('.x'):
@@ -97,7 +100,6 @@ class AbiCalc:
                 raise AbiturError(_X_ALONE.format(sid = sid)) from e
             gtag = 'GRADE_%d_m' % n
             self.tags[gtag] = grade
-            self.grade_list[n * 2 - 1] = grade
             self.sid2tag[sid] = gtag
             self.tag2sid[gtag] = sid
         # Check for correct numbers of each type
@@ -110,16 +112,27 @@ class AbiCalc:
         if len(xsids) != 4:
             raise AbiturError(_X_WRONG.format(n = xn))
 #
-    def calculate(self, grades):
-        """Given the grades, perform all the calculations necessary for
-        the grade editor AND the report form.
-        <grades> is a list of the eight subjects plus the four (potential)
-        extra exams, ordered thus:
-            [grade1, extra1, grade2, extra2, ..., grade5, grade6, ...]
+    def get_all_grades(self):
+        """Return a list of all (subject, grade) pairs, including the
+        'UNCHOSEN' ones
+        """
+        grade_list = []
+        for sid, grade in self.calc.grade_map.items():   # {sid -> grade}
+            if grade == UNCHOSEN:
+                grade_list.append(sid, UNCHOSEN)
+            else:
+                tag = self.sid2tag[sid]
+                grade_list.append(sid, self.tags[tag])
+        return grade_list
+#
+    def calculate(self):
+        """Perform all the calculations necessary for the grade editor
+        AND the report form.
+        The grades are available in the mapping <self.tags>.
         All entries are strings. They can be in the range '00' to '15',
         or '' (indicating that the grade is not yet available). The
-        extraN entries may also have the value '*', which indicates that
-        the exam is not taken.
+        supplemental oral exam grades may also have the value '*', which
+        indicates that the exam didn't / won't take place.
         Return the field values as a mapping: {field -> value (str)}.
         """
         fields = {}     # the result mapping, {field -> value (str)}
@@ -128,18 +141,15 @@ class AbiCalc:
         scaled = []     # 8 scaled averages
         scaled14 = 0    # partial total, subjects 1 – 4
         scaled58 = 0    # partial total, subjects 5 – 8
-        i = -1
         for n in range(1, 9):   # 1 – 8
-            i += 1
             try:
-                g = int(grades[i])
+                g = int(self.tags['GRADE_%d' % n])
             except:
                 g = None
             if n < 5:
-                i += 1
                 factor = 4 if n == 4 else 6
                 try:
-                    gx = int(grades[i])
+                    gx = int(self.tags['GRADE_%d_m' % n])
                     s = (g + gx) * factor
                     scaled.append(s)
                     scaled14 += s

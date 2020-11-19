@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-11-18
+Last updated:  2020-11-19
 
 Editor for Abitur results.
 
@@ -70,7 +70,6 @@ from gui.grid import Grid, CellStyle, PopupDate, PopupTable
 from gui.gui_support import VLine, KeySelect#, ZIcon
 from grades.gradetable import GradeTable
 from local.base_config import FONT, print_schoolyear, SCHOOL_NAME, year_path
-from local.grade_config import UNCHOSEN
 from local.abitur_config import AbiCalc
 
 
@@ -99,6 +98,7 @@ class AbiturGrid(Grid):
 
         self.setTable(ROWS, COLUMNS)
         ### Cell editors
+#TODO: add '*' to list for "Nachprüfungen"
         edit_grade = PopupTable(self, VALID_GRADES)
         edit_date = PopupDate(self)
 
@@ -341,25 +341,17 @@ class _GradeEdit(QDialog):
         date = self.grade_table.grades_d
 #TODO: Get individual pupil's completion date
         self.gradeView.tagmap['FERTIG_D'].setText(date)
-        gdata = self.grade_table[pid]
-#TODO: Maybe this could deliver sid/index binding?:
-        grade_pairs = [(sid, g) for sid, g in gdata.items() if g != UNCHOSEN]
-        self.calc = AbiCalc(grade_pairs, self.grade_table.subjects)
-#?
-#        self.calc = AbiCalc(self.grade_table, pid)
-
-
+        self.calc = AbiCalc(self.grade_table, pid)
         # Set subject names and grades
         for tag, val in self.calc.tags.items():
             self.gradeView.tagmap[tag].setText(val)
-        self.update_calc(self.calc.grade_list)
+        self.update_calc()
 #
-    def update_calc(self, grade_list):
-        """Update all the calculated parts of the grid from the given
-        list of grades:
-            [grade1, extra1, grade2, extra2, ..., grade5, grade6, ...]
+    def update_calc(self):
+        """Update all the calculated parts of the grid from the current
+        grades.
         """
-        for tag, val in self.calc.calculate(grade_list).items():
+        for tag, val in self.calc.calculate().items():
             try:
                 self.gradeView.tagmap[tag].setText(val)
             except:
@@ -370,35 +362,24 @@ class _GradeEdit(QDialog):
         """Called when a cell is edited.
         """
         if tag.startswith('GRADE_'):
-            # Collect all grades and recalculate
-            grade_list = []
-            for n in range(1, 9):   # 1 – 8
-                tag = 'GRADE_%d' % n
-                grade_list.append(self.gradeView.tagmap[tag].value())
-                if n < 5:
-                    tag += '_m'
-                    grade_list.append(self.gradeView.tagmap[tag].value())
-            self.update_calc(grade_list)
+            self.calc.tags[tag] = value
+            self.update_calc()
         elif tag == 'FERTIG_D':
             print("NEW DATE:", value)
         else:
             raise Bug("Unexpected cell change, %s: %s" % (tag, value))
 #
-#TODO:
-    def get_fields(self):
-        """Collect the fields which are saved (year, pid, grades and date).
+#TODO: This might need some tweaking ... unless the <GradeTable> is a
+# subclass especially for Abitur.
+    def save_changes(self):
+        """Collect the fields to be saved and pass them to the
+        <GradeTable> method.
         """
-        year = int(self.grade_table.schoolyear)
-        pid = self.pid
-        grade_list = []
-        for n in range(1, 9):   # 1 – 8
-            tag = 'GRADE_%d' % n
-            grade_list.append(self.gradeView.tagmap[tag].value())
-            if n < 5:
-                tag += '_m'
-                grade_list.append(self.gradeView.tagmap[tag].value())
-# Need to get the sids too!
+        full_grade_list = self.calc.get_all_grades()
         fertig_d = self.gradeView.tagmap['FERTIG_D'].value()
+#TODO: method <update_pupil>
+        self.grade_table.update_pupil(self.pid, full_grade_list, fertig_d)
+
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
