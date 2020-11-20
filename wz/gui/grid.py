@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2020-11-18
+Last updated:  2020-11-20
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -385,6 +385,7 @@ class Tile(QGraphicsRectItem):
     This cell can span rows and columns.
     """
     def __init__(self, grid, tag, x, y, w, h, text, style, validation):
+        self._style = style
         self._grid = grid
         self.tag = tag
         self.height0 = h
@@ -424,7 +425,10 @@ class Tile(QGraphicsRectItem):
             if style.fontColour != None:
                 self.textItem.setBrush(style.fontColour)
             self.setText(text)
-
+#
+    def mark(self, on):
+        self.textItem.setBrush(self._style.getBrush(self._style.colour_marked)
+                if on else self._style.fontColour)
 
     def margin(self):
         return 1.0 * self._grid.MM2PT

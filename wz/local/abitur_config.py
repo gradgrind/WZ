@@ -3,7 +3,7 @@
 """
 local/abitur_config.py
 
-Last updated:  2020-11-19
+Last updated:  2020-11-20
 
 Configuration for Abitur-grade handling.
 ====================================
@@ -56,6 +56,7 @@ class AbiCalc:
         sid2n = {}              # stripped sid (only e and g)
         self.tag2sid = {}
         self.tags = {}          # {tag -> value}
+        self.tags0 = {}         # original values of editable cells
         for sid, grade in self.grade_map.items():
             if grade == UNCHOSEN:
                 continue
@@ -67,7 +68,7 @@ class AbiCalc:
                 if sid0 in sid2n:
                     raise AbiturError(_MULTISID.format(sid = sid0))
                 sid2n[sid0] = e
-                self.tags[gtag] = grade
+                self.set_editable_cell(gtag, grade)
                 self.sid2tag[sid] = gtag
                 self.tag2sid[gtag] = sid
             elif sid.endswith('.g'):
@@ -78,14 +79,14 @@ class AbiCalc:
                 if sid0 in sid2n:
                     raise AbiturError(_MULTISID.format(sid = sid0))
                 sid2n[sid0] = g
-                self.tags[gtag] = grade
+                self.set_editable_cell(gtag, grade)
                 self.sid2tag[sid] = gtag
                 self.tag2sid[gtag] = sid
             elif sid.endswith('.m'):
                 m += 1
                 self.tags['SUBJECT_%d' % m] = get_name(sid)
                 gtag = 'GRADE_%d' % m
-                self.tags[gtag] = grade
+                self.set_editable_cell(gtag, grade)
                 self.sid2tag[sid] = gtag
                 self.tag2sid[gtag] = sid
             elif sid.endswith('.x'):
@@ -99,7 +100,7 @@ class AbiCalc:
             except KeyError as e:
                 raise AbiturError(_X_ALONE.format(sid = sid)) from e
             gtag = 'GRADE_%d_m' % n
-            self.tags[gtag] = grade
+            self.set_editable_cell(gtag, grade)
             self.sid2tag[sid] = gtag
             self.tag2sid[gtag] = sid
         # Check for correct numbers of each type
@@ -111,6 +112,14 @@ class AbiCalc:
             raise AbiturError(_M_WRONG.format(n = m - 4))
         if len(xsids) != 4:
             raise AbiturError(_X_WRONG.format(n = xn))
+#
+    def set_editable_cell(self, tag, value):
+        """As well as being entered in the general <self.tags> mapping,
+        editable cells are remembered in the <self.tags0> mapping,
+        to allow change tracking.
+        """
+        self.tags[tag] = value
+        self.tags0[tag] = value
 #
     def get_all_grades(self):
         """Return a list of all (subject, grade) pairs, including the

@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-11-19
+Last updated:  2020-11-20
 
 Editor for Abitur results.
 
@@ -92,9 +92,11 @@ class AbiturGrid(Grid):
         vStyle = smallStyle.copy(align = 'm')
         hStyle = smallStyle.copy(border = 0)
         gradeStyle = baseStyle.copy(highlight = ':2a6099')
+        gradeStyle.colour_marked = 'E00000'
         resultStyleL = titleStyle.copy(border = 2)
         resultStyle = titleStyle.copy(border = 2, align = 'c')
         dateStyle = resultStyle.copy(highlight = ':2a6099')
+        dateStyle.colour_marked = 'E00000'
 
         self.setTable(ROWS, COLUMNS)
         ### Cell editors
@@ -335,13 +337,15 @@ class _GradeEdit(QDialog):
         """A new pupil has been selected: reset the grid accordingly.
         """
         self.pid = pid
+        self.changes = set()    # set of changed cells
         # Set pupil's name (NAME) and completion date (FERTIG_D)
         name = self.grade_table.name[pid]
         self.gradeView.tagmap['NAME'].setText(name)
         date = self.grade_table.grades_d
 #TODO: Get individual pupil's completion date
-        self.gradeView.tagmap['FERTIG_D'].setText(date)
+
         self.calc = AbiCalc(self.grade_table, pid)
+        self.calc.set_editable_cell('FERTIG_D', date)
         # Set subject names and grades
         for tag, val in self.calc.tags.items():
             self.gradeView.tagmap[tag].setText(val)
@@ -361,13 +365,23 @@ class _GradeEdit(QDialog):
     def cell_changed(self, tag, value):
         """Called when a cell is edited.
         """
+        try:
+            old = self.calc.tags0[tag]
+        except KeyError:
+            raise Bug("Unexpected cell change, %s: %s" % (tag, value))
+        if value == old:
+            self.changes.discard(tag)
+            self.gradeView.tagmap[tag].mark(False)
+        else:
+            self.changes.add(tag)
+            self.gradeView.tagmap[tag].mark(True)
         if tag.startswith('GRADE_'):
             self.calc.tags[tag] = value
             self.update_calc()
         elif tag == 'FERTIG_D':
             print("NEW DATE:", value)
         else:
-            raise Bug("Unexpected cell change, %s: %s" % (tag, value))
+            raise Bug("Invalid cell change, %s: %s" % (tag, value))
 #
 #TODO: This might need some tweaking ... unless the <GradeTable> is a
 # subclass especially for Abitur.
@@ -376,7 +390,7 @@ class _GradeEdit(QDialog):
         <GradeTable> method.
         """
         full_grade_list = self.calc.get_all_grades()
-        fertig_d = self.gradeView.tagmap['FERTIG_D'].value()
+        fertig_d = self.calc.tags['FERTIG_D']
 #TODO: method <update_pupil>
         self.grade_table.update_pupil(self.pid, full_grade_list, fertig_d)
 
