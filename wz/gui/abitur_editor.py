@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-11-20
+Last updated:  2020-11-22
 
 Editor for Abitur results.
 
@@ -420,6 +420,6 @@ if __name__ == '__main__':
 
     ge = _GradeEdit()
 #    ge.set_table(year_path(_year, 'NOTEN/Noten_13_A.xlsx'))
-    ge.set_table(os.path.join(DATA, 'testing', 'Noten_13_A.xlsx'))
+    ge.set_table(os.path.join(DATA, 'testing', 'NOTEN', 'Noten_13_A.xlsx'))
     ge.exec_()
 

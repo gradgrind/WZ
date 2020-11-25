@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2020-11-17
+Last updated:  2020-11-25
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -55,7 +55,6 @@ from openpyxl.utils import get_column_letter
 
 from local.base_config import USE_XLSX
 from tables.simple_ods_reader import OdsReader
-from tables.dictuple import dictuple
 
 
 class TsvReader(dict):
@@ -350,6 +349,9 @@ class DBtable:
     All subsequent non-empty rows are taken as records (unless the
     first column contains '#').
     The table is iterable and indexable (returning the rows).
+    Each row is a tuple, the fields are available as the ordered mapping
+    <self.header>: {field -> index}. The method <get> allows access via
+    the field-name to that field of a particular row.
     """
     @staticmethod
     def empty(row):
@@ -378,31 +380,45 @@ class DBtable:
             if c1 == '#':
                 continue
             if self.header:
-                self.rows.append(self.header(row))
+                self.rows.append(row)
             elif c1 == '+++':
                 self.info.append(row[1:])
             elif c1:
                 # The field names
                 i = 0   # for automatic tagging of unnamed columns
-                cols = []
+                n = 0   # column indexing
+                self.header = {}
                 for f in row:
                     if f:
-                        if f in cols:
+                        if f in self.header:
                             raise TableError(_DUPLICATECOLUMNNAME.format(
                                     name = f))
-                        cols.append(f)
+                        self.header[f] = n
                     else:
                         i += 1
-                        cols.append('$%02d' % i)
-                self.header = dictuple('DBROW', cols)
+                        self.header['$%02d' % i] = n
+                    n += 1
 #
     def fieldnames(self):
-        return self.header.fieldnames()
+        """Return an ordered list of the fields.
+        """
+        return list(self.header)
+#
+    def get(self, row, field):
+        """Return the value of the given (named) field within the row.
+        """
+        return row[self.header[field]]
+#
+    def as_dict(self, row):
+        """Return the row as a <dict>.
+        """
+        return {h: row[i] for h, i in self.header.items()}
 
 ###
 
 def make_db_table(title, fields, items, info = None):
     """Build a table with title, info lines, header line and records.
+    The records are mappings {field: value}.
     """
     table = NewSpreadsheet() if USE_XLSX else NewTable()
     table.add_row(('#', title))
@@ -413,7 +429,7 @@ def make_db_table(title, fields, items, info = None):
     table.add_row(None)
     table.add_row(fields)
     for line in items:
-        table.add_row(line)
+        table.add_row([line.get(f) or '' for f in fields])
     return table.save()
 
 ###
@@ -532,7 +548,7 @@ if __name__ == '__main__':
 #    print("\n*** 20th row:", dbt[19])
 
     print("\nGRADES 10:")
-    ss = Spreadsheet(os.path.join(DATA, 'testing', 'Noten_2', 'Noten_10'))
+    ss = Spreadsheet(os.path.join(DATA, 'testing', 'NOTEN', 'Noten_2', 'Noten_10'))
     dbt = ss.dbTable()
     print("\nINFO:", dbt.info)
     print("\nFIELDS:", dbt.fieldnames())

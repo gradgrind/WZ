@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+#Deprecated?
+
 """
 tables/dictuple.py - last updated 2020-11-16
 

@@ -1,7 +1,7 @@
 #	Schülerliste
 
-+++	Schuljahr	2016
-+++	Klasse	13
++++	SCHOOLYEAR	2016
++++	CLASS	13
 
 PID	PSORT	FIRSTNAME	LASTNAME	STREAM	FIRSTNAMES	DOB_D	POB	SEX	HOME	ENTRY_D	EXIT_D	QUALI_D
 200301	Boellermann_Stefan	Stefan	Böllermann	Gym	Stefan	1997-04-07	Hannover	m	Hannover	2003-08-01		2014-09-11

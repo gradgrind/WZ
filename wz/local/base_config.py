@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2020-11-17
+Last updated:  2020-11-22
 
 General configuration items.
 ============================
@@ -53,8 +53,8 @@ def class_year(klass):
 class PupilsBase:
     TITLE = "Schülerliste"
     FIELDS = {
+        'CLASS'     : 'Klasse',         # This must be the first field!
         'PID'       : 'ID',
-#        'CLASS'     : 'Klasse',
         'PSORT'     : 'Sortiername',    # ! generated on record entry
         'FIRSTNAME' : 'Rufname',
         'LASTNAME'  : 'Name',
@@ -70,7 +70,7 @@ class PupilsBase:
     }
     #
     SCHOOLYEAR = 'Schuljahr'
-    CLASS = 'Klasse'
+#    CLASS = 'Klasse'
     #
     # The path to the class tables. This must end with '_{klass}' for
     # determining the class in method <classes>.

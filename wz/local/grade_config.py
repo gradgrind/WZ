@@ -3,11 +3,13 @@
 """
 local/grade_config.py
 
-Last updated:  2020-11-11
+Last updated:  2020-11-22
 
 Configuration for grade handling.
 ====================================
 """
+
+from core.pupils import Pupils
 
 ### Messages
 _BAD_GRADE = "ERROR: Ungültige \"Note\" im Fach {sid}: {g}"
@@ -51,13 +53,6 @@ GRADES_FIELDS = {
     'QUALI'     : 'Qualifikation',
     'COMMENT'   : 'Bemerkungen'
 }
-#
-DB_TABLES['GRADES'] = GRADES_FIELDS
-#TODO: There is a problem with the unique index – category 'S*'! There
-# can be multiple unscheduled reports ...
-DB_TABLES['__INDEX__']['GRADES'] = (('PID', 'TERM'),)
-# Add 'id' integer-primary-key, can aid updates
-DB_TABLES['__PK__'].add('GRADES')
 
 
 class GradeConfigError(Exception):
@@ -102,6 +97,13 @@ class GradeBase:
         ('A', 'Abitur', 'NOTEN/Abitur'),
         ('S*', 'Einzelzeugnisse', 'NOTEN/Einzel')
     )
+    GRADE_TABLE = 'Noten_{group}_{term}'  # grade table: file-name
+    GRADE_TABLE_TEMPLATES = { # without .xlsx (or whatever) suffix
+        '*':        'grades/Noteneingabe',      # default
+        '12.G':     'grades/Noteneingabe-SII',
+        '13':       'grades/Noteneingabe-Abitur'
+    }
+    #
     _GROUP_STREAMS = { # The classes which are divided into groups for
         # grade reports. This maps the groups to the pupils' streams.
         # { class -> { group -> (stream, ...)}}
@@ -129,11 +131,6 @@ class GradeBase:
         'A': (
             ('13', 'Abitur'),
         )
-    }
-    GRADE_TABLES = { # without .xlsx suffix
-        '*':        'grades/Noteneingabe',      # default
-        '12.G':     'grades/Noteneingabe-SII',
-        '13':       'grades/Noteneingabe-Abitur'
     }
     _NORMAL_GRADES = (
         '1+', '1', '1-',
@@ -174,10 +171,23 @@ class GradeBase:
     }
 #
     @classmethod
-    def group2klass_streams(cls, group):
+    def group2pupils(cls, group, date = None):
+        """Return a list of pupil-data items for the pupils in the group.
+        Only those groups relevant for grade reports are acceptable.
+        A date may be supplied to filter out pupils who have left.
+        """
+        klass, streams = cls._group2klass_streams(group)
+        pupils = Pupils(schoolyear)
+        return [pdata for pdata in pupils.classPupils(klass, date = date)
+                if (not streams) or (pdata['STREAM'] in streams)]
+#
+    @classmethod
+    def _group2klass_streams(cls, group):
         """Return the class and a list (tuple) of streams for the given
         pupil group. Only those groups relevant for grade reports are
         acceptable.
+        To avoid leaking implementation internals for the groups, this
+        method should only be used within this module.
         """
         try:
             klass, g = group.split('.', 1)

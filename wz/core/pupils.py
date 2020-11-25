@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2020-11-17
+core/pupils.py - last updated 2020-11-25
 
 Database access for reading pupil data.
 
@@ -35,14 +35,107 @@ _UNKNOWN_PID = "Schüler „{pid}“ ist nicht bekannt"
 
 
 import datetime, glob, zipfile
+from collections import UserList
 
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
-from tables.dictuple import dictuple
+#from tables.dictuple import dictuple
 from local.base_config import PupilsBase, USE_XLSX
 from core.base import name_filter
 
 
-PupilData = dictuple("PupilData", PupilsBase.FIELDS)
+class _PupilData(dict):
+    """The instances of this class represent the data pertaining to a
+    single pupil. All entries should be strings.
+    The instance is created (<__init__>) from a <DBtable> row, so all
+    non-empty fields are strings.
+    <field_index> is a list of (field, index) pairs. <index> is less
+    than 0 for fields which are not supplied.
+    Unsupplied fields are given the value <None>, while supplied but
+    empty fields receive the value ''. Thus the two cases can be
+    distinguished
+    """
+    def __init__(self, row, field_index, klass = None):
+        """To cater for table rows which don't contain a CLASS field,
+        the class can be supplied as an extra argument.
+        """
+        super().__init__()
+        for f, i in field_index:
+            if i < 0:
+                # Field not supplied
+                if klass and f == 'CLASS':
+                    self[f] = klass
+                else:
+                    self[f] = None
+            else:
+                self[f] = row[i] or ''
+#
+    def name(self):
+        """Return the pupil's "short" name.
+        """
+        return self['FIRSTNAME'] + ' ' + self['LASTNAME']
+#
+    def __str__(self):
+        """A visual representation of the instance.
+        """
+        items = ['{k}={v}'.format(k = f, v = v) for f, v in self.items()]
+        return '_PupilData:<%s>' % '; '.join(items)
+#
+    def compare(self, dt2, ignore_null = True):
+        """Compare the fields of this instance with those of <dt2>.
+        Return a list of pairs detailing the deviating fields:
+            [(field, dt2-value), ...]
+        If <ignore_null> is true, fields in <dt2> which are set to
+        <None> will not be included.
+        """
+        delta = []
+        for k, v in self.items():
+            vnew = dt2[k]
+            if v == vnew:
+                continue
+            if ignore_null and vnew == None:
+                continue
+            if v or vnew:
+                # Register the change. If the cell should be emptied,
+                # ensure that this is with the empty string, ''
+                delta.append((k, vnew or ''))
+        return delta
+#
+    def tweak(self, changes):
+        """Update the fields in <changes>: [(field, new value), ...].
+        """
+        self.update(changes)
+#
+    def namesort(self):
+        """Regenerate name fields, including PSORT for all changed and
+        new entries. The names are regenerated to ensure that any
+        "tussenvoegsel" (see <name_filter>) are in the LASTNAME field.
+        """
+        _ndata = name_filter(self['FIRSTNAMES'],
+                self['LASTNAME'], self['FIRSTNAME'])
+        _changes = ((
+            ('FIRSTNAMES', _ndata[0]),
+            ('LASTNAME', _ndata[1]),
+            ('FIRSTNAME', _ndata[2]),
+            ('PSORT', _ndata[3])
+        ))
+        self.tweak(_changes)
+
+###
+
+class _PupilList(list):
+    """Representation for a list of <_PupilData> instances.
+    It also maintains a mapping {pid -> <_PupilData> instance}.
+    The resulting list should be regarded as immutable!
+    """
+    def __init__(self):
+        super().__init__()
+        self._pidmap = {}
+
+    def append(self, item):
+        super().append(item)
+        self._pidmap[item['PID']] = item
+
+###
 
 class Pupils(PupilsBase):
     def __init__(self, schoolyear):
@@ -60,36 +153,23 @@ class Pupils(PupilsBase):
         type-extension can be read).
         """
         ptable = Spreadsheet(filepath).dbTable()
-        # Map local field name to internal field name, ignore case
-        rFIELDS = {t.upper(): f for f, t in self.FIELDS.items()}
-        rFIELDS[self.CLASS.upper()] = 'CLASS'
         # Get column mapping: {field -> column index}
+        # Convert the localized names to uppercase to avoid case problems.
+        # Get the columns for the localized field names
         colmap = {}
         col = -1
         for t in ptable.fieldnames():
             col += 1
-            try:
-                f = rFIELDS[t.upper()]
-            except:
-                continue
-            colmap[f] = col
-        class_col = colmap['CLASS']
+            colmap[t.upper()] = col
+        # ... then for the internal field names,
+        # the index is -1 for non-supplied fields:
+        field_index = [(f, colmap.get(t.upper(), -1))
+                for f, t in self.FIELDS.items()]
         # Collate rows into classes
         classes = {}
         for row in ptable:
-            vals = []
-            for f in self.FIELDS:
-                try:
-                    col = colmap[f]
-                except KeyError:
-                    # Field not supplied
-                    vals.append(None)
-                else:
-                    # An empty field will be '' – to distinguish
-                    # between empty fields and non-supplied fields!
-                    vals.append(row[col] or '')
-            pd = PupilData(vals)
-            klass = row[class_col]
+            pd = _PupilData(row, field_index)
+            klass = pd.get('CLASS')
             try:
                 classes[klass].append(pd)
             except:
@@ -127,17 +207,18 @@ class Pupils(PupilsBase):
                 # Compare fields: <pdata> fields which are set to <None>
                 # will not be included.
                 delta = old.compare(pdata)
-                if old._class == klass:
+                klass0 = old['CLASS']
+                if klass0 == klass:
                     if delta:
                         kchanges.append(('DELTA', old, delta))
                 else:
                     # Changed class, add entry for OLD class.
                     # <delta> is passed in here, though it may be empty
-                    changes[old._class].append(('CLASS', old, klass, delta))
+                    changes[klass0].append(('CLASS', old, klass, delta))
         # Add removed pupils to list
         for pid in pidset:
             pdata = pid2data[pid]
-            changes[pdata._class].append(('REMOVE', pdata))
+            changes[pdata['CLASS']].append(('REMOVE', pdata))
         return changes
 #
     def update_table(self, changes = None):
@@ -147,22 +228,8 @@ class Pupils(PupilsBase):
         If <changes> is not supplied, the name fields (in particular
         PSORT) are regenerated.
         """
-        def psort(_pdata):
-            """Regenerate name fields, including PSORT for all changed and new
-            entries.
-            """
-            _ndata = name_filter(_pdata.get('FIRSTNAMES'),
-                    _pdata.get('LASTNAME'), _pdata.get('FIRSTNAME'))
-            _changes = ((
-                ('FIRSTNAMES', _ndata[0]),
-                ('LASTNAME', _ndata[1]),
-                ('FIRSTNAME', _ndata[2]),
-                ('PSORT', _ndata[3])
-            ))
-            return _pdata.tweak(_changes)
-#-
         # Class changes are transformed to pairs of remove and add operations
-        cmap = {}
+        cmap = {}       # {class -> list of "change" tuples}
         if changes == None:
             for k in self.classes():
                 cmap[k] = []
@@ -175,46 +242,55 @@ class Pupils(PupilsBase):
                     cmap[klass] = kchanges
                 for d in dlist:
                     if d[0] == 'CLASS':
+                        pdata = d[1]
                         # Remove from old class
-                        kchanges.append(('REMOVE', d[1]))
-                        pdnew = d[1].tweak(d[3])
+                        kchanges.append(('REMOVE', pdata))
+                        # The pupil-data can now be modified, the
+                        # REMOVE action requires only the PID-field
+                        # (which won't be changed).
+                        pdata.tweak(d[3])
                         # Add to new class
+                        k_new = d[2]
                         try:
-                            cmap[d[2]].append(('NEW', pdnew))
+                            cmap[k_new].append(('NEW', pdata))
                         except KeyError:
-                            cmap[d[2]] = [('NEW', pdnew)]
+                            cmap[k_new] = [('NEW', pdata)]
                     else:
                         kchanges.append(d)
+
         # Run through the classes and build updated versions
         newclasses = [] # collect the new classes and their pupils
         for klass, dlist in cmap.items():
             try:
-                # If <changes> is <None>, regenerate _all_ PSORT fields:
-                pidmap = {pdata.get('PID'): (psort(pdata)
-                        if changes == None else pdata)
-                        for pdata in self.classPupils(klass)}
+                _pdlist = self.class_pupils(klass)
+                if changes == None:
+                    # Regenerate _all_ name and PSORT fields
+                    for pdata in _pdlist:
+                        pdata.namesort()
             except:
                 # A completely new class
-                pidmap = {}
+                _pdlist = _PupilList()
+            to_remove = set()
             for d in dlist:
                 pdata = d[1]
-                pid = pdata.get('PID')
                 if d[0] == 'NEW':
                     # Set sorting field
-                    pdnew = psort(pdata)
-                    pidmap[pid] = pdnew
+                    pdata.namesort()
+                    # Add to pupil list
+                    _pdlist.append(pdata)
                 elif d[0] == 'REMOVE':
-                    del(pidmap[pid])
+                    to_remove.add(pdata['PID'])
                 elif d[0] == 'DELTA':
                     # Amend and set sorting field
-                    pdnew = psort(pdata.tweak(d[2]))
-                    pidmap[pid] = pdnew
+                    pdata.tweak(d[2])
+                    pdata.namesort()
                 else:
                     raise Bug("Bad delta key: %s" % d[0])
+            pdlist = [pd for pd in _pdlist if pd['PID'] not in to_remove]
             # Resort class list
-            if pidmap:
-                newclasses.append((klass, sorted(pidmap.values(),
-                        key = lambda pdata: pdata.get('PSORT'))))
+            if pdlist:
+                pdlist.sort(key = lambda pdata: pdata.get('PSORT'))
+                newclasses.append((klass, pdlist))
 
         # Save old files as zip-archive
         files = glob.glob(self.read_class_path('*'))
@@ -236,8 +312,8 @@ class Pupils(PupilsBase):
         tables = []
         for klass, dlist in newclasses:
             info = (
-                (self.SCHOOLYEAR, self.schoolyear),
-                (self.CLASS, klass)
+                ('SCHOOLYEAR', str(self.schoolyear)),
+                ('CLASS', klass)
             )
             bstream = make_db_table(PupilsBase.TITLE, PupilsBase.FIELDS,
                     dlist, info = info)
@@ -268,63 +344,60 @@ class Pupils(PupilsBase):
         """
         self._pid2data = {}
         for k in self.classes():
-            plist = self.classPupils(k)
+            plist = self.class_pupils(k)
             self._pid2data.update(plist._pidmap)
         return self._pid2data
 #
     def pid2name(self, pid):
         """Return the short name of a pupil given the PID.
         """
-        pdata = self[pid]
-        return self.pdata2name(pdata)
+        return self[pid].name()
 #
-    @staticmethod
-    def pdata2name(pdata):
-        """Return the short name of a pupil given the database row.
-        """
-        return pdata['FIRSTNAME'] + ' ' + pdata['LASTNAME']
-#
-    def classPupils(self, klass, stream = None, date = None):
+    def class_pupils(self, klass, *streams, date = None):
         """Read the pupil data for the given school-class (possibly with
         stream).
-        Return a list of pupil-data (database rows), the pupils being
-        ordered alphabetically.
-        These pupil-data items have the class as an additional attribute,
-        <_class>.
+        Return a list of mappings {field -> value} (the table rows), the
+        pupils being ordered alphabetically.
+        The result also has the attribute <pidmap>, which maps the pid
+        to the pupil data.
         If a <date> is supplied, pupils who left the school before that
         date will not be included.
-        If <stream> is provided, only pupils in that stream are included,
-        otherwise all pupils in the class.
+        If <*streams> are provided, only pupils in one of those streams
+        are included, otherwise all pupils in the class.
         """
         try:
             ptable = self._klasses[klass]
         except KeyError:
             # Read in table for class
             fpath = self.read_class_path(klass)
-            ptable = Spreadsheet(fpath).dbTable()
-            info = {r[0]:r[1] for r in ptable.info}
-            if info.get(self.SCHOOLYEAR) != str(self.schoolyear) or \
-                    info.get(self.CLASS) != klass:
+            dbtable = Spreadsheet(fpath).dbTable()
+            info = {r[0]:r[1] for r in dbtable.info}
+            if info.get('SCHOOLYEAR') != str(self.schoolyear) or \
+                    info.get('CLASS') != klass:
                 raise TableError(_TABLE_MISMATCH.format(path = fpath))
+            ptable = _PupilList()
             self._klasses[klass] = ptable
-            # Set class attribute, add mapping {pid -> pdata}
-            pidmap = {}
-            ptable._pidmap = pidmap
-            for pdata in ptable:
-                pdata._class = klass
-                pidmap[pdata.get('PID')] = pdata
-        if date or stream:
-            rows = []
-            for row in ptable:
-                # Check exit date
+            # Build access key to table row: [(field, row index), ...]
+            field_index = []
+            for f in self.FIELDS:
+                try:
+                    i = dbtable.header[f]
+                except KeyError:
+                    # Normally all the fields should be provided,
+                    # except CLASS.
+                    i = -1
+                field_index.append((f, i))
+            # Read table rows
+            for pline in dbtable:
+                pdata = _PupilData(pline, field_index, klass)
                 if date:
-                    exd = row['EXIT_D']
+                    # Check exit date
+                    exd = pdata['EXIT_D']
                     if exd and exd < date:
                         continue
-                if stream and row['STREAM'] != stream:
+                if streams and pdata['STREAM'] not in streams:
                     continue
-                rows.append(row)
-            return rows
+                ptable.append(pdata)
         return ptable
 
 
@@ -341,12 +414,12 @@ if __name__ == '__main__':
 
     _klass = '12'
     print("\n $$$", _klass)
-    for pdata in pupils.classPupils(_klass):
+    for pdata in pupils.class_pupils(_klass):
         print("\n :::", pdata)
 
     _pid = '200502'
     _pdata = pupils[_pid]
-    print("\n PUPIL %s (class %s)" % (_pdata.get('PID'), _pdata._class))
+    print("\n PUPIL %s (class %s)" % (_pdata['PID'], _pdata['CLASS']))
     print("  ", _pdata)
 
     # Re-sort tables
@@ -378,7 +451,7 @@ if __name__ == '__main__':
 
     print("\nSTREAMS in class 12:", pupils.streams('12'))
 
-    cp = pupils.classPupils('12', stream = 'RS', date = None)
+    cp = pupils.class_pupils('12', 'RS', date = None)
     print("\nPUPILS in 12.RS:")
     for pdata in cp:
         print(" --", dict(pdata))
@@ -394,10 +467,10 @@ if __name__ == '__main__':
     print(" -->", dict(pupils["XXX"]))
     pupils.update("XXX", STREAM="RS", EXIT_D="2016-01-31")
     print("\nUPDATE (showRS):")
-    for pdata in pupils.classPupils('12', stream = 'RS', date = None):
+    for pdata in pupils.class_pupils('12', 'RS', date = None):
         print(" --", dict(pdata))
     print("\n AND ... on 2016-02-01:")
-    for pdata in pupils.classPupils('12', stream = 'RS', date = "2016-02-01"):
+    for pdata in pupils.class_pupils('12', 'RS', date = "2016-02-01"):
         print(" --", dict(pdata))
     pupils.remove("XXX")
 
