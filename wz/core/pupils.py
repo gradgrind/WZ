@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2020-11-25
+core/pupils.py - last updated 2020-11-26
 
 Database access for reading pupil data.
 
@@ -315,7 +315,7 @@ class Pupils(PupilsBase):
                 ('SCHOOLYEAR', str(self.schoolyear)),
                 ('CLASS', klass)
             )
-            bstream = make_db_table(PupilsBase.TITLE, PupilsBase.FIELDS,
+            bstream = make_db_table(self.TITLE, self.FIELDS,
                     dlist, info = info)
             fpath = self.read_class_path(klass)
             suffix = '.xlsx' if USE_XLSX else '.tsv'
@@ -358,7 +358,7 @@ class Pupils(PupilsBase):
         stream).
         Return a list of mappings {field -> value} (the table rows), the
         pupils being ordered alphabetically.
-        The result also has the attribute <pidmap>, which maps the pid
+        The result also has the attribute <_pidmap>, which maps the pid
         to the pupil data.
         If a <date> is supplied, pupils who left the school before that
         date will not be included.
@@ -455,7 +455,7 @@ if __name__ == '__main__':
     print("\nPUPILS in 12.RS:")
     for pdata in cp:
         print(" --", dict(pdata))
-    print("\nPUPIL 200888, in 12.RS:", dict(cp.pidmap['200888']))
+    print("\nPUPIL 200888, in 12.RS:", dict(cp._pidmap['200888']))
 
     try:
         pupils.remove("XXX")

@@ -1,0 +1,24 @@
+#	2020-11-26
+
++++	SCHOOLYEAR	2016
++++	CLASS	12
+
+SID	SUBJECT	TIDS	FLAGS	SGROUPS
+De	Deutsch	BW BTH		A V
+En	Englisch	BD MF		A V
+Fr	Französisch	MFN		A
+Ma	Mathematik	VP MT		C V
+Ku	Kunst			A V
+Mu	Musik	BS		A V
+Geo	Geographie	TU		B V
+Ges	Geschichte	TU		B V
+Rel	Religion	CH		B V
+Soz	Sozialkunde	TU		B V
+Bio	Biologie	KK		C V
+Ch	Chemie	KK		C V
+Sp	Sport	MS NW		D V
+Eu	Eurythmie	UM	*/	D K
+Kge	Kunstgeschichte	BW	*Ku	X K
+Mal	Malen	GM	*Ku	X K
+Sth	Steinhauen	MR	*Ku	X K
+Ja	Jahresarbeit	BW	*Ku	-

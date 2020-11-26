@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2020-11-22
+Last updated:  2020-11-26
 
 General configuration items.
 ============================
@@ -27,6 +27,7 @@ USE_XLSX = False
 
 import os, glob
 
+
 def year_path(schoolyear, fpath = None):
     """Return a path within the data folder for a school year.
     <fpath> is a '/' separated path relative to the year folder.
@@ -36,10 +37,14 @@ def year_path(schoolyear, fpath = None):
                 *fpath.split('/'))
     return os.path.join(DATA, 'SCHULJAHRE', str(schoolyear))
 
+###
+
 def print_schoolyear(schoolyear):
     """Convert a school-year (<int>) to the format used for output
     """
     return '%d – %d' % (schoolyear-1, schoolyear)
+
+###
 
 def class_year(klass):
     """Get just the year part of a class name.
@@ -49,6 +54,34 @@ def class_year(klass):
     except:
         return int(klass[0])
 
+###
+
+class SubjectsBase:
+    FIELDS = {
+        'SID'       : 'Fach-Kürzel',
+        'SUBJECT'   : 'Fach',
+        'TIDS'      : 'Lehrer-Kürzel',
+        'FLAGS'     : 'Merkmale',
+        'SGROUPS'   : 'Fachgruppe'
+    }
+#
+    CLASS = 'Klasse'    # info-line
+#
+    # The path to the class tables. This must end with '_{klass}' for
+    # determining the class.
+    TABLE_NAME = 'Fachlisten/KLASSE_{klass}'
+#
+    def read_class_path(self, klass = None):
+        """Return the path to the table for the class.
+        If <klass> is not given, return the directory path.
+        """
+        if klass != None:
+            xpath = self.TABLE_NAME.format(klass = klass)
+        else:
+            xpath = os.path.dirname(self.TABLE_NAME)
+        return year_path(self.schoolyear, xpath)
+
+###
 
 class PupilsBase:
     TITLE = "Schülerliste"
@@ -68,14 +101,13 @@ class PupilsBase:
         'EXIT_D'    : 'Schulaustritt',
         'QUALI_D'   : 'Eintritt-SekII'  # not in imported data
     }
-    #
+#
     SCHOOLYEAR = 'Schuljahr'
-#    CLASS = 'Klasse'
-    #
+#
     # The path to the class tables. This must end with '_{klass}' for
     # determining the class in method <classes>.
     TABLE_NAME = 'Klassen/KLASSE_{year}_{klass}'
-    #
+#
     def classes(self):
         """Return a sorted list of class names.
         """
@@ -83,7 +115,7 @@ class PupilsBase:
                 year = self.schoolyear, klass = '*')))
         return sorted([f.rsplit('_', 1)[-1].split('.', 1)[0]
                 for f in files])
-    #
+#
     def read_class_path(self, klass = None):
         """Return the path to the table for the class.
         If <klass> is not given, return the directory path.

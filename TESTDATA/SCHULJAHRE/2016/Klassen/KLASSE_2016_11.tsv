@@ -3,12 +3,12 @@
 +++	SCHOOLYEAR	2016
 +++	CLASS	11
 
-PID	PSORT	FIRSTNAME	LASTNAME	STREAM	FIRSTNAMES	DOB_D	POB	SEX	HOME	ENTRY_D	EXIT_D	QUALI_D
-200501	Amundsen_Anna	Anna	Amundsen	Gym	Anna Berta Caterina	1998-12-07	Hannover	w	Hannover	2005-08-01
-200502	Blumig_Bettina	Bettina	Blumig	Gym	Bettina	1998-09-26	Wunstorf	w	Hannover	2005-08-01
-200503	Christiansen_Carsten	Carsten	Christiansen	Gym	Carsten Friedrich	1998-05-05	Hannover	m	Hannover	2005-08-01
-200504	Donau_Daniel	Daniel	Donau	Gym	Daniel Demian	1998-11-18	Hannover	m	Garbsen	2005-08-01
-200505	Passau_Ernst	Ernst	Passau	RS	Ernst Ludwig	1999-02-27	Hannover	m	Hannover	2005-08-01
-200506	Rathenau_Ida	Ida	Rathenau	RS	Ida Maria	1998-07-21	Hamburg	w	Hannover	2005-08-01
-200953	Starke_Martin	Martin	Starke	RS	Martin Leon	1998-08-13	München	m	Hannover	2009-08-01
-200852	Streng_Susanne	Susanne	Streng	RS	Susanne	1998-11-06	Köln	w	Hannover	2008-05-01
+CLASS	PID	PSORT	FIRSTNAME	LASTNAME	STREAM	FIRSTNAMES	DOB_D	POB	SEX	HOME	ENTRY_D	EXIT_D	QUALI_D
+11	200501	Amundsen_Anna	Anna	Amundsen	Gym	Anna Berta Caterina	1998-12-07	Hannover	w	Hannover	2005-08-01		
+11	200502	Blumig_Bettina	Bettina	Blumig	Gym	Bettina	1998-09-26	Wunstorf	w	Hannover	2005-08-01		
+11	200503	Christiansen_Carsten	Carsten	Christiansen	Gym	Carsten Friedrich	1998-05-05	Hannover	m	Hannover	2005-08-01		
+11	200504	Donau_Daniel	Daniel	Donau	Gym	Daniel Demian	1998-11-18	Hannover	m	Garbsen	2005-08-01		
+11	200505	Passau_Ernst	Ernst	Passau	RS	Ernst Ludwig	1999-02-27	Hannover	m	Hannover	2005-08-01		
+11	200506	Rathenau_Ida	Ida	Rathenau	RS	Ida Maria	1998-07-21	Hamburg	w	Hannover	2005-08-01		
+11	200953	Starke_Martin	Martin	Starke	RS	Martin Leon	1998-08-13	München	m	Hannover	2009-08-01		
+11	200852	Streng_Susanne	Susanne	Streng	RS	Susanne	1998-11-06	Köln	w	Hannover	2008-05-01		

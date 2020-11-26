@@ -1,0 +1,27 @@
+#	2020-11-26
+
++++	SCHOOLYEAR	2016
++++	CLASS	11
+
+SID	SUBJECT	TIDS	FLAGS	SGROUPS
+De	Deutsch	BTH		V
+En	Englisch	BD MF		V
+Fr	Französisch	ESM		V
+Ma	Mathematik	VP MT		V
+Ku	Kunst			V
+Mu	Musik	BS		V
+Ges	Geschichte	TU		V
+Rel	Religion	CH BS		V
+Soz	Sozialkunde	TU		V
+Bio	Biologie	KK		V
+Ch	Chemie	KK		V
+Sp	Sport	MS NW		V
+AWT	Arbeit-Wirtschaft-Technik	ML		V
+Pd	Pädagogik	BW		-
+Eu	Eurythmie	UM	*/	K
+Bb	Buchbinden	CG	*Ku	K
+Kge	Kunstgeschichte	BW	*Ku	K
+Mal	Malen	GM	*Ku	K
+Pls	Plastizieren	MR	*Ku	K
+pSz	Sozialpraktikum	KK MT		-
+Ja	Jahresarbeit	KK MT		-

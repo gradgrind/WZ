@@ -3,12 +3,12 @@
 +++	SCHOOLYEAR	2016
 +++	CLASS	09
 
-PID	PSORT	FIRSTNAME	LASTNAME	STREAM	FIRSTNAMES	DOB_D	POB	SEX	HOME	ENTRY_D	EXIT_D	QUALI_D
-200701	AErger_Anton	Anton	Ärger	RS	Anton David	2001-01-01	Gifhorn	m	Hannover	2007-08-01
-200702	Dornbusch_Cecilia	Cecilia	Dornbusch	Gym	Cecilia	2000-10-03	Lehrte	w	Lehrte	2007-08-01
-200703	Gruenberg_von_Albert	Albert	von Grünberg	Gym	Ludwig Albert	2000-12-24	Hannover	m	Lehrte	2007-08-01
-200704	Koestlich_Kevin	Kevin	Köstlich	Gym	Kevin	2000-06-06	Hannover	m	Hannover	2007-08-01
-200705	Lammfeld_zu_Bernd	Bernd	zu Lammfeld	RS	Bernd Alexander	2001-02-27	Hannover	m	Hannover	2007-08-01
-200706	Lose_Luzie	Luzie	Lose	Gym	Luzie	2000-12-07	Gifhorn	w	Langenhagen	2015-09-10
-200952	Schwips_Stefan	Stefan	Schwips	RS	Stefan	2001-03-02	Worms	m	Hannover	2009-08-01
-201051	Taufrisch_Tanja	Tanja	Taufrisch	RS	Tanja Susanna	2000-11-06	Bremen	w	Hannover	2010-04-01
+CLASS	PID	PSORT	FIRSTNAME	LASTNAME	STREAM	FIRSTNAMES	DOB_D	POB	SEX	HOME	ENTRY_D	EXIT_D	QUALI_D
+09	200701	AErger_Anton	Anton	Ärger	RS	Anton David	2001-01-01	Gifhorn	m	Hannover	2007-08-01		
+09	200703	Gruenberg_von_Albert	Albert	von Grünberg	Gym	Ludwig Albert	2000-12-24	Hannover	m	Hannover	2007-08-01		
+09	200704	Koestlich_Kevin	Kevin	Köstlich	Gym	Kevin	2000-06-06	Hannover	m	Hannover	2007-08-01		
+09	200710	Lammfeld_zu_Bernadette	Bernadette	zu Lammfeld	Gym	Bernadette Gloria	2001-02-27	Hannover	w	Hannover	2007-08-01		
+09	200705	Lammfeld_zu_Bernd	Bernd	zu Lammfeld	RS	Bernd Alexander	2001-02-27	Hannover	m	Hannover	2007-08-01		
+09	200711	Metzger_Molly	Molly	Metzger	Gym	Molly	2000-10-03	Lehrte	w	Lehrte	2007-08-01		
+09	200952	Schwips_Stefan	Stefan	Schwips	RS	Stefan	2001-03-02	Worms	m	Hannover	2009-08-01		
+09	201051	Taufrisch_Tanja	Tanja	Taufrisch	RS	Tanja Susanna	2000-11-06	Bremen	w	Hannover	2010-04-01		

@@ -3,9 +3,9 @@
 +++	SCHOOLYEAR	2016
 +++	CLASS	13
 
-PID	PSORT	FIRSTNAME	LASTNAME	STREAM	FIRSTNAMES	DOB_D	POB	SEX	HOME	ENTRY_D	EXIT_D	QUALI_D
-200301	Boellermann_Stefan	Stefan	Böllermann	Gym	Stefan	1997-04-07	Hannover	m	Hannover	2003-08-01		2014-09-11
-200302	Lieblich_Lucie	Lucie	Lieblich	Gym	Lucie Marie	1997-01-16	Gehrden	w	Hannover	2003-08-01		2014-09-11
-200305	Musterschueler_Martin	Martin	Musterschüler	Gym	Martin	1996-11-05	Rothenburg ob der Tauber	m	Hannover	2003-08-01		2014-09-11
-200854	Riemann_Lara	Lara	Riemann	Gym	Lara	1997-03-18	Stuttgart	w	Hannover	2008-12-11		2014-09-11
-200307	Veldt_van_der_Olivia	Olivia	van der Veldt	Gym	Olivia Persephone	1996-08-27	Hannover	w	Hannover	2003-08-01		2014-09-11
+CLASS	PID	PSORT	FIRSTNAME	LASTNAME	STREAM	FIRSTNAMES	DOB_D	POB	SEX	HOME	ENTRY_D	EXIT_D	QUALI_D
+13	200301	Boellermann_Stefan	Stefan	Böllermann	Gym	Stefan	1997-04-07	Hannover	m	Hannover	2003-08-01		2014-09-11
+13	200302	Lieblich_Lucie	Lucie	Lieblich	Gym	Lucie Marie	1997-01-16	Gehrden	w	Hannover	2003-08-01		2014-09-11
+13	200305	Musterschueler_Martin	Martin	Musterschüler	Gym	Martin	1996-11-05	Hannover	m	Hannover	2003-08-01		2014-09-11
+13	200854	Riemann_Lara	Lara	Riemann	Gym	Lara	1997-03-18	Stuttgart	w	Hannover	2008-12-11		2014-09-11
+13	200307	Veldt_van_der_Olivia	Olivia	van der Veldt	Gym	Olivia Persephone	1996-08-27	Hannover	w	Hannover	2003-08-01		2014-09-11

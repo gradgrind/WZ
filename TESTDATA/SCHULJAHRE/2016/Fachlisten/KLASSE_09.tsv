@@ -1,0 +1,25 @@
+#	2020-11-26
+
++++	SCHOOLYEAR	2016
++++	CLASS	09
+
+SID	SUBJECT	TIDS	FLAGS	SGROUPS
+De	Deutsch	TU		V
+En	Englisch	UO		V
+Fr	Französisch	AFM		V
+Ma	Mathematik	AK		V
+Ku	Kunst			V
+Mu	Musik	BS		V
+Ges	Geschichte	TU		V
+Rel	Religion	CH RW		V
+Soz	Sozialkunde	TU		V
+Bio	Biologie	KK		V
+Ch	Chemie	KK		V
+Sp	Sport	MS NW		V
+Eu	Eurythmie	RW	*/	K
+Kge	Kunstgeschichte	TU	*Ku	K
+Pls	Plastizieren	MR	*Ku	K
+Snd	Schneidern	ML	*Ku	K
+Tln	Tischlern	SN	*Ku	K
+TZ	Technisches Zeichnen	SN	*Ku	K
+pLw	Landwirtschaftspraktikum	JW		-

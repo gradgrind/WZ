@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-11-22
+Last updated:  2020-11-25
 
 Editor for Abitur results.
 
@@ -68,7 +68,7 @@ from qtpy.QtWidgets import QApplication, QDialog, \
 
 from gui.grid import Grid, CellStyle, PopupDate, PopupTable
 from gui.gui_support import VLine, KeySelect#, ZIcon
-from grades.gradetable import GradeTable
+from grades.gradetable import read_grade_table
 from local.base_config import FONT, print_schoolyear, SCHOOL_NAME, year_path
 from local.abitur_config import AbiCalc
 
@@ -313,7 +313,7 @@ class _GradeEdit(QDialog):
         """Set the grade table to be used.
         <fpath> is the full path to the table file (see <GradeTable>).
         """
-        self.grade_table = GradeTable(fpath)
+        self.grade_table = read_grade_table(fpath)
         self.gradeView.tagmap['SCHOOLYEAR'].setText(
                 print_schoolyear(int(self.grade_table.schoolyear)))
         self.pselect.set_items([(pid, self.grade_table.name[pid])

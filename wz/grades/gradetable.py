@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2020-11-22
+grades/gradetable.py - last updated 2020-11-25
 
 Access grade data, read and build grade tables.
 
@@ -62,7 +62,7 @@ from fractions import Fraction
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 from core.base import str2list, Dates
 #from core.pupils import Pupils
-from core.courses import Subjects
+#from core.courses import Subjects
 from tables.spreadsheet import Spreadsheet, TableError
 from tables.matrix import KlassMatrix
 from local.base_config import DECIMAL_SEP
@@ -278,6 +278,7 @@ class Frac(Fraction):
 
 ###
 
+#LATEST
 def read_grade_table(filepath):
     """Read the header info and pupils' grades from the given table file.
     The "spreadsheet" module is used as backend so .ods, .xlsx and .tsv
@@ -286,13 +287,13 @@ def read_grade_table(filepath):
     <Spreadsheet> also supports in-memory binary streams (io.BytesIO)
     with attribute 'filename' (so that the type-extension can be read).
     The <info> mapping of the table should contain the keys:
-        'SCHOOLYEAR', 'CLASS', 'TERM', 'ISSUE_D', 'GRADES_D'
+        'SCHOOLYEAR', 'GROUP', 'TERM', 'ISSUE_D', 'GRADES_D'
     """
     _self = GradeTable()
     ss = Spreadsheet(filepath)
     dbt = ss.dbTable()
     info = {row[0]: row[1] for row in dbt.info if row[0]}
-    _self.klass = info.get(_CLASS)
+    _self.group = info.get(_GROUP)
     _self.term = GradeBase.text2category(info.get(_TERM))
     _self.schoolyear = info.get(_SCHOOLYEAR)
     _self.issue_d = info.get(_ISSUE_D)
@@ -569,8 +570,7 @@ class GradeTable(dict):
 
 ###
 
-def makeBasicGradeTable(schoolyear, term, group,
-        empty = False, force_open = False):
+def makeBasicGradeTable(schoolyear, term, group, empty = False):
     """Build a basic pupil/subject table containing the existing grades
     (initially empty).
     <term> is a string representing a valid "term".
@@ -578,8 +578,6 @@ def makeBasicGradeTable(schoolyear, term, group,
     <GradeBase._REPORT_GROUPS>.
     If <empty> is true, the table will be empty even if there are
     existing grades.
-    <force_open> is only for testing purposes, it causes old data sets
-    to be treated as current (still "open").
     """
     # Get data set.
 #    termGrade = TermGrade(schoolyear, term, group, force_open = force_open)
@@ -607,7 +605,7 @@ def makeBasicGradeTable(schoolyear, term, group,
     # Translate and enter general info
     info = (
         (_SCHOOLYEAR,    str(schoolyear)),
-        (_CLASS,         termGrade.klass),
+        (_GROUP,         group,
         (_TERM,          GradeBase.category2text(term)),
         (_GRADES_D,      termGrade.grades_info['GRADES_D']),
         (_ISSUE_D,       termGrade.grades_info['ISSUE_D'])
