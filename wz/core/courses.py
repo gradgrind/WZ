@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2020-11-26
+core/courses.py - last updated 2020-11-28
 
 Handle course data.
 
@@ -142,8 +142,8 @@ class Subjects(SubjectsBase):
             table.append(sdata)
         return table
 #
-    def grade_subjects(self, klass):
-        """Return a list of <GradeSubject> named-tuples for the given class.
+    def grade_subjects(self, group):
+        """Return a list of <GradeSubject> named-tuples for the given group.
         Only subjects relevant for grade reports are included, i.e. those
         with non-empty report_groups (see below). That does not mean
         they will all be included in the report – that depends on the
@@ -160,7 +160,7 @@ class Subjects(SubjectsBase):
             name: the full name of the subject.
         "Composite" grades are marked in the database by having no tids.
         Grade "components" are marked by having an entry starting with '*'
-        in thier FLAGS field. The first element of this field (after
+        in their FLAGS field. The first element of this field (after
         stripping the '*') is the composite subject tag.
         *** Weighting of components ***
          Add to composite in FLAGS field: *Ku:2  for weight 2.
@@ -168,7 +168,7 @@ class Subjects(SubjectsBase):
         """
         composites = {}
         subjects = []
-        for sdata in self.class_subjects(klass):
+        for sdata in self.group_subjects(group):    # see <SubjectsBase>
             sid = sdata.SID
             _rgroups = sdata.SGROUPS
             if (not _rgroups) or _rgroups == NOT_GRADED:
@@ -274,5 +274,5 @@ if __name__ == '__main__':
             print("  -->", _subjects.save_table(table))
 
     print("\n**** Subject data for class 11: grading ****")
-    for sdata in _subjects.grade_subjects('11'):
+    for sdata in _subjects.grade_subjects('11.G'):
         print("  ++", sdata)

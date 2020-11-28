@@ -3,13 +3,11 @@
 """
 local/grade_config.py
 
-Last updated:  2020-11-22
+Last updated:  2020-11-28
 
 Configuration for grade handling.
 ====================================
 """
-
-from core.pupils import Pupils
 
 ### Messages
 _BAD_GRADE = "ERROR: Ungültige \"Note\" im Fach {sid}: {g}"
@@ -85,7 +83,7 @@ def all_streams(klass):
 
 
 ### Grade handling
-class GradeBase:
+class GradeBase(dict):
     """The base class for grade handling. It provides information
     specific to the locality. A subclass handles the set of
     grades for a particular report for a pupil in a more general way.
@@ -171,17 +169,6 @@ class GradeBase:
     }
 #
     @classmethod
-    def group2pupils(cls, group, date = None):
-        """Return a list of pupil-data items for the pupils in the group.
-        Only those groups relevant for grade reports are acceptable.
-        A date may be supplied to filter out pupils who have left.
-        """
-        klass, streams = cls._group2klass_streams(group)
-        pupils = Pupils(schoolyear)
-        return [pdata for pdata in pupils.classPupils(klass, date = date)
-                if (not streams) or (pdata['STREAM'] in streams)]
-#
-    @classmethod
     def _group2klass_streams(cls, group):
         """Return the class and a list (tuple) of streams for the given
         pupil group. Only those groups relevant for grade reports are
@@ -227,10 +214,12 @@ class GradeBase:
         except KeyError:
             return klass
 #
-    def __init__(self, grade_row):
-        klass, stream = grade_row['CLASS'], grade_row['STREAM']
+    def __init__(self, group, stream):
+        super().__init__()
         self.i_grade = {}
-        if klass >= '12' and stream == 'Gym':
+        self.stream = stream
+        self.klass = self._group2klass_streams(group)[0]
+        if self.klass >= '12' and stream == 'Gym':
             self.valid_grades = self._ABITUR_GRADES
             self.isAbitur = True
         else:

@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2020-11-26
+Last updated:  2020-11-27
 
 General configuration items.
 ============================
@@ -26,6 +26,8 @@ USE_XLSX = False
 
 
 import os, glob
+
+from local.grade_config import GradeBase
 
 
 def year_path(schoolyear, fpath = None):
@@ -80,6 +82,13 @@ class SubjectsBase:
         else:
             xpath = os.path.dirname(self.TABLE_NAME)
         return year_path(self.schoolyear, xpath)
+#
+    def group_subjects(self, group):
+        klass, streams = GradeBase._group2klass_streams(group)
+#TODO: filter on group? E.g. -G in FLAGS for "not in group G"?
+# Would probably only apply to grade reports? (Because G/R are only
+# used there?)
+        return self.class_subjects(klass)
 
 ###
 
@@ -126,6 +135,14 @@ class PupilsBase:
         else:
             xpath = os.path.dirname(self.TABLE_NAME)
         return year_path(self.schoolyear, xpath)
+#
+    def group2pupils(self, group, date = None):
+        """Return a list of pupil-data items for the pupils in the group.
+        Only those groups relevant for grade reports are acceptable.
+        A date may be supplied to filter out pupils who have left.
+        """
+        klass, streams = GradeBase._group2klass_streams(group)
+        return self.class_pupils(klass, *streams, date = date)
 
 ###
 
