@@ -96,6 +96,65 @@ class GradeBase(dict):
         ('S*', 'Einzelzeugnisse', 'NOTEN/Einzel')
     )
     GRADE_TABLE = 'Noten_{group}_{term}'  # grade table: file-name
+
+###########################
+# bring all group info together?
+# Zwischenzeugnisse here also under 'Zeugnis'?
+    GROUPS = {
+        '13':  {
+            '*': {
+                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe-Abitur',
+                'SCHEDULED_REPORTS': (('1', 'Zeugnis'), ('A', 'Abitur')),
+                'GRADE_FIELDS_X': ('REPORT_TYPE', 'QUALI', 'FERTIG_D'),
+                'X_REPORT_TYPES': ('Abgang',),
+            }
+        },
+        '12': {
+            'G': {
+                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe-SII',
+                'GROUP_STREAMS': ('Gym',),
+                'SCHEDULED_REPORTS': (('1', 'Zeugnis'), ('2', 'Zeugnis')),
+                'GRADE_FIELDS_X': ('REPORT_TYPE', 'QUALI'),
+                'X_REPORT_TYPES': ('Abgang',),
+            },
+            'R': {
+                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe',
+                'GROUP_STREAMS': ('RS', 'HS'),
+                'SCHEDULED_REPORTS': (('1', 'Zeugnis'), ('2', 'Abschluss')),
+                'GRADE_FIELDS_X': ('REPORT_TYPE', 'QUALI'),
+                'X_REPORT_TYPES': ('Abgang', 'Zeugnis'),
+            }
+        },
+        '11': {
+            'G': {
+                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe',
+                'GROUP_STREAMS': ('Gym',),
+                'SCHEDULED_REPORTS': (('1', 'Orientierung'), ('2', 'Zeugnis')),
+                'GRADE_FIELDS_X': ('REPORT_TYPE', 'QUALI'),
+                'X_REPORT_TYPES': ('Abgang', 'Zeugnis'),
+            },
+            'R': {
+                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe',
+                'GROUP_STREAMS': ('RS', 'HS'),
+                'SCHEDULED_REPORTS': (('1', 'Orientierung'), ('2', 'Zeugnis')),
+                'GRADE_FIELDS_X': ('REPORT_TYPE', 'QUALI'),
+                'X_REPORT_TYPES': ('Abgang', 'Zeugnis'),
+            }
+         },
+       '10': {
+            '*': {
+                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe',
+                'SCHEDULED_REPORTS': (('2', 'Orientierung'),),
+                'X_REPORT_TYPES': ('Abgang', 'Zeugnis'),
+            },
+        },
+        '*' : {
+            'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe',
+            'X_REPORT_TYPES': ('Abgang', 'Zeugnis'),
+        }
+    }
+###########################
+
     GRADE_TABLE_TEMPLATES = { # without .xlsx (or whatever) suffix
         '*':        'grades/Noteneingabe',      # default
         '12.G':     'grades/Noteneingabe-SII',
@@ -167,6 +226,23 @@ class GradeBase(dict):
 #            'ne': "nicht erteilt",
         'nb': "kann nicht beurteilt werden",
     }
+#
+    @classmethod
+    def group_term_info(cls, group, term, tag):
+        try:
+            k, g = group.split('.')
+        except ValueError:
+            k, g = group, '*'
+        try:
+            groups = cls.GROUPS[k]
+        except KeyError:
+            items = cls.GROUPS['*']
+        else:
+            try:
+                items = groups[g]
+            except KeyError as e:
+                raise GradeConfigError(_BAD_GROUP.format(group = group)) from e
+        return items.get(tag)
 #
     @classmethod
     def _group2klass_streams(cls, group):

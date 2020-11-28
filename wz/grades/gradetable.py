@@ -62,9 +62,9 @@ from fractions import Fraction
 from core.base import str2list, Dates
 from core.pupils import Pupils
 from core.courses import Subjects
-from tables.spreadsheet import Spreadsheet, TableError
+from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from tables.matrix import KlassMatrix
-from local.base_config import DECIMAL_SEP
+from local.base_config import DECIMAL_SEP, USE_XLSX, year_path
 from local.grade_config import GradeBase, UNCHOSEN, NO_GRADE
 
 """TODO:
@@ -421,7 +421,11 @@ class GradeTable(dict):
         grades = {}
         for sid in self.subjects:
             grades[sid] = gmap.get(sid) or ''
-#TODO: conditionally include composites, qualifications, report-type, etc.?
+        for comp in self.composites:
+            grades[comp] = gmap.get(comp) or ''
+        for f in GradeBase.group_term_info(self.group, self.term,
+                'GRADE_FIELDS_X'):
+            grades[f] = gmap.get(f) or ''
         return grades
 #
     def _read_grade_table(self, filepath):
@@ -467,11 +471,9 @@ class GradeTable(dict):
     def table_path(group, term):
         """Get file path for the grade table.
         """
-        grade_dir = GradeBase.grade_path(term)
-        return os.path.join(grade_dir,
-                GradeBase.GRADE_TABLE.format(term = term, group = group))
-
-
+        return GradeBase.grade_path(term) + '/' + \
+                GradeBase.GRADE_TABLE.format(term = term, group = group)
+#
     @classmethod
     def group_table(cls, schoolyear, group, term, ok_new = False, pids = None):
         """If <ok_new> is true, a new table may be created, otherwise
@@ -481,7 +483,8 @@ class GradeTable(dict):
         relevant when creating a new table.
         """
         # Get file path
-        table_path = cls.table_path(group, term)
+        # Get file path and write file
+        table_path = year_path(schoolyear, cls.table_path(group, term))
         try:
             # Read the "internal" table for this group/term
             _self = cls(schoolyear)
@@ -516,13 +519,8 @@ class GradeTable(dict):
                     gmap = {sid: row[col] for sid, col in sid2col}
                     _self.name[pid] = row[1]
                     # stream = row[2]
-                    _self[pid] = Grades(self.group, row[2],
+                    _self[pid] = Grades(_self.group, row[2],
                             _self._include_grades(gmap))
-
-#TODO: composites, qualifications, report-type, ...
-
-
-
             return _self
         except TableError:
             # File doesn't exist
@@ -652,23 +650,32 @@ class GradeTable(dict):
             ('GRADES_D',      self.grades_d),
             ('ISSUE_D',       self.issue_d)
         )
-#?
-#TODO
-        fields = ['PID', 'PUPIL', 'STREAM', "????", subjects,  '...']
-# add composites, qualifications and report-type
-        # first line after headers:
-        # $, POINT-SCALE, '', "????", subject names ...
-
-
+        fields = ['PID', 'PUPIL', 'STREAM']
+        for sid in self.subjects:
+            fields.append(sid)
+        for comp in self.composites:
+            fields.append(comp)
+        for f in GradeBase.group_term_info(self.group, self.term,
+                'GRADE_FIELDS_X'):
+            fields.append(f)
+        # Get line data
+        dlist = []
+        for pid, grades in self.items():
+            dmap = {'PID': pid, 'PUPIL': self.name[pid],
+                    'STREAM': grades.stream}
+            dmap.update(grades)
+            dlist.append(dmap)
         # "Title"
         dt = datetime.datetime.now().isoformat(sep=' ', timespec='minutes')
         bstream = make_db_table(dt,         # "title"
-                fields,
-#?
-                dlist, info = info)
+                fields, dlist, info = info)
         suffix = '.xlsx' if USE_XLSX else '.tsv'
         # Get file path and write file
-        table_path = cls.table_path(self.group, self.term)
+        table_path = year_path(self.schoolyear,
+                self.table_path(self.group, self.term))
+        print(" --->", os.getcwd(), table_path)
+        tpdir = os.path.dirname(table_path)
+        os.makedirs(tpdir, exist_ok = True)
         with open(table_path + suffix, 'wb') as fh:
             fh.write(bstream)
 
@@ -860,6 +867,9 @@ if __name__ == '__main__':
         with open(os.path.join(DATA, 'testing', 'tmp',
                 'Noten_%s.xlsx' % _group), 'wb') as fh:
             fh.write(xlsx_bytes)
+
+    if True:
+        _gtable.save()
 
     quit(0)
 
