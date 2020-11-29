@@ -91,7 +91,7 @@ class Subjects(SubjectsBase):
             fpath = self.read_class_path(klass)
             dbtable = Spreadsheet(fpath).dbTable()
             info = {r[0]:r[1] for r in dbtable.info}
-            if info.get('SCHOOLYEAR') != str(self.schoolyear) or \
+            if info.get('SCHOOLYEAR') != self.schoolyear or \
                     info.get('CLASS') != klass:
                 raise TableError(_TABLE_MISMATCH.format(path = fpath))
             table = _SubjectList(klass)
@@ -237,7 +237,7 @@ class Subjects(SubjectsBase):
         """Save the given table to the subject folder.
         """
         info = (
-            ('SCHOOLYEAR', str(self.schoolyear)),
+            ('SCHOOLYEAR', self.schoolyear),
             ('CLASS', table.klass)
         )
         # <make_db_table> requires a list of <dict>s, not tuples
@@ -254,7 +254,7 @@ class Subjects(SubjectsBase):
 
 
 if __name__ == '__main__':
-    _year = 2016
+    _year = '2016'
     from core.base import init
     init('TESTDATA')
 

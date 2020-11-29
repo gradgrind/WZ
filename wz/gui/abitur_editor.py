@@ -68,7 +68,7 @@ from qtpy.QtWidgets import QApplication, QDialog, \
 
 from gui.grid import Grid, CellStyle, PopupDate, PopupTable
 from gui.gui_support import VLine, KeySelect#, ZIcon
-from grades.gradetable import read_grade_table
+from grades.gradetable import GradeTable
 from local.base_config import FONT, print_schoolyear, SCHOOL_NAME, year_path
 from local.abitur_config import AbiCalc
 
@@ -309,13 +309,17 @@ class _GradeEdit(QDialog):
 ## This doesn't initially select any entry
 
 
-    def set_table(self, fpath):
+#    def set_table(self, fpath):
+#        read_grade_table(fpath)
+
+    def set_table(self, schoolyear, group, term):
         """Set the grade table to be used.
         <fpath> is the full path to the table file (see <GradeTable>).
         """
-        self.grade_table = read_grade_table(fpath)
+        self.grade_table = GradeTable.group_table(schoolyear, group, term,
+                ok_new = True)
         self.gradeView.tagmap['SCHOOLYEAR'].setText(
-                print_schoolyear(int(self.grade_table.schoolyear)))
+                print_schoolyear(self.grade_table.schoolyear))
         self.pselect.set_items([(pid, self.grade_table.name[pid])
                 for pid, grades in self.grade_table.items()])
 
@@ -401,7 +405,7 @@ if __name__ == '__main__':
     from core.base import init
     init('TESTDATA')
 
-    _year = 2016
+    _year = '2016'
 
     import sys
     from qtpy.QtWidgets import QApplication, QStyleFactory
@@ -420,6 +424,7 @@ if __name__ == '__main__':
 
     ge = _GradeEdit()
 #    ge.set_table(year_path(_year, 'NOTEN/Noten_13_A.xlsx'))
-    ge.set_table(os.path.join(DATA, 'testing', 'NOTEN', 'Noten_13_A.xlsx'))
+#    ge.set_table(os.path.join(DATA, 'testing', 'NOTEN', 'Noten_13_A.xlsx'))
+    ge.set_table(_year, '13', 'A')
     ge.exec_()
 

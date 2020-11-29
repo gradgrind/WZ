@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2020-11-26
+core/pupils.py - last updated 2020-11-29
 
 Database access for reading pupil data.
 
@@ -312,7 +312,7 @@ class Pupils(PupilsBase):
         tables = []
         for klass, dlist in newclasses:
             info = (
-                ('SCHOOLYEAR', str(self.schoolyear)),
+                ('SCHOOLYEAR', self.schoolyear),
                 ('CLASS', klass)
             )
             bstream = make_db_table(self.TITLE, self.FIELDS,
@@ -372,7 +372,7 @@ class Pupils(PupilsBase):
             fpath = self.read_class_path(klass)
             dbtable = Spreadsheet(fpath).dbTable()
             info = {r[0]:r[1] for r in dbtable.info}
-            if info.get('SCHOOLYEAR') != str(self.schoolyear) or \
+            if info.get('SCHOOLYEAR') != self.schoolyear or \
                     info.get('CLASS') != klass:
                 raise TableError(_TABLE_MISMATCH.format(path = fpath))
             ptable = _PupilList()
@@ -407,7 +407,7 @@ if __name__ == '__main__':
     from core.base import init
     init('TESTDATA')
 
-    _year = 2016
+    _year = '2016'
     pupils = Pupils(_year)
 
     print("\nCLASSES:", pupils.classes())

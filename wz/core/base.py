@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2020-10-16
+Last updated:  2020-11-29
 
 Basic configuration and structural stuff.
 
@@ -30,6 +30,7 @@ _INVALID_SCHOOLYEAR = "Ungültiges Schuljahr: {year}"
 _BAD_CALENDAR_LINE = "Ungültige Zeile im Kalender: {line}"
 _DOUBLE_DATE_TAG = "Mehrfacher Kalendereintrag: {tag} = ..."
 
+_CALENDAR = 'Kalender'  # Calendar file (in year folder)
 
 import sys, os, re, builtins, datetime
 if __name__ == '__main__':
@@ -41,30 +42,9 @@ class Bug(Exception):
     pass
 builtins.Bug = Bug
 
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#TODO
-#from core.db import year_path # core.db is also needed for initialisation
-
-#TODO !!!!!!!!!!!!!!!!!
-# This was in the db module
-# To collect the field names of the various tables:
-#    {table-name -> {internal-field-name -> external-field-name}}
-builtins.DB_TABLES = {
-    # A special entry for indexes:
-    #    {table-name -> <index> parameter to DB.makeTable()}
-    '__INDEX__': {},
-    # A special entry for unique field groups:
-    #    {table-name -> <unique> parameter to DB.makeTable()}
-    '__UNIQUE__': {},
-    # A special entry to include the field 'id', the integer primary key
-    # If required, include the table name in this set
-    '__PK__': set()
-}
-
-
-
-# First month of school year (Jan -> 1, Dec -> 12):
 import local.base_config as CONFIG
+
+#
 
 def init(datadir = 'DATA'):
     appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -80,25 +60,7 @@ def report(text):
     print(text)
 builtins.REPORT = report
 
-#    set_schoolyear()
-
-
-#def set_schoolyear(schoolyear = None):
-#    allyears = Dates.get_years()
-#    if schoolyear:
-#        if schoolyear not in allyears:
-#            raise ValueError(_INVALID_SCHOOLYEAR.format(year=schoolyear))
-#    else:
-#        schoolyear = Dates.get_schoolyear()
-#        if schoolyear not in allyears:
-#            # Choose the latest school year, if there is one
-#            try:
-#                schoolyear = allyears[0]
-#            except:
-#                pass
-#    builtins.DATABASE = DB(schoolyear)
-#    builtins.SCHOOLYEAR = schoolyear
-
+#
 
 def read_float(string):
     # Allow spaces (e.g. as thousands separator)
@@ -106,6 +68,7 @@ def read_float(string):
     # Allow ',' as decimal separator
     return float(inum.replace (',', '.'))
 
+#
 
 def str2list(string, sep = ','):
     """Convert a string with separator character to a list.
@@ -158,8 +121,8 @@ class Dates:
 
     @staticmethod
     def day1(schoolyear):
-        return '%d-%02d-01' % (schoolyear if CONFIG.SCHOOLYEAR_MONTH_1 == 1
-                else schoolyear - 1, CONFIG.SCHOOLYEAR_MONTH_1)
+        return '%s-%02d-01' % (schoolyear if CONFIG.SCHOOLYEAR_MONTH_1 == 1
+                else str(int(schoolyear) - 1), CONFIG.SCHOOLYEAR_MONTH_1)
 
     @classmethod
     def check_schoolyear(cls, schoolyear, d = None):
@@ -169,7 +132,7 @@ class Dates:
         """
         d1 = cls.day1(schoolyear)
         oneday = datetime.timedelta(days = 1)
-        d2 = datetime.date.fromisoformat(cls.day1(schoolyear + 1))
+        d2 = datetime.date.fromisoformat(cls.day1(str(int(schoolyear) + 1)))
         d2 -= oneday
         d2 = d2.isoformat()
         if d:
@@ -187,24 +150,23 @@ class Dates:
             d = cls.today()
         y = int(d.split('-', 1)[0])
         if d >= cls.day1(y + 1):
-            return y + 1
-        return y
+            return str(y + 1)
+        return str(y)
 
     @classmethod
     def get_years(cls):
-        """Return a list of the school-years ([<int>, ...]) for which
+        """Return a list of the school-years ([<str>, ...]) for which
         there is data available, sorted with the latest first.
         No validity checks are made on the data, beyond checking that
-        a database file exists for each year.
+        a calendar file exists for each year.
         """
         sypath = os.path.join(DATA, 'SCHOOLYEARS')
         years = []
         for d in os.listdir(sypath):
             try:
                 y = int(d)
-                if os.path.exists(os.path.join(sypath, d,
-                        'db_%d.sqlite3' % y)):
-                    years.append(y)
+                if os.path.exists(os.path.join(sypath, d, _CALENDAR)):
+                    years.append(d)
             except:
                 pass
         return sorted(years, reverse=True)

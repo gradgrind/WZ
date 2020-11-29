@@ -201,12 +201,42 @@ class GradeTable(dict):
 #
     def _include_grades(self, gmap):
         grades = {}
+
+#TODO: do I really need self.subjects AND self.sid2subject_data?
+
+#TODO: adding .x subjects in Abi! ... possibly in grade_config (see
+# <special_term>).
+        if self.term == 'A':
+            # Add additional oral exam grades
+            sdmap = {}
+            smap = {}
+            for sid, sdata in self.sid2subject_data.items():
+                sdmap[sid] = sdata
+                smap[sid] = sdata.name
+                if sid.endswith('.e') or sid.endswith('.g'):
+                    if gmap.get(sid) == UNCHOSEN:
+                        continue
+                    print("§§§+++", sid, sdata)
+                    new_sdata = sdata._replace(
+                            sid = sdata.sid[:-1] + 'x',
+# <tids> must have a value, otherwise it will not be passed by the
+# composites filter, but is this alright? (rather ['X']?)
+                            tids = 'X',
+                            composite = None,
+                            report_groups = None,
+                            name = sdata.name.split('|', 1)[0] + '| nach'
+                        )
+                    sdmap[new_sdata.sid] = new_sdata
+                    smap[new_sdata.sid] = new_sdata.name
+            self.sid2subject_data = sdmap
+            self.subjects = smap
+
         for sid in self.subjects:
             grades[sid] = gmap.get(sid) or ''
         for comp in self.composites:
             grades[comp] = gmap.get(comp) or ''
         for f in GradeBase.group_info(self.group,  'Notenfelder_X'):
-            grades[f] = gmap.get(f) or ''
+            grades['X_' + f] = gmap.get(f) or ''
         return grades
 #
     def _read_grade_table(self, filepath):
@@ -256,12 +286,9 @@ class GradeTable(dict):
         return GradeBase.GRADE_PATH.format(term = term, group = group)
 #
     @classmethod
-    def group_table(cls, schoolyear, group, term, ok_new = False, pids = None):
+    def group_table(cls, schoolyear, group, term, ok_new = False):
         """If <ok_new> is true, a new table may be created, otherwise
         the table must already exist.
-        If <pids> is supplied it should be a list of pupil ids: only
-        these pupils will be included in a new table. This is only
-        relevant when creating a new table.
         """
         # Get file path
         # Get file path and write file
@@ -280,7 +307,7 @@ class GradeTable(dict):
                 raise Bug(_TABLE_CLASS_MISMATCH.format(filepath = table_path))
             _self._set_group(group)
             _trm = info.get('TERM')
-            if _term != term:
+            if _trm != term:
                 raise Bug(_TABLE_TERM_MISMATCH.format(filepath = table_path))
             _self.term = term
             _self.issue_d = info.get('ISSUE_D')
@@ -311,7 +338,7 @@ class GradeTable(dict):
             # File doesn't exist
             if not ok_new:
                 raise
-            return cls.new_group_table(schoolyear, group, term, pids)
+            return cls.new_group_table(schoolyear, group, term)
 #
     @classmethod
     def new_group_table(cls, schoolyear, group, term, pids = None):
@@ -429,7 +456,7 @@ class GradeTable(dict):
         info = (
             ('SCHOOLYEAR',    str(self.schoolyear)),
             ('GROUP',         self.group),
-            ('TERM',          GradeBase.term2text(self.term)),
+            ('TERM',          self.term),
             ('GRADES_D',      self.grades_d),
             ('ISSUE_D',       self.issue_d)
         )
@@ -543,7 +570,7 @@ def update_grades(schoolyear, term, pid, tid = None, grades = None, **fields):
 if __name__ == '__main__':
     from core.base import init
     init('TESTDATA')
-    _schoolyear = 2016
+    _schoolyear = '2016'
 
     if True:
 #    if False:

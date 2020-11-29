@@ -91,7 +91,7 @@ class AbiCalc:
                 self.tag2sid[gtag] = sid
             elif sid.endswith('.x'):
                 xsids.append((sid, grade))
-            else:
+            elif not sid.startswith('X_'):
                 raise AbiturError(_BAD_SID.format(sid = sid))
         # This must come after <sid2n> has been completed
         for sid, grade in xsids:
@@ -111,7 +111,7 @@ class AbiCalc:
         if m != 8:
             raise AbiturError(_M_WRONG.format(n = m - 4))
         if len(xsids) != 4:
-            raise AbiturError(_X_WRONG.format(n = xn))
+            raise AbiturError(_X_WRONG.format(n = len(xsids)))
 #
     def set_editable_cell(self, tag, value):
         """As well as being entered in the general <self.tags> mapping,
