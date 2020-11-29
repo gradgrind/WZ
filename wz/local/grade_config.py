@@ -202,21 +202,14 @@ class GradeBase(dict):
     grades for a particular report for a pupil in a more general way.
     """
     _ANLASS = (
-        # term/category-tag, text version, relative path to files
-        ('1', '1. Halbjahr', 'NOTEN/HJ1'),
-        ('2', '2. Halbjahr', 'NOTEN/HJ2'),
-        ('A', 'Abitur', 'NOTEN/Abitur'),
-        ('S*', 'Einzelzeugnisse', 'NOTEN/Einzel')
+        # term/category-tag, text version
+        ('1', '1. Halbjahr'),
+        ('2', '2. Halbjahr'),
+        ('A', 'Abitur'),
+        ('S*', 'Sonderzeugnisse')
     )
-#?
-    GRADE_TABLE = 'Noten_{group}_{term}'  # grade table: file-name
     #
-#?
-    GRADE_TABLE_TEMPLATES = { # without .xlsx (or whatever) suffix
-        '*':        'grades/Noteneingabe',      # default
-        '12.G':     'grades/Noteneingabe-SII',
-        '13':       'grades/Noteneingabe-Abitur'
-    }
+    GRADE_PATH = 'NOTEN_{term}/Noten_{group}_{term}'  # grade table: file-name
     #
     _NORMAL_GRADES = (
         '1+', '1', '1-',
@@ -353,13 +346,6 @@ class GradeBase(dict):
         except:
             pass
         raise GradeConfigError(_INVALID_GRADE.format(grade = repr(grade)))
-#
-    @classmethod
-    def grade_path(cls, term):
-        for cat in cls._ANLASS:
-            if cat[0] == term:
-                return cat[2]
-        raise GradeConfigError(_BAD_ANLASS.format(term = term))
 #
     @classmethod
     def terms(cls):

@@ -20,6 +20,11 @@ Copyright 2020 Michael Towers
    limitations under the License.
 """
 
+#TODO: Special reports might best have tags S2016-04-32, where the date
+# is ISSUE_D. That way they are, like the other "terms", time-based.
+# The tables would also be group-based, so a file name might be
+# 'Noten_10_S2016-04-32'.
+
 ### Grade table header items
 _SCHOOLYEAR = 'Schuljahr'
 _GROUP = 'Klasse/Gruppe'
@@ -41,12 +46,7 @@ _TEACHER_MISMATCH = "Fach {sid}: Alte Note wurde von {tid0}," \
 _BAD_GRADE = "Ungültige Note im Fach {sid}: {g}"
 
 
-#TODO:
-# Title for grade tables
-#_TITLE0 = "Noten"
-#_TITLE = "Noten, bis {date}"
 _TITLE2 = "Tabelle erstellt am {time}"
-#_TTITLE = "Klausurnoten"
 
 
 import sys, os
@@ -58,7 +58,6 @@ if __name__ == '__main__':
 import datetime
 from fractions import Fraction
 
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 from core.base import str2list, Dates
 from core.pupils import Pupils
 from core.courses import Subjects
@@ -67,24 +66,11 @@ from tables.matrix import KlassMatrix
 from local.base_config import DECIMAL_SEP, USE_XLSX, year_path
 from local.grade_config import GradeBase, UNCHOSEN, NO_GRADE
 
-"""TODO:
-Use "internal" grade tables (tsv) which also include fields for
-composite grades, "qualification", report-type (Abitur: date of
-last exam ...). In short, all the info needed to print a report card.
-
-Reading a grade table (at least the "external" ones) should check the
-validity of the grades.
-"""
-
-
-
-
 class GradeTableError(Exception):
     pass
 
 ###
 
-#TODO: use subject list as reference for all table reading?
 class Grades(GradeBase):
     """A <Grades> instance manages the set of grades in the database for
     a pupil and "term".
@@ -267,8 +253,7 @@ class GradeTable(dict):
     def table_path(group, term):
         """Get file path for the grade table.
         """
-        return GradeBase.grade_path(term) + '/' + \
-                GradeBase.GRADE_TABLE.format(term = term, group = group)
+        return GradeBase.GRADE_PATH.format(term = term, group = group)
 #
     @classmethod
     def group_table(cls, schoolyear, group, term, ok_new = False, pids = None):
@@ -385,10 +370,7 @@ class GradeTable(dict):
         initialize the <GradeTable> instance using method <new_group_table>.
         """
         ### Get template file
-        try:
-            template = GradeBase.GRADE_TABLE_TEMPLATES[self.group]
-        except KeyError:
-            template = GradeBase.GRADE_TABLE_TEMPLATES['*']
+        template = GradeBase.group_info(self.group, 'NotentabelleVorlage')
         template_path = os.path.join(RESOURCES, 'templates',
                     *template.split('/'))
         table = KlassMatrix(template_path)
@@ -473,11 +455,12 @@ class GradeTable(dict):
         # Get file path and write file
         table_path = year_path(self.schoolyear,
                 self.table_path(self.group, self.term))
-        print(" --->", os.getcwd(), table_path)
         tpdir = os.path.dirname(table_path)
         os.makedirs(tpdir, exist_ok = True)
-        with open(table_path + suffix, 'wb') as fh:
+        tfile = table_path + suffix
+        with open(tfile, 'wb') as fh:
             fh.write(bstream)
+        return tfile
 
 ###
 #TODO: I probably still need something like this:
@@ -564,7 +547,8 @@ if __name__ == '__main__':
 
     if True:
 #    if False:
-        _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'Noten_13_A')
+        _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'NOTEN_A',
+                'Noten_13_A')
         _gtable = GradeTable(_schoolyear, _filepath)
         print("SUBJECTS:", _gtable.subjects)
         print("GROUP:", _gtable.group)
@@ -593,128 +577,21 @@ if __name__ == '__main__':
         for _pid, _gdata in _gtable.items():
             print("???", _pid, _gdata.stream, _gdata)
 
-    if True:
-        _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'Noten_2', 'Noten_12.G')
-        _gtable = GradeTable(_schoolyear, _filepath)
-        xlsx_bytes = _gtable.make_grade_table()
-        with open(os.path.join(DATA, 'testing', 'tmp',
-                'Noten_%s.xlsx' % _group), 'wb') as fh:
-            fh.write(xlsx_bytes)
 
     if True:
-        _gtable.save()
-
-    quit(0)
-
-#~~~~~~~~~~~~~~~~OLD STUFF ...
-#    if True:
-    if False:
-        print("NEW ROW:", Grades.newPupil(_schoolyear, TERM = 'S1',
-                CLASS = '12', STREAM = 'Gym', PID = '200888'))
-
-        with DB(_schoolyear) as dbconn:
-            row = dbconn.select1('GRADES', PID = '200888', TERM = 'S1')
-        g = Grades(_schoolyear, row)
-
-        g.update(STREAM = 'RS')
-        print("CHANGED TO:", dict(g.grade_row))
-
-        with DB(_schoolyear) as dbconn:
-            dbconn.deleteEntry ('GRADES', id = g['id'])
-
-#    if True:
-    if False:
-        _term = '2'
-        _group = '12.R'
-        print("\n ****", _group)
-        term_grade = TermGrade(_schoolyear, _term, _group)
-        for _gdata in term_grade.gdata_list:
-            print("\nid:", _gdata['id'])
-            print(":::", _gdata['PID'])
-            print(_gdata.full_grades)
-
-        _group = '12.G'
-        print("\n ****", _group)
-        term_grade = TermGrade(_schoolyear, _term, _group, with_composites = True)
-        for _gdata in term_grade.gdata_list:
-            print("\nid:", _gdata['id'])
-            print(":::", _gdata['PID'])
-            print(_gdata.full_grades)
-
-        _group = '13'
-        print("\n ****", _group)
-        term_grade = TermGrade(_schoolyear, 'A', _group, force_open = True)
-        for _gdata in term_grade.gdata_list:
-            print("\nid:", _gdata['id'])
-            print(":::", _gdata['PID'])
-            print(_gdata.full_grades)
-
-    if True:
+        # Read all existing test tables into the internal form
 #    if False:
-#        print("\nGRADES 10/2:")
-#        gt = GradeTable(os.path.join(DATA, 'testing', 'Noten_2', 'Noten_10'))
-        print("\nGRADES 11.G/2:")
-        gt = GradeTable(os.path.join(DATA, 'testing', 'Noten_2', 'Noten_11.G'))
-        print("   TID:", gt.tid)
-        print("   CLASS:", gt.klass)
-        print("   TERM:", gt.term)
-        print("   SCHOOL-YEAR:", gt.schoolyear)
-        print("   ISSUE_D:", gt.issue_d)
-        print("   GRADES_D:", gt.grades_d)
-
-        print("\nSUBJECTS:", gt.subjects)
-        print("\nGRADES:")
-        for pid, grades in gt.items():
-            print(" ::: %s (%s):" % (gt.name[pid], gt.stream[pid]), grades)
-
-    if True:
-        print("\n=============== Make Grade Table 13/1 ===============")
-        xlsx_bytes = makeBasicGradeTable(_schoolyear, '1', '13',
-                empty = True, force_open = True)
-        dpath = os.path.join(DATA, 'testing', 'tmp')
-        os.makedirs(dpath, exist_ok = True)
-        filepath = os.path.join(dpath, 'Grades-13-1.xlsx')
-        with open(filepath, 'wb') as fh:
-            fh.write(xlsx_bytes)
-        print(" --> %s" % filepath)
-
-
-    quit(0)
-
-    from core.db import DB
-    _year = 2016
-    dbconn = DB(_year)
-
-    for folder in 'Noten_1', 'Noten_2':
-        fpath = os.path.join(DATA, 'testing', folder)
-        for f in os.listdir(fpath):
-            if f.rsplit('.', 1)[-1] in ('xlsx', 'ods', 'tsv'):
-                gt = GradeTable(os.path.join(fpath, f))
-                print ("\n*** READING: %s.%s, class %s, teacher: %s" % (
-                        gt.schoolyear, gt.term or '-',
-                        gt.klass, gt.tid or '-'))
-                for pid, grades in gt.items():
-                    print(" ::: %s (%s):" % (gt.name[pid], gt.stream[pid]), grades)
-                    # <grades> is a mapping: {sid -> grade}
-                    glist = ['%s:%s:%s' % (sid, g, gt.tid or '-')
-                            for sid, g in grades.items() if g]
-
-                    # The GRADES table has the fields:
-                    #   (id – Integer, primary key), PID, CLASS, STREAM,
-                    #   TERM, GRADES, REPORT_TYPE, ISSUE_D, GRADES_D,
-                    #   QUALI, COMMENT
-                    valmap = {
-                        'PID': pid,
-                        'CLASS': gt.klass,
-                        'STREAM': gt.stream[pid],
-                        'TERM': gt.term,
-                        'GRADES': ','.join(glist)
-                    }
-
-# At some point the class, stream and pupil subject choices should be checked,
-# but maybe not here?
-
-                    # Enter into GRADES table
-                    with dbconn:
-                        dbconn.updateOrAdd('GRADES', valmap,
-                                PID = pid, TERM = gt.term)
+        odir = os.path.join(DATA, 'testing', 'tmp')
+        os.makedirs(odir, exist_ok = True)
+        from glob import glob
+        _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'NOTEN_*', 'Noten_*')
+        for f in sorted(glob(_filepath)):
+            _gtable = GradeTable(_schoolyear, f)
+            print("READ", f)
+            fname = os.path.basename(f)
+            xlsx_bytes = _gtable.make_grade_table()
+            tfile = os.path.join(odir, fname.rsplit('.', 1)[0] + '.xlsx')
+            with open(tfile, 'wb') as fh:
+                fh.write(xlsx_bytes)
+                print("OUT:", tfile)
+            print("INTERNAL: -->", _gtable.save())
