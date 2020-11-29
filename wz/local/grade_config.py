@@ -3,17 +3,22 @@
 """
 local/grade_config.py
 
-Last updated:  2020-11-28
+Last updated:  2020-11-29
 
 Configuration for grade handling.
 ====================================
 """
 
 ### Messages
-_BAD_GRADE = "ERROR: Ungültige \"Note\" im Fach {sid}: {g}"
+_BAD_GROUP_INFO = "Ungültige Zeile in grade_config.REPORT_GROUPS:\n  {line}"
+_BAD_INFOTAG = "Ungültige Noten-Konfiguration für Gruppe {group}: {tag}"
+_BAD_GROUP = "Ungültige Schülergruppe: {group}"
+_BAD_TERM_REPORT = "Ungültige Noten-Konfiguration für Gruppe {group}:" \
+        "Anlässe = ... {item}"
+_BAD_ANLASS = "Ungültiger Anlass: {term}"
 _BAD_TERM = "Ungültiger \"Anlass\" (Halbjahr): {term}"
 _INVALID_GRADE = "Ungültige \"Note\": {grade}"
-_BAD_GROUP = "Ungültige Schülergruppe: {group}"
+
 
 # Special "grades"
 UNCHOSEN = '/'
@@ -35,6 +40,114 @@ STREAMS = {
 #    'FS': 'Förderschule',
 #    'GS': 'Grundschule'
 }
+
+###########################
+# Eine Sammlung der Daten für die Zeugnisgruppen.
+# Nur für die hier eingetragenen Gruppen können Notenzeugnisse erstellt
+# werden.
+#TODO: Auch Zwischenzeugnisse hier durch 'Zeugnis' vertreten?
+# Für Listen ist das Trennzeichen ';'. Auch wenn eine Liste keine oder
+# nur einen Wert hat, muss das Trennzeichen vorhanden sein (am Ende in
+# diesem Fall).
+REPORT_GROUPS = """
+# ************** Voreinstellungen ("defaults") **************
+    Stufe = SekI
+######## (grade table template):
+    NotentabelleVorlage = Noten/Noteneingabe
+######## ("streams" contained in "group"):
+######## leer => keine Untergruppen in dieser Klasse/Gruppe:
+    Maßstäbe = ;
+######## ("term", etc. – scheduled reports: <term>/<default report type>)
+######## <Anlass>/<Zeugnis-Art-Voreinstellung>; ...
+    Anlässe = ;
+######## (extra "grade" fields in internal table):
+######## Zusätzliche "Notenfelder" in interner Notentabelle
+    Notenfelder_X = ZeugnisArt;
+######## (additional report types):
+######## Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
+######## können
+    ZeugnisArt_X = Abgang; Zeugnis
+
+# Gruppe '13':
+:13
+    Stufe = SekII
+    NotentabelleVorlage = Noten/Noteneingabe-Abitur
+######## (term '2': grades collected, but no report cards)
+######## Für das 2. Halbjahr werden Noten gegeben, aber keine
+######## Notenzeugnisse erstellt:
+    Anlässe = 1/Zeugnis; 2/; A/Abitur
+######## (The report type is determined by calculations):
+    Notenfelder_X = ZeugnisArt; FERTIG_D
+    ZeugnisArt_X = Abgang;
+
+:12.G
+    Stufe = SekII
+    NotentabelleVorlage = Noten/Noteneingabe-SII
+    Maßstäbe = Gym;
+    Anlässe = 1/Zeugnis; 2/Zeugnis
+    Notenfelder_X = ZeugnisArt; QUALI
+    ZeugnisArt_X = Abgang;
+
+:12.R
+    Maßstäbe = RS; HS
+    Anlässe = 1/Zeugnis; 2/Abschluss
+    Notenfelder_X = ZeugnisArt; QUALI
+
+:11.G
+    Maßstäbe = Gym;
+    Anlässe = 1/Orientierung; 2/Zeugnis
+    Notenfelder_X = ZeugnisArt; QUALI
+    ZeugnisArt_X = Abgang; Zeugnis
+
+:11.R
+    Maßstäbe = RS; HS
+    Anlässe = 1/Orientierung; 2/Abschluss
+    Notenfelder_X = ZeugnisArt; QUALI
+    ZeugnisArt_X = Abgang; Zeugnis
+
+:10
+    Anlässe = 2/Orientierung
+
+# Gruppen '09', '08', ... (benutzen die Voreinstellungen)
+:09 08 07 06 05
+"""
+
+GROUP_INFO = {}
+default = {}
+info = default
+continuation = None
+for line in REPORT_GROUPS.splitlines():
+    line = line.strip()
+    if (not line) or line[0] == '#':
+        continue
+    if continuation:
+        line = continuation + line
+        continuation = None
+    if line[0] == ':':
+        # A new group, or new groups: start from the default values.
+        # A shallow copy is adequate here:
+        info = default.copy()
+        for g in line[1:].split():
+            GROUP_INFO[g] = info
+        continue
+    if line[-1] == '+':
+        continuation = line
+        continue
+    try:
+        tag, val = line.split('=')
+    except ValueError as e:
+        raise GradeConfigError(_BAD_GROUP_INFO.format(line = line)) from e
+    _vals = val.split(';')
+    if len(_vals) > 1:
+        vals = []
+        for v in _vals:
+            v = v.strip()
+            if v:
+                vals.append(v)
+    else:
+        vals = val.strip()
+    info[tag.strip()] = vals
+###########################
 
 
 # Localized field names.
@@ -88,107 +201,23 @@ class GradeBase(dict):
     specific to the locality. A subclass handles the set of
     grades for a particular report for a pupil in a more general way.
     """
-    _CATEGORIES = (
+    _ANLASS = (
         # term/category-tag, text version, relative path to files
         ('1', '1. Halbjahr', 'NOTEN/HJ1'),
         ('2', '2. Halbjahr', 'NOTEN/HJ2'),
         ('A', 'Abitur', 'NOTEN/Abitur'),
         ('S*', 'Einzelzeugnisse', 'NOTEN/Einzel')
     )
+#?
     GRADE_TABLE = 'Noten_{group}_{term}'  # grade table: file-name
-
-###########################
-# bring all group info together?
-# Zwischenzeugnisse here also under 'Zeugnis'?
-    GROUPS = {
-        '13':  {
-            '*': {
-                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe-Abitur',
-                'SCHEDULED_REPORTS': (('1', 'Zeugnis'), ('A', 'Abitur')),
-                'GRADE_FIELDS_X': ('REPORT_TYPE', 'QUALI', 'FERTIG_D'),
-                'X_REPORT_TYPES': ('Abgang',),
-            }
-        },
-        '12': {
-            'G': {
-                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe-SII',
-                'GROUP_STREAMS': ('Gym',),
-                'SCHEDULED_REPORTS': (('1', 'Zeugnis'), ('2', 'Zeugnis')),
-                'GRADE_FIELDS_X': ('REPORT_TYPE', 'QUALI'),
-                'X_REPORT_TYPES': ('Abgang',),
-            },
-            'R': {
-                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe',
-                'GROUP_STREAMS': ('RS', 'HS'),
-                'SCHEDULED_REPORTS': (('1', 'Zeugnis'), ('2', 'Abschluss')),
-                'GRADE_FIELDS_X': ('REPORT_TYPE', 'QUALI'),
-                'X_REPORT_TYPES': ('Abgang', 'Zeugnis'),
-            }
-        },
-        '11': {
-            'G': {
-                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe',
-                'GROUP_STREAMS': ('Gym',),
-                'SCHEDULED_REPORTS': (('1', 'Orientierung'), ('2', 'Zeugnis')),
-                'GRADE_FIELDS_X': ('REPORT_TYPE', 'QUALI'),
-                'X_REPORT_TYPES': ('Abgang', 'Zeugnis'),
-            },
-            'R': {
-                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe',
-                'GROUP_STREAMS': ('RS', 'HS'),
-                'SCHEDULED_REPORTS': (('1', 'Orientierung'), ('2', 'Zeugnis')),
-                'GRADE_FIELDS_X': ('REPORT_TYPE', 'QUALI'),
-                'X_REPORT_TYPES': ('Abgang', 'Zeugnis'),
-            }
-         },
-       '10': {
-            '*': {
-                'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe',
-                'SCHEDULED_REPORTS': (('2', 'Orientierung'),),
-                'X_REPORT_TYPES': ('Abgang', 'Zeugnis'),
-            },
-        },
-        '*' : {
-            'GRADE_TABLE_TEMPLATE': 'grades/Noteneingabe',
-            'X_REPORT_TYPES': ('Abgang', 'Zeugnis'),
-        }
-    }
-###########################
-
+    #
+#?
     GRADE_TABLE_TEMPLATES = { # without .xlsx (or whatever) suffix
         '*':        'grades/Noteneingabe',      # default
         '12.G':     'grades/Noteneingabe-SII',
         '13':       'grades/Noteneingabe-Abitur'
     }
     #
-    _GROUP_STREAMS = { # The classes which are divided into groups for
-        # grade reports. This maps the groups to the pupils' streams.
-        # { class -> { group -> (stream, ...)}}
-        '12': {'G': ('Gym',), 'R': ('RS', 'HS')},
-        '11': {'G': ('Gym',), 'R': ('RS', 'HS')}
-    }
-    _REPORT_GROUPS = { # Groups for which scheduled reports are to be
-        # prepared. Mapped from school term. Also the default report type
-        # is given.
-        '1': (
-            ('13', 'Zeugnis'),
-            ('12.G', 'Zeugnis'),
-            ('12.R', 'Zeugnis'),
-            ('11.G', 'Orientierung'),
-            ('11.R', 'Orientierung')
-        ),
-        '2': (
-            ('13', None),      # Only for the grade table
-            ('12.G', 'Zeugnis'),
-            ('12.R', 'Abschluss'),
-            ('11.G', 'Zeugnis'),
-            ('11.R', 'Zeugnis'),
-            ('10', 'Orientierung')
-        ),
-        'A': (
-            ('13', 'Abitur'),
-        )
-    }
     _NORMAL_GRADES = (
         '1+', '1', '1-',
         '2+', '2', '2-',
@@ -227,41 +256,31 @@ class GradeBase(dict):
         'nb': "kann nicht beurteilt werden",
     }
 #
-    @classmethod
-    def group_term_info(cls, group, term, tag):
+    @staticmethod
+    def group_info(group, tag):
         try:
-            k, g = group.split('.')
-        except ValueError:
-            k, g = group, '*'
+            ginfo = GROUP_INFO[group]
+        except KeyError as e:
+            raise GradeConfigError(_BAD_GROUP.format(group = group)) from e
         try:
-            groups = cls.GROUPS[k]
-        except KeyError:
-            items = cls.GROUPS['*']
-        else:
-            try:
-                items = groups[g]
-            except KeyError as e:
-                raise GradeConfigError(_BAD_GROUP.format(group = group)) from e
-        return items.get(tag)
+            return ginfo[tag]
+        except KeyError as e:
+            raise GradeConfigError(_BAD_INFOTAG.format(group = group,
+                    tag = tag)) from e
 #
     @classmethod
     def _group2klass_streams(cls, group):
-        """Return the class and a list (tuple) of streams for the given
+        """Return the class and a list of streams for the given
         pupil group. Only those groups relevant for grade reports are
         acceptable.
+        Return a pair: (class, stream-list).
+        For undivided classes, an empty stream-list is returned.
         To avoid leaking implementation internals for the groups, this
         method should only be used within this module.
         """
-        try:
-            klass, g = group.split('.', 1)
-        except ValueError:
-            # Whole class
-            return (group, ())
-        try:
-            return (klass, cls._GROUP_STREAMS[klass][g])
-        except KeyError as e:
-            raise GradeConfigError(_BAD_GROUP.format(group = group)) from e
+        return (group.split('.', 1)[0], cls.group_info(group, 'Maßstäbe'))
 #
+#DEPRECATED?
     @classmethod
     def stream_in_group(cls, klass, stream, grouptag):
         """Return <True> if the stream is in the group. <grouptag> is
@@ -269,6 +288,7 @@ class GradeBase(dict):
         <grouptag> may also be '*', indicating the whole class (i.e.
         all streams).
         """
+        raise Bug("Deprecated?")
         if grouptag == '*':
             return True
         try:
@@ -277,12 +297,14 @@ class GradeBase(dict):
             raise GradeConfigError(_BAD_GROUP.format(
                     group = klass + '.' + grouptag)) from e
 #
+#DEPRECATED?
     @classmethod
     def klass_stream2group(cls, klass, stream):
         """This is needed because the grades in general, and in particular
         the templates, are dependant on the grade groups.
         Return the group containing the given stream.
         """
+        raise Bug("Deprecated?")
         try:
             for g, streams in cls._GROUP_STREAMS[klass].items():
                 if stream in streams:
@@ -294,35 +316,12 @@ class GradeBase(dict):
         super().__init__()
         self.i_grade = {}
         self.stream = stream
-        self.klass = self._group2klass_streams(group)[0]
-        if self.klass >= '12' and stream == 'Gym':
+        if self.group_info(group, 'Stufe') == 'SekII':
             self.valid_grades = self._ABITUR_GRADES
             self.isAbitur = True
         else:
             self.valid_grades = self._NORMAL_GRADES
             self.isAbitur = False
-#
-    def filter_grade(self, sid, g):
-        """Return the possibly filtered grade <g> for the subject <sid>.
-        Integer values are stored additionally in the mapping
-        <self.i_grade> (only for subjects with numerical grades).
-        """
-        # There can be normal, empty, non-numeric and badly-formed grades
-        if g:
-            if g in self.valid_grades:
-                # Separate out numeric grades, ignoring '+' and '-'.
-                # This can also be used for the Abitur scale, though the
-                # stripping is superfluous.
-                try:
-                    self.i_grade[sid] = int(g.rstrip('+-'))
-                except ValueError:
-                    pass
-            else:
-                REPORT(_BAD_GRADE.format(sid = sid, g = g))
-                g = ''
-        else:
-            g = ''  # ensure that the grade is a <str>
-        return g
 #
     def grade_format(self, g):
         """Format the grade corresponding to the given numeric string.
@@ -356,30 +355,62 @@ class GradeBase(dict):
         raise GradeConfigError(_INVALID_GRADE.format(grade = repr(grade)))
 #
     @classmethod
-    def categories(cls):
+    def grade_path(cls, term):
+        for cat in cls._ANLASS:
+            if cat[0] == term:
+                return cat[2]
+        raise GradeConfigError(_BAD_ANLASS.format(term = term))
+#
+    @classmethod
+    def terms(cls):
         """Return list of tuples: (term tag, term name).
         """
-        return [(cat[0], cat[1]) for cat in cls._CATEGORIES]
+        return [(cat[0], cat[1]) for cat in cls._ANLASS]
+#
+    @classmethod
+    def term2text(cls, term):
+        """For grade tables, produce readable "term" entries.
+        """
+        for t, text in cls.terms():
+            if term == t:
+                return text
+        if term[0] == 'S':
+            return term
+        raise Bug("INVALID term: %s" % term)
+#
+    @classmethod
+    def text2term(cls, text):
+        """For grade tables, convert the readable "term" entries to
+        the corresponding tag.
+        """
+        for term, txt in cls.terms():
+            if text == txt:
+                return term
+        if text[0] == 'S':
+            return text
+        raise Bug("INVALID term text: %s" % text)
 #
     @classmethod
     def term2group_rtype_list(cls, term):
         """Return list of (group, default-report-type) pairs for valid
         groups in the given term.
         """
-        try:
-            return cls._REPORT_GROUPS[term]
-        except KeyError as e:
-            raise GradeConfigError(_BAD_TERM.format(term = term))
+        groups = []
+        for group, data in GROUP_INFO.items():
+            for item in cls.group_info(group, 'Anlässe'):
+                try:
+                    t, report_type = item.split('/')
+                except ValueError as e:
+                    raise GradeConfigError(_BAD_TERM_REPORT.format(
+                            group = group, item = item)) from e
+                if t == term:
+                    groups.append((group, report_type))
+        return groups
 #
-    @classmethod
-    def grade_path(cls, term):
-        for cat in cls._CATEGORIES:
-            if cat[0] == term:
-                return cat[2]
-        raise Bug("Bad category/type: %s" % term)
-#
+#TODO
     @staticmethod
     def special_term(termGrade):
+        raise Bug("TODO")
         if termGrade.term != 'A':
             raise GradeConfigError(_BAD_TERM.format(term = term))
         # Add additional oral exam grades
@@ -399,28 +430,3 @@ class GradeBase(dict):
                     )
                 )
         termGrade.sdata_list = slist
-#
-    @staticmethod
-    def category2text(term):
-        """For grade tables, produce readable "term" entries.
-        """
-        if term in ('1', '2'):
-            return '%s. Halbjahr' % term
-        if term == 'A':
-            return 'Abitur'
-        if term[0] == 'S':
-            return term
-        raise Bug("INVALID term: %s" % term)
-#
-    @staticmethod
-    def text2category(text):
-        """For grade tables, convert the readable "term" entries to
-        the corresponding tag.
-        """
-        t0 = text[0]
-        if t0 in ('1', '2', 'A'):
-            return t0
-        if text[0] == 'S':
-            return text
-        raise Bug("INVALID term text: %s" % text)
-

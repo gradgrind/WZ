@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2020-11-28
+grades/gradetable.py - last updated 2020-11-29
 
 Access grade data, read and build grade tables.
 
@@ -94,173 +94,54 @@ class Grades(GradeBase):
         for sid, g in grades.items():
             self[sid] = self.filter_grade(sid, g)
 #
-
-
-
-
-    @classmethod
-    def forGroupTerm(cls, schoolyear, term, group):
-        """Return a list of <Grades> instances for the given group and term.
-        This is not intended for 'Single' reports.
+    def filter_grade(self, sid, g):
+        """Return the possibly filtered grade <g> for the subject <sid>.
+        Integer values are stored additionally in the mapping
+        <self.i_grade> (only for subjects with numerical grades).
         """
-        klass, streams = cls.group2klass_streams(group)
-        with DB(schoolyear) as dbconn:
-            rows = dbconn.select('GRADES', CLASS = klass, TERM = term)
-        if streams:
-            return [cls(schoolyear, row) for row in rows
-                    if row['STREAM'] in streams]
+        # There can be normal, empty, non-numeric and badly-formed grades
+        if g:
+            if g in self.valid_grades:
+                # Separate out numeric grades, ignoring '+' and '-'.
+                # This can also be used for the Abitur scale, though the
+                # stripping is superfluous.
+                try:
+                    self.i_grade[sid] = int(g.rstrip('+-'))
+                except ValueError:
+                    pass
+            else:
+                REPORT("ERROR: " + _BAD_GRADE.format(sid = sid, g = g))
+                g = ''
         else:
-            return [cls(schoolyear, row) for row in rows]
+            g = ''  # ensure that the grade is a <str>
+        return g
 #
-    @staticmethod
-    def list_pupil(schoolyear, pid):
-        """List all grade entries for the given pupil.
+    def composite_calc(self, sdata):
+        """Recalculate a composite grade.
+        <sdata> is the subject-data for the composite, the (weighted)
+        average of the components will be calculated, if possible.
+        If there are no numeric grades, choose NO_GRADE, unless all
+        components are UNCHOSEN (in which case also the composite will
+        be UNCHOSEN).
         """
-        with DB(schoolyear) as dbconn:
-            return list(dbconn.select('GRADES', PID = pid))
-#
-#TODO: handling of 'S' reports not yet ok!
-    @classmethod
-    def forPupil(cls, schoolyear, term_or_date, pid):
-        """Return <Grades> instance for the given pupil and term. If
-        an unscheduled report is sought, <term_or_date> should be the
-        date (YYYY-MM-DD) of the report.
-        """
-        # Determine whether <term_or_date> is a date
-        for c, t in cls.categories():
-            if c == term_or_date:
-                # not a date
-                with DB(schoolyear) as dbconn:
-                    row = dbconn.select1('GRADES', PID = pid,
-                            TERM = term_or_date)
-                if not row:
-                    raise GradeTableError(_NO_GRADES_ENTRY.format(
-                            pid = pid, zum = t))
-                break
+        asum = 0
+        ai = 0
+        non_grade = UNCHOSEN
+        for csid, weight in sdata.composite:
+            try:
+                gi = self.i_grade[csid]
+            except KeyError:
+                if self[csid] != UNCHOSEN:
+                    non_grade = NO_GRADE
+            else:
+                ai += weight
+                asum += gi * weight
+        if ai:
+            g = Frac(asum, ai).round()
+            self[sdata.sid] = self.grade_format(g)
+            self.i_grade[sdata.sid] = int(g)
         else:
-            # date
-            with DB(schoolyear) as dbconn:
-                row = dbconn.select1('GRADES', PID = pid, TERM = 'S',
-                        ISSUE_D = term_or_date)
-            if not row:
-                raise GradeTableError(_NO_GRADES_ENTRY.format(
-                        pid = pid, zum = term_or_date))
-        return cls(schoolyear, row)
-#
-    @classmethod
-    def newPupil(cls, schoolyear, **fields):
-        """Add a new grade entry for the given term and pupil.
-        """
-#TODO: What about "unscheduled" reports?
-        with DB(schoolyear) as dbconn:
-            rowid = dbconn.addEntry('GRADES', fields)
-            row = dbconn.select1('GRADES', id = rowid)
-        return cls(schoolyear, row)
-#
-    def update(self, **changes):
-        """Update the fields of the grade entry.
-        """
-        with DB(self.schoolyear) as dbconn:
-            rowid = self.grade_row['id']
-            dbconn.updateOrAdd('GRADES', changes, update_only = True,
-                    id = rowid)
-            row = dbconn.select1('GRADES', id = rowid)
-        # Reinitialize the instance
-        self.__init__(self.schoolyear, row)
-#
-    def get_raw_grades(self):
-        """Return the mapping {sid -> grade} for the "real" grades.
-        In addition, the call to <self.filter_grade> also enters numerical
-        grades (as integers) into the mapping <self.i_grade>:
-            {sid -> grade value}.
-        Non-numerical grades are not entered into <self.i_grade>.
-        """
-        if self._grades == None:
-            self._grades = {}
-            self._sid2tid = {}
-            self.empty_grades = []
-            for sg in str2list(self.grade_row['GRADES']):
-                sid, g, tid = sg.split(':')
-                self._grades[sid] = self.filter_grade(sid, g)
-                self._sid2tid[sid] = tid
-        return self._grades
-#
-    def sid2tid(self, sid):
-        """Return the tag for the teacher who graded the given subject.
-        If there is no entry for this subject, return <None>.
-        """
-        if self._sid2tid == None:
-            self.get_raw_grades()   # Ensure cache is loaded
-        return self._sid2tid.get(sid)
-#
-    def set_tid(self, sid, tid):
-        """When a grade is updated, the updating teacher (or '-') must
-        be set.
-        """
-        self._sid2tid[sid] = tid or '-'
-#
-    def get_full_grades(self, sdata_list, with_composites = False):
-        """Return the full grade mapping including all subjects in
-        <sdata_list>, a list of <SubjectData> instances. If
-        <with_composites> is true, also the "composite" subjects will be
-        processed and included.
-        All subjects relevant for grades in the class are included.
-        A <SubjectData> tuple has the following fields:
-            sid: the subject tag;
-            tids: a list of teacher ids, empty if the subject is a composite;
-            composite: if the subject is a component, this will be the
-                sid of its composite; if the subject is a composite, this
-                will be the list of components, each is a tuple
-                (sid, weight); otherwise the field is empty;
-            report_groups: a list of tags representing a particular block
-                of grades in the report template;
-            name: the full name of the subject.
-        The result is also saved as <self.full_grades>.
-        """
-        raw_grades = self.get_raw_grades()
-        # Add subjects missing from GRADES field, process composites
-        grades = {}
-        for sdata in sdata_list:
-            sid = sdata.sid
-            if sdata.tids:
-                g = raw_grades.pop(sid, '')
-                grades[sid] = g
-            elif with_composites:
-                # A composite subject, calculate the component-average,
-                # if possible. If there are no numeric grades, choose
-                # NO_GRADE, unless all components are UNCHOSEN (in
-                # which case also the composite will be UNCHOSEN).
-                asum = 0
-                ai = 0
-                non_grade = UNCHOSEN
-                for csid, weight in sdata.composite:
-                    try:
-                        gi = self.i_grade[csid]
-                    except KeyError:
-                        if raw_grades.get(csid) != UNCHOSEN:
-                            non_grade = NO_GRADE
-                    else:
-                        ai += weight
-                        asum += gi * weight
-                if ai:
-                    g = Frac(asum, ai).round()
-                    grades[sid] = self.grade_format(g)
-                    self.i_grade[sid] = int(g)
-                else:
-                    grades[sid] = non_grade
-        if raw_grades:
-            REPORT(_EXCESS_SUBJECTS.format(sids = ', '.join(raw_grades)))
-        self.full_grades = grades
-        return grades
-#
-    def set_pupil_name(self, name):
-        """The pupil name can be set externally. This avoids having this
-        module deal with pupil data.
-        """
-        self._pname = name
-#
-    def pupil_name(self):
-        return self._pname
+            self[sdata.sid] = non_grade
 
 ###
 
@@ -282,91 +163,6 @@ class Frac(Fraction):
         v = int(self * 10**decimal_places + f)
         sval = ("{:0%dd}" % (decimal_places+1)).format(v)
         return (sval[:-decimal_places] + DECIMAL_SEP + sval[-decimal_places:])
-
-###
-
-
-###
-
-
-
-
-def new_table(schoolyear, klass, streams, term, pids):
-    ### Pupil data
-    pupils = Pupils(schoolyear)
-
-    ### Subject data (for whole class)
-    _courses = Subjects(schoolyear)
-    sdata_list = _courses.grade_subjects(klass)
-
-    gdata_list = []
-#    date = ???
-    for pdata in pupils.classPupils(klass, date = date):
-        if streams and (pdata['STREAM'] not in self.streams):
-            continue
-        pname = pupils.pdata2name(pdata)
-        gdata = Grades.newPupil(schoolyear, TERM = term,
-                CLASS = pdata['CLASS'], STREAM = pdata['STREAM'],
-                PID = pdata['PID'], ISSUE_D = '*', GRADES_D = '*',
-#group! self!
-                REPORT_TYPE = self.default_report_type(term, group))
-        # Get all the grades, possibly including composites
-        gdata.get_full_grades(self.sdata_list)
-        gdata.set_pupil_name(pname)
-        gdata_list.append(gdata)
-
-
-# How to deal with composites?
-
-
-#???
-    # If the "term" refers to a special grade collection, allow the
-    # data to be modified
-    try:
-        int(term)
-    except ValueError:
-        Grades.special_term(self)
-
-    ### Collect rows
-    self.grades_info = self.get_grade_info(schoolyear, term, group)
-    self.gdata_list = []
-    if (not force_open) and self._grades_closed():
-        for gdata in Grades.forGroupTerm(schoolyear, term, group):
-            # Get all the grades, possibly including composites.
-            gdata.get_full_grades(self.sdata_list, with_composites)
-            gdata.set_pupil_name(pupils.pid2name(gdata['PID']))
-            self.gdata_list.append(gdata)
-    else:
-        date = self.grades_info['ISSUE_D']
-        for pdata in pupils.classPupils(self.klass, date = date):
-            if self.streams and (pdata['STREAM'] not in self.streams):
-                continue
-            pname = pupils.pdata2name(pdata)
-            try:
-                gdata = Grades.forPupil(schoolyear, term, pdata['PID'])
-            except GradeTableError:
-                # No entry in database table
-                gdata = Grades.newPupil(schoolyear, TERM = term,
-                        CLASS = pdata['CLASS'], STREAM = pdata['STREAM'],
-                        PID = pdata['PID'], ISSUE_D = '*', GRADES_D = '*',
-                        REPORT_TYPE = self.default_report_type(
-                                term, group))
-            else:
-                # Check for changed pupil stream and class
-                changes = {}
-                if pdata['CLASS'] != gdata['CLASS']:
-                    changes['CLASS'] = pdata['CLASS']
-                if pdata['STREAM'] != gdata['STREAM']:
-                    changes['STREAM']  = pdata['STREAM']
-                if changes:
-                    REPORT(_GROUP_CHANGE.format(
-                            pname = pname,
-                            delta = repr(changes)))
-                    gdata.update(**changes)
-            # Get all the grades, possibly including composites
-            gdata.get_full_grades(self.sdata_list, with_composites)
-            gdata.set_pupil_name(pname)
-            self.gdata_list.append(gdata)
 
 ###
 
@@ -423,8 +219,7 @@ class GradeTable(dict):
             grades[sid] = gmap.get(sid) or ''
         for comp in self.composites:
             grades[comp] = gmap.get(comp) or ''
-        for f in GradeBase.group_term_info(self.group, self.term,
-                'GRADE_FIELDS_X'):
+        for f in GradeBase.group_info(self.group,  'Notenfelder_X'):
             grades[f] = gmap.get(f) or ''
         return grades
 #
@@ -442,7 +237,7 @@ class GradeTable(dict):
         dbt = ss.dbTable()
         info = {row[0]: row[1] for row in dbt.info if row[0]}
         self._set_group(info.get(_GROUP))
-        self.term = GradeBase.text2category(info.get(_TERM))
+        self.term = GradeBase.text2term(info.get(_TERM))
         year = info.get(_SCHOOLYEAR)
         if year != str(self.schoolyear):
             raise GradeTableError(_TABLE_YEAR_MISMATCH.format(
@@ -466,6 +261,7 @@ class GradeTable(dict):
                 # stream = row[2]
                 self[pid] = Grades(self.group, row[2],
                         self._include_grades(gmap))
+                # No need to calculate composites here.
 #
     @staticmethod
     def table_path(group, term):
@@ -519,8 +315,12 @@ class GradeTable(dict):
                     gmap = {sid: row[col] for sid, col in sid2col}
                     _self.name[pid] = row[1]
                     # stream = row[2]
-                    _self[pid] = Grades(_self.group, row[2],
+                    grades = Grades(_self.group, row[2],
                             _self._include_grades(gmap))
+                    _self[pid] = grades
+                    for comp in _self.composites:
+                        grades.composite_calc(_self.sid2subject_data[comp])
+#                        print("§§§", pid, comp, grades[comp])
             return _self
         except TableError:
             # File doesn't exist
@@ -570,7 +370,8 @@ class GradeTable(dict):
             _self.name[pid] = pdata.name()
             # Set grades (all empty)
             _self[pid] = Grades(group, pdata['STREAM'],
-                    {sid: '' for sid in _self.subjects})
+                    _self._include_grades({}))
+            # No need to calculate composites.
             pid_list.append(pid)
         if pidset:
             raise GradeTableError(_PIDS_NOT_IN_GROUP.format(
@@ -602,7 +403,7 @@ class GradeTable(dict):
         info = (
             (_SCHOOLYEAR,    str(self.schoolyear)),
             (_GROUP,         self.group),
-            (_TERM,          GradeBase.category2text(self.term)),
+            (_TERM,          GradeBase.term2text(self.term)),
             (_GRADES_D,      self.grades_d),
             (_ISSUE_D,       self.issue_d)
         )
@@ -646,7 +447,7 @@ class GradeTable(dict):
         info = (
             ('SCHOOLYEAR',    str(self.schoolyear)),
             ('GROUP',         self.group),
-            ('TERM',          GradeBase.category2text(self.term)),
+            ('TERM',          GradeBase.term2text(self.term)),
             ('GRADES_D',      self.grades_d),
             ('ISSUE_D',       self.issue_d)
         )
@@ -655,8 +456,7 @@ class GradeTable(dict):
             fields.append(sid)
         for comp in self.composites:
             fields.append(comp)
-        for f in GradeBase.group_term_info(self.group, self.term,
-                'GRADE_FIELDS_X'):
+        for f in GradeBase.group_info(self.group,  'Notenfelder_X'):
             fields.append(f)
         # Get line data
         dlist = []
@@ -679,71 +479,8 @@ class GradeTable(dict):
         with open(table_path + suffix, 'wb') as fh:
             fh.write(bstream)
 
-
-
-
-
-
-#? ... old stuff ...
-
-#DEPRECATED
-    @staticmethod
-    def default_report_type(term, group):
-        for grp, rtype in Grades.term2group_rtype_list(term):
-            if grp == group:
-                return rtype
-        raise Bug("No report type for term {term}, group {group}".format(
-                term = term, group = group))
-#
-#DEPRECATED
-    @classmethod
-    def get_grade_info(cls, schoolyear, term, group):
-        """Fetch general information for the term/group.
-        If necessary, initialize the entries.
-        """
-        kb = cls.info_keybase(term, group)
-        ginfo = {}
-        with DB(schoolyear) as dbconn:
-            row = dbconn.select1('INFO', K = kb.format(field = 'ISSUE_D'))
-            if row:
-                ginfo['ISSUE_D'] = row['V']
-                ginfo['GRADES_D'] = dbconn.select1('INFO',
-                        K = kb.format(field = 'GRADES_D'))['V']
-            else:
-                # Initialize the information
-                try:
-                    date = dbconn.select1('INFO',
-                            K = 'CALENDAR_TERM_%d' % (int(term) + 1))['V']
-                except:
-                    date = dbconn.select1('INFO',
-                            K = 'CALENDAR_LAST_DAY')['V']
-                else:
-                    # Previous day, ensure that it is a weekday
-                    td = datetime.timedelta(days = 1)
-                    d = datetime.date.fromisoformat(date)
-                    while True:
-                        d -= td
-                        if d.weekday() < 5:
-                            date = d.isoformat()
-                            break
-                kb = cls.info_keybase(term, group)
-                ginfo = {'ISSUE_D': date, 'GRADES_D': None}
-                for key, value in ginfo.items():
-                    dbconn.updateOrAdd('INFO',
-                            {'K': kb.format(field = key), 'V': value},
-                            K = key)
-        return ginfo
-#
-#DEPRECATED
-    @staticmethod
-    def info_keybase(term, group):
-        """Return the base for the INFO table key.
-        """
-        return 'GRADES_%s.%s_{field}' % (group, term)
-
 ###
-###
-
+#TODO: I probably still need something like this:
 def update_grades(schoolyear, term, pid, tid = None, grades = None, **fields):
     """Compare the existing GRADES entry with the data passed in:
     <grades> is a mapping {sid -> grade}.
@@ -783,9 +520,6 @@ def update_grades(schoolyear, term, pid, tid = None, grades = None, **fields):
     if fields:
         # Only the administrator may perform these updates?
         pass
-
-
-
 
 # This is old code:
     gt = GradeTable(os.path.join(fpath, f))
@@ -858,7 +592,6 @@ if __name__ == '__main__':
         print("NAMES:", _gtable.name)
         for _pid, _gdata in _gtable.items():
             print("???", _pid, _gdata.stream, _gdata)
-
 
     if True:
         _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'Noten_2', 'Noten_12.G')
