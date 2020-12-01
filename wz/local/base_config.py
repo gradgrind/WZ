@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2020-11-29
+Last updated:  2020-12-01
 
 General configuration items.
 ============================
@@ -31,14 +31,16 @@ from local.grade_config import GradeBase
 
 ###
 
+SCHOOLYEARS = 'SCHULJAHRE'
+
 def year_path(schoolyear, fpath = None):
     """Return a path within the data folder for a school year.
     <fpath> is a '/' separated path relative to the year folder.
     """
     if fpath:
-        return os.path.join(DATA, 'SCHULJAHRE', schoolyear,
+        return os.path.join(DATA, SCHOOLYEARS, schoolyear,
                 *fpath.split('/'))
-    return os.path.join(DATA, 'SCHULJAHRE', schoolyear)
+    return os.path.join(DATA, SCHOOLYEARS, schoolyear)
 
 ###
 

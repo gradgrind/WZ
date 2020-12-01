@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2020-11-29
+Last updated:  2020-12-01
 
 Basic configuration and structural stuff.
 
@@ -160,7 +160,7 @@ class Dates:
         No validity checks are made on the data, beyond checking that
         a calendar file exists for each year.
         """
-        sypath = os.path.join(DATA, 'SCHOOLYEARS')
+        sypath = os.path.join(DATA, CONFIG.SCHOOLYEARS)
         years = []
         for d in os.listdir(sypath):
             try:

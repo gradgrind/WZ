@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-11-29
+Last updated:  2020-12-01
 
 Configuration for grade handling.
 ====================================
@@ -42,6 +42,25 @@ STREAMS = {
 }
 
 ###########################
+_NORMAL_GRADES = f"""1+ ; 1 ; 1- ;  +
+    2+ ; 2 ; 2- ; 3+ ; 3 ; 3- ; +
+    4+ ; 4 ; 4- ; 5+ ; 5 ; 5- ; 6 ; +
+    * ; nt ; t ; nb ; {UNCHOSEN}
+"""
+
+# *: ("no grade" ->) "––––––"
+# nt: "nicht teilgenommen"
+# t: "teilgenommen"
+# nb: "kann nich beurteilt werden"
+## ne: "nicht erteilt"
+# <UNCHOSEN>: Subject not included in report
+
+_ABITUR_GRADES = f"""15 ; 14 ; 13 ;  +
+    12 ; 11 ; 10 ; 09 ; 08 ; 07 ; +
+    06 ; 05 ; 04 ; 03 ; 02 ; 01 ; 00 ; +
+    * ; nt ; t ; nb ; {UNCHOSEN}
+"""
+
 # Eine Sammlung der Daten für die Zeugnisgruppen.
 # Nur für die hier eingetragenen Gruppen können Notenzeugnisse erstellt
 # werden.
@@ -49,7 +68,7 @@ STREAMS = {
 # Für Listen ist das Trennzeichen ';'. Auch wenn eine Liste keine oder
 # nur einen Wert hat, muss das Trennzeichen vorhanden sein (am Ende in
 # diesem Fall).
-REPORT_GROUPS = """
+REPORT_GROUPS = f"""
 # ************** Voreinstellungen ("defaults") **************
     Stufe = SekI
 ######## (grade table template):
@@ -67,6 +86,8 @@ REPORT_GROUPS = """
 ######## Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
 ######## können
     ZeugnisArt_X = Abgang; Zeugnis
+######## gültige "Noten":
+    NotenWerte = {_NORMAL_GRADES}
 
 # Gruppe '13':
 :13
@@ -79,6 +100,7 @@ REPORT_GROUPS = """
 ######## (The report type is determined by calculations):
     Notenfelder_X = ZeugnisArt; FERTIG_D
     ZeugnisArt_X = Abgang;
+    NotenWerte = {_ABITUR_GRADES}
 
 :12.G
     Stufe = SekII
@@ -87,6 +109,7 @@ REPORT_GROUPS = """
     Anlässe = 1/Zeugnis; 2/Zeugnis
     Notenfelder_X = ZeugnisArt; QUALI
     ZeugnisArt_X = Abgang;
+    NotenWerte = {_ABITUR_GRADES}
 
 :12.R
     Maßstäbe = RS; HS
@@ -106,7 +129,7 @@ REPORT_GROUPS = """
     ZeugnisArt_X = Abgang; Zeugnis
 
 :10
-    Anlässe = 2/Orientierung
+    Anlässe = 2/Orientierung;
 
 # Gruppen '09', '08', ... (benutzen die Voreinstellungen)
 :09 08 07 06 05
@@ -131,7 +154,7 @@ for line in REPORT_GROUPS.splitlines():
             GROUP_INFO[g] = info
         continue
     if line[-1] == '+':
-        continuation = line
+        continuation = line[:-1]
         continue
     try:
         tag, val = line.split('=')
@@ -149,21 +172,20 @@ for line in REPORT_GROUPS.splitlines():
     info[tag.strip()] = vals
 ###########################
 
-
-# Localized field names.
-# This also determines the fields for the GRADES table.
-GRADES_FIELDS = {
-    'PID'       : 'ID',
-    'CLASS'     : 'Klasse',
-    'STREAM'    : 'Maßstab',    # Grading level, etc.
-    'TERM'      : 'Anlass',     # Term/Category
-    'GRADES'    : 'Noten',
-    'REPORT_TYPE': 'Zeugnistyp',
-    'ISSUE_D'   : 'Ausstellungsdatum',
-    'GRADES_D'  : 'Notenkonferenz',
-    'QUALI'     : 'Qualifikation',
-    'COMMENT'   : 'Bemerkungen'
-}
+## Localized field names.
+## This also determines the fields for the GRADES table.
+#GRADES_FIELDS = {
+#    'PID'       : 'ID',
+#    'CLASS'     : 'Klasse',
+#    'STREAM'    : 'Maßstab',    # Grading level, etc.
+#    'TERM'      : 'Anlass',     # Term/Category
+#    'GRADES'    : 'Noten',
+#    'REPORT_TYPE': 'Zeugnistyp',
+#    'ISSUE_D'   : 'Ausstellungsdatum',
+#    'GRADES_D'  : 'Notenkonferenz',
+#    'QUALI'     : 'Qualifikation',
+#    'COMMENT'   : 'Bemerkungen'
+#}
 
 
 class GradeConfigError(Exception):
@@ -211,30 +233,6 @@ class GradeBase(dict):
     #
     GRADE_PATH = 'NOTEN_{term}/Noten_{group}_{term}'  # grade table: file-name
     #
-    _NORMAL_GRADES = (
-        '1+', '1', '1-',
-        '2+', '2', '2-',
-        '3+', '3', '3-',
-        '4+', '4', '4-',
-        '5+', '5', '5-',
-        '6',
-        '*',    # ("no grade" ->) "––––––"
-        'nt',   # "nicht teilgenommen"
-        't',    # "teilgenommen"
-        'nb',   # "kann nich beurteilt werden"
-        #'ne',   # "nicht erteilt"
-        UNCHOSEN # Subject not included in report
-    )
-    _ABITUR_GRADES = ( # class 12 and 13, 'Gym'
-        '15', '14', '13',
-        '12', '11', '10',
-        '09', '08', '07',
-        '06', '05', '04',
-        '03', '02', '01',
-        '00',
-        '*', 'nt', 't', 'nb', #'ne',
-        UNCHOSEN
-    )
     _PRINT_GRADE = {
         '1': "sehr gut",
         '2': "gut",
@@ -309,17 +307,13 @@ class GradeBase(dict):
         super().__init__()
         self.i_grade = {}
         self.stream = stream
-        if self.group_info(group, 'Stufe') == 'SekII':
-            self.valid_grades = self._ABITUR_GRADES
-            self.isAbitur = True
-        else:
-            self.valid_grades = self._NORMAL_GRADES
-            self.isAbitur = False
+        self.sekII = self.group_info(group, 'Stufe') == 'SekII'
+        self.valid_grades = self.group_info(group, 'NotenWerte')
 #
     def grade_format(self, g):
         """Format the grade corresponding to the given numeric string.
         """
-        return g.zfill(2) if self.isAbitur else g.zfill(1)
+        return g.zfill(2) if self.sekII else g.zfill(1)
 #
     def print_grade(self, grade):
         """Return the string representation of the grade which should
@@ -334,7 +328,7 @@ class GradeBase(dict):
         else:
             return MISSING_GRADE
         try:
-            if self.isAbitur:
+            if self.sekII:
                 if grade in self.valid_grades:
                     try:
                         int(grade)

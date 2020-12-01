@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2020-11-20
+Last updated:  2020-12-01
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -24,9 +24,6 @@ Copyright 2020 Michael Towers
 
 =-LICENCE========================================
 """
-
-#TODO:
-#  - Consider replacing graphicsitem popups by modal dialogs (like for date).
 
 ##### Configuration #####################
 FONT_DEFAULT = 'Arial'
@@ -68,6 +65,7 @@ from qtpy.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
 class GridError(Exception):
     pass
 
+###
 
 class Grid(QGraphicsView):
     """This is the grid widget.
@@ -90,14 +88,20 @@ class Grid(QGraphicsView):
 #        self.ymarks = None
         self.DEFAULT_STYLE = CellStyle(FONT_DEFAULT, FONT_SIZE_DEFAULT,
                 align = 'c', border = 1)
-
-
+#
+    def clear(self):
+        self._scene = None
+        self.setScene(None)
+#
     def setTable(self, rowheights, columnwidths):
         """Set the grid size.
             <columnwidths>: a list of column widths (mm)
             <rowheights>: a list of row heights (mm)
         Calling this function will delete all existing data.
         """
+        self._styles = {'*': CellStyle(FONT_DEFAULT, FONT_SIZE_DEFAULT,
+                align = 'c', border = 1)
+        }
         self.tagmap = {}
         self._scene = QGraphicsScene()
         self.xmarks = [0.0]
@@ -122,13 +126,24 @@ class Grid(QGraphicsView):
             'DATE': PopupDate(self)
         }
         self._popup = None
-
+#
+    def style(self, name):
+        return self._styles[name]
+#
+    def new_style(self, name, base = None, **params):
+        if base:
+            style0 = self._styles[base]
+            self._styles[name] = style0.copy(**params)
+        else:
+            self._styles[name] = CellStyle(params.pop('font', None),
+                    params.pop('size', None), **params)
+#
     def ncols(self):
         return len(self.xmarks) - 1
-
+#
     def nrows(self):
         return len(self.ymarks) - 1
-
+#
     def viewWH(self):
         """Return the width and height of the viewing area scaled to
         scene coordinates.
@@ -138,18 +153,17 @@ class Grid(QGraphicsView):
         vh1 = vp.height()
         spoint = self.mapToScene(vw1, vh1)
         return (spoint.x(), spoint.y())
-
-
+#
     ### Methods dealing with cell editing
     def editCell(self, tile, x, y, validation):
         self.popdown(True)
         self._popup = validation
         validation.activate(tile, x, y)
-
+#
     def popdown (self, force = False):
         if self._popup != None and self._popup.hideMe(force):
             self._popup = None
-
+#
     def mousePressEvent(self, event):
         point = event.pos()
 #        print("POS:", point, self.mapToGlobal(point), self.itemAt(point))
@@ -157,39 +171,37 @@ class Grid(QGraphicsView):
         if self.items(point):
             return super().mousePressEvent(event)
         self.popdown(True)
-
+#
     def addSelect(self, tag, valuelist):
         if tag in self.editors:
             raise Bug(_EDITOR_TAG_REUSED.format(tag = tag))
         self.editors[tag] = PopupTable(self, valuelist)
-
-
+#
     ### View scaling
     def scaleUp (self):
         self.scale(1)
-
+#
     def scaleDn (self):
         self.scale(-1)
-
+#
     def scale(self, delta):
         t = QTransform()
         self._scale += self._scale * delta / 10
         t.scale(self._scale, self._scale)
         self.setTransform(t)
     ### ---------------
-
-
+#
     ### pdf output
     def setPdfMargins(self, left = 20, top = 20, right = 20, bottom = 20):
         self._pdfmargins = (left, top, right, bottom)
         return self._pdfmargins
-
+#
     def pdfMargins(self):
         try:
             return self._pdfmargins
         except AttributeError:
             return self.setPdfMargins()
-
+#
     def toPdf(self, filename = None):
         """Produce and save a pdf of the table.
         <filename> is a suggestion for the save dialog.
@@ -222,8 +234,7 @@ class Grid(QGraphicsView):
         # Write resulting file
         QFileDialog.saveFileContent(qbytes, filename or 'grid.pdf')
     ### ---------------
-
-
+#
     def tile(self, row, col, text = None, cspan = 1, rspan = 1,
             style = None, validation = None, tag = None):
         """Add a tile to the grid.
@@ -241,19 +252,18 @@ class Grid(QGraphicsView):
         h = self.ymarks[row + rspan] - y
         if not tag:
             tag = '#%d:%d' % (row, col)
-        t = Tile(self, tag, x, y, w, h, text,
-                style or self.DEFAULT_STYLE, validation)
+        cell_style = self._styles[style or '*']
+        t = Tile(self, tag, x, y, w, h, text, cell_style, validation)
         self._scene.addItem(t)
         self.tagmap[tag] = t
-
-
+#
     def valueChanged(self, tag, text):
         """Cell-changed callback.
         This should be overridden if it is needed.
         """
         pass
 
-
+###
 
 class CellStyle:
     """Handle various aspects of cell styling.
@@ -262,7 +272,7 @@ class CellStyle:
     _fonts = {}
     _brushes = {}
     _pens = {}
-
+#
     @classmethod
     def getFont(cls, fontFamily, fontSize, fontBold, fontItalic):
         ftag = (fontFamily, fontSize, fontBold, fontItalic)
@@ -281,8 +291,7 @@ class CellStyle:
             font.setItalic(True)
         cls._fonts[ftag] = font
         return font
-
-
+#
     @classmethod
     def getPen(cls, width):
         """Manage a cache for pens of different width.
@@ -303,8 +312,7 @@ class CellStyle:
             pen.setWidthF(widthF)
         cls._pens[width] = pen
         return pen
-
-
+#
     @classmethod
     def getBrush(cls, colour):
         """Manage a cache for brushes of different colour.
@@ -317,10 +325,9 @@ class CellStyle:
         brush = QBrush(QColor('#FF' + colour))
         cls._brushes[colour] = brush
         return brush
-
-
+#
     def __init__(self, font, size, align = 'c', highlight = None,
-            bg = None, border = 1):
+            bg = None, border = 1, mark = None):
         """
         <font> is the name of the font (<None> => default, not recommended,
             unless the cell is to contain no text).
@@ -335,16 +342,19 @@ class CellStyle:
             0: none
             1: all sides
             2: (thicker) underline
+        <mark> is a colour ('RRGGBB') which can be selected as an
+        "alternative" font colour.
         """
         # Font
         self.setFont(font, size, highlight)
+        self.colour_marked = mark
         # Alignment
         self.setAlign(align)
         # Background colour
         self.bgColour = self.getBrush(bg) if bg else None
         # Border
         self.border = border
-
+#
     def setFont(self, font, size, highlight):
         self._font, self._size, self._highlight = font, size, highlight
         try:
@@ -353,16 +363,16 @@ class CellStyle:
             emph, clr = highlight or '', None
         self.fontColour = self.getBrush(clr) if clr else None
         self.font = self.getFont(font, size, 'b' in emph, 'i' in emph)
-
+#
     def setAlign(self, align):
         if align in 'bmt':
             # Vertical
             self.alignment = ('c', align, True)
         else:
             self.alignment = (align, 'm', False)
-
+#
     def copy(self, font = None, size = None, align = None,
-            highlight = None, bg = None, border = None):
+            highlight = None, mark = None, bg = None, border = None):
         """Make a copy of this style, but with changes specified by the
         parameters.
         Note that a change to a 'None' parameter value is not possible.
@@ -379,6 +389,7 @@ class CellStyle:
             newstyle.border = border
         return newstyle
 
+###
 
 class Tile(QGraphicsRectItem):
     """The graphical representation of a table cell.
@@ -429,15 +440,13 @@ class Tile(QGraphicsRectItem):
     def mark(self, on):
         self.textItem.setBrush(self._style.getBrush(self._style.colour_marked)
                 if on else self._style.fontColour)
-
+#
     def margin(self):
         return 1.0 * self._grid.MM2PT
-
-
+#
     def value(self):
         return None if self.textItem == None else self.textItem.text()
-
-
+#
     def setText(self, text):
         if type(text) != str:
             raise Bug(_NOTSTRING.format(val = repr(text)))
@@ -476,8 +485,7 @@ class Tile(QGraphicsRectItem):
         else:
             yshift += (self.height0 - h) / 2
         self.textItem.setPos(xshift, yshift)
-
-
+#
     def mousePressEvent(self, event):
         if self.validation:
 #            point = event.scenePos ()
@@ -488,8 +496,7 @@ class Tile(QGraphicsRectItem):
         else:
             # This should cause any existing pop-up to be cancelled
             self._grid.popdown(True)
-
-
+#
     def newValue(self, text):
         """Called with the new value. The tile should be updated and the
         callback invoked.
@@ -497,7 +504,7 @@ class Tile(QGraphicsRectItem):
         self.setText(text)
         self._grid.valueChanged(self.tag, text)
 
-
+###
 
 class MiniTile(QGraphicsRectItem):
     """A small tile for the grid view – specifically for the table popup.
@@ -513,11 +520,11 @@ class MiniTile(QGraphicsRectItem):
         self.adjust()
         self.setBrush(parent.normalBrush)
         self.setPos(x, y)
-
+#
     def setText(self, text):
         self.textItem.setText(text)
         self.adjust()
-
+#
     def adjust(self):
         bdrect = self.textItem.boundingRect()
         wt = bdrect.width()
@@ -525,18 +532,18 @@ class MiniTile(QGraphicsRectItem):
         ht = bdrect.height()
         yshift = (self.height - ht) / 2
         self.textItem.setPos(xshift, yshift)
-
+#
     def hoverEnterEvent(self, event):
         self.setBrush(self.parentItem().highlightBrush)
-
+#
     def hoverLeaveEvent(self, event):
         self.setBrush(self.parentItem().normalBrush)
-
+#
     def mousePressEvent(self, event):
         self.hoverLeaveEvent(None)
         self.parentItem().selected(self.textItem.text())
 
-
+###
 
 class PopupTable(QGraphicsRectItem):
     """A selection-table popup for the grid view.
@@ -591,7 +598,7 @@ class PopupTable(QGraphicsRectItem):
                 y += h0
             else:
                 x += w0
-
+#
     def hideMe(self, force):
         """This should be called only by <GridView.popdown>.
         This popup is hidden regardless of <force> as the
@@ -599,7 +606,7 @@ class PopupTable(QGraphicsRectItem):
         """
         self.setVisible(False)
         return True
-
+#
     def activate(self, tile, x, y):
         # x and y are scene coordinates.
         # Get the visible area by converting view width and height to scene
@@ -619,12 +626,12 @@ class PopupTable(QGraphicsRectItem):
                 y = 0
         self.setPos(x, y)
         self.setVisible(True)
-
-
+#
     def selected(self, text):
         self.setVisible(False)
         self.tile.newValue(text)
 
+###
 
 class PopupDate(QDialog):
     def __init__(self, grid):
@@ -645,7 +652,7 @@ class PopupDate(QDialog):
         self.setLayout(vbox)
         self.setWindowTitle(_DATE_POPUP)
 #        self.setWindowFlags(Qt.SplashScreen)
-
+#
     def activate(self, tile, x, y):
         # Set date
         self.tile = tile
@@ -657,11 +664,11 @@ class PopupDate(QDialog):
         self.move(self._grid.mapToGlobal(viewp))
         if self.exec_():
             self.tile.newValue(self.date)
-
+#
     def newDate(self, date):
         self.lbl.setText(QLocale().toString(date))
         self.date = date.toString('yyyy-MM-dd')
-
+#
     def hideMe(self, force):
         """This should be called only by <Grid.popdown>.
         Here it is a dummy function because <PopupDate> is a modal
@@ -669,6 +676,7 @@ class PopupDate(QDialog):
         """
         return True
 
+###
 
 class PopupLineEdit(QGraphicsProxyWidget):
     """A line editor.
@@ -685,7 +693,7 @@ class PopupLineEdit(QGraphicsProxyWidget):
         self.setWidget(self.lineedit)
         self.setVisible(False)
         grid._scene.addItem(self)
-
+#
     def hideMe(self, force):
         """This should be called only by <Grid.popdown>.
         It hides only when <force> is true because the widget needs to
@@ -695,7 +703,7 @@ class PopupLineEdit(QGraphicsProxyWidget):
             self.setVisible(False)
             return True
         return False
-
+#
     def activate(self, tile, x, y):
         """Start the editing widget.
         x and y are scene coordinates.
@@ -711,7 +719,7 @@ class PopupLineEdit(QGraphicsProxyWidget):
         self.setPos(x, y)
         self.setVisible(True)
         self.lineedit.setFocus()
-
+#
 # If signal "editingFinished" is used in place of "returnPressed", this
 # method is called twice on pressing "Enter".
     def onDone(self):
@@ -721,6 +729,7 @@ class PopupLineEdit(QGraphicsProxyWidget):
         self.tile.newValue(text)
 
 
+#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 
 if __name__ == '__main__':
@@ -752,15 +761,16 @@ if __name__ == '__main__':
     topbox.addWidget(pb)
 
     # Add some data
-    titleStyle = CellStyle('Serif', size = 12, align = 'c', border = 2)
-
     rows = (10, 2, 6, 6, 6, 6, 6)
     cols = (25, 10, 8, 20, 8, 8, 25)
     grid.setTable(rows, cols)
 
+    grid.new_style('title', font = 'Serif', size = 12,
+            align = 'c', border = 2)
+
     # Title
     grid.tile(0, 0, cspan = len(cols), text = "Table Testing",
-                style = titleStyle)
+                style = 'title')
 
     editS = PopupTable(grid,
             ('1', '2', '3', '4', '5', '6', 'nb', 'nt', '*', '/'))

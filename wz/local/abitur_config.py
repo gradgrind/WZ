@@ -3,7 +3,7 @@
 """
 local/abitur_config.py
 
-Last updated:  2020-11-20
+Last updated:  2020-11-30
 
 Configuration for Abitur-grade handling.
 ====================================

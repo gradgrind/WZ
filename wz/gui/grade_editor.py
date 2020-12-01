@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-gui/abitur_editor.py
+gui/grade_editor.py
 
-Last updated:  2020-11-30
+Last updated:  2020-12-01
 
-Editor for Abitur results.
+Editor for grades.
 
 
 =+LICENCE=============================
@@ -25,32 +25,10 @@ Copyright 2020 Michael Towers
 =-LICENCE========================================
 """
 
-##### Configuration
-_TITLE = "Abitur-Ergebnisse"
-
-## Measurements are in mm ##
-COLUMNS = (14, 14, 25, 14, 14, 4, 20, 6, 6, 14, 3, 18, 3, 11)
-ROWS = (
-    6, 3, 6, 3, 4, 5, 4, 10, 5, 1,
-    # Written subjects:
-    5, 6, 6, 5, 6, 6, 5, 6, 6, 5, 6, 6,
-    # Other subjects:
-    5, 5, 6, 5, 6, 5, 6, 5, 6,
-    # Results:
-    5, 5, 3, 5, 3, 5, 3, 5, 3, 5, 5, 6, 5, 6
-)
-
-VALID_GRADES = (
-    '15', '14', '13',
-    '12', '11', '10',
-    '09', '08', '07',
-    '06', '05', '04',
-    '03', '02', '01',
-    '00'
-)
-
 ### Messages
 
+
+_TITLE = "WZ: Noten"
 
 #####################################################
 
@@ -68,149 +46,99 @@ from qtpy.QtWidgets import QApplication, QDialog, QStackedWidget, \
 
 from gui.grid import Grid, CellStyle, PopupDate, PopupTable
 from gui.gui_support import VLine, KeySelect#, ZIcon
+from core.base import Dates
 from grades.gradetable import GradeTable, Grades
 from local.base_config import FONT, print_schoolyear, SCHOOL_NAME, year_path
-from local.abitur_config import AbiCalc
+
+## Measurements are in mm ##
+COLUMNS = (15, 50, 15, 2) # + 6 * n ... further separators?
+# The info values could need more space than just the 3rd column ...
+ROWS = (
+#title
+    10,
+# info rows
+    6, 6, 6, 6, 6, 2,
+# header
+    6, 35, 2
+) # + 6 * n
+
+#TODO: change <Grid> to a QGraphicsScene, so that the scene can be
+# easily swapped out in the view?
+# Actually, that can probably be done using the <setTable> method ...
 
 
-class AbiturGrid(Grid):
-    def __init__(self, callback_value_changed):
-        super().__init__()
-        self.callback_changed = callback_value_changed
-        ### Styles:
-        ## The styles which may be used
-        baseStyle = CellStyle(FONT, size = 11)
-        infoStyle = baseStyle.copy(border = 0)
-        underlineStyle = baseStyle.copy(border = 2)
-        baseStyleL0 = infoStyle.copy(align = 'l')
-        labelStyle = baseStyle.copy(align = 'l', border = 0, highlight = 'b')
-        titleStyle = CellStyle(FONT, size = 12, align = 'l',
-                border = 0, highlight = 'b')
-        titleStyleR = titleStyle.copy(align = 'r')
-        smallStyle = baseStyle.copy(size = 10)
-        vStyle = smallStyle.copy(align = 'm')
-        hStyle = smallStyle.copy(border = 0)
-        gradeStyle = baseStyle.copy(highlight = ':2a6099')
-        gradeStyle.colour_marked = 'E00000'
-        resultStyleL = titleStyle.copy(border = 2)
-        resultStyle = titleStyle.copy(border = 2, align = 'c')
-        dateStyle = resultStyle.copy(highlight = ':2a6099')
-        dateStyle.colour_marked = 'E00000'
 
-        self.setTable(ROWS, COLUMNS)
+class GradeGrid(Grid):
+#
+    def styles(self):
+        """Set up the styles used in the table view.
+        """
+        self.new_style('base', font = FONT, size = 11)
+        self.new_style('title', font = FONT, size = 12, align = 'l',
+                    border = 0, highlight = 'b')
+        self.new_style('info', base = 'base', border = 0, align = 'l')
+        self.new_style('underline', base = 'base', border = 2)
+        self.new_style('titleR', base = 'title', align = 'r')
+        self.new_style('small', base = 'base', size = 10)
+        self.new_style('v', base = 'small', align = 'm')
+        self.new_style('h', base = 'small', border = 0)
+        self.new_style('entry', base = 'base', highlight = ':2a6099',
+                mark = 'E00000')
+
+    def set_table(self, schoolyear, group, term):
+        """Set the grade table (a <GradeTable> instance) to be used.
+        Set up the grid accordingly.
+        """
+        self.cell_callback = 'TODO'
+
+        self.grade_table = GradeTable.group_table(schoolyear, group, term,
+                ok_new = True)
+#TODO: more info needed?
+#
+#TODO: get number of rows and columns from <grade_table>
+        _ROWS = ROWS + (8,)*10
+        _COLS = COLUMNS + (6,)*10 + (2,) + (6,)*3
+        self.setTable(_ROWS, _COLS)
+        self.styles()
+
         ### Cell editors
-#TODO: add '*' to list for "Nachprüfungen"
-        edit_grade = PopupTable(self, VALID_GRADES)
+        # These are attached to the scene, so a new table (which starts
+        # a new scene) begins with no cell editors.
+        edit_grade = PopupTable(self, Grades.group_info(group, 'NotenWerte'))
         edit_date = PopupDate(self)
+#TODO: add editors for extra fields
 
         ### Title area
-        self.tile(0, 0, text = "Abitur-Berechnungsbogen", cspan = 4,
-                style = titleStyle)
-        self.tile(0, 4, text = SCHOOL_NAME, cspan = 10, style = titleStyleR)
-        self.tile(2, 7, text = "Schuljahr:", cspan = 3, style = titleStyleR)
-        self.tile(2, 10, text = '', cspan = 4, style = titleStyle,
-                tag = 'SCHOOLYEAR')
-        self.tile(3, 0, cspan = 14, style = underlineStyle)
+        self.tile(0, 0, text = "Notentabelle", cspan = 2, style = 'title')
+        self.tile(0, 4, text = SCHOOL_NAME, cspan = 10, style = 'titleR')
+        ### General Info
+        self.tile(1, 1, text = self.grade_table.SCHOOLYEAR, style = 'info')
+        self.tile(1, 2, text = self.grade_table.schoolyear,
+                cspan = 3, style = 'info')
+        self.tile(2, 1, text = self.grade_table.GROUP, style = 'info')
+        self.tile(2, 2, text = self.grade_table.group,
+                cspan = 3, style = 'info')
+        self.tile(3, 1, text = self.grade_table.TERM, style = 'info')
+        self.tile(3, 2, text = Grades.term2text(self.grade_table.term),
+                cspan = 3, style = 'info')
+        # These are editable dates:
+        self.tile(4, 1, text = self.grade_table.ISSUE_D, style = 'info')
+        self.tile(4, 2, text = self.grade_table.issue_d,
+                cspan = 3, style = 'info',
+                validation = edit_date, tag = 'ISSUE_D')
+        self.tile(5, 1, text = self.grade_table.GRADES_D, style = 'info')
+        self.tile(5, 2, text = self.grade_table.grades_d,
+                cspan = 3, style = 'info',
+                validation = edit_date, tag = 'GRADES_D')
 
-        ### Pupil's name
-        self.tile(5, 0, cspan = 2, text = "Name:", style = labelStyle)
-        self.tile(5, 2, cspan = 12, text = '', style = labelStyle,
-                tag = 'NAME')
-        self.tile(6, 0, cspan = 14, style = underlineStyle)
 
-        ### Grade area headers
-        self.tile(8, 2, text = "Fach", style = hStyle)
-        self.tile(8, 3, text = "Kurspunkte", cspan = 2, style = hStyle)
-        self.tile(8, 6, text = "Mittelwert", style = hStyle)
-        self.tile(8, 9, text = "Berechnungspunkte", cspan = 3,
-                style = hStyle)
 
-        self.tile(10, 11, text = "Fach 1-4", style = smallStyle)
-        self.tile(11, 0, text = "Erhöhtes Anforderungsniveau",
-                rspan = 8, style = vStyle)
-        self.tile(23, 11, text = "Fach 5-8", style = smallStyle)
-        self.tile(20, 0, text = "Grundlegendes Anforderungsniveau",
-                rspan = 11, style = vStyle)
 
-        ### Subject entries
-        # With written exams
-        for i in (1, 2, 3, 4):
-            istr = str(i)
-            row0 = 8 + i*3
-            self.tile(row0, 1, rspan = 2, text = istr, style = baseStyle)
-            self.tile(row0, 2, rspan = 2, text = '', style = baseStyle,
-                    tag = "SUBJECT_%s" % istr)
-            self.tile(row0, 3, text = "schr.", style = smallStyle)
-            self.tile(row0 + 1, 3, text = "mündl.", style = smallStyle)
-            self.tile(row0, 4, text = '', style = gradeStyle,
-                    validation = edit_grade, tag = "GRADE_%s" % istr)
-            self.tile(row0 + 1, 4, text = '', style = gradeStyle,
-                    validation = edit_grade, tag = "GRADE_%s_m" % istr)
-            self.tile(row0, 6, rspan = 2, text = '', style = baseStyle,
-                    tag = "AVERAGE_%s" % istr)
-            self.tile(row0, 7, rspan = 2, text = "X", style = infoStyle)
-            self.tile(row0, 8, rspan = 2, text = "12" if i < 4 else "8",
-                    style = infoStyle)
-            self.tile(row0, 9, rspan = 2, text = '', style = underlineStyle,
-                    tag = "SCALED_%s" % istr)
-
-        # Without written exams
-        for i in (5, 6, 7, 8):
-            istr = str(i)
-            row0 = 14 + i*2
-            self.tile(row0, 1, text = istr, style = baseStyle)
-            self.tile(row0, 2, text = '', style = baseStyle,
-                    tag = "SUBJECT_%s" % istr)
-            self.tile(row0, 3, text = "mündl." if i < 7 else "2. Hj.",
-                    style = smallStyle)
-            self.tile(row0, 4, text = "04", style = gradeStyle,
-                    validation = edit_grade, tag = "GRADE_%s" % istr)
-            self.tile(row0, 6, text = '', style = baseStyle,
-                    tag = "AVERAGE_%s" % istr)
-            self.tile(row0, 7, text = "X", style = infoStyle)
-            self.tile(row0, 8, text = "4", style = infoStyle)
-            self.tile(row0, 9, text = '', style = underlineStyle,
-                    tag = "SCALED_%s" % istr)
-
-        ### Totals
-        self.tile(11, 11, text = '', rspan = 11, style = baseStyle,
-                    tag = "TOTAL_1-4")
-        self.tile(24, 11, text = '', rspan = 7, style = baseStyle,
-                    tag = "TOTAL_5-8")
-
-        ### Evaluation
-        i = 0
-        for text in (
-                "Alle >0:",
-                "Fach 1 – 4, mindestens 2mal ≥ 5P.:",
-                "Fach 5 – 8, mindestens 2mal ≥ 5P.:",
-                "Fach 1 – 4 ≥ 220:",
-                "Fach 5 – 8 ≥ 80:"
-                ):
-            row = 32 + i*2
-            i += 1
-            self.tile(row, 2, text = text, cspan = 6, style = baseStyleL0)
-            self.tile(row, 9, text = '', style = baseStyle,
-                tag = "JA_%d" % i)
-
-        ### Final result
-        self.tile(42, 2, text = "Summe:", style = resultStyleL)
-        self.tile(42, 3, text = '', cspan = 2, style = resultStyle,
-                tag = "SUM")
-        self.tile(42, 8, text = "Endnote:", cspan = 2, style = resultStyleL)
-        self.tile(42, 10, text = '', cspan = 4, style = resultStyle,
-                tag = "FINAL_GRADE")
-
-        self.tile(44, 8, text = "Datum:", cspan = 2, style = resultStyleL)
-        self.tile(44, 10, text = '', cspan = 4, style = dateStyle,
-                validation = edit_date, tag = "FERTIG_D")
-#TODO: Do I want to display the date in local format? If so, I would need
-# to adjust the popup editor ...
 #
     def valueChanged(self, tag, text):
         """Called when a cell value is changed by the editor.
         """
-        self.callback_changed(tag, text)
+        self.cell_callback(tag, text)
 
 
 ###########################################
@@ -231,12 +159,8 @@ class _GradeEdit(QDialog):
 #        self.gridtitle.setAlignment (Qt.AlignCenter)
 
 #*********** The "main" widget ***********
-# This should perhaps be a QGraphicsView, whose scene can be set as required?
-        self.grade_edit = QStackedWidget()
-        topbox.addWidget(self.grade_edit)
-
-        self.gradeView = AbiturGrid(self.cell_changed)
-#        topbox.addWidget(self.gradeView)
+        self.gradeView = GradeGrid()
+        topbox.addWidget(self.gradeView)
 
         topbox.addWidget(VLine())
 
@@ -251,21 +175,16 @@ class _GradeEdit(QDialog):
 
         cbox = QVBoxLayout()
 #        cbox.addLayout(bbox)
-#        self.yearSelect = KeySelect([(y, print_schoolyear(y))
-#                for y in Dates.get_years()],
-#                self.changedYear)
+        self.year_select = KeySelect(changed_callback = self.year_changed)
         self.term_select = KeySelect(Grades.terms(), self.term_changed)
 
-        ### Select group (might be just one entry ...)
-#TODO: classes
-        self.group_select = KeySelect([('13', 'Klasse 13')],
-                self.changedGroup)
-        self.group_select
+        ### Select group (might be just one entry ... perhaps even none)
+        self.group_select = KeySelect(changed_callback = self.group_changed)
 
-        ### List of pupils
+        ### List of pupils – not for term 1, 2?
         self.pselect = KeySelect(changed_callback = self.pupil_changed)
         self.pselect.setMaximumWidth(150)
-#        cbox.addWidget(self.yearSelect)
+        cbox.addWidget(self.year_select)
         cbox.addWidget(self.term_select)
         cbox.addWidget(self.group_select)
         cbox.addWidget(self.pselect)
@@ -274,26 +193,46 @@ class _GradeEdit(QDialog):
         cbox.addWidget(pbPdf)
         pbPdf.clicked.connect(self.gradeView.toPdf)
         topbox.addLayout(cbox)
-#        self.yearSelect.trigger()
+#        self.year_select.trigger()
+#        self.term_select.trigger()
 
 # after "showing"?
 #        pbSmaller.setFixedWidth (pbSmaller.height ())
 #        pbLarger.setFixedWidth (pbLarger.height ())
 
-    def changedGroup(self, group):
-        pass
+#TODO: at certain changes the scene should probably be cleared!
+# Maybe at any change!
 
-#    def changedYear(self, schoolyear):
-#        print("Change Year:", schoolyear)
-#        self.schoolyear = schoolyear
-## clear main view?
-#        self.categorySelect.trigger()
-
-
+#
+    def init(self):
+        years = [(y, print_schoolyear(y)) for y in Dates.get_years()]
+        self.year_select.set_items(years)
+#        self.gradeView.clear()
+#        self.year_select.trigger()
+#
+    def group_changed(self, group):
+        print("Change Group:", group)
+        self.group = group
+        self.gradeView.set_table(self.schoolyear, self.group, self.term)
+#
+    def year_changed(self, schoolyear):
+        print("Change Year:", schoolyear)
+        self.schoolyear = schoolyear
+#        self.gradeView.clear()
+        self.term_select.trigger()
+#
     def term_changed(self, key):
-        print("Change Category:", key)
-        if key == 'A':
-            self.grade_edit.addWidget(self.gradeView)
+        self.term = key
+        groups = [(grp, grp)
+                for grp, rtype in Grades.term2group_rtype_list(key)]
+        print("Change Category:", key, [grp[0] for grp in groups])
+        self.gradeView.clear()
+        self.group_select.set_items(groups)
+#        self.group_select.trigger()
+
+
+#        if key == 'A':
+#            self.grade_edit.addWidget(self.gradeView)
 ##TODO: choices -> ???
 ##        categories = Grades.categories()
 #
@@ -320,8 +259,9 @@ class _GradeEdit(QDialog):
 #    def set_table(self, fpath):
 #        read_grade_table(fpath)
 
-    def set_table(self, schoolyear, group, term):
+    def set_table0(self, schoolyear, group, term):
         """Set the grade table to be used.
+        <fpath> is the full path to the table file (see <GradeTable>).
         """
         self.grade_table = GradeTable.group_table(schoolyear, group, term,
                 ok_new = True)
@@ -429,8 +369,10 @@ if __name__ == '__main__':
     app.installTranslator(qtr)
 
     ge = _GradeEdit()
+    ge.init()
+
 #    ge.set_table(year_path(_year, 'NOTEN/Noten_13_A.xlsx'))
 #    ge.set_table(os.path.join(DATA, 'testing', 'NOTEN', 'Noten_13_A.xlsx'))
-    ge.set_table(_year, '13', 'A')
+#    ge.gradeView.set_table(_year, '12.R', '2')
     ge.exec_()
 

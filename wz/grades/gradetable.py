@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2020-11-29
+grades/gradetable.py - last updated 2020-11-30
 
 Access grade data, read and build grade tables.
 
@@ -25,13 +25,14 @@ Copyright 2020 Michael Towers
 # The tables would also be group-based, so a file name might be
 # 'Noten_10_S2016-04-32'.
 
-### Grade table header items
+### Grade table "info" items
 _SCHOOLYEAR = 'Schuljahr'
 _GROUP = 'Klasse/Gruppe'
 _TERM = 'Anlass'
 _ISSUE_D = 'Ausgabedatum'      # or 'Ausstellungsdatum'?
 _GRADES_D = 'Notendatum'
 
+#TODO: comments – where should these be stored?
 
 ### Messages
 _TABLE_CLASS_MISMATCH = "Falsche Klasse in Notentabelle:\n  {filepath}"
@@ -163,7 +164,7 @@ class GradeTable(dict):
     stream is available in the <Grades> instance.
     Additional information is available as attributes:
         <group>: school-class/group, as specified in
-                <GradeBase._REPORT_GROUPS>
+                <GradeBase.REPORT_GROUPS>
         <term>: a string representing a valid "term" (school-term, etc.)
         <schoolyear>: school-year
         <issue_d>: date of issue
@@ -172,6 +173,12 @@ class GradeTable(dict):
         <name>: {pid -> (short) name}
         <stream>: {pid -> stream}
     """
+    SCHOOLYEAR = _SCHOOLYEAR
+    GROUP = _GROUP
+    TERM = _TERM
+    ISSUE_D = _ISSUE_D
+    GRADES_D = _GRADES_D
+#
     def __init__(self, schoolyear, filepath = None):
         super().__init__()
         self.schoolyear = schoolyear
@@ -216,7 +223,6 @@ class GradeTable(dict):
                 if sid.endswith('.e') or sid.endswith('.g'):
                     if gmap.get(sid) == UNCHOSEN:
                         continue
-                    print("§§§+++", sid, sdata)
                     new_sdata = sdata._replace(
                             sid = sdata.sid[:-1] + 'x',
 # <tids> must have a value, otherwise it will not be passed by the
