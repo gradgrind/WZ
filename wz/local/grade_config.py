@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-12-01
+Last updated:  2020-12-03
 
 Configuration for grade handling.
 ====================================
@@ -18,7 +18,8 @@ _BAD_TERM_REPORT = "Ungültige Noten-Konfiguration für Gruppe {group}:" \
 _BAD_ANLASS = "Ungültiger Anlass: {term}"
 _BAD_TERM = "Ungültiger \"Anlass\" (Halbjahr): {term}"
 _INVALID_GRADE = "Ungültige \"Note\": {grade}"
-
+_BAD_XGRADE = "Ungültiges Zusatz-Notenfeld für Gruppe {grp}: {item}"
+_BAD_AVERAGE = "Ungültiges Durchschnittsfeld für Gruppe {grp}: {item}"
 
 # Special "grades"
 UNCHOSEN = '/'
@@ -81,7 +82,9 @@ REPORT_GROUPS = f"""
     Anlässe = ;
 ######## (extra "grade" fields in internal table):
 ######## Zusätzliche "Notenfelder" in interner Notentabelle
-    Notenfelder_X = ZeugnisArt;
+    Notenfelder_X = *ZA/Zeugnis (Art);
+######## Durchschnitte für Notenkonferenz:
+    Durchschnitte = ;
 ######## (additional report types):
 ######## Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
 ######## können
@@ -98,7 +101,7 @@ REPORT_GROUPS = f"""
 ######## Notenzeugnisse erstellt:
     Anlässe = 1/Zeugnis; 2/; A/Abitur
 ######## (The report type is determined by calculations):
-    Notenfelder_X = ZeugnisArt; FERTIG_D
+    Notenfelder_X = *ZA/Zeugnis (Art); *F_D/Fertigstellung
     ZeugnisArt_X = Abgang;
     NotenWerte = {_ABITUR_GRADES}
 
@@ -107,26 +110,29 @@ REPORT_GROUPS = f"""
     NotentabelleVorlage = Noten/Noteneingabe-SII
     Maßstäbe = Gym;
     Anlässe = 1/Zeugnis; 2/Zeugnis
-    Notenfelder_X = ZeugnisArt; QUALI
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation
     ZeugnisArt_X = Abgang;
     NotenWerte = {_ABITUR_GRADES}
 
 :12.R
     Maßstäbe = RS; HS
     Anlässe = 1/Zeugnis; 2/Abschluss
-    Notenfelder_X = ZeugnisArt; QUALI
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation
+    Durchschnitte = :D/Φ Alle Fächer; :Dx/Φ De-En-Ma
 
 :11.G
     Maßstäbe = Gym;
     Anlässe = 1/Orientierung; 2/Zeugnis
-    Notenfelder_X = ZeugnisArt; QUALI
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation
     ZeugnisArt_X = Abgang; Zeugnis
+    Durchschnitte = :D/Φ Alle Fächer;
 
 :11.R
     Maßstäbe = RS; HS
     Anlässe = 1/Orientierung; 2/Abschluss
-    Notenfelder_X = ZeugnisArt; QUALI
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation
     ZeugnisArt_X = Abgang; Zeugnis
+    Durchschnitte = :D/Φ Alle Fächer; :Dx/Φ De-En-Ma
 
 :10
     Anlässe = 2/Orientierung;
@@ -387,6 +393,34 @@ class GradeBase(dict):
                     groups.append((group, report_type))
         return groups
 #
+    @classmethod
+    def xgradefields(cls, group):
+        """Return a mapping of additional fields (qualification,
+        report type, etc.) which are treated similarly to grades:
+            {sid(tag) -> name}
+        """
+        xfmap = {}
+        for nf in cls.group_info(group,  'Notenfelder_X'):
+            try:
+                k, v = nf.split('/')
+            except ValueError as e:
+                raise GradeConfigError(_BAD_XGRADE.format(
+                        grp = group, item = nf))
+            xfmap[k] = v
+        return xfmap
+#
+    @classmethod
+    def averages(cls, group):
+        amap = {}
+        for a in cls.group_info(group,  'Durchschnitte'):
+            try:
+                k, v = a.split('/')
+            except ValueError as e:
+                raise GradeConfigError(_BAD_AVERAGE.format(
+                        grp = group, item = a))
+            amap[k] = v
+        return amap
+
 #TODO
     @staticmethod
     def special_term(termGrade):

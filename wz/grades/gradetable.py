@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2020-11-30
+grades/gradetable.py - last updated 2020-12-02
 
 Access grade data, read and build grade tables.
 
@@ -169,9 +169,11 @@ class GradeTable(dict):
         <schoolyear>: school-year
         <issue_d>: date of issue
         <grades_d>: date of grade finalization
-        <subjects>: {sid -> subject-name}
+        <sid2subject_data>: {sid -> subject_data} also for "special" sids
+        <subjects>: {sid -> subject-name}   (just "real" sids)
+        <composites>: {sid -> subject-name} ("composite" sids)
+        <extra>: {sid/tag -> text name} ("extra" data, treated as grade)
         <name>: {pid -> (short) name}
-        <stream>: {pid -> stream}
     """
     SCHOOLYEAR = _SCHOOLYEAR
     GROUP = _GROUP
@@ -186,7 +188,10 @@ class GradeTable(dict):
         self.term = None
         self.issue_d = None
         self.grades_d = None
+        self.sid2subject_data = None
         self.subjects = None
+        self.composites = None
+        self.extras = None
         self.name = None
         if filepath:
             self._read_grade_table(filepath)
@@ -196,23 +201,21 @@ class GradeTable(dict):
         # Get subjects
         subjects = Subjects(self.schoolyear)
         self.sid2subject_data = {} # {sid -> subject_data}
-        self.subjects = {}   # mapping just for "real" subjects, sid -> name
-        self.composites = [] # list of composite sids
+        self.subjects = {}   # name-mapping just for "real" subjects
+        self.composites = {} # name-mapping for composite sids
         for gs in subjects.grade_subjects(group):
             self.sid2subject_data[gs.sid] = gs
             if gs.tids:
+                # "real" (taught) subject
                 self.subjects[gs.sid] = gs.name
             else:
-                # composite
-                self.composites.append(gs.sid)
+                # "composite" subject
+                self.composites[gs.sid] = gs.name
+        # name-mapping for "extra" sid-fields:
+        self.extras = Grades.xgradefields(group)
 #
     def _include_grades(self, gmap):
         grades = {}
-
-#TODO: do I really need self.subjects AND self.sid2subject_data?
-
-#TODO: adding .x subjects in Abi! ... possibly in grade_config (see
-# <special_term>).
         if self.term == 'A':
             # Add additional oral exam grades
             sdmap = {}
@@ -241,8 +244,8 @@ class GradeTable(dict):
             grades[sid] = gmap.get(sid) or ''
         for comp in self.composites:
             grades[comp] = gmap.get(comp) or ''
-        for f in GradeBase.group_info(self.group,  'Notenfelder_X'):
-            grades['X_' + f] = gmap.get(f) or ''
+        for xsid in self.extras:
+            grades[xsid] = gmap.get(xsid) or ''
         return grades
 #
     def _read_grade_table(self, filepath):
@@ -297,7 +300,6 @@ class GradeTable(dict):
         the table must already exist.
         """
         # Get file path
-        # Get file path and write file
         table_path = year_path(schoolyear, cls.table_path(group, term))
         try:
             # Read the "internal" table for this group/term
@@ -471,8 +473,8 @@ class GradeTable(dict):
             fields.append(sid)
         for comp in self.composites:
             fields.append(comp)
-        for f in GradeBase.group_info(self.group,  'Notenfelder_X'):
-            fields.append(f)
+        for xsid in self.extras:
+            fields.append(xsid)
         # Get line data
         dlist = []
         for pid, grades in self.items():

@@ -1,4 +1,4 @@
-#	2020-11-29 16:44
+#	2020-12-02 14:43
 
 +++	SCHOOLYEAR	2016
 +++	GROUP	11.G
@@ -6,7 +6,7 @@
 +++	GRADES_D	2016-06-06
 +++	ISSUE_D	2016-06-22
 
-PID	PUPIL	STREAM	De	En	Fr	Ma	Mu	Ges	Rel	Soz	Bio	Ch	Sp	AWT	Eu	Bb	Kge	Mal	Pls	Ku	ZeugnisArt	QUALI
+PID	PUPIL	STREAM	De	En	Fr	Ma	Mu	Ges	Rel	Soz	Bio	Ch	Sp	AWT	Eu	Bb	Kge	Mal	Pls	Ku	*ZA	*Q
 200501	Anna Amundsen	Gym	1	2+	4	3	4+	4	2	6	3	2	1	/	2	1	2	3	2			
 200502	Bettina Blumig	Gym	2	2	5	4	3	4	3	2	5	4	2	/	3	2	3	2	2			
 200503	Carsten Christiansen	Gym	1	1-	2	3	3	3	3	1	3	2	3	/	2	2	3	1	2			

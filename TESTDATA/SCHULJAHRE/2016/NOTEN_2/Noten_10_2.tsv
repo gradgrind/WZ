@@ -1,4 +1,4 @@
-#	2020-11-29 16:44
+#	2020-12-02 14:43
 
 +++	SCHOOLYEAR	2016
 +++	GROUP	10
@@ -6,7 +6,7 @@
 +++	GRADES_D	2016-06-06
 +++	ISSUE_D	2016-06-22
 
-PID	PUPIL	STREAM	De	En	Fr	Ma	Mu	Ges	Rel	Soz	Bio	Ch	Sp	AWT	Eu	Kge	Ktn	Snt	Web	Ku	ZeugnisArt
+PID	PUPIL	STREAM	De	En	Fr	Ma	Mu	Ges	Rel	Soz	Bio	Ch	Sp	AWT	Eu	Kge	Ktn	Snt	Web	Ku	*ZA
 200601	Annegret Adelig	Gym	2+	3	1+	2-	2	1	2-	2-	3-	3	3+	/	2			nb	nt		
 200602	Bertha Bunte	Gym	1+	1	2+	1-	2+	3+	2+	2-	3-	3-	1-	/	1			nt	1+		
 200603	Christian Carstensen	Gym	3	2	2-	5	3+	3-	nb	3-	4+	4	2-	/	2			nt	2		
