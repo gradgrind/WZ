@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-12-03
+Last updated:  2020-12-04
 
 Configuration for grade handling.
 ====================================
@@ -88,7 +88,7 @@ REPORT_GROUPS = f"""
 ######## (additional report types):
 ######## Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
 ######## können
-    ZeugnisArt_X = Abgang; Zeugnis
+    *ZA/S = Abgang; Zeugnis;
 ######## gültige "Noten":
     NotenWerte = {_NORMAL_GRADES}
 
@@ -98,44 +98,58 @@ REPORT_GROUPS = f"""
     NotentabelleVorlage = Noten/Noteneingabe-Abitur
 ######## (term '2': grades collected, but no report cards)
 ######## Für das 2. Halbjahr werden Noten gegeben, aber keine
-######## Notenzeugnisse erstellt:
-    Anlässe = 1/Zeugnis; 2/; A/Abitur
+######## Notenzeugnisse erstellt: ????? Not needed? – see *ZA/x ...
+    Anlässe = 1/Zeugnis; 2/; A/Abitur;
 ######## (The report type is determined by calculations):
-    Notenfelder_X = *ZA/Zeugnis (Art); *F_D/Fertigstellung
-    ZeugnisArt_X = Abgang;
+    Notenfelder_X = *ZA/Zeugnis (Art); *F_D/Fertigstellung;
+######## Zeugnis-Art/Abitur automatic?
+    *ZA/A = Abitur; Fachhochschulreife; Abitur-nicht-bestanden;
+    *ZA/1 = Zeugnis; Abgang;
+    *ZA/2 = -; Abgang;
+    *ZA/S = Abgang;
     NotenWerte = {_ABITUR_GRADES}
 
 :12.G
     Stufe = SekII
     NotentabelleVorlage = Noten/Noteneingabe-SII
     Maßstäbe = Gym;
-    Anlässe = 1/Zeugnis; 2/Zeugnis
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation
-    ZeugnisArt_X = Abgang;
+    Anlässe = 1/Zeugnis; 2/Zeugnis;
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
+    *ZA/1 = Zeugnis; Abgang;
+    *ZA/2 = Zeugnis; Abgang;
+    *ZA/S = Abgang;
     NotenWerte = {_ABITUR_GRADES}
 
 :12.R
-    Maßstäbe = RS; HS
-    Anlässe = 1/Zeugnis; 2/Abschluss
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation
-    Durchschnitte = :D/Φ Alle Fächer; :Dx/Φ De-En-Ma
+    Maßstäbe = RS; HS;
+    Anlässe = 1/Zeugnis; 2/Abschluss;
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
+    *ZA/1 = Zeugnis; Abgang;
+    *ZA/2 = Abschluss; Abgang; Zeugnis;
+    *ZA/S = Abgang;
+    Durchschnitte = :D/Φ Alle Fächer; :Dx/Φ De-En-Ma;
 
 :11.G
     Maßstäbe = Gym;
-    Anlässe = 1/Orientierung; 2/Zeugnis
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation
-    ZeugnisArt_X = Abgang; Zeugnis
+    Anlässe = 1/Orientierung; 2/Zeugnis;
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
+    *ZA/1 = Orientierung; Abgang; Zeugnis;
+    *ZA/2 = Zeugnis; Abgang;
+    *ZA/S = Abgang; Zeugnis;
     Durchschnitte = :D/Φ Alle Fächer;
 
 :11.R
-    Maßstäbe = RS; HS
-    Anlässe = 1/Orientierung; 2/Abschluss
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation
-    ZeugnisArt_X = Abgang; Zeugnis
-    Durchschnitte = :D/Φ Alle Fächer; :Dx/Φ De-En-Ma
+    Maßstäbe = RS; HS;
+    Anlässe = 1/Orientierung; 2/Abschluss;
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
+    *ZA/1 = Orientierung; Abgang; Zeugnis;
+    *ZA/2 = Zeugnis; Abgang; Abschluss;
+    *ZA/S = Abgang; Zeugnis;
+    Durchschnitte = :D/Φ Alle Fächer; :Dx/Φ De-En-Ma;
 
 :10
     Anlässe = 2/Orientierung;
+    *ZA/2 = Orientierung; Zeugnis;
 
 # Gruppen '09', '08', ... (benutzen die Voreinstellungen)
 :09 08 07 06 05
@@ -379,8 +393,17 @@ class GradeBase(dict):
     @classmethod
     def term2group_rtype_list(cls, term):
         """Return list of (group, default-report-type) pairs for valid
-        groups in the given term.
+        groups in the given "term".
         """
+        groups = []
+        for group in GROUP_INFO:
+            try:
+                groups.append((group, cls.group_info(group, f'*ZA/{term}')))
+            except GradeConfigError:
+                continue
+        return groups
+
+#'Anlässe' deprecated?
         groups = []
         for group, data in GROUP_INFO.items():
             for item in cls.group_info(group, 'Anlässe'):

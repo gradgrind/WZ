@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-12-01
+Last updated:  2020-12-05
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -89,8 +89,8 @@ class KeySelect(QComboBox):
         super().__init__()
         self.changed_callback = changed_callback
         self.set_items(value_mapping)
-# If connecting after adding the items, there seems to be no signal;
-# if before, then the first item is signalled.
+# Note concerning Qt: If connecting after adding the items, there seems
+# to be no signal; if before, then the first item is signalled.
         self.currentIndexChanged.connect(self._new)
 
     def _new(self, index):
@@ -105,7 +105,10 @@ class KeySelect(QComboBox):
     def set_items(self, value_mapping):
         """Set / reset the items.
         <value_mapping> is a list: ((key, display text), ...)
+        This will not cause a callback.
         """
+        self._cb = self.changed_callback
+        self.changed_callback = None        # suppress callback
         self.value_mapping = value_mapping
         self.clear()
         if value_mapping:
@@ -113,6 +116,7 @@ class KeySelect(QComboBox):
             self.key = self.value_mapping[self.currentIndex()][0]
         else:
             self.key = None
+        self.changed_callback = self._cb    # reenable callback
 
 ### ------------------------------------------------------------- ###
 # Everything below here is not currently used ...

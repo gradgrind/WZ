@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-03
+Last updated:  2020-12-05
 
 Editor for grades.
 
@@ -32,6 +32,9 @@ _TITLE = "WZ: Noten"
 _PUPIL = "Schüler"
 _STREAM = "Maßstab"
 
+_SCHULJAHR = "Schuljahr:"
+_TERM = "Anlass:"
+_GROUP = "Klasse/Gruppe:"
 #####################################################
 
 
@@ -41,213 +44,16 @@ if __name__ == '__main__':
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
 
-from qtpy.QtWidgets import QApplication, QDialog, QStackedWidget, \
-    QHBoxLayout, QVBoxLayout, QPushButton
-#from qtpy.QtGui import QFont
-#from qtpy.QtCore import Qt
+from qtpy.QtWidgets import QApplication, QDialog, \
+    QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
-from gui.grid import Grid, CellStyle, PopupDate, PopupTable
+from gui.grade_grid import GradeGrid
 from gui.gui_support import VLine, KeySelect#, ZIcon
 from core.base import Dates
-from grades.gradetable import GradeTable, Grades
-from local.base_config import FONT, print_schoolyear, SCHOOL_NAME, year_path
-
-## Measurements are in mm ##
-COLUMNS = (35, 15, 15, 2) # + 8 * n ... further separators?
-# The info values could need more space than just the 3rd column ...
-
-# Specify widths of special columns explicitly:
-COL_WIDTH = {
-    ':D': 10,
-    ':Dx': 10,
-    '*ZA': 30,
-    '*Q': 8,
-    '*F_D': 20,
-}
-
-ROWS = (
-#title
-    12,
-# info rows
-    6, 6, 6, 6, 6, 6,
-# header (tags)
-    6, 2
-) # + 6 * n
+from local.base_config import print_schoolyear
+from local.grade_config import GradeBase
 
 ###
-
-class GradeGrid(Grid):
-#
-    def styles(self):
-        """Set up the styles used in the table view.
-        """
-        self.new_style('base', font = FONT, size = 11)
-        self.new_style('title', font = FONT, size = 12, align = 'l',
-                    border = 0, highlight = 'b')
-        self.new_style('info', base = 'base', border = 0, align = 'l')
-        self.new_style('underline', base = 'base', border = 2)
-        self.new_style('titleR', base = 'title', align = 'r')
-        self.new_style('small', base = 'base', size = 10)
-        self.new_style('v', base = 'small', align = 'b')
-        self.new_style('h', base = 'small', border = 0)
-        self.new_style('entry', base = 'base', highlight = ':2a6099',
-                mark = 'E00000')
-
-    def set_table(self, schoolyear, group, term):
-        """Set the grade table (a <GradeTable> instance) to be used.
-        Set up the grid accordingly.
-        """
-        self.cell_callback = 'TODO'
-
-        self.grade_table = GradeTable.group_table(schoolyear, group, term,
-                ok_new = True)
-
-#        print("$$$ pupils:", len(self.grade_table))
-#        print("$$$ subjects:", self.grade_table.subjects) # real subjects
-
-        # Get number of rows and columns from <grade_table>
-        row_pids = len(ROWS)
-        _ROWS = ROWS + (6,) * len(self.grade_table)
-        col_sids = len(COLUMNS)
-        _nsids = len(self.grade_table.subjects)
-        _ncomps = len(self.grade_table.composites)
-        _COLS = COLUMNS + (8,) * _nsids
-        col_composites = len(_COLS) + 1
-        if _ncomps:
-            _COLS += (2,) + (8,) * _ncomps
-        col_averages = len(_COLS) + 1
-# The averages are only used in the grade editor ...
-        averages = Grades.averages(group)
-        if averages:
-            _COLS += (2,)
-            for x in averages:
-                _COLS += (COL_WIDTH[x],)
-        col_extras = len(_COLS) + 1
-        if self.grade_table.extras:
-            _COLS += (2,)
-            for x in self.grade_table.extras:
-                _COLS += (COL_WIDTH[x],)
-
-        self.setTable(_ROWS, _COLS)
-        self.styles()
-
-        ### Cell editors
-        # These are attached to the scene, so a new table (which starts
-        # a new scene) begins with no cell editors.
-        edit_grade = PopupTable(self, Grades.group_info(group, 'NotenWerte'))
-        edit_date = PopupDate(self)
-#TODO: add editors for extra fields
-
-        ### Title area
-        self.tile(0, 0, text = "Notentabelle", cspan = 2, style = 'title')
-        self.tile(0, 4, text = SCHOOL_NAME, cspan = 10, style = 'titleR')
-        ### General Info
-        self.tile(1, 0, text = self.grade_table.SCHOOLYEAR, style = 'info')
-        self.tile(1, 1, text = self.grade_table.schoolyear,
-                cspan = 2, style = 'info')
-        self.tile(2, 0, text = self.grade_table.GROUP, style = 'info')
-        self.tile(2, 1, text = self.grade_table.group,
-                cspan = 2, style = 'info')
-        self.tile(3, 0, text = self.grade_table.TERM, style = 'info')
-        self.tile(3, 1, text = Grades.term2text(self.grade_table.term),
-                cspan = 2, style = 'info')
-        # These are editable dates:
-        self.tile(4, 0, text = self.grade_table.ISSUE_D, style = 'info')
-        self.tile(4, 1, text = self.grade_table.issue_d,
-                cspan = 2, style = 'info',
-                validation = edit_date, tag = 'ISSUE_D')
-        self.tile(5, 0, text = self.grade_table.GRADES_D, style = 'info')
-        self.tile(5, 1, text = self.grade_table.grades_d,
-                cspan = 2, style = 'info',
-                validation = edit_date, tag = 'GRADES_D')
-
-        # Subject lines
-        self.tile(7, 0, text = _PUPIL, cspan = 2, style = 'small')
-        self.tile(7, 2, text = _STREAM,  style = 'small')
-        col = col_sids
-        for sid, name in self.grade_table.subjects.items():
-            self.tile(7, col, text = sid, style = 'small')
-            self.tile(1, col, text = name, rspan = 6, style = 'v')
-            col += 1
-
-        col = col_composites
-        for sid, name in self.grade_table.composites.items():
-            self.tile(7, col, text = sid, style = 'small')
-            self.tile(1, col, text = name, rspan = 6, style = 'v')
-            col += 1
-
-        col = col_averages
-        for sid, name in averages.items():
-            self.tile(7, col, text = sid, style = 'small')
-            self.tile(1, col, text = name, rspan = 6, style = 'v')
-            col += 1
-
-        col = col_extras
-        for sid, name in self.grade_table.extras.items():
-            self.tile(7, col, text = sid, style = 'small')
-            self.tile(1, col, text = name, rspan = 6, style = 'v')
-            col += 1
-
-#TODO: pupil lines
-
-
-#
-    def valueChanged(self, tag, text):
-        """Called when a cell value is changed by the editor.
-        """
-        self.cell_callback(tag, text)
-#
-    def average(self, pid):
-        """Calculate the average of all grades, including composites,
-        but ignoring components and non-numerical grades.
-        """
-        asum = 0
-        ai = 0
-        grades = self.grade_table[pid]
-        for sid in self.grade_table.subjects:
-            if self.grade_table.sid2subject_data[sid].composite:
-                # A component
-                continue
-            try:
-                gi = grades.i_grade[sid]
-            except KeyError:
-                continue
-            asum += gi
-            ai += 1
-        for sid in self.grade_table.composites:
-            try:
-                gi = grades.i_grade[sid]
-            except KeyError:
-                continue
-            asum += gi
-            ai += 1
-        if ai:
-            return Frac(asum, ai).round()
-        else:
-            return '–––'
-#
-    def average_dem(self, pid):
-        """Special average for "Realschulabschluss": De-En_Ma only.
-        """
-        asum = 0
-        ai = 0
-        grades = self.grade_table[pid]
-        for sid in ('De', 'En', 'Ma'):
-            try:
-                gi = grades.i_grade[sid]
-            except KeyError:
-                continue
-            asum += gi
-            ai += 1
-        if ai:
-            return Frac(asum, ai).round()
-        else:
-            return '–––'
-
-
-
-
-###########################################
 
 class _GradeEdit(QDialog):
     def __init__(self):
@@ -281,18 +87,23 @@ class _GradeEdit(QDialog):
 
         cbox = QVBoxLayout()
 #        cbox.addLayout(bbox)
+
         self.year_select = KeySelect(changed_callback = self.year_changed)
-        self.term_select = KeySelect(Grades.terms(), self.term_changed)
+        cbox.addWidget(QLabel(_SCHULJAHR))
+        cbox.addWidget(self.year_select)
+
+        self.term_select = KeySelect(GradeBase.terms(), self.term_changed)
+        cbox.addWidget(QLabel(_TERM))
+        cbox.addWidget(self.term_select)
 
         ### Select group (might be just one entry ... perhaps even none)
         self.group_select = KeySelect(changed_callback = self.group_changed)
+        cbox.addWidget(QLabel(_GROUP))
+        cbox.addWidget(self.group_select)
 
         ### List of pupils – not for term 1, 2?
         self.pselect = KeySelect(changed_callback = self.pupil_changed)
         self.pselect.setMaximumWidth(150)
-        cbox.addWidget(self.year_select)
-        cbox.addWidget(self.term_select)
-        cbox.addWidget(self.group_select)
         cbox.addWidget(self.pselect)
         cbox.addStretch(1)
         pbPdf = QPushButton('PDF')
@@ -314,7 +125,7 @@ class _GradeEdit(QDialog):
         years = [(y, print_schoolyear(y)) for y in Dates.get_years()]
         self.year_select.set_items(years)
 #        self.gradeView.clear()
-#        self.year_select.trigger()
+        self.year_select.trigger()
 #
     def group_changed(self, group):
         print("Change Group:", group)
@@ -330,11 +141,11 @@ class _GradeEdit(QDialog):
     def term_changed(self, key):
         self.term = key
         groups = [(grp, grp)
-                for grp, rtype in Grades.term2group_rtype_list(key)]
+                for grp, rtype in GradeBase.term2group_rtype_list(key[0])]
         print("Change Category:", key, [grp[0] for grp in groups])
         self.gradeView.clear()
         self.group_select.set_items(groups)
-#        self.group_select.trigger()
+        self.group_select.trigger()
 
 
 

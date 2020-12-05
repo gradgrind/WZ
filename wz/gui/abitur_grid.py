@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-gui/abitur_editor.py
+gui/abitur_grid.py
 
-Last updated:  2020-11-30
+Last updated:  2020-12-05
 
 Editor for Abitur results.
 
@@ -74,30 +74,34 @@ from local.abitur_config import AbiCalc
 
 
 class AbiturGrid(Grid):
+    def styles(self):
+        """Set up the styles used in the table view.
+        """
+        self.new_style('base', font = FONT, size = 11)
+        self.new_style('info', base = 'base', border = 0)
+        self.new_style('infoL', base = 'info', align = 'l')
+        self.new_style('label', base = 'infoL', highlight = 'b')
+
+        self.new_style('title', font = FONT, size = 12, align = 'l',
+                    border = 0, highlight = 'b')
+        self.new_style('titleR', base = 'title', align = 'r')
+        self.new_style('underline', base = 'base', border = 2)
+        self.new_style('small', base = 'base', size = 10)
+        self.new_style('v', base = 'small', align = 'm')
+        self.new_style('h', base = 'small', border = 0)
+        self.new_style('entry', base = 'base', highlight = ':2a6099',
+                mark = 'E00000')
+        self.new_style('resultL', base = 'title', border = 2)
+        self.new_style('result', base = 'resultL', align = 'c')
+        self.new_style('date', base = 'result', highlight = ':2a6099',
+                mark = 'E00000')
+#
     def __init__(self, callback_value_changed):
         super().__init__()
         self.callback_changed = callback_value_changed
-        ### Styles:
-        ## The styles which may be used
-        baseStyle = CellStyle(FONT, size = 11)
-        infoStyle = baseStyle.copy(border = 0)
-        underlineStyle = baseStyle.copy(border = 2)
-        baseStyleL0 = infoStyle.copy(align = 'l')
-        labelStyle = baseStyle.copy(align = 'l', border = 0, highlight = 'b')
-        titleStyle = CellStyle(FONT, size = 12, align = 'l',
-                border = 0, highlight = 'b')
-        titleStyleR = titleStyle.copy(align = 'r')
-        smallStyle = baseStyle.copy(size = 10)
-        vStyle = smallStyle.copy(align = 'm')
-        hStyle = smallStyle.copy(border = 0)
-        gradeStyle = baseStyle.copy(highlight = ':2a6099')
-        gradeStyle.colour_marked = 'E00000'
-        resultStyleL = titleStyle.copy(border = 2)
-        resultStyle = titleStyle.copy(border = 2, align = 'c')
-        dateStyle = resultStyle.copy(highlight = ':2a6099')
-        dateStyle.colour_marked = 'E00000'
 
         self.setTable(ROWS, COLUMNS)
+        self.styles()
         ### Cell editors
 #TODO: add '*' to list for "Nachprüfungen"
         edit_grade = PopupTable(self, VALID_GRADES)
@@ -105,77 +109,77 @@ class AbiturGrid(Grid):
 
         ### Title area
         self.tile(0, 0, text = "Abitur-Berechnungsbogen", cspan = 4,
-                style = titleStyle)
-        self.tile(0, 4, text = SCHOOL_NAME, cspan = 10, style = titleStyleR)
-        self.tile(2, 7, text = "Schuljahr:", cspan = 3, style = titleStyleR)
-        self.tile(2, 10, text = '', cspan = 4, style = titleStyle,
+                style = 'title')
+        self.tile(0, 4, text = SCHOOL_NAME, cspan = 10, style = 'titleR')
+        self.tile(2, 7, text = "Schuljahr:", cspan = 3, style = 'titleR')
+        self.tile(2, 10, text = '', cspan = 4, style = 'title',
                 tag = 'SCHOOLYEAR')
-        self.tile(3, 0, cspan = 14, style = underlineStyle)
+        self.tile(3, 0, cspan = 14, style = 'underline')
 
         ### Pupil's name
-        self.tile(5, 0, cspan = 2, text = "Name:", style = labelStyle)
-        self.tile(5, 2, cspan = 12, text = '', style = labelStyle,
+        self.tile(5, 0, cspan = 2, text = "Name:", style = 'label')
+        self.tile(5, 2, cspan = 12, text = '', style = 'label',
                 tag = 'NAME')
-        self.tile(6, 0, cspan = 14, style = underlineStyle)
+        self.tile(6, 0, cspan = 14, style = 'underline')
 
         ### Grade area headers
-        self.tile(8, 2, text = "Fach", style = hStyle)
-        self.tile(8, 3, text = "Kurspunkte", cspan = 2, style = hStyle)
-        self.tile(8, 6, text = "Mittelwert", style = hStyle)
+        self.tile(8, 2, text = "Fach", style = 'h')
+        self.tile(8, 3, text = "Kurspunkte", cspan = 2, style = 'h')
+        self.tile(8, 6, text = "Mittelwert", style = 'h')
         self.tile(8, 9, text = "Berechnungspunkte", cspan = 3,
-                style = hStyle)
+                style = 'h')
 
-        self.tile(10, 11, text = "Fach 1-4", style = smallStyle)
+        self.tile(10, 11, text = "Fach 1-4", style = 'small')
         self.tile(11, 0, text = "Erhöhtes Anforderungsniveau",
-                rspan = 8, style = vStyle)
-        self.tile(23, 11, text = "Fach 5-8", style = smallStyle)
+                rspan = 8, style = 'v')
+        self.tile(23, 11, text = "Fach 5-8", style = 'small')
         self.tile(20, 0, text = "Grundlegendes Anforderungsniveau",
-                rspan = 11, style = vStyle)
+                rspan = 11, style = 'v')
 
         ### Subject entries
         # With written exams
         for i in (1, 2, 3, 4):
             istr = str(i)
             row0 = 8 + i*3
-            self.tile(row0, 1, rspan = 2, text = istr, style = baseStyle)
-            self.tile(row0, 2, rspan = 2, text = '', style = baseStyle,
+            self.tile(row0, 1, rspan = 2, text = istr, style = 'base')
+            self.tile(row0, 2, rspan = 2, text = '', style = 'base',
                     tag = "SUBJECT_%s" % istr)
-            self.tile(row0, 3, text = "schr.", style = smallStyle)
-            self.tile(row0 + 1, 3, text = "mündl.", style = smallStyle)
-            self.tile(row0, 4, text = '', style = gradeStyle,
+            self.tile(row0, 3, text = "schr.", style = 'small')
+            self.tile(row0 + 1, 3, text = "mündl.", style = 'small')
+            self.tile(row0, 4, text = '', style = 'entry',
                     validation = edit_grade, tag = "GRADE_%s" % istr)
-            self.tile(row0 + 1, 4, text = '', style = gradeStyle,
+            self.tile(row0 + 1, 4, text = '', style = 'entry',
                     validation = edit_grade, tag = "GRADE_%s_m" % istr)
-            self.tile(row0, 6, rspan = 2, text = '', style = baseStyle,
+            self.tile(row0, 6, rspan = 2, text = '', style = 'base',
                     tag = "AVERAGE_%s" % istr)
-            self.tile(row0, 7, rspan = 2, text = "X", style = infoStyle)
+            self.tile(row0, 7, rspan = 2, text = "X", style = 'info')
             self.tile(row0, 8, rspan = 2, text = "12" if i < 4 else "8",
-                    style = infoStyle)
-            self.tile(row0, 9, rspan = 2, text = '', style = underlineStyle,
+                    style = 'info')
+            self.tile(row0, 9, rspan = 2, text = '', style = 'underline',
                     tag = "SCALED_%s" % istr)
 
         # Without written exams
         for i in (5, 6, 7, 8):
             istr = str(i)
             row0 = 14 + i*2
-            self.tile(row0, 1, text = istr, style = baseStyle)
-            self.tile(row0, 2, text = '', style = baseStyle,
+            self.tile(row0, 1, text = istr, style = 'base')
+            self.tile(row0, 2, text = '', style = 'base',
                     tag = "SUBJECT_%s" % istr)
             self.tile(row0, 3, text = "mündl." if i < 7 else "2. Hj.",
-                    style = smallStyle)
-            self.tile(row0, 4, text = "04", style = gradeStyle,
+                    style = 'small')
+            self.tile(row0, 4, text = "04", style = 'entry',
                     validation = edit_grade, tag = "GRADE_%s" % istr)
-            self.tile(row0, 6, text = '', style = baseStyle,
+            self.tile(row0, 6, text = '', style = 'base',
                     tag = "AVERAGE_%s" % istr)
-            self.tile(row0, 7, text = "X", style = infoStyle)
-            self.tile(row0, 8, text = "4", style = infoStyle)
-            self.tile(row0, 9, text = '', style = underlineStyle,
+            self.tile(row0, 7, text = "X", style = 'info')
+            self.tile(row0, 8, text = "4", style = 'info')
+            self.tile(row0, 9, text = '', style = 'underline',
                     tag = "SCALED_%s" % istr)
 
         ### Totals
-        self.tile(11, 11, text = '', rspan = 11, style = baseStyle,
+        self.tile(11, 11, text = '', rspan = 11, style = 'base',
                     tag = "TOTAL_1-4")
-        self.tile(24, 11, text = '', rspan = 7, style = baseStyle,
+        self.tile(24, 11, text = '', rspan = 7, style = 'base',
                     tag = "TOTAL_5-8")
 
         ### Evaluation
@@ -189,20 +193,20 @@ class AbiturGrid(Grid):
                 ):
             row = 32 + i*2
             i += 1
-            self.tile(row, 2, text = text, cspan = 6, style = baseStyleL0)
-            self.tile(row, 9, text = '', style = baseStyle,
+            self.tile(row, 2, text = text, cspan = 6, style = 'infoL')
+            self.tile(row, 9, text = '', style = 'base',
                 tag = "JA_%d" % i)
 
         ### Final result
-        self.tile(42, 2, text = "Summe:", style = resultStyleL)
-        self.tile(42, 3, text = '', cspan = 2, style = resultStyle,
+        self.tile(42, 2, text = "Summe:", style = 'resultL')
+        self.tile(42, 3, text = '', cspan = 2, style = 'result',
                 tag = "SUM")
-        self.tile(42, 8, text = "Endnote:", cspan = 2, style = resultStyleL)
-        self.tile(42, 10, text = '', cspan = 4, style = resultStyle,
+        self.tile(42, 8, text = "Endnote:", cspan = 2, style = 'resultL')
+        self.tile(42, 10, text = '', cspan = 4, style = 'result',
                 tag = "FINAL_GRADE")
 
-        self.tile(44, 8, text = "Datum:", cspan = 2, style = resultStyleL)
-        self.tile(44, 10, text = '', cspan = 4, style = dateStyle,
+        self.tile(44, 8, text = "Datum:", cspan = 2, style = 'resultL')
+        self.tile(44, 10, text = '', cspan = 4, style = 'date',
                 validation = edit_date, tag = "FERTIG_D")
 #TODO: Do I want to display the date in local format? If so, I would need
 # to adjust the popup editor ...
@@ -355,7 +359,7 @@ class _GradeEdit(QDialog):
         self.calc = AbiCalc(self.grade_table, pid)
         # Set date of completion: if no value for pupil, use group date
         self.calc.set_editable_cell('FERTIG_D',
-                self.calc.grade_map['X_FERTIG_D'] or self.grade_table.grades_d)
+                self.calc.grade_map['*F_D'] or self.grade_table.grades_d)
         # Set subject names and grades
         for tag, val in self.calc.tags.items():
             self.gradeView.tagmap[tag].setText(val)

@@ -3,7 +3,7 @@
 """
 local/abitur_config.py
 
-Last updated:  2020-11-30
+Last updated:  2020-12-05
 
 Configuration for Abitur-grade handling.
 ====================================
@@ -91,7 +91,7 @@ class AbiCalc:
                 self.tag2sid[gtag] = sid
             elif sid.endswith('.x'):
                 xsids.append((sid, grade))
-            elif not sid.startswith('X_'):
+            elif not sid.startswith('*'):
                 raise AbiturError(_BAD_SID.format(sid = sid))
         # This must come after <sid2n> has been completed
         for sid, grade in xsids:
