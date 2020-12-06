@@ -79,7 +79,7 @@ class Grades(GradeBase):
     def __init__(self, group, stream, grades):
         super().__init__(group, stream)
         for sid, g in grades.items():
-            self[sid] = self.filter_grade(sid, g)
+            self.set_grade(sid, g)
 #
     def filter_grade(self, sid, g):
         """Return the possibly filtered grade <g> for the subject <sid>.
@@ -87,6 +87,9 @@ class Grades(GradeBase):
         <self.i_grade> – only for subjects with numerical grades, others
         are set to -1.
         """
+        if sid[0] == '*':
+            # An "extra" field
+            return g or ''
         # There can be normal, empty, non-numeric and badly-formed grades
         gi = -1     # integer value
         if g:

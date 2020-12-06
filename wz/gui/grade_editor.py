@@ -121,6 +121,10 @@ class _GradeEdit(QDialog):
 # Maybe at any change!
 
 #
+    def closeEvent(self, e):
+        self.gradeView.leaving()
+        super().closeEvent(e)
+#
     def init(self):
         years = [(y, print_schoolyear(y)) for y in Dates.get_years()]
         self.year_select.set_items(years)

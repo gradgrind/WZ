@@ -88,10 +88,17 @@ class Grid(QGraphicsView):
 #        self.ymarks = None
         self.DEFAULT_STYLE = CellStyle(FONT_DEFAULT, FONT_SIZE_DEFAULT,
                 align = 'c', border = 1)
+        self.changes = None
 #
     def clear(self):
+        self.leaving()
         self._scene = None
         self.setScene(None)
+#
+    def leaving(self):
+        """Override this to handle scene-changing.
+        """
+        pass
 #
     def setTable(self, rowheights, columnwidths):
         """Set the grid size.

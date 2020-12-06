@@ -99,7 +99,8 @@ REPORT_GROUPS = f"""
 ######## (The report type is determined by calculations):
     Notenfelder_X = *ZA/Zeugnis (Art); *F_D/Fertigstellung;
 ######## Zeugnis-Art/Abitur automatic?
-    *ZA/A = Abitur; Fachhochschulreife; Abitur-nicht-bestanden;
+    *ZA/A = ;
+#Abitur; Fachhochschulreife; Abitur-nicht-bestanden;
     *ZA/1 = Zeugnis; Abgang;
     *ZA/2 = -; Abgang;
     *ZA/S = Abgang;

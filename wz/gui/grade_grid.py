@@ -26,7 +26,12 @@ Copyright 2020 Michael Towers
 """
 
 ### Messages
-
+_TITLE_TABLE_CHANGE = "Änderungen speichern"
+# Would need to be a bit different for individual pupils:
+_TABLE_CHANGES = "Änderungen für Klasse/Gruppe {group}, {term}" \
+        " im Jahr {year} nicht gespeichert.\n" \
+        "Sollen sie jetzt gespeichert werden?\n" \
+        "Wenn nicht, dann gehen sie verloren."
 
 ### Display texts
 _PUPIL = "Schüler"
@@ -37,6 +42,7 @@ _STREAM = "Maßstab"
 # To test this module, use it via grade_editor.py
 
 from gui.grid import Grid, CellStyle, PopupDate, PopupTable
+from gui.gui_support import QuestionDialog
 
 from grades.gradetable import GradeTable, Grades, Frac
 from local.base_config import FONT, SCHOOL_NAME
@@ -89,10 +95,19 @@ class GradeGrid(Grid):
                 highlight = ':002562', mark = 'E00000')
         self.new_style('padding', bg = '666666')
 #
+    def leaving(self):
+        if self.changes and QuestionDialog(_TITLE_TABLE_CHANGE,
+                _TABLE_CHANGES.format(year = self.grade_table.schoolyear,
+                        term = Grades.term2text(self.grade_table.term),
+                        group = self.grade_table.group)):
+            self.grade_table.save()
+        self.changes = None
+#
     def set_table(self, schoolyear, group, term):
         """Set the grade table (a <GradeTable> instance) to be used.
         Set up the grid accordingly.
         """
+        self.leaving()
         self.grade_table = GradeTable.group_table(schoolyear, group, term,
                 ok_new = True)
 
@@ -199,7 +214,7 @@ class GradeGrid(Grid):
             if sid == '*ZA':
                 _ZA_vals = Grades.group_info(group, f'*ZA/{term}')
                 edit_x[sid] = PopupTable(self, _ZA_vals)
-                ZA_default = _ZA_vals[0]
+                ZA_default = _ZA_vals[0] if _ZA_vals else ''
             elif sid.endswith('_D'):
                 edit_x[sid] = edit_date
             elif sid == '*Q':
@@ -246,7 +261,7 @@ class GradeGrid(Grid):
                 # Default values if empty?
                 if (not _val) and sid == '*ZA':
                     self.set_text(_tag, ZA_default)
-                    self.set_change_mark(_tag, ZA_default)
+                    self.valueChanged(_tag, ZA_default)
                 col += 1
             row += 1
 #
@@ -254,30 +269,33 @@ class GradeGrid(Grid):
         """Called when a cell value is changed by the editor.
         Specific action is taken here only for real grades, which can
         cause further changes in the table.
-        References to other value changes will be available in
-        <self.changes> (a set of tile-tags).
+        References to other value changes will nevertheless be available
+        in <self.changes> (a set of tile-tags).
         """
         super().valueChanged(tag, text)
         if tag.startswith('$'):
+            # Averages should not be handled, but have no "validation"
+            # so they won't land here at all.
             pid, sid = tag[1:].split('-')
             grades = self.grade_table[pid]
-            if sid in self.grade_table.subjects:
-                # Update the grade
-                grades.set_grade(sid, text)
-                # If it is a component, recalculate the composite
-                if sid in self.grade_table.components:
-                    csid = self.grade_table.sid2subject_data[sid].composite
-                    if csid == UNCHOSEN:
-                        return
-                    grades.composite_calc(
-                            self.grade_table.sid2subject_data[csid])
-                    ctag = f'${pid}-{csid}'
-                    cgrade = grades[csid]
-                    self.set_text(ctag, cgrade)
-                    self.set_change_mark(ctag, cgrade)
-                # Recalculate the averages
-                self.calc_averages(pid)
-        return
+            # Update the grade, includes special handling for numbers
+            grades.set_grade(sid, text)
+            if sid in self.grade_table.extras:
+                return
+            # If it is a component, recalculate the composite
+            if sid in self.grade_table.components:
+                csid = self.grade_table.sid2subject_data[sid].composite
+                if csid == UNCHOSEN:
+                    return
+                grades.composite_calc(
+                        self.grade_table.sid2subject_data[csid])
+                ctag = f'${pid}-{csid}'
+                cgrade = grades[csid]
+                self.set_text(ctag, cgrade)
+                self.set_change_mark(ctag, cgrade)
+            # Recalculate the averages
+            self.calc_averages(pid)
+#TODO: Other changes: where to save the new values?
 #
     def calc_averages(self, pid):
         for sid in self.averages:

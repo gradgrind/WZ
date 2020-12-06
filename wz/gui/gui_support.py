@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-12-05
+Last updated:  2020-12-06
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -48,7 +48,7 @@ from qtpy.QtCore import Qt, QDate, QObject, Signal, Slot
 # Dialog buttons
 _CANCEL = "Abbrechen"
 _ACCEPT = "Übernehmen"
-_OK = "o.k."
+_OK = "OK"
 _SETALL = "Alle setzen"
 _RESETALL = "Alle zurücksetzen"
 
@@ -63,6 +63,7 @@ class HLine (QFrame):
         self.setFrameShape (QFrame.HLine)
         self.setFrameShadow (QFrame.Sunken)
 
+###
 
 class VLine (QFrame):
     def __init__ (self):
@@ -70,6 +71,7 @@ class VLine (QFrame):
         self.setFrameShape (QFrame.VLine)
         self.setFrameShadow (QFrame.Sunken)
 
+###
 
 class BoldLabel (QLabel):
     def __init__ (self, text):
@@ -92,16 +94,16 @@ class KeySelect(QComboBox):
 # Note concerning Qt: If connecting after adding the items, there seems
 # to be no signal; if before, then the first item is signalled.
         self.currentIndexChanged.connect(self._new)
-
+#
     def _new(self, index):
         if self.value_mapping:
             self.key = self.value_mapping[index][0]
             if self.changed_callback:
                 self.changed_callback(self.key)
-
+#
     def trigger(self):
         self._new(self.currentIndex())
-
+#
     def set_items(self, value_mapping):
         """Set / reset the items.
         <value_mapping> is a list: ((key, display text), ...)
@@ -117,6 +119,28 @@ class KeySelect(QComboBox):
         else:
             self.key = None
         self.changed_callback = self._cb    # reenable callback
+
+###
+
+def QuestionDialog(title, message):
+    qd = QDialog()
+    qd.setWindowTitle(title)
+    vbox = QVBoxLayout(qd)
+    vbox.addWidget(QLabel (message))
+    vbox.addWidget(HLine ())
+    bbox = QHBoxLayout()
+    vbox.addLayout(bbox)
+    bbox.addStretch(1)
+    cancel = QPushButton(_CANCEL)
+    cancel.clicked.connect(qd.reject)
+    bbox.addWidget(cancel)
+    ok = QPushButton(_OK)
+    ok.clicked.connect(qd.accept)
+    bbox.addWidget(ok)
+    cancel.setDefault(True)
+    return qd.exec_() == QDialog.Accepted
+
+
 
 ### ------------------------------------------------------------- ###
 # Everything below here is not currently used ...
@@ -180,27 +204,6 @@ def _InfoDialog (title, message, mtype):
             QMessageBox.NoButton, CONTROL)
     mbox.addButton (_OK, QMessageBox.AcceptRole)
     mbox.exec_ ()
-
-
-
-def QuestionDialog (title, message):
-    qd = QDialog (CONTROL)
-    qd.setWindowTitle (title)
-    vbox = QVBoxLayout (qd)
-    vbox.addWidget (QLabel (message))
-    vbox.addWidget (HLine ())
-    bbox = QHBoxLayout ()
-    vbox.addLayout (bbox)
-    bbox.addStretch (1)
-    cancel = QPushButton (_CANCEL)
-    cancel.clicked.connect (qd.reject)
-    bbox.addWidget (cancel)
-    ok = QPushButton (_OK)
-    ok.clicked.connect (qd.accept)
-    bbox.addWidget (ok)
-    cancel.setDefault (True)
-    return qd.exec_ () == QDialog.Accepted
-
 
 
 class CalendarDialog (QDialog):
