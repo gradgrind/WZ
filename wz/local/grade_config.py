@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-12-04
+Last updated:  2020-12-06
 
 Configuration for grade handling.
 ====================================
@@ -96,10 +96,6 @@ REPORT_GROUPS = f"""
 :13
     Stufe = SekII
     NotentabelleVorlage = Noten/Noteneingabe-Abitur
-######## (term '2': grades collected, but no report cards)
-######## Für das 2. Halbjahr werden Noten gegeben, aber keine
-######## Notenzeugnisse erstellt: ????? Not needed? – see *ZA/x ...
-    Anlässe = 1/Zeugnis; 2/; A/Abitur;
 ######## (The report type is determined by calculations):
     Notenfelder_X = *ZA/Zeugnis (Art); *F_D/Fertigstellung;
 ######## Zeugnis-Art/Abitur automatic?
@@ -113,42 +109,41 @@ REPORT_GROUPS = f"""
     Stufe = SekII
     NotentabelleVorlage = Noten/Noteneingabe-SII
     Maßstäbe = Gym;
-    Anlässe = 1/Zeugnis; 2/Zeugnis;
     Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
     *ZA/1 = Zeugnis; Abgang;
     *ZA/2 = Zeugnis; Abgang;
     *ZA/S = Abgang;
+    *Q = Erw; RS; HS;
     NotenWerte = {_ABITUR_GRADES}
 
 :12.R
     Maßstäbe = RS; HS;
-    Anlässe = 1/Zeugnis; 2/Abschluss;
     Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
     *ZA/1 = Zeugnis; Abgang;
     *ZA/2 = Abschluss; Abgang; Zeugnis;
     *ZA/S = Abgang;
+    *Q = Erw; RS; HS; -;
     Durchschnitte = :D/Φ Alle Fächer; :Dx/Φ De-En-Ma;
 
 :11.G
     Maßstäbe = Gym;
-    Anlässe = 1/Orientierung; 2/Zeugnis;
     Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
     *ZA/1 = Orientierung; Abgang; Zeugnis;
     *ZA/2 = Zeugnis; Abgang;
     *ZA/S = Abgang; Zeugnis;
+    *Q = 12; HS; -;
     Durchschnitte = :D/Φ Alle Fächer;
 
 :11.R
     Maßstäbe = RS; HS;
-    Anlässe = 1/Orientierung; 2/Abschluss;
     Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
     *ZA/1 = Orientierung; Abgang; Zeugnis;
     *ZA/2 = Zeugnis; Abgang; Abschluss;
     *ZA/S = Abgang; Zeugnis;
+    *Q = RS; HS; -;
     Durchschnitte = :D/Φ Alle Fächer; :Dx/Φ De-En-Ma;
 
 :10
-    Anlässe = 2/Orientierung;
     *ZA/2 = Orientierung; Zeugnis;
 
 # Gruppen '09', '08', ... (benutzen die Voreinstellungen)
@@ -401,19 +396,6 @@ class GradeBase(dict):
                 groups.append((group, cls.group_info(group, f'*ZA/{term}')))
             except GradeConfigError:
                 continue
-        return groups
-
-#'Anlässe' deprecated?
-        groups = []
-        for group, data in GROUP_INFO.items():
-            for item in cls.group_info(group, 'Anlässe'):
-                try:
-                    t, report_type = item.split('/')
-                except ValueError as e:
-                    raise GradeConfigError(_BAD_TERM_REPORT.format(
-                            group = group, item = item)) from e
-                if t == term:
-                    groups.append((group, report_type))
         return groups
 #
     @classmethod

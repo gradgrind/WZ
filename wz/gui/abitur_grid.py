@@ -346,7 +346,7 @@ class _GradeEdit(QDialog):
 #                    self.grade_table.stream[pid]), grades)
 
 
-#TODO: Updating database ... (save button? ... or immediate update?)
+#TODO: Updating "database" ... (save button? ... or immediate update?)
 
     def pupil_changed(self, pid):
         """A new pupil has been selected: reset the grid accordingly.

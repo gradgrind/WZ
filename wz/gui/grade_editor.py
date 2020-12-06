@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-05
+Last updated:  2020-12-06
 
 Editor for grades.
 
@@ -177,30 +177,6 @@ class _GradeEdit(QDialog):
 ## This doesn't initially select any entry
 
 
-#    def set_table(self, fpath):
-#        read_grade_table(fpath)
-
-    def set_table0(self, schoolyear, group, term):
-        """Set the grade table to be used.
-        <fpath> is the full path to the table file (see <GradeTable>).
-        """
-        self.grade_table = GradeTable.group_table(schoolyear, group, term,
-                ok_new = True)
-        self.gradeView.tagmap['SCHOOLYEAR'].setText(
-                print_schoolyear(self.grade_table.schoolyear))
-        self.pselect.set_items([(pid, self.grade_table.name[pid])
-                for pid, grades in self.grade_table.items()])
-
-#        print("\n*** READING: %s.%s, class %s, teacher: %s" % (
-#                self.grade_table.schoolyear, self.grade_table.term or '-',
-#                self.grade_table.klass, self.grade_table.tid))
-#        print("~~~ ISSUE_D: %s, GRADES_D: %s" % (self.grade_table.issue_d,
-#                self.grade_table.grades_d))
-#        print("~~~ Subjects:", self.grade_table.subjects)
-#
-#        for pid, grades in self.grade_table.items():
-#            print("\n ::: %s (%s):" % (self.grade_table.name[pid],
-#                    self.grade_table.stream[pid]), grades)
 
 
 #TODO: Updating database ... (save button? ... or immediate update?)

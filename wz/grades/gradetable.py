@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2020-12-02
+grades/gradetable.py - last updated 2020-12-06
 
 Access grade data, read and build grade tables.
 
@@ -84,16 +84,18 @@ class Grades(GradeBase):
     def filter_grade(self, sid, g):
         """Return the possibly filtered grade <g> for the subject <sid>.
         Integer values are stored additionally in the mapping
-        <self.i_grade> (only for subjects with numerical grades).
+        <self.i_grade> – only for subjects with numerical grades, others
+        are set to -1.
         """
         # There can be normal, empty, non-numeric and badly-formed grades
+        gi = -1     # integer value
         if g:
             if g in self.valid_grades:
                 # Separate out numeric grades, ignoring '+' and '-'.
                 # This can also be used for the Abitur scale, though the
                 # stripping is superfluous.
                 try:
-                    self.i_grade[sid] = int(g.rstrip('+-'))
+                    gi = int(g.rstrip('+-'))
                 except ValueError:
                     pass
             else:
@@ -101,7 +103,13 @@ class Grades(GradeBase):
                 g = ''
         else:
             g = ''  # ensure that the grade is a <str>
+        self.i_grade[sid] = gi
         return g
+#
+    def set_grade(self, sid, grade):
+        """Update a single grade.
+        """
+        self[sid] = self.filter_grade(sid, grade)
 #
     def composite_calc(self, sdata):
         """Recalculate a composite grade.
@@ -115,14 +123,12 @@ class Grades(GradeBase):
         ai = 0
         non_grade = UNCHOSEN
         for csid, weight in sdata.composite:
-            try:
-                gi = self.i_grade[csid]
-            except KeyError:
-                if self[csid] != UNCHOSEN:
-                    non_grade = NO_GRADE
-            else:
+            gi = self.i_grade[csid]
+            if gi >= 0:
                 ai += weight
                 asum += gi * weight
+            elif self[csid] != UNCHOSEN:
+                non_grade = NO_GRADE
         if ai:
             g = Frac(asum, ai).round()
             self[sdata.sid] = self.grade_format(g)
@@ -172,6 +178,7 @@ class GradeTable(dict):
         <sid2subject_data>: {sid -> subject_data} also for "special" sids
         <subjects>: {sid -> subject-name}   (just "real" sids)
         <composites>: {sid -> subject-name} ("composite" sids)
+        <components>: set of "component" sids
         <extra>: {sid/tag -> text name} ("extra" data, treated as grade)
         <name>: {pid -> (short) name}
     """
@@ -203,11 +210,14 @@ class GradeTable(dict):
         self.sid2subject_data = {} # {sid -> subject_data}
         self.subjects = {}   # name-mapping just for "real" subjects
         self.composites = {} # name-mapping for composite sids
+        self.components = set() # set of "component" sids
         for gs in subjects.grade_subjects(group):
             self.sid2subject_data[gs.sid] = gs
             if gs.tids:
                 # "real" (taught) subject
                 self.subjects[gs.sid] = gs.name
+                if gs.composite:
+                    self.components.add(gs.sid)
             else:
                 # "composite" subject
                 self.composites[gs.sid] = gs.name

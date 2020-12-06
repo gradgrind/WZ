@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2020-12-01
+Last updated:  2020-12-06
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -102,7 +102,9 @@ class Grid(QGraphicsView):
         self._styles = {'*': CellStyle(FONT_DEFAULT, FONT_SIZE_DEFAULT,
                 align = 'c', border = 1)
         }
-        self.tagmap = {}
+        self.tagmap = {}        # {tag -> {Tile> instance}
+        self.value0 = {}        # initial values (text) of cells
+        self.changes = set()    # set of changed cells (tags)
         self._scene = QGraphicsScene()
         self.xmarks = [0.0]
         x = 0.0
@@ -256,13 +258,31 @@ class Grid(QGraphicsView):
         t = Tile(self, tag, x, y, w, h, text, cell_style, validation)
         self._scene.addItem(t)
         self.tagmap[tag] = t
+        self.value0[tag] = text # initial value
+        return t
+#
+    def set_text(self, tag, text):
+        """Set the text in the given cell, not activating the
+        cell-changed callback.
+        """
+        self.tagmap[tag].setText(text)
+#
+    def set_change_mark(self, tag, text):
+        tile = self.tagmap[tag]
+        if text == self.value0[tag]:
+            self.changes.discard(tag)
+            tile.unmark()
+        else:
+            self.changes.add(tag)
+            tile.mark()
 #
     def valueChanged(self, tag, text):
-        """Cell-changed callback.
-        This should be overridden if it is needed.
+        """Cell-changed callback. This should be overridden if it is needed.
+        The default code changes the text colour of a cell when the text
+        differs from its initial value (a "changed" indicator).
+        Also a set of "changed" cells is maintained.
         """
-        pass
-
+        self.set_change_mark(tag, text)
 ###
 
 class CellStyle:
@@ -381,6 +401,8 @@ class CellStyle:
         if font or size or highlight:
             newstyle.setFont(font or self._font,
                     size or self._size, highlight or self._highlight)
+        if mark:
+            newstyle.colour_marked = mark
         if align:
             newstyle.setAlign(align)
         if bg:
@@ -437,9 +459,12 @@ class Tile(QGraphicsRectItem):
                 self.textItem.setBrush(style.fontColour)
             self.setText(text)
 #
-    def mark(self, on):
-        self.textItem.setBrush(self._style.getBrush(self._style.colour_marked)
-                if on else self._style.fontColour)
+    def mark(self):
+        if self._style.colour_marked:
+            self.textItem.setBrush(self._style.getBrush(self._style.colour_marked))
+#
+    def unmark(self):
+        self.textItem.setBrush(self._style.fontColour)
 #
     def margin(self):
         return 1.0 * self._grid.MM2PT
