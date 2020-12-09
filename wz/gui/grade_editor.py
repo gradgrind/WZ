@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-06
+Last updated:  2020-12-09
 
 Editor for grades.
 
@@ -31,6 +31,7 @@ Copyright 2020 Michael Towers
 _TITLE = "WZ: Noten"
 _PUPIL = "Schüler"
 _STREAM = "Maßstab"
+_ALL_PUPILS = "Gesamttabelle"
 
 _SCHULJAHR = "Schuljahr:"
 _TERM = "Anlass:"
@@ -47,6 +48,7 @@ if __name__ == '__main__':
 from qtpy.QtWidgets import QApplication, QDialog, \
     QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
+from gui.grid import GridView
 from gui.grade_grid import GradeGrid
 from gui.gui_support import VLine, KeySelect#, ZIcon
 from core.base import Dates
@@ -71,7 +73,7 @@ class _GradeEdit(QDialog):
 #        self.gridtitle.setAlignment (Qt.AlignCenter)
 
 #*********** The "main" widget ***********
-        self.gradeView = GradeGrid()
+        self.gradeView = GridView()
         topbox.addWidget(self.gradeView)
 
         topbox.addWidget(VLine())
@@ -122,7 +124,7 @@ class _GradeEdit(QDialog):
 
 #
     def closeEvent(self, e):
-        self.gradeView.leaving()
+        self.gradeView._leaving()
         super().closeEvent(e)
 #
     def init(self):
@@ -130,11 +132,6 @@ class _GradeEdit(QDialog):
         self.year_select.set_items(years)
 #        self.gradeView.clear()
         self.year_select.trigger()
-#
-    def group_changed(self, group):
-        print("Change Group:", group)
-        self.group = group
-        self.gradeView.set_table(self.schoolyear, self.group, self.term)
 #
     def year_changed(self, schoolyear):
         print("Change Year:", schoolyear)
@@ -150,7 +147,20 @@ class _GradeEdit(QDialog):
         self.gradeView.clear()
         self.group_select.set_items(groups)
         self.group_select.trigger()
-
+#
+    def group_changed(self, group):
+        print("Change Group:", group)
+        self.group = group
+        self.grade_scene = GradeGrid(self.gradeView, self.schoolyear,
+                self.group, self.term)
+        self.gradeView.set_scene(self.grade_scene)
+        if self.term == 'A':
+            # Show pupil choice ...
+            plist = [('', _ALL_PUPILS)] + self.grade_scene.pupils()
+            self.pselect.set_items(plist)
+        else:
+            self.pselect.set_items(None)
+#TODO
 
 
 
@@ -189,17 +199,26 @@ class _GradeEdit(QDialog):
         """A new pupil has been selected: reset the grid accordingly.
         """
         self.pid = pid
+        print("SELECT Pupil:", pid)
+        if pid:
+#TODO
+            self.gradeView.clear()
+        else:
+            self.group_changed(self.group)
+        return
+############# old:
+
         self.changes = set()    # set of changed cells
         # Set pupil's name (NAME) and completion date (FERTIG_D)
         name = self.grade_table.name[pid]
-        self.gradeView.tagmap['NAME'].setText(name)
+        self.grade_scene.tagmap['NAME'].setText(name)
         self.calc = AbiCalc(self.grade_table, pid)
         # Set date of completion: if no value for pupil, use group date
         self.calc.set_editable_cell('FERTIG_D',
                 self.calc.grade_map['X_FERTIG_D'] or self.grade_table.grades_d)
         # Set subject names and grades
         for tag, val in self.calc.tags.items():
-            self.gradeView.tagmap[tag].setText(val)
+            self.grade_scene.tagmap[tag].setText(val)
         self.update_calc()
 #
     def update_calc(self):
@@ -208,7 +227,7 @@ class _GradeEdit(QDialog):
         """
         for tag, val in self.calc.calculate().items():
             try:
-                self.gradeView.tagmap[tag].setText(val)
+                self.grade_scene.tagmap[tag].setText(val)
             except:
                 pass
 #                print("NO FIELD:", tag)
@@ -222,10 +241,10 @@ class _GradeEdit(QDialog):
             raise Bug("Unexpected cell change, %s: %s" % (tag, value))
         if value == old:
             self.changes.discard(tag)
-            self.gradeView.tagmap[tag].mark(False)
+            self.grade_scene.tagmap[tag].mark(False)
         else:
             self.changes.add(tag)
-            self.gradeView.tagmap[tag].mark(True)
+            self.grade_scene.tagmap[tag].mark(True)
         if tag.startswith('GRADE_'):
             self.calc.tags[tag] = value
             self.update_calc()

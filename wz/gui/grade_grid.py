@@ -2,7 +2,7 @@
 """
 gui/grade_grid.py
 
-Last updated:  2020-12-06
+Last updated:  2020-12-09
 
 Manage the grid for the grade-editor.
 
@@ -41,7 +41,7 @@ _STREAM = "Maßstab"
 
 # To test this module, use it via grade_editor.py
 
-from gui.grid import Grid, CellStyle, PopupDate, PopupTable
+from gui.grid import Grid
 from gui.gui_support import QuestionDialog
 
 from grades.gradetable import GradeTable, Grades, Frac
@@ -74,40 +74,10 @@ ROWS = (
 ###
 
 class GradeGrid(Grid):
-#
-    def styles(self):
-        """Set up the styles used in the table view.
-        """
-        self.new_style('base', font = FONT, size = 11)
-        self.new_style('calc', base = 'base', highlight = ':006000')
-        self.new_style('name', base = 'base', align = 'l')
-        self.new_style('title', font = FONT, size = 12, align = 'l',
-                    border = 0, highlight = 'b')
-        self.new_style('info', base = 'base', border = 0, align = 'l')
-        self.new_style('underline', base = 'base', border = 2)
-        self.new_style('titleR', base = 'title', align = 'r')
-        self.new_style('small', base = 'base', size = 10)
-        self.new_style('v', base = 'small', align = 'b')
-        self.new_style('h', base = 'small', border = 0)
-        self.new_style('entry', base = 'base', highlight = ':002562',
-                mark = 'E00000')
-        self.new_style('info_edit', base = 'info', align = 'l',
-                highlight = ':002562', mark = 'E00000')
-        self.new_style('padding', bg = '666666')
-#
-    def leaving(self):
-        if self.changes and QuestionDialog(_TITLE_TABLE_CHANGE,
-                _TABLE_CHANGES.format(year = self.grade_table.schoolyear,
-                        term = Grades.term2text(self.grade_table.term),
-                        group = self.grade_table.group)):
-            self.grade_table.save()
-        self.changes = None
-#
-    def set_table(self, schoolyear, group, term):
+    def __init__(self, grades_view, schoolyear, group, term):
         """Set the grade table (a <GradeTable> instance) to be used.
         Set up the grid accordingly.
         """
-        self.leaving()
         self.grade_table = GradeTable.group_table(schoolyear, group, term,
                 ok_new = True)
 
@@ -145,7 +115,7 @@ class GradeGrid(Grid):
             for x in self.grade_table.extras:
                 _COLS += (COL_WIDTH[x],)
 
-        self.setTable(_ROWS, _COLS)
+        super().__init__(grades_view, _ROWS, _COLS)
         self.styles()
 
         self.tile(row_pids - 1, 0, cspan = len(_COLS), style = 'padding')
@@ -153,12 +123,8 @@ class GradeGrid(Grid):
                 col_averages, col_extras):
             self.tile(1, col - 1, rspan = len(_ROWS) - 1, style = 'padding')
 
-        ### Cell editors
-        # These are attached to the scene, so a new table (which starts
-        # a new scene) begins with no cell editors.
-        edit_grade = PopupTable(self, Grades.group_info(group, 'NotenWerte'))
-        edit_date = PopupDate(self)
-        # Special cases are added a bit further down.
+        ### Pop-up editor for grades
+        self.addSelect('grade', Grades.group_info(group, 'NotenWerte'))
 
         ### Title area
         self.tile(0, 0, text = "Notentabelle", cspan = 2, style = 'title')
@@ -177,11 +143,11 @@ class GradeGrid(Grid):
         self.tile(4, 0, text = self.grade_table.ISSUE_D, style = 'info')
         self.tile(4, 1, text = self.grade_table.issue_d,
                 cspan = 2, style = 'info_edit',
-                validation = edit_date, tag = 'ISSUE_D')
+                validation = 'DATE', tag = 'ISSUE_D')
         self.tile(5, 0, text = self.grade_table.GRADES_D, style = 'info')
         self.tile(5, 1, text = self.grade_table.grades_d,
                 cspan = 2, style = 'info_edit',
-                validation = edit_date, tag = 'GRADES_D')
+                validation = 'DATE', tag = 'GRADES_D')
 
         # Subject lines
         self.tile(7, 0, text = _PUPIL, cspan = 2, style = 'small')
@@ -207,18 +173,17 @@ class GradeGrid(Grid):
             self.tile(1, col, text = name, rspan = 6, style = 'v')
             col += 1
         col = col_extras
-        edit_x = {}     # Further cell editors
         for sid, name in self.grade_table.extras.items():
             self.tile(7, col, text = sid, style = 'small')
             self.tile(1, col, text = name, rspan = 6, style = 'v')
             if sid == '*ZA':
                 _ZA_vals = Grades.group_info(group, f'*ZA/{term}')
-                edit_x[sid] = PopupTable(self, _ZA_vals)
+                self.addSelect(sid, _ZA_vals)
                 ZA_default = _ZA_vals[0] if _ZA_vals else ''
-            elif sid.endswith('_D'):
-                edit_x[sid] = edit_date
+#            elif sid.endswith('_D'):
+#                'DATE'
             elif sid == '*Q':
-                edit_x[sid] = PopupTable(self, Grades.group_info(group, '*Q'))
+                self.addSelect(sid, Grades.group_info(group, '*Q'))
             col += 1
 
         # Pupil lines
@@ -232,13 +197,13 @@ class GradeGrid(Grid):
             for sid in main_sids:
                 self.tile(row, col, text = grades.get(sid, UNCHOSEN),
                     style = 'entry',
-                    validation = edit_grade, tag = f'${pid}-{sid}')
+                    validation = 'grade', tag = f'${pid}-{sid}')
                 col += 1
             col = col_components
             for sid in components:
                 self.tile(row, col, text = grades.get(sid, UNCHOSEN),
                     style = 'entry',
-                    validation = edit_grade, tag = f'${pid}-{sid}')
+                    validation = 'grade', tag = f'${pid}-{sid}')
                 col += 1
             col = col_composites
             for sid in self.grade_table.composites:
@@ -257,13 +222,50 @@ class GradeGrid(Grid):
                 _tag = f'${pid}-{sid}'
                 _val = grades[sid]
                 self.tile(row, col, text = _val, style = 'entry',
-                        validation = edit_x.get(sid), tag = _tag)
+                        validation = 'DATE' if sid.endswith('_D') else sid,
+                        tag = _tag)
                 # Default values if empty?
                 if (not _val) and sid == '*ZA':
                     self.set_text(_tag, ZA_default)
                     self.valueChanged(_tag, ZA_default)
                 col += 1
             row += 1
+#
+    def styles(self):
+        """Set up the styles used in the table view.
+        """
+        self.new_style('base', font = FONT, size = 11)
+        self.new_style('calc', base = 'base', highlight = ':006000')
+        self.new_style('name', base = 'base', align = 'l')
+        self.new_style('title', font = FONT, size = 12, align = 'l',
+                    border = 0, highlight = 'b')
+        self.new_style('info', base = 'base', border = 0, align = 'l')
+        self.new_style('underline', base = 'base', border = 2)
+        self.new_style('titleR', base = 'title', align = 'r')
+        self.new_style('small', base = 'base', size = 10)
+        self.new_style('v', base = 'small', align = 'b')
+        self.new_style('h', base = 'small', border = 0)
+        self.new_style('entry', base = 'base', highlight = ':002562',
+                mark = 'E00000')
+        self.new_style('info_edit', base = 'info', align = 'l',
+                highlight = ':002562', mark = 'E00000')
+        self.new_style('padding', bg = '666666')
+#
+    def leaving(self):
+        """When setting a scene (or clearing one), or exiting the program
+        (or dialog), this check for changed data should be made.
+        """
+        if self.changes and QuestionDialog(_TITLE_TABLE_CHANGE,
+                _TABLE_CHANGES.format(year = self.grade_table.schoolyear,
+                        term = Grades.term2text(self.grade_table.term),
+                        group = self.grade_table.group)):
+            self.grade_table.save()
+        self.changes = None
+#
+    def pupils(self):
+        """Return an ordered mapping of pupils: {pid -> name}.
+        """
+        return [(pid, name) for pid, name in self.grade_table.name.items()]
 #
     def valueChanged(self, tag, text):
         """Called when a cell value is changed by the editor.

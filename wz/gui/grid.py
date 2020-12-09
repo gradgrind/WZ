@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2020-12-06
+Last updated:  2020-12-09
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -67,9 +67,9 @@ class GridError(Exception):
 
 ###
 
-class Grid(QGraphicsView):
-    """This is the grid widget.
-    Rows and columns are 0-indexed.
+class GridView(QGraphicsView):
+    """This is the "view" widget for the grid.
+    The actual grid is implemented as a "scene".
     """
     def __init__(self):
         self._scale = 1.0
@@ -82,62 +82,93 @@ class Grid(QGraphicsView):
         if self.logicalDpiY() != self.ldpi:
             REPORT("WARNING: LOGICAL DPI different for x and y")
         self.MM2PT = self.ldpi / 25.4
-#        self._popup = None
-#        self._scene = None
-#        self.xmarks = None
-#        self.ymarks = None
-        self.DEFAULT_STYLE = CellStyle(FONT_DEFAULT, FONT_SIZE_DEFAULT,
-                align = 'c', border = 1)
-        self.changes = None
+#
+    def set_scene(self, scene):
+        self._leaving()
+        self.setScene(scene)
+        # Set the view's scene area to a fixed size
+        # (pop-ups could otherwise extend it)
+        self.setSceneRect(scene._sceneRect)
 #
     def clear(self):
-        self.leaving()
-        self._scene = None
+        self._leaving()
         self.setScene(None)
 #
-    def leaving(self):
-        """Override this to handle scene-changing.
-        """
-        pass
+    def _leaving(self):
+        s = self.scene()
+        if s:
+            s.leaving()
 #
-    def setTable(self, rowheights, columnwidths):
+    def mousePressEvent(self, event):
+        point = event.pos()
+#        print("POS:", point, self.mapToGlobal(point), self.itemAt(point))
+# The Tile may not be the top item.
+        if self.items(point):
+            return super().mousePressEvent(event)
+        self.scene().popdown(True)
+#
+    def toPdf(self, filename = None):
+        s = self.scene()
+        if s:
+            s.to_pdf(filename)
+#
+    ### View scaling
+    def scaleUp (self):
+        self.scale(1)
+#
+    def scaleDn (self):
+        self.scale(-1)
+#
+    def scale(self, delta):
+        t = QTransform()
+        self._scale += self._scale * delta / 10
+        t.scale(self._scale, self._scale)
+        self.setTransform(t)
+    ### ---------------
+###
+
+class Grid(QGraphicsScene):
+    def __init__(self, gview, rowheights, columnwidths):
         """Set the grid size.
             <columnwidths>: a list of column widths (mm)
             <rowheights>: a list of row heights (mm)
-        Calling this function will delete all existing data.
+        Rows and columns are 0-indexed.
         """
+        super().__init__()
+        self._gview = gview
+        self.changes = None
         self._styles = {'*': CellStyle(FONT_DEFAULT, FONT_SIZE_DEFAULT,
                 align = 'c', border = 1)
         }
         self.tagmap = {}        # {tag -> {Tile> instance}
         self.value0 = {}        # initial values (text) of cells
         self.changes = set()    # set of changed cells (tags)
-        self._scene = QGraphicsScene()
         self.xmarks = [0.0]
         x = 0.0
         for c in columnwidths:
-            x += c * self.MM2PT
+            x += c * self._gview.MM2PT
             self.xmarks.append(x)
         self.ymarks = [0.0]
         y = 0.0
         for r in rowheights:
-            y += r * self.MM2PT
+            y += r * self._gview.MM2PT
             self.ymarks.append(y)
 # Allow a little margin? e.g.(-1.0, -1.0, x + 1.0, y + 1.0)
         self._sceneRect = QRectF(0.0, 0.0, x, y)
-#?        self._scene.setSceneRect(self._sceneRect)
-        self.setScene(self._scene)
-        # Fix the view's scene area (pop-ups could otherwise extend it)
-        self.setSceneRect(self._sceneRect)
         # For popup editors
         self.editors = {
             'LINE': PopupLineEdit(self),
             'DATE': PopupDate(self)
         }
-        self._popup = None
+        self._popup = None  # the "active" pop-up editor
 #
-    def style(self, name):
-        return self._styles[name]
+    def leaving(self):
+        """Override this to handle scene-changing.
+        """
+        pass
+#
+#    def style(self, name):
+#        return self._styles[name]
 #
     def new_style(self, name, base = None, **params):
         if base:
@@ -153,52 +184,38 @@ class Grid(QGraphicsView):
     def nrows(self):
         return len(self.ymarks) - 1
 #
+    def screen_coordinates(self, x, y):
+        """Return the screen coordinates of the given scene point.
+        """
+        viewp = self._gview.mapFromScene(x, y)
+        return self._gview.mapToGlobal(viewp)
+#
     def viewWH(self):
         """Return the width and height of the viewing area scaled to
         scene coordinates.
+        This must query the graphics-view widget.
         """
-        vp = self.viewport()
+        vp = self._gview.viewport()
         vw1 = vp.width()
         vh1 = vp.height()
-        spoint = self.mapToScene(vw1, vh1)
+        spoint = self._gview.mapToScene(vw1, vh1)
         return (spoint.x(), spoint.y())
 #
     ### Methods dealing with cell editing
     def editCell(self, tile, x, y, validation):
         self.popdown(True)
-        self._popup = validation
-        validation.activate(tile, x, y)
+        editor = self.editors[validation]
+        self._popup = editor
+        editor.activate(tile, x, y)
 #
     def popdown (self, force = False):
         if self._popup != None and self._popup.hideMe(force):
             self._popup = None
 #
-    def mousePressEvent(self, event):
-        point = event.pos()
-#        print("POS:", point, self.mapToGlobal(point), self.itemAt(point))
-# The Tile may not be the top item.
-        if self.items(point):
-            return super().mousePressEvent(event)
-        self.popdown(True)
-#
     def addSelect(self, tag, valuelist):
         if tag in self.editors:
             raise Bug(_EDITOR_TAG_REUSED.format(tag = tag))
         self.editors[tag] = PopupTable(self, valuelist)
-#
-    ### View scaling
-    def scaleUp (self):
-        self.scale(1)
-#
-    def scaleDn (self):
-        self.scale(-1)
-#
-    def scale(self, delta):
-        t = QTransform()
-        self._scale += self._scale * delta / 10
-        t.scale(self._scale, self._scale)
-        self.setTransform(t)
-    ### ---------------
 #
     ### pdf output
     def setPdfMargins(self, left = 20, top = 20, right = 20, bottom = 20):
@@ -211,7 +228,9 @@ class Grid(QGraphicsView):
         except AttributeError:
             return self.setPdfMargins()
 #
-    def toPdf(self, filename = None):
+#TODO: I'm not sure whether this version should run on the scene or on
+# the view!!!
+    def to_pdf(self, filename = None):
         """Produce and save a pdf of the table.
         <filename> is a suggestion for the save dialog.
         The output orientation is selected according to the aspect ratio
@@ -235,9 +254,9 @@ class Grid(QGraphicsView):
         if sw > sh:
             printer.setPageOrientation(QPageLayout.Orientation.Landscape)
         painter = QPainter(printer)
-        scale = printer.resolution() / self.ldpi
+        scale = printer.resolution() / self._gview.ldpi
         pdfRect = QRectF(0, 0, sw * scale, sh * scale)
-        self.scene().render(painter, pdfRect, sceneRect)
+        self.render(painter, pdfRect, sceneRect)
         painter.end()
         qbuf.close()
         # Write resulting file
@@ -263,7 +282,7 @@ class Grid(QGraphicsView):
             tag = '#%d:%d' % (row, col)
         cell_style = self._styles[style or '*']
         t = Tile(self, tag, x, y, w, h, text, cell_style, validation)
-        self._scene.addItem(t)
+        self.addItem(t)
         self.tagmap[tag] = t
         self.value0[tag] = text # initial value
         return t
@@ -474,7 +493,7 @@ class Tile(QGraphicsRectItem):
         self.textItem.setBrush(self._style.fontColour)
 #
     def margin(self):
-        return 1.0 * self._grid.MM2PT
+        return 1.0 * self._grid._gview.MM2PT
 #
     def value(self):
         return None if self.textItem == None else self.textItem.text()
@@ -577,7 +596,12 @@ class MiniTile(QGraphicsRectItem):
 
 ###
 
-class PopupTable(QGraphicsRectItem):
+def PopupTable(grid, items):
+    if items:
+        return _PopupTable(grid, items)
+    return None
+#
+class _PopupTable(QGraphicsRectItem):
     """A selection-table popup for the grid view.
     """
     def __init__(self, grid, items):
@@ -604,7 +628,7 @@ class PopupTable(QGraphicsRectItem):
         super().__init__(0, 0, self.boxwidth, self.boxheight)
         self.setZValue(10)
         self.setVisible(False)
-        grid._scene.addItem(self)
+        grid.addItem(self)
         pen = QPen(QColor('#ff0040'))
         pen.setWidth(2)
         self.setPen(pen)
@@ -692,8 +716,7 @@ class PopupDate(QDialog):
         self.cal.setSelectedDate(QDate.fromString(date, 'yyyy-MM-dd')
                 if date else QDate.currentDate())
         self.newDate(self.cal.selectedDate())
-        viewp = self._grid.mapFromScene(x, y)
-        self.move(self._grid.mapToGlobal(viewp))
+        self.move(self._grid.screen_coordinates(x, y))
         if self.exec_():
             self.tile.newValue(self.date)
 #
@@ -724,7 +747,7 @@ class PopupLineEdit(QGraphicsProxyWidget):
         self.lineedit.returnPressed.connect(self.onDone)
         self.setWidget(self.lineedit)
         self.setVisible(False)
-        grid._scene.addItem(self)
+        grid.addItem(self)
 #
     def hideMe(self, force):
         """This should be called only by <Grid.popdown>.
@@ -781,13 +804,12 @@ if __name__ == '__main__':
     app.installTranslator(qtr)
 
     window = QDialog()
-    grid = Grid()
+    gview = GridView()
 
     topbox = QHBoxLayout(window)
-    topbox.addWidget(grid)
+    topbox.addWidget(gview)
 
-#        self.gradeView.setToolTip ('This shows the <b>grades</b> for a class')
-#        bbox = QHBoxLayout ()
+    gview.setToolTip ('This shows the <b>grades</b> for a class')
     pb = QPushButton('–')
 #    pb.clicked.connect(function)
     topbox.addWidget(pb)
@@ -795,7 +817,7 @@ if __name__ == '__main__':
     # Add some data
     rows = (10, 2, 6, 6, 6, 6, 6)
     cols = (25, 10, 8, 20, 8, 8, 25)
-    grid.setTable(rows, cols)
+    grid = Grid(gview, rows, cols)
 
     grid.new_style('title', font = 'Serif', size = 12,
             align = 'c', border = 2)
@@ -804,22 +826,21 @@ if __name__ == '__main__':
     grid.tile(0, 0, cspan = len(cols), text = "Table Testing",
                 style = 'title')
 
-    editS = PopupTable(grid,
-            ('1', '2', '3', '4', '5', '6', 'nb', 'nt', '*', '/'))
-    editD = PopupDate(grid)
-    editL = PopupLineEdit(grid)
+    grid.addSelect('SGRADE', ('1', '2', '3', '4', '5', '6',
+            'nb', 'nt', '*', '/'))
 
-    grid.tile(2, 0, tag = 'd1', text = "2020-08-10", validation = editD)
-    grid.tile(2, 6, tag = 'd2', text = "2020-09-02", validation = editD)
+    grid.tile(2, 0, tag = 'd1', text = "2020-08-10", validation = 'DATE')
+    grid.tile(2, 6, tag = 'd2', text = "2020-09-02", validation = 'DATE')
 # Why isn't the date centred? It is connected with shrink-fitting!
-    grid.tile(4, 3, tag = 'd3', text = "2020-02-09", validation = editD)
-    grid.tile(6, 0, tag = 'd4', text = "2020-01-31", validation = editD)
-    grid.tile(6, 6, tag = 'd5', text = "2020-12-01", validation = editD)
+    grid.tile(4, 3, tag = 'd3', text = "2020-02-09", validation = 'DATE')
+    grid.tile(6, 0, tag = 'd4', text = "2020-01-31", validation = 'DATE')
+    grid.tile(6, 6, tag = 'd5', text = "2020-12-01", validation = 'DATE')
 
-    grid.tile(5, 4, tag = 'g1', text = "4", validation = editS)
-    grid.tile(3, 2, tag = 'g2', validation = editS)
+    grid.tile(5, 4, tag = 'g1', text = "4", validation = 'SGRADE')
+    grid.tile(3, 2, tag = 'g2', validation = 'SGRADE')
 
-    grid.tile(3, 0, cspan = 2, tag = 't1', validation = editL, text = "Text")
-    grid.tile(4, 5, tag = 't2', validation = editL, text = "X")
+    grid.tile(3, 0, cspan = 2, tag = 't1', validation = 'LINE', text = "Text")
+    grid.tile(4, 5, tag = 't2', validation = 'LINE', text = "X")
 
+    gview.set_scene(grid)
     window.exec_()
