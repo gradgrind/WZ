@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-09
+Last updated:  2020-12-11
 
 Editor for grades.
 
@@ -50,6 +50,7 @@ from qtpy.QtWidgets import QApplication, QDialog, \
 
 from gui.grid import GridView
 from gui.grade_grid import GradeGrid
+from gui.abitur_pupil_view import AbiPupilView
 from gui.gui_support import VLine, KeySelect#, ZIcon
 from core.base import Dates
 from local.base_config import print_schoolyear
@@ -153,6 +154,8 @@ class _GradeEdit(QDialog):
         self.group = group
         self.grade_scene = GradeGrid(self.gradeView, self.schoolyear,
                 self.group, self.term)
+        self.group_scene = self.grade_scene
+        self.pupil_scene = None
         self.gradeView.set_scene(self.grade_scene)
         if self.term == 'A':
             # Show pupil choice ...
@@ -202,7 +205,18 @@ class _GradeEdit(QDialog):
         print("SELECT Pupil:", pid)
         if pid:
 #TODO
-            self.gradeView.clear()
+            if self.term == 'A':
+                if not self.pupil_scene:
+                    self.pupil_scene = AbiPupilView(self.gradeView,
+                            self.group_scene.grade_table)
+                self.gradeView.set_scene(self.pupil_scene)
+                self.pupil_scene.set_pupil(pid)
+                return
+
+            else:
+                pass
+
+                self.gradeView.clear()
         else:
             self.group_changed(self.group)
         return
