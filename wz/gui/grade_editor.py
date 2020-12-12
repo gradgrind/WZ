@@ -36,6 +36,7 @@ _ALL_PUPILS = "Gesamttabelle"
 _SCHULJAHR = "Schuljahr:"
 _TERM = "Anlass:"
 _GROUP = "Klasse/Gruppe:"
+_SAVE = "Änderungen speichern"
 #####################################################
 
 
@@ -109,6 +110,9 @@ class _GradeEdit(QDialog):
         self.pselect.setMaximumWidth(150)
         cbox.addWidget(self.pselect)
         cbox.addStretch(1)
+        pbSave = QPushButton(_SAVE)
+        cbox.addWidget(pbSave)
+        pbSave.clicked.connect(self.save)
         pbPdf = QPushButton('PDF')
         cbox.addWidget(pbPdf)
         pbPdf.clicked.connect(self.gradeView.toPdf)
@@ -125,7 +129,7 @@ class _GradeEdit(QDialog):
 
 #
     def closeEvent(self, e):
-        self.gradeView._leaving()
+        self.gradeView.clear()
         super().closeEvent(e)
 #
     def init(self):
@@ -150,13 +154,14 @@ class _GradeEdit(QDialog):
         self.group_select.trigger()
 #
     def group_changed(self, group):
-        print("Change Group:", group)
+        # Needed to call <leaving> before (re)loading the grade table:
+        self.gradeView.clear()
         self.group = group
-        self.grade_scene = GradeGrid(self.gradeView, self.schoolyear,
+        self.group_scene = GradeGrid(self.gradeView, self.schoolyear,
                 self.group, self.term)
-        self.group_scene = self.grade_scene
+        self.gradeView.set_scene(self.group_scene)
+        self.grade_scene = self.group_scene
         self.pupil_scene = None
-        self.gradeView.set_scene(self.grade_scene)
         if self.term == 'A':
             # Show pupil choice ...
             plist = [('', _ALL_PUPILS)] + self.grade_scene.pupils()
@@ -206,9 +211,11 @@ class _GradeEdit(QDialog):
         if pid:
 #TODO
             if self.term == 'A':
+                self.gradeView.clear()
                 if not self.pupil_scene:
                     self.pupil_scene = AbiPupilView(self.gradeView,
-                            self.group_scene.grade_table)
+                            self.schoolyear, self.group)
+                    self.grade_scene = self.pupil_scene
                 self.gradeView.set_scene(self.pupil_scene)
                 self.pupil_scene.set_pupil(pid)
                 return
@@ -220,21 +227,8 @@ class _GradeEdit(QDialog):
         else:
             self.group_changed(self.group)
         return
-############# old:
-
-        self.changes = set()    # set of changed cells
-        # Set pupil's name (NAME) and completion date (FERTIG_D)
-        name = self.grade_table.name[pid]
-        self.grade_scene.tagmap['NAME'].setText(name)
-        self.calc = AbiCalc(self.grade_table, pid)
-        # Set date of completion: if no value for pupil, use group date
-        self.calc.set_editable_cell('FERTIG_D',
-                self.calc.grade_map['X_FERTIG_D'] or self.grade_table.grades_d)
-        # Set subject names and grades
-        for tag, val in self.calc.tags.items():
-            self.grade_scene.tagmap[tag].setText(val)
-        self.update_calc()
 #
+#?
     def update_calc(self):
         """Update all the calculated parts of the grid from the current
         grades.
@@ -246,37 +240,9 @@ class _GradeEdit(QDialog):
                 pass
 #                print("NO FIELD:", tag)
 #
-    def cell_changed(self, tag, value):
-        """Called when a cell is edited.
-        """
-        try:
-            old = self.calc.tags0[tag]
-        except KeyError:
-            raise Bug("Unexpected cell change, %s: %s" % (tag, value))
-        if value == old:
-            self.changes.discard(tag)
-            self.grade_scene.tagmap[tag].mark(False)
-        else:
-            self.changes.add(tag)
-            self.grade_scene.tagmap[tag].mark(True)
-        if tag.startswith('GRADE_'):
-            self.calc.tags[tag] = value
-            self.update_calc()
-        elif tag == 'FERTIG_D':
-            print("NEW DATE:", value)
-        else:
-            raise Bug("Invalid cell change, %s: %s" % (tag, value))
-#
-#TODO: This might need some tweaking ... unless the <GradeTable> is a
-# subclass especially for Abitur.
-    def save_changes(self):
-        """Collect the fields to be saved and pass them to the
-        <GradeTable> method.
-        """
-        full_grade_list = self.calc.get_all_grades()
-        fertig_d = self.calc.tags['FERTIG_D']
-#TODO: method <update_pupil>
-        self.grade_table.update_pupil(self.pid, full_grade_list, fertig_d)
+    def save(self):
+        self.grade_scene.save_changes()
+        self.grade_scene.clear_changes()
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

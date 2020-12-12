@@ -2,7 +2,7 @@
 """
 gui/grade_grid.py
 
-Last updated:  2020-12-09
+Last updated:  2020-12-12
 
 Manage the grid for the grade-editor.
 
@@ -106,7 +106,7 @@ class GradeGrid(Grid):
                     (_WIDTH_GRADE,) * len(self.grade_table.composites)
         col_averages = len(_COLS) + 1
 # The averages are only used in the grade editor ...
-        self.averages = Grades.averages(group)
+        self.averages = Grades.averages(self.grade_table.group)
         if self.averages:
             _COLS += (_SEP_SIZE,) + (_WIDTH_AVERAGE,) * len(self.averages)
         col_extras = len(_COLS) + 1
@@ -124,7 +124,8 @@ class GradeGrid(Grid):
             self.tile(1, col - 1, rspan = len(_ROWS) - 1, style = 'padding')
 
         ### Pop-up editor for grades
-        self.addSelect('grade', Grades.group_info(group, 'NotenWerte'))
+        self.addSelect('grade', Grades.group_info(self.grade_table.group,
+                'NotenWerte'))
 
         ### Title area
         self.tile(0, 0, text = "Notentabelle", cspan = 2, style = 'title')
@@ -177,13 +178,15 @@ class GradeGrid(Grid):
             self.tile(7, col, text = sid, style = 'small')
             self.tile(1, col, text = name, rspan = 6, style = 'v')
             if sid == '*ZA':
-                _ZA_vals = Grades.group_info(group, f'*ZA/{term}')
+                _ZA_vals = Grades.group_info(self.grade_table.group,
+                        f'*ZA/{self.grade_table.term}')
                 self.addSelect(sid, _ZA_vals)
                 ZA_default = _ZA_vals[0] if _ZA_vals else ''
 #            elif sid.endswith('_D'):
 #                'DATE'
             elif sid == '*Q':
-                self.addSelect(sid, Grades.group_info(group, '*Q'))
+                self.addSelect(sid, Grades.group_info(self.grade_table.group,
+                        '*Q'))
             col += 1
 
         # Pupil lines
@@ -259,8 +262,10 @@ class GradeGrid(Grid):
                 _TABLE_CHANGES.format(year = self.grade_table.schoolyear,
                         term = Grades.term2text(self.grade_table.term),
                         group = self.grade_table.group)):
-            self.grade_table.save()
-        self.changes = None
+            self.save_changes()
+#
+    def save_changes(self):
+        self.grade_table.save()
 #
     def pupils(self):
         """Return an ordered mapping of pupils: {pid -> name}.

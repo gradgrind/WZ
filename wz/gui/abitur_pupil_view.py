@@ -2,7 +2,7 @@
 """
 gui/abitur_pupil_view.py
 
-Last updated:  2020-12-11
+Last updated:  2020-12-12
 
 Editor for Abitur results (single pupil).
 
@@ -50,17 +50,22 @@ VALID_GRADES = (
 VALID_GRADES_X = VALID_GRADES + ('*',)
 
 ### Messages
+_TITLE_TABLE_CHANGE = "Änderungen speichern"
+_TABLE_CHANGES = "Änderungen für {pupil} nicht gespeichert.\n" \
+        "Sollen sie jetzt gespeichert werden?\n" \
+        "Wenn nicht, dann gehen sie verloren."
 
 
 #####################################################
 
-# To test this module, use it via grade_editor.py
+# To test this module, use it via grade_editor.py (select "Anlass: Abitur")
 
 from gui.grid import Grid
 from gui.gui_support import QuestionDialog
 
 from local.base_config import FONT, print_schoolyear, SCHOOL_NAME
 from local.abitur_config import AbiCalc
+from grades.gradetable import GradeTable
 
 
 class AbiPupilView(Grid):
@@ -86,8 +91,9 @@ class AbiPupilView(Grid):
         self.new_style('date', base = 'result', highlight = ':002562',
                 mark = 'E00000')
 #
-    def __init__(self, grades_view, grade_table):
-        self.grade_table = grade_table
+    def __init__(self, grades_view, schoolyear, group):
+        self.grade_table = GradeTable.group_table(schoolyear, group, 'A',
+                ok_new = True)
         super().__init__(grades_view, ROWS, COLUMNS)
         self.styles()
 
@@ -194,7 +200,6 @@ class AbiPupilView(Grid):
                 tag = "FINAL_GRADE")
 
         self.tile(44, 8, text = "Datum:", cspan = 2, style = 'resultL')
-#tag? *F_D ?
         self.tile(44, 10, text = '', cspan = 4, style = 'date',
                 validation = 'DATE', tag = "FERTIG_D")
 #TODO: Do I want to display the date in local format? If so, I would need
@@ -208,28 +213,40 @@ class AbiPupilView(Grid):
         in <self.changes> (a set of tile-tags).
         """
         super().valueChanged(tag, text)
-#TODO
-
-
-#TODO: Updating "database" ... (save button? ... or immediate update?)
-
+        if tag.startswith('GRADE_'):
+            self.calc.set_editable_cell(tag, text)
+            self.update_calc()
+        elif tag == 'FERTIG_D':
+            self.calc.set_editable_cell(tag, text)
+        else:
+            raise Bug("Invalid cell change, %s: %s" % (tag, text))
+#
+    def leaving(self):
+        """When setting a scene (or clearing one), or exiting the program
+        (or dialog), this check for changed data should be made.
+        """
+        if self.changes and QuestionDialog(_TITLE_TABLE_CHANGE,
+                _TABLE_CHANGES.format(pupil = self.name)):
+            self.save_changes()
+#
     def set_pupil(self, pid):
         """A new pupil has been selected: reset the grid accordingly.
         """
         self.pid = pid
+        self.clear_changes()
         self.changes = set()    # set of changed cells
         # Set pupil's name (NAME) and completion date (FERTIG_D)
-        name = self.grade_table.name[pid]
+        self.name = self.grade_table.name[pid]
         self.set_text('SCHOOLYEAR',
                 print_schoolyear(self.grade_table.schoolyear))
-        self.set_text('NAME', name)
+        self.set_text('NAME', self.name)
         self.calc = AbiCalc(self.grade_table, pid)
         # Set date of completion: if no value for pupil, use group date
         self.calc.set_editable_cell('FERTIG_D',
                 self.calc.grade_map['*F_D'] or self.grade_table.grades_d)
         # Set subject names and grades
-        for tag, val in self.calc.tags.items():
-            self.set_text(tag, val)
+        for tag, val in self.calc.all_values():
+            self.set_text_init(tag, val)
         self.update_calc()
 #
     def update_calc(self):
@@ -243,38 +260,17 @@ class AbiPupilView(Grid):
                 pass
 #                print("NO FIELD:", tag)
 #
-#TODO
-    def cell_changed(self, tag, value):
-        """Called when a cell is edited.
-        """
-        try:
-            old = self.calc.tags0[tag]
-        except KeyError:
-            raise Bug("Unexpected cell change, %s: %s" % (tag, value))
-        if value == old:
-            self.changes.discard(tag)
-            self.gradeView.tagmap[tag].mark(False)
-        else:
-            self.changes.add(tag)
-            self.gradeView.tagmap[tag].mark(True)
-        if tag.startswith('GRADE_'):
-            self.calc.tags[tag] = value
-            self.update_calc()
-        elif tag == 'FERTIG_D':
-            print("NEW DATE:", value)
-        else:
-            raise Bug("Invalid cell change, %s: %s" % (tag, value))
-#
-#TODO: This might need some tweaking ... unless the <GradeTable> is a
-# subclass especially for Abitur.
     def save_changes(self):
         """Collect the fields to be saved and pass them to the
         <GradeTable> method.
         """
-        full_grade_list = self.calc.get_all_grades()
-        fertig_d = self.calc.tags['FERTIG_D']
-#TODO: method <update_pupil>
-        self.grade_table.update_pupil(self.pid, full_grade_list, fertig_d)
+        if self.changes:
+            pgtable = self.grade_table[self.pid]
+            pgtable.set_grade('*F_D', self.calc.value('FERTIG_D'))
+            for s, g in self.calc.get_all_grades():
+                pgtable.set_grade(s, g)
+#TODO: also '*ZA'?
+            self.grade_table.save()
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2020-12-09
+Last updated:  2020-12-12
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -84,20 +84,19 @@ class GridView(QGraphicsView):
         self.MM2PT = self.ldpi / 25.4
 #
     def set_scene(self, scene):
-        self._leaving()
         self.setScene(scene)
         # Set the view's scene area to a fixed size
         # (pop-ups could otherwise extend it)
         self.setSceneRect(scene._sceneRect)
 #
     def clear(self):
-        self._leaving()
-        self.setScene(None)
-#
-    def _leaving(self):
+        """Call this before <set_scene> to ensure that <leaving> is called.
+        It should also be called when closing the application window.
+        """
         s = self.scene()
         if s:
             s.leaving()
+        self.setScene(None)
 #
     def mousePressEvent(self, event):
         point = event.pos()
@@ -206,7 +205,8 @@ class Grid(QGraphicsScene):
         self.popdown(True)
         editor = self.editors[validation]
         self._popup = editor
-        editor.activate(tile, x, y)
+        if editor:
+            editor.activate(tile, x, y)
 #
     def popdown (self, force = False):
         if self._popup != None and self._popup.hideMe(force):
@@ -292,6 +292,29 @@ class Grid(QGraphicsScene):
         cell-changed callback.
         """
         self.tagmap[tag].setText(text)
+#
+    def set_text_init(self, tag, text):
+        """Reset the initial text in the given cell, not activating the
+        cell-changed callback.
+        """
+        tile = self.tagmap[tag]
+        tile.setText(text)
+        self.value0[tag] = text
+        # Clear "changed" highlighting
+        if tile._style.colour_marked:
+            # Only if the cell _can_ highlight "changed" ...
+            tile.unmark()
+#
+    def clear_changes(self):
+        """Used after saving changes to clear markings.
+        """
+        for tag in list(self.changes):
+            tile = self.tagmap[tag]
+            self.value0[tag] = tile.value()
+            self.changes.discard(tag)
+            if tile._style.colour_marked:
+                # Only if the cell _can_ highlight "changed" ...
+                tile.unmark()
 #
     def set_change_mark(self, tag, text):
         tile = self.tagmap[tag]
