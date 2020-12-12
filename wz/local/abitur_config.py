@@ -3,7 +3,7 @@
 """
 local/abitur_config.py
 
-Last updated:  2020-12-05
+Last updated:  2020-12-12
 
 Configuration for Abitur-grade handling.
 ====================================
@@ -56,7 +56,6 @@ class AbiCalc:
         sid2n = {}              # stripped sid (only e and g)
         self.tag2sid = {}
         self.tags = {}          # {tag -> value}
-        self.tags0 = {}         # original values of editable cells
         for sid, grade in self.grade_map.items():
             if grade == UNCHOSEN:
                 continue
@@ -113,25 +112,32 @@ class AbiCalc:
         if len(xsids) != 4:
             raise AbiturError(_X_WRONG.format(n = len(xsids)))
 #
+    def value(self, tag):
+        """Return the value in the given cell.
+        """
+        return self.tags[tag]
+#
+    def all_values(self):
+        """Return a list of all tags and values: [(tag, value), ...].
+        """
+        return [(t, v) for t, v in self.tags.items()]
+#
     def set_editable_cell(self, tag, value):
-        """As well as being entered in the general <self.tags> mapping,
-        editable cells are remembered in the <self.tags0> mapping,
-        to allow change tracking.
+        """Enter value in the general <self.tags> mapping.
         """
         self.tags[tag] = value
-        self.tags0[tag] = value
 #
     def get_all_grades(self):
         """Return a list of all (subject, grade) pairs, including the
-        'UNCHOSEN' ones
+        'UNCHOSEN' ones. This list does not include "special" fields.
         """
         grade_list = []
-        for sid, grade in self.calc.grade_map.items():   # {sid -> grade}
+        for sid, grade in self.grade_map.items():   # {sid -> grade}
             if grade == UNCHOSEN:
-                grade_list.append(sid, UNCHOSEN)
-            else:
+                grade_list.append((sid, UNCHOSEN))
+            elif sid[0] != '*':
                 tag = self.sid2tag[sid]
-                grade_list.append(sid, self.tags[tag])
+                grade_list.append((sid, self.tags[tag]))
         return grade_list
 #
     def calculate(self):
@@ -253,39 +259,7 @@ class AbiCalc:
 # Fachabi, etc?
         return fields
 
-
-
-
-
-#old ...
-    def old__init__(self, sid2grade):
-        """<sid2grade> must be a <GradeManagerA> instance. The subjects
-        should thus be checked and ordered.
-        """
-
-        def getSG():
-            for sid, grade in sid2grade.items():
-                yield (sid, grade)
-
-#        REPORT.Test("???name %s" % repr(sid2grade.sname))
-#        REPORT.Test("???grade %s" % repr(sid2grade))
-        self.zgrades = {}   # For report building
-        self.sngg = []      # For grade entry/editing
-        sg = getSG()
-        for i in range(1, 9):
-            sid, grade = sg.__next__()
-            sname = sid2grade.sname[sid]
-            self.zgrades["F%d" % i] = sname.split('|')[0].rstrip()
-            grade = grade or '?'
-            self.zgrades["S%d" % i] = grade
-            if i <= 4:
-                sn, gn = sg.__next__()
-                gn = gn or '*'
-                self.zgrades["M%d" % i] = '––––––' if gn == '*' else gn
-            else:
-                gn = None
-            self.sngg.append((sid, sname, grade, gn))
-
+###
 
     def getFullGrades(self):
         """Return the full tag mapping for an Abitur report.
