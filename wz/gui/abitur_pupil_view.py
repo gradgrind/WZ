@@ -210,7 +210,7 @@ class AbiPupilView(Grid):
         Specific action is taken here only for grades, which can
         cause further changes in the table.
         References to other value changes will nevertheless be available
-        in <self.changes> (a set of tile-tags).
+        via <self.changes()> (a list of tile-tags).
         """
         super().valueChanged(tag, text)
         if tag.startswith('GRADE_'):
@@ -225,7 +225,7 @@ class AbiPupilView(Grid):
         """When setting a scene (or clearing one), or exiting the program
         (or dialog), this check for changed data should be made.
         """
-        if self.changes and QuestionDialog(_TITLE_TABLE_CHANGE,
+        if self.changes() and QuestionDialog(_TITLE_TABLE_CHANGE,
                 _TABLE_CHANGES.format(pupil = self.name)):
             self.save_changes()
 #
@@ -234,7 +234,7 @@ class AbiPupilView(Grid):
         """
         self.pid = pid
         self.clear_changes()
-        self.changes = set()    # set of changed cells
+        self.changes_init()    # set of changed cells
         # Set pupil's name (NAME) and completion date (FERTIG_D)
         self.name = self.grade_table.name[pid]
         self.set_text('SCHOOLYEAR',
@@ -264,7 +264,7 @@ class AbiPupilView(Grid):
         """Collect the fields to be saved and pass them to the
         <GradeTable> method.
         """
-        if self.changes:
+        if self.changes():
             pgtable = self.grade_table[self.pid]
             pgtable.set_grade('*F_D', self.calc.value('FERTIG_D'))
             for s, g in self.calc.get_all_grades():

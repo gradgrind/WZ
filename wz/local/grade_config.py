@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-12-06
+Last updated:  2020-12-13
 
 Configuration for grade handling.
 ====================================
@@ -19,6 +19,8 @@ _BAD_ANLASS = "Ungültiger Anlass: {term}"
 _BAD_TERM = "Ungültiger \"Anlass\" (Halbjahr): {term}"
 _INVALID_GRADE = "Ungültige \"Note\": {grade}"
 _BAD_XGRADE = "Ungültiges Zusatz-Notenfeld für Gruppe {grp}: {item}"
+_BAD_RTEMPLATE = "Ungültige Zeugnisvorlage für Gruppe {grp}: {item}"
+_NO_RTEMPLATE = "Keine Zeugnisvorlage '{template}' für Gruppe {grp}"
 _BAD_AVERAGE = "Ungültiges Durchschnittsfeld für Gruppe {grp}: {item}"
 
 # Special "grades"
@@ -41,6 +43,8 @@ STREAMS = {
 #    'FS': 'Förderschule',
 #    'GS': 'Grundschule'
 }
+
+_TEMPLATE_PATH = 'Noten/{fname}'
 
 ###########################
 _NORMAL_GRADES = f"""1+ ; 1 ; 1- ;  +
@@ -74,6 +78,9 @@ REPORT_GROUPS = f"""
     Stufe = SekI
 ######## (grade table template):
     NotentabelleVorlage = Noten/Noteneingabe
+######## (grade report template):
+    NotenzeugnisVorlage = Zeugnis/SekI; Abgang/SekI-Abgang; +
+            Abschluss/SekI-Abschluss; Orientierung/Orientierung;
 ######## ("streams" contained in "group"):
 ######## leer => keine Untergruppen in dieser Klasse/Gruppe:
     Maßstäbe = ;
@@ -96,6 +103,8 @@ REPORT_GROUPS = f"""
 :13
     Stufe = SekII
     NotentabelleVorlage = Noten/Noteneingabe-Abitur
+    NotenzeugnisVorlage = Zeugnis/SekII-13_1; Abgang/SekII-13-Abgang; +
+            Abi/Abitur; FHS/Fachhochschulreife; NA/Abitur-nicht-bestanden;
 ######## (The report type is determined by calculations):
     Notenfelder_X = *ZA/Zeugnis (Art); *F_D/Fertigstellung;
 ######## Zeugnis-Art/Abitur automatic?
@@ -109,6 +118,7 @@ REPORT_GROUPS = f"""
 :12.G
     Stufe = SekII
     NotentabelleVorlage = Noten/Noteneingabe-SII
+    NotenzeugnisVorlage = Zeugnis/SekII-12; Abgang/SekII-12-Abgang;
     Maßstäbe = Gym;
     Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
     *ZA/1 = Zeugnis; Abgang;
@@ -188,21 +198,6 @@ for line in REPORT_GROUPS.splitlines():
     info[tag.strip()] = vals
 ###########################
 
-## Localized field names.
-## This also determines the fields for the GRADES table.
-#GRADES_FIELDS = {
-#    'PID'       : 'ID',
-#    'CLASS'     : 'Klasse',
-#    'STREAM'    : 'Maßstab',    # Grading level, etc.
-#    'TERM'      : 'Anlass',     # Term/Category
-#    'GRADES'    : 'Noten',
-#    'REPORT_TYPE': 'Zeugnistyp',
-#    'ISSUE_D'   : 'Ausstellungsdatum',
-#    'GRADES_D'  : 'Notenkonferenz',
-#    'QUALI'     : 'Qualifikation',
-#    'COMMENT'   : 'Bemerkungen'
-#}
-
 
 class GradeConfigError(Exception):
     pass
@@ -247,7 +242,7 @@ class GradeBase(dict):
         ('S*', 'Sonderzeugnisse')
     )
     #
-    GRADE_PATH = 'NOTEN_{term}/Noten_{group}_{term}'  # grade table: file-name
+    GRADE_PATH = 'NOTEN_{term[0]}/Noten_{group}_{term}'  # grade table: file-name
     #
     _PRINT_GRADE = {
         '1': "sehr gut",
@@ -398,6 +393,21 @@ class GradeBase(dict):
             except GradeConfigError:
                 continue
         return groups
+#
+    @classmethod
+    def report_template(cls, group, rtype):
+        """Return the template "path" for the grade reports.
+        """
+        for item in cls.group_info(group, 'NotenzeugnisVorlage'):
+            try:
+                k, v = item.split('/')
+            except ValueError as e:
+                raise GradeConfigError(_BAD_RTEMPLATE.format(
+                        grp = group, item = item))
+            if rtype == k:
+                return _TEMPLATE_PATH.format(fname = v)
+        raise GradeConfigError(_NO_RTEMPLATE.format(grp = group,
+                template = rtype))
 #
     @classmethod
     def xgradefields(cls, group):

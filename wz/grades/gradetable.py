@@ -584,8 +584,6 @@ def update_grades(schoolyear, term, pid, tid = None, grades = None, **fields):
                     PID = pid, TERM = gt.term)
 
 
-
-
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':

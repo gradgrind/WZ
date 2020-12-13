@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2020-12-12
+Last updated:  2020-12-13
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -106,10 +106,12 @@ class GridView(QGraphicsView):
             return super().mousePressEvent(event)
         self.scene().popdown(True)
 #
-    def toPdf(self, filename = None):
-        s = self.scene()
-        if s:
-            s.to_pdf(filename)
+    def set_changed(self, show):
+        """Called when there is a switch from "no changes" to "changes"
+        or vice versa.
+        """
+        # Override this if something should happen!
+        pass
 #
     ### View scaling
     def scaleUp (self):
@@ -127,6 +129,11 @@ class GridView(QGraphicsView):
 ###
 
 class Grid(QGraphicsScene):
+    _savedir = None
+    @classmethod
+    def set_savedir(cls, path):
+        cls._savedir = path
+#
     def __init__(self, gview, rowheights, columnwidths):
         """Set the grid size.
             <columnwidths>: a list of column widths (mm)
@@ -135,13 +142,12 @@ class Grid(QGraphicsScene):
         """
         super().__init__()
         self._gview = gview
-        self.changes = None
         self._styles = {'*': CellStyle(FONT_DEFAULT, FONT_SIZE_DEFAULT,
                 align = 'c', border = 1)
         }
         self.tagmap = {}        # {tag -> {Tile> instance}
         self.value0 = {}        # initial values (text) of cells
-        self.changes = set()    # set of changed cells (tags)
+        self.changes_init()     # set of changed cells (tags)
         self.xmarks = [0.0]
         x = 0.0
         for c in columnwidths:
@@ -160,6 +166,23 @@ class Grid(QGraphicsScene):
             'DATE': PopupDate(self)
         }
         self._popup = None  # the "active" pop-up editor
+#
+    def changes(self):
+        return list(self._changes)
+#
+    def changes_init(self):
+        self._changes = set()
+        self._gview.set_changed(False)
+#
+    def changes_discard(self, tag):
+        self._changes.discard(tag)
+        if not self._changes:
+            self._gview.set_changed(False)
+#
+    def changes_add(self, tag):
+        if not self._changes:
+            self._gview.set_changed(True)
+        self._changes.add(tag)
 #
     def leaving(self):
         """Override this to handle scene-changing.
@@ -228,8 +251,6 @@ class Grid(QGraphicsScene):
         except AttributeError:
             return self.setPdfMargins()
 #
-#TODO: I'm not sure whether this version should run on the scene or on
-# the view!!!
     def to_pdf(self, filename = None):
         """Produce and save a pdf of the table.
         <filename> is a suggestion for the save dialog.
@@ -260,8 +281,22 @@ class Grid(QGraphicsScene):
         painter.end()
         qbuf.close()
         # Write resulting file
-        QFileDialog.saveFileContent(qbytes, filename or 'grid.pdf')
-    ### ---------------
+#        QFileDialog.saveFileContent(qbytes, filename or 'grid.pdf')
+        dir0 = self._savedir or os.path.expanduser('~')
+        if filename:
+            if not filename.endswith('.pdf'):
+                filename += '.pdf'
+        else:
+            filename = 'grid.pdf'
+        fpath = QFileDialog.getSaveFileName(self._gview, "Save File",
+                           os.path.join(dir0, filename),
+                           "pdf-Datei (*.pdf)")[0]
+        if fpath:
+            self.set_savedir(os.path.dirname(fpath))
+            with open(fpath, 'wb') as fh:
+                fh.write(bytes(qbytes))
+
+### ---------------
 #
     def tile(self, row, col, text = None, cspan = 1, rspan = 1,
             style = None, validation = None, tag = None):
@@ -308,10 +343,10 @@ class Grid(QGraphicsScene):
     def clear_changes(self):
         """Used after saving changes to clear markings.
         """
-        for tag in list(self.changes):
+        for tag in self.changes():
             tile = self.tagmap[tag]
             self.value0[tag] = tile.value()
-            self.changes.discard(tag)
+            self.changes_discard(tag)
             if tile._style.colour_marked:
                 # Only if the cell _can_ highlight "changed" ...
                 tile.unmark()
@@ -319,10 +354,10 @@ class Grid(QGraphicsScene):
     def set_change_mark(self, tag, text):
         tile = self.tagmap[tag]
         if text == self.value0[tag]:
-            self.changes.discard(tag)
+            self.changes_discard(tag)
             tile.unmark()
         else:
-            self.changes.add(tag)
+            self.changes_add(tag)
             tile.mark()
 #
     def valueChanged(self, tag, text):

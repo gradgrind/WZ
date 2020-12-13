@@ -2,7 +2,7 @@
 """
 gui/grade_grid.py
 
-Last updated:  2020-12-12
+Last updated:  2020-12-13
 
 Manage the grid for the grade-editor.
 
@@ -40,6 +40,8 @@ _STREAM = "Maßstab"
 #####################################################
 
 # To test this module, use it via grade_editor.py
+
+import os
 
 from gui.grid import Grid
 from gui.gui_support import QuestionDialog
@@ -258,7 +260,7 @@ class GradeGrid(Grid):
         """When setting a scene (or clearing one), or exiting the program
         (or dialog), this check for changed data should be made.
         """
-        if self.changes and QuestionDialog(_TITLE_TABLE_CHANGE,
+        if self.changes() and QuestionDialog(_TITLE_TABLE_CHANGE,
                 _TABLE_CHANGES.format(year = self.grade_table.schoolyear,
                         term = Grades.term2text(self.grade_table.term),
                         group = self.grade_table.group)):
@@ -266,6 +268,11 @@ class GradeGrid(Grid):
 #
     def save_changes(self):
         self.grade_table.save()
+#
+    def to_pdf(self):
+        fname = os.path.basename(self.grade_table.table_path(
+                self.grade_table.group, self.grade_table.term))
+        super().to_pdf(fname)
 #
     def pupils(self):
         """Return an ordered mapping of pupils: {pid -> name}.
@@ -277,7 +284,7 @@ class GradeGrid(Grid):
         Specific action is taken here only for real grades, which can
         cause further changes in the table.
         References to other value changes will nevertheless be available
-        in <self.changes> (a set of tile-tags).
+        via <self.changes()> (a list of tile-tags).
         """
         super().valueChanged(tag, text)
         if tag.startswith('$'):

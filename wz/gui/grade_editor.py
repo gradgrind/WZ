@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-11
+Last updated:  2020-12-13
 
 Editor for grades.
 
@@ -37,6 +37,8 @@ _SCHULJAHR = "Schuljahr:"
 _TERM = "Anlass:"
 _GROUP = "Klasse/Gruppe:"
 _SAVE = "Änderungen speichern"
+_TABLE_PDF = "Tabelle als PDF"
+_REPORT_PDF = "Zeugnis(se) erstellen"
 #####################################################
 
 
@@ -59,6 +61,12 @@ from local.grade_config import GradeBase
 
 ###
 
+class GView(GridView):
+    def set_changed(self, show):
+        self.pbSave.setEnabled(show)
+
+###
+
 class _GradeEdit(QDialog):
     def __init__(self):
         super().__init__()
@@ -75,7 +83,7 @@ class _GradeEdit(QDialog):
 #        self.gridtitle.setAlignment (Qt.AlignCenter)
 
 #*********** The "main" widget ***********
-        self.gradeView = GridView()
+        self.gradeView = GView()
         topbox.addWidget(self.gradeView)
 
         topbox.addWidget(VLine())
@@ -109,23 +117,24 @@ class _GradeEdit(QDialog):
         self.pselect = KeySelect(changed_callback = self.pupil_changed)
         self.pselect.setMaximumWidth(150)
         cbox.addWidget(self.pselect)
+
+        cbox.addSpacing(30)
+        self.gradeView.pbSave = QPushButton(_SAVE)
+        cbox.addWidget(self.gradeView.pbSave)
+        self.gradeView.pbSave.clicked.connect(self.save)
+
         cbox.addStretch(1)
-        pbSave = QPushButton(_SAVE)
-        cbox.addWidget(pbSave)
-        pbSave.clicked.connect(self.save)
-        pbPdf = QPushButton('PDF')
+        pbReport = QPushButton(_REPORT_PDF)
+        cbox.addWidget(pbReport)
+        pbReport.clicked.connect(self.make_reports)
+        pbPdf = QPushButton(_TABLE_PDF)
         cbox.addWidget(pbPdf)
-        pbPdf.clicked.connect(self.gradeView.toPdf)
+        pbPdf.clicked.connect(self.print_table)
         topbox.addLayout(cbox)
-#        self.year_select.trigger()
-#        self.term_select.trigger()
 
 # after "showing"?
 #        pbSmaller.setFixedWidth (pbSmaller.height ())
 #        pbLarger.setFixedWidth (pbLarger.height ())
-
-#TODO: at certain changes the scene should probably be cleared!
-# Maybe at any change!
 
 #
     def closeEvent(self, e):
@@ -149,7 +158,7 @@ class _GradeEdit(QDialog):
         groups = [(grp, grp)
                 for grp, rtype in GradeBase.term2group_rtype_list(key[0])]
         print("Change Category:", key, [grp[0] for grp in groups])
-        self.gradeView.clear()
+#        self.gradeView.clear()
         self.group_select.set_items(groups)
         self.group_select.trigger()
 #
@@ -157,6 +166,12 @@ class _GradeEdit(QDialog):
         # Needed to call <leaving> before (re)loading the grade table:
         self.gradeView.clear()
         self.group = group
+        self.pselect.setVisible(False)
+        if self.term[0] == 'S':
+            self.pselect.setVisible(True)
+            print("TODO: special report")
+            return
+
         self.group_scene = GradeGrid(self.gradeView, self.schoolyear,
                 self.group, self.term)
         self.gradeView.set_scene(self.group_scene)
@@ -164,10 +179,13 @@ class _GradeEdit(QDialog):
         self.pupil_scene = None
         if self.term == 'A':
             # Show pupil choice ...
+            self.pselect.setVisible(True)
             plist = [('', _ALL_PUPILS)] + self.grade_scene.pupils()
             self.pselect.set_items(plist)
         else:
+            #TODO: hide select element?
             self.pselect.set_items(None)
+
 #TODO
 
 
@@ -243,6 +261,18 @@ class _GradeEdit(QDialog):
     def save(self):
         self.grade_scene.save_changes()
         self.grade_scene.clear_changes()
+#
+    def make_reports(self):
+        """Generate the grade report(s).
+        """
+        print("TODO: make_reports")
+
+#
+    def print_table(self):
+        """Output the table as pdf.
+        """
+        if self.grade_scene:
+            self.grade_scene.to_pdf()
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
