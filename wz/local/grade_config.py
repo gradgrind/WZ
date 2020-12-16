@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-12-13
+Last updated:  2020-12-16
 
 Configuration for grade handling.
 ====================================
@@ -81,6 +81,8 @@ REPORT_GROUPS = f"""
 ######## (grade report template):
     NotenzeugnisVorlage = Zeugnis/SekI; Abgang/SekI-Abgang; +
             Abschluss/SekI-Abschluss; Orientierung/Orientierung;
+######## Notengruppen, deren Noten nicht im Zeugnis erscheinen:
+    Nullgruppen = ;
 ######## ("streams" contained in "group"):
 ######## leer => keine Untergruppen in dieser Klasse/Gruppe:
     Maßstäbe = ;
@@ -119,6 +121,7 @@ REPORT_GROUPS = f"""
     Stufe = SekII
     NotentabelleVorlage = Noten/Noteneingabe-SII
     NotenzeugnisVorlage = Zeugnis/SekII-12; Abgang/SekII-12-Abgang;
+    group_ignore = K;
     Maßstäbe = Gym;
     Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
     *ZA/1 = Zeugnis; Abgang;
@@ -243,6 +246,9 @@ class GradeBase(dict):
     )
     #
     GRADE_PATH = 'NOTEN_{term[0]}/Noten_{group}_{term}'  # grade table: file-name
+    #
+    REPORT_DIR = 'NOTEN_{term[0]}'          # grade report: folder
+    REPORT_NAME = '{rtype}_{group}_{term}'  # grade report: file name
     #
     _PRINT_GRADE = {
         '1': "sehr gut",

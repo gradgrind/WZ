@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2020-12-13
+Last updated:  2020-12-16
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -47,7 +47,7 @@ if __name__ == '__main__':
 ## Messages
 _NO_REPORT_TYPE = "Kein Zeugnistyp für Schüler {pids}"
 _MULTI_GRADE_GROUPS = "Fach {sbj} passt zu mehr als eine Fach-Gruppe"
-_WARN_NO_GRADE = "Schüler {pid}: keine Note im Fach {sbj}"
+_NO_GRADE = "Schüler {pname}: keine Note im Fach {sbj}"
 _UNEXPECTED_GRADE_GROUP = "Ungültiger Fachgruppe ({tag}) in Vorlage:\n" \
         "  {tpath}"
 _NO_SUBJECT_GROUP = "Keine passende Fach-Gruppe für Fach {sbj}"
@@ -143,12 +143,17 @@ class GradeReports:
         for rtype, pid_list in greport_type.items():
             template, gmaplist = self.prepare_report_data(rtype,
                     pid_list)
+            # make_pdf: data_list, dir_name, working_dir
             fplist.append(template.make_pdf(gmaplist,
+                    grades.REPORT_NAME.format(
+                        rtype = rtype,
+                        group = self.grade_table.group,
+                        term = self.grade_table.term
+                    ),
                     year_path(self.grade_table.schoolyear,
-                            Grades.grade_path(self.grade_tableterm)
-                    )
-                )
-            )
+                        grades.REPORT_DIR.format(
+                            term = self.grade_table.term))
+            ))
         return fplist
 #
     def prepare_report_data(self, rtype, pid_list):
@@ -201,12 +206,12 @@ class GradeReports:
             ## Add general data
             gmap['SCHOOL'] = SCHOOL_NAME
             gmap['SCHOOLBIG'] = SCHOOL_NAME.upper()
-            gmap['schoolyear'] = str(schoolyear)
-            gmap['SCHOOLYEAR'] = print_schoolyear(schoolyear)
-            gmap['Zeugnis'] = gTemplate.NAME
-            gmap['ZEUGNIS'] = gTemplate.NAME.upper()
+            gmap['schoolyear'] = str(self.grade_table.schoolyear)
+            gmap['SCHOOLYEAR'] = print_schoolyear(self.grade_table.schoolyear)
+            gmap['Zeugnis'] = 'Todo'    # from '*ZA'
+            gmap['ZEUGNIS'] = 'TODO'.upper()
             # Add local stuff
-            gTemplate.quali(gmap)
+#TODO:            gTemplate.quali(gmap)
 
             gmaplist.append(gmap)
 
@@ -220,36 +225,40 @@ class GradeReports:
         <template> is a <Template> (or subclass) instance.
         """
         _grp2indexes = group_grades(template.all_keys())
-        tag2indexes = {}
-        for tag in template.GROUPS:
-            try:
-                indexes = _grp2indexes.pop(tag)
-            except KeyError:
-                # Subjects in this group wil not appear in the report
-                tag2indexes[tag] = None
-            else:
-                tag2indexes[tag] = indexes
-        sbj_grades = None       # grade-only entries
-        for tag in _grp2indexes:
-            if tag:
-                raise TemplateError(_UNEXPECTED_GRADE_GROUP.format(tag = tag,
-                        tpath = template.template_path))
-            else:
-                sbj_grades = _grp2indexes[tag]  # set of sids for grade-only
+        for rg in grades.group_info(self.grade_table.group, 'Nullgruppen'):
+            _grp2indexes[rg] = None
+        print("_grp2indexes:", _grp2indexes)
+        sbj_grades = _grp2indexes[None] # "direct" grade slots
+
+#        tag2indexes = {}
+#???
+#        for tag in template.GROUPS:
+#            try:
+#                indexes = _grp2indexes.pop(tag)
+#            except KeyError:
+#                # Subjects in this group wil not appear in the report
+#                tag2indexes[tag] = None
+#            else:
+#                tag2indexes[tag] = indexes
+#        sbj_grades = None       # grade-only entries
+#        for tag in _grp2indexes:
+#            if tag:
+#                raise TemplateError(_UNEXPECTED_GRADE_GROUP.format(tag = tag,
+#                        tpath = template.template_path))
+#            else:
+#                sbj_grades = _grp2indexes[tag]  # set of sids for grade-only
+#
 
         gmap = {}   # for the result
 
 #TODO: Maybe rather use entries in <grades>?
-#        for sid, sdata in self.grade_table.sid2subjectdata:
+#        for sid, sdata in self.grade_table.sid2subject_data:
         for sid, grade in grades.items():
-            if grade == UNCHOSEN:
-                continue
             # Get the print representation of the grade
+            if sid[0] == '*':
+                gmap[sid] = grade
+                continue
             g = grades.print_grade(grade)
-            # Get the subject name
-            sbj = self.grade_table.sid2subjectdata.name
-            if g == MISSING_GRADE:
-                REPORT(_WARN_NO_GRADE.format(pname = name, sbj = sbj))
             if sbj_grades:
                 try:
                     sbj_grades.remove(sdata.sid)
@@ -259,22 +268,29 @@ class GradeReports:
                     # grade-only entry
                     gmap['G.%s' % sdata.sid] = g or UNGRADED
                     continue
+            if grade == UNCHOSEN:
+                continue
+            # Get the subject data
+            sdata = self.grade_table.sid2subject_data[sid]
+            if g == MISSING_GRADE:
+                REPORT("WARN: " + _NO_GRADE.format(pname = name,
+                        sbj = sdata.name))
             if not g:
                 # Subject "not chosen", no report entry
                 continue
             done = False
-#???
             for rg in sdata.report_groups:
                 # Get an index
                 try:
-                    ilist = tag2indexes[rg]
+                    ilist = _grp2indexes[rg]
                 except KeyError:
                     continue
                 if done:
-                    raise GradeConfigError(_MULTI_GRADE_GROUPS.format(sbj = sbj))
+                    raise GradeConfigError(_MULTI_GRADE_GROUPS.format(
+                            sbj = sbj))
+                done = True
                 if ilist == None:
                     # Suppress subject/grade
-                    done = True
                     continue
                 try:
                     i = ilist.pop()
@@ -284,8 +300,8 @@ class GradeReports:
                             sid = sdata.sid, done = repr(gmap))) from e
                 gmap['G.%s.%s' % (rg, i)] = g
                 # For the name, strip possible extra bits, after '|':
-                gmap['S.%s.%s' % (rg, i)] = sbj.split('|', 1)[0].rstrip()
-                done = True
+                gmap['S.%s.%s' % (rg, i)] = sdata.name.split(
+                        '|', 1)[0].rstrip()
             if not done:
                 raise GradeConfigError(_NO_SUBJECT_GROUP.format(sbj = sbj))
 
@@ -293,7 +309,7 @@ class GradeReports:
         if sbj_grades:
             for sid in sbj_grades:
                 gmap['G.%s' % sid] = UNGRADED
-        for tag, ilist in tag2indexes.items():
+        for tag, ilist in _grp2indexes.items():
             if ilist:
                 for i in ilist:
                     gmap['G.%s.%s' % (tag, i)] = NO_SUBJECT

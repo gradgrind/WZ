@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2020-12-13
+Last updated:  2020-12-16
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -149,19 +149,20 @@ class Template:
     def all_keys(self):
         return {k for k,s in OdtFields.listUserFields(self.template_path)}
 #
-
-    def make_pdf(self, data_list, working_dir = None):
+    def make_pdf(self, data_list, dir_name, working_dir = None):
         """From the supplied list of data mappings produce a pdf
         containing the concatenated individual reports.
-        Files are built in <working_dir>, which will normally be a path
-        within the data area for the school-year being processed.
-        If it is not supplied, a temporary directory is created, which
-        is removed automatically when the function completes.
+        <dir_name> is the name of the folder containing all the output
+        files. The pdf-file has the same name as this folder (but ending
+        '.pdf').
+        The resulting folder is built within <working_dir>, which will
+        normally be a path within the data area for the school-year being
+        processed. If it is not supplied, a temporary directory is created,
+        which is removed automatically when the function completes.
         Note that the return value varies according to whether <working_dir>
         is provided:
             With <working_dir>: path to resulting pdf-file
-            No <working_dir>: (pdf-bytes, file-name (no path))
-        For single reports use method <make_pdf1>.
+            No <working_dir>: pdf-bytes
         """
         if working_dir:
             wdir = working_dir
@@ -170,14 +171,12 @@ class Template:
         else:
             wdirTD = tempfile.TemporaryDirectory()
             wdir = wdirTD.name
-        dir_name = '%s_%s' % (self.GROUP, self.TAG)
         # <self.GROUP> and <self.TAG> should be supplied in the subclass.
         odt_dir = os.path.join(wdir, dir_name)
         clean_dir(odt_dir)
         odt_list = []
         for datamap in data_list:
-            _outfile = os.path.join(odt_dir,
-                    datamap['PSORT'].replace(' ', '_') + '.odt')
+            _outfile = os.path.join(odt_dir, datamap['PSORT'] + '.odt')
             odtBytes, used, notsub = OdtFields.fillUserFields(
                     self.template_path, datamap)
 #TODO: Do something with <used> and <notsub>?
@@ -213,7 +212,7 @@ class Template:
             clean_dir(pdf_dir)
             return pdf_path
         else:
-            return (pdf_bytes, pdf_file)
+            return pdf_bytes
 
 # For odt-templates, there needs to be a folder to receive the odt-files.
 # These would then be batch-converted to pdf-files – in another folder.
@@ -226,17 +225,19 @@ class Template:
 #                                   – <Single> – Behrens_Fritz_2016-03-12_Zwischen.odt
 #                                              – Behrens_Fritz_2016-03-12_Zwischen.pdf
 
-    def make_pdf1(self, datamap, working_dir = None):
+    def make_pdf1(self, datamap, file_name, working_dir = None):
         """From the supplied data mapping produce a pdf of the
         corresponding report.
         Files are built in <working_dir>, which will normally be a path
-        within the data area for the school-year being processed.
-        If it is not supplied,va temporary directory is created, which
-        is removed automatically when the function completes.
+        within the data area for the school-year being processed. Both
+        an odt and pdf file are produced.
+        If <working_dir> is not supplied, a temporary directory is created,
+        which is removed automatically when the function completes. In
+        this case only the pdf file remains.
         Note that the return value varies according to whether <working_dir>
         is provided:
             With <working_dir>: path to resulting pdf-file
-            No <working_dir>: (pdf-bytes, file-name (no path))
+            No <working_dir>: pdf-bytes
         """
         if working_dir:
             wdir = working_dir
@@ -245,9 +246,6 @@ class Template:
         else:
             wdirTD = tempfile.TemporaryDirectory()
             wdir = wdirTD.name
-        file_name = '%s_%s_%s' % (datamap['PSORT'].replace(' ', '_'),
-                datamap['issue_d'], self.TAG)
-        # <self.TAG> should be supplied in the subclass.
         _outfile = os.path.join(wdir, file_name + '.odt')
         odtBytes, used, notsub = OdtFields.fillUserFields(
                 self.template_path, datamap)
@@ -265,7 +263,7 @@ class Template:
             return pdf_file
         else:
             with open(pdf_file, 'rb') as fin:
-                return (fin.read(), file_name + '.pdf')
+                return fin.read()
 
 
 
@@ -304,7 +302,7 @@ if __name__ == '__main__':
         'ENTRY_D': '01.08.2009',
         'FIRSTNAMES': 'Elena Susanne',
         'LASTNAME': 'Blender',
-        'PSORT': 'Blender Elena',
+        'PSORT': 'Blender_Elena',
         'EXIT_D': '15.07.2020',     # Abschluss / Abgang only
 
         'S.V.01': 'Deutsch', 'G.V.01': 'sehr gut',
@@ -339,14 +337,18 @@ if __name__ == '__main__':
     print("\nKeys:", sorted(t.all_keys()))
 
 #    quit(0)
-    wdir = os.path.join(DATA, 'testing')
-    pdf_bytes, file_name = t.make_pdf1(sdict0)
-    #    print("\nSubstituted:", t1)
-#    print("\nsubbed", s)
-#    print("\nunsubbed", u, "\n")
-
-    fpath = os.path.join(wdir, file_name)
-    with open(fpath, 'wb') as fout:
-        fout.write(pdf_bytes)
+    wdir = os.path.join(DATA, 'testing', 'tmp')
+    file_name = '%s_%s' % (sdict0['PSORT'], sdict0['issue_d'])
+    fpath = t.make_pdf1(sdict0, file_name, wdir)
+#    pdf_bytes = t.make_pdf1(sdict0, file_name)
+#    fpath = os.path.join(wdir, file_name) + '.pdf'
+#    with open(fpath, 'wb') as fout:
+#        fout.write(pdf_bytes)
 
     print("\nGenerated", fpath)
+
+    sdict1 = sdict0.copy()
+    sdict1['PSORT'] = 'Blender_Eleni'
+    sdict1['FIRSTNAMES'] = 'Eleni Marie'
+    dir_name = '11_2'
+    print("\nGenerated", t.make_pdf([sdict0, sdict1], dir_name, wdir))
