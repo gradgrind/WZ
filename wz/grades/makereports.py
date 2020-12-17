@@ -61,13 +61,14 @@ from core.courses import Subjects
 from local.base_config import year_path, SCHOOL_NAME, class_year, print_schoolyear
 from local.grade_config import UNCHOSEN, MISSING_GRADE, UNGRADED, \
         GradeConfigError, STREAMS, NO_SUBJECT
-#from local.grade_template import REPORT_TYPES
+from local.grade_template import info_extend
 from template_engine.template_sub import Template, TemplateError
 from grades.gradetable import GradeTable, Grades, GradeTableError
 
 
 #TODO: Does this handle Abitur reports?
 
+#???
 def makeReport1(schoolyear, term_date, pid):
     """Generate the grade report for the given pupil.
     The grade information is extracted from the database for the given
@@ -152,7 +153,10 @@ class GradeReports:
                     ),
                     year_path(self.grade_table.schoolyear,
                         grades.REPORT_DIR.format(
-                            term = self.grade_table.term))
+                            term = self.grade_table.term)
+                    ),
+                    double_sided = grades.double_sided(
+                            self.grade_table.group, rtype)
             ))
         return fplist
 #
@@ -211,7 +215,7 @@ class GradeReports:
             gmap['Zeugnis'] = 'Todo'    # from '*ZA'
             gmap['ZEUGNIS'] = 'TODO'.upper()
             # Add local stuff
-#TODO:            gTemplate.quali(gmap)
+            info_extend(gmap)
 
             gmaplist.append(gmap)
 
@@ -367,5 +371,6 @@ if __name__ == '__main__':
     for f in greports.makeReports():
         print("\n$$$: %s\n" % f)
 
+#?
     # Build a single report
-    print("\n$$$: %s\n" % makeReport1(_year, _term, '200408'))
+#    print("\n$$$: %s\n" % makeReport1(_year, _term, '200408'))

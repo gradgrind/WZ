@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2020-12-16
+Last updated:  2020-12-17
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -133,9 +133,6 @@ class Template:
     The method <all_keys> returns a <set> of all field names from the
     template.
     """
-    TAG = "___"         # This should be overridden in a subclass.
-    DOUBLE_SIDED = True # This can be overridden in a subclass.
-#
     def __init__(self, template_path):
         """<template_path> is the path to the template file relative to
         the templates folder. The '.odt' ending is optional in
@@ -149,7 +146,8 @@ class Template:
     def all_keys(self):
         return {k for k,s in OdtFields.listUserFields(self.template_path)}
 #
-    def make_pdf(self, data_list, dir_name, working_dir = None):
+    def make_pdf(self, data_list, dir_name, working_dir = None,
+            double_sided = False):
         """From the supplied list of data mappings produce a pdf
         containing the concatenated individual reports.
         <dir_name> is the name of the folder containing all the output
@@ -171,7 +169,6 @@ class Template:
         else:
             wdirTD = tempfile.TemporaryDirectory()
             wdir = wdirTD.name
-        # <self.GROUP> and <self.TAG> should be supplied in the subclass.
         odt_dir = os.path.join(wdir, dir_name)
         clean_dir(odt_dir)
         odt_list = []
@@ -202,7 +199,7 @@ class Template:
         # should not be padded!).
         pdf_bytes = merge_pdf([os.path.join(pdf_dir, pdf)
                         for pdf in sorted(pdfs)],
-                pad2sided = self.DOUBLE_SIDED)
+                pad2sided = double_sided)
         # If a working folder is provided, store the result in it
         pdf_file = dir_name + '.pdf'
         if working_dir:

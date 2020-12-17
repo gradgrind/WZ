@@ -336,7 +336,7 @@ class GradeBase(dict):
         """Return the string representation of the grade which should
         appear in the report.
         If the grade is UNCHOSEN, return <None>.
-        The SekII forms have no space for longer remarks, but the
+        The SekII forms have no space for longer entries, but the
         special "grades" are retained for "Notenkonferenzen".
         """
         if grade:
@@ -442,6 +442,12 @@ class GradeBase(dict):
                         grp = group, item = a))
             amap[k] = v
         return amap
+#
+    @staticmethod
+    def double_sided(group, rtype):
+        return rtype != 'Orientierung'
+
+
 
 #TODO
     @staticmethod
