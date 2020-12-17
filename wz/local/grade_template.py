@@ -40,7 +40,7 @@ _INVALID_RTYPE = "Ungültiger Zeugnistyp: '{rtype}'"
 _INVALID_QUALI = "Ungültiges Qualifikationsfeld für Schüler {pid}: '{quali}'"
 
 
-#from local.grade_config import GradeConfigError, GradeBase, STREAMS
+from local.grade_config import GradeConfigError, STREAMS
 #from template_engine.template_sub import Template, TEMPLATE_FILE
 
 VERSETZUNG_11_12 = "Durch Konferenzbeschluss vom {grades_d} in die" \
@@ -86,7 +86,8 @@ TEMPLATE_FILE.update({ # add to template mapping in template module
 """
 
 def info_extend(grade_map):
-    if grade_map['REPORT_TYPE'] == 'Abschluss':
+    rtype = grade_map['REPORT_TYPE']
+    if rtype == 'Abschluss':
 #        grade_map['NAME'] = 'Abschlusszeugnis'
         q = grade_map['*Q']
         if q == 'Erw' and grade_map['CYEAR'] == '11':
@@ -98,10 +99,46 @@ def info_extend(grade_map):
                     pid = grade_map['PID'], quali = q or '')) from e
         grade_map['NOCOMMENT'] = '' if grade_map['COMMENT'] else _NOCOMMENT
 
+    elif rtype == 'Zeugnis':
+#        grade_map['NAME'] = 'Zeugnis'
+        stream = grade_map['STREAM']
+        term = grade_map['TERM']
+        if grade_map['SekII']:
+            grade_map['QP12'] = ''
+            if term == '1':
+                grade_map['HJ'] = '1'
+            elif term == '2':
+                grade_map['HJ'] = '1. und 2.'
+                grade_map['QP12'] = QP12_TEXT.format(
+                        vom = grade_map['QUALI_D'],
+                        bis = grade_map['ISSUE_D'])
+                if grade_map['*Q'] == 'Erw':
+                    # Versetzung 12.Gym -> 13.Gym
+                    comment = grade_map['COMMENT']
+                    newcomment = VERSETZUNG_12_13.format(
+                        grades_d = grade_map['GRADES_D'])
+                    if comment:
+                        newcomment += '\n' + comment
+                    grade_map['COMMENT'] = newcomment
+        else:
+            grade_map['LEVEL'] = STREAMS[stream] # SekI only
+            # Versetzung 11.Gym -> 12.Gym
+            if (stream == 'Gym' and term == '2'
+                    and grade_map['CLASS'] == '11'
+                    and grade_map['*Q'] == 'Erw'):
+                comment = grade_map['COMMENT']
+                newcomment = VERSETZUNG_11_12.format(
+                        grades_d = grade_map['GRADES_D'])
+                if comment:
+                    newcomment += '\n' + comment
+                grade_map['COMMENT'] = newcomment
+
+        grade_map['NOCOMMENT'] = '' if grade_map['COMMENT'] else _NOCOMMENT
+
 #TODO
 
     else:
-        print("info_extend for %s: TODO" % report_type)
+        print("info_extend for %s: TODO" % rtype)
 
 
 # Although most of the template classes specify DOUBLE_SIDED (via the

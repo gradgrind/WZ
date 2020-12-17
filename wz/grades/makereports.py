@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2020-12-16
+Last updated:  2020-12-17
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -193,6 +193,7 @@ class GradeReports:
             # Grade parameters
 #???
             gmap['STREAM'] = grades.stream
+            gmap['SekII'] = grades.sekII
             gmap['TERM'] = self.grade_table.term
             gmap['REPORT_TYPE'] = rtype
 #TODO: 'COMMENT' field ...
@@ -307,7 +308,8 @@ class GradeReports:
                 gmap['S.%s.%s' % (rg, i)] = sdata.name.split(
                         '|', 1)[0].rstrip()
             if not done:
-                raise GradeConfigError(_NO_SUBJECT_GROUP.format(sbj = sbj))
+                raise GradeConfigError(_NO_SUBJECT_GROUP.format(
+                        sbj = sdata.name))
 
         ### Fill unused slots
         if sbj_grades:
@@ -367,7 +369,7 @@ if __name__ == '__main__':
     _grades_date = '2016-06-06'
 
     # Build reports for a group
-    greports = GradeReports(_year, '12.R', _term)
+    greports = GradeReports(_year, '12.G', _term)
     for f in greports.makeReports():
         print("\n$$$: %s\n" % f)
 
