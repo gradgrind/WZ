@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2020-12-17
+Last updated:  2020-12-18
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -108,7 +108,7 @@ class GradeReports:
     def __init__(self, schoolyear, group, term):
         self.grade_table = GradeTable.group_table(schoolyear, group, term)
 #
-    def  makeReports(self, pids = None):
+    def makeReports(self, pids = None):
         """A subset of the group can be chosen by passing a list of
         pupil-ids as <pids>.
         The resulting pdfs will be combined into a single pdf-file for
@@ -144,7 +144,7 @@ class GradeReports:
         for rtype, pid_list in greport_type.items():
             template, gmaplist = self.prepare_report_data(rtype,
                     pid_list)
-            # make_pdf: data_list, dir_name, working_dir
+            # make_pdf: data_list, dir_name, working_dir, double_sided
             fplist.append(template.make_pdf(gmaplist,
                     grades.REPORT_NAME.format(
                         rtype = rtype,

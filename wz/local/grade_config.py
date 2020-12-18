@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-12-16
+Last updated:  2020-12-18
 
 Configuration for grade handling.
 ====================================
@@ -247,7 +247,7 @@ class GradeBase(dict):
     #
     GRADE_PATH = 'NOTEN_{term[0]}/Noten_{group}_{term}'  # grade table: file-name
     #
-    REPORT_DIR = 'NOTEN_{term[0]}'          # grade report: folder
+    REPORT_DIR = 'Notenzeugnisse_{term[0]}' # grade report: folder
     REPORT_NAME = '{rtype}_{group}_{term}'  # grade report: file name
     #
     _PRINT_GRADE = {
