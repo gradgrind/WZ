@@ -5,7 +5,7 @@ local/grade_template.py
 
 Last updated:  2020-12-18
 
-Manage templates for grade reports.
+Manage template-specific fields for grade reports.
 
 
 =+LICENCE=============================
@@ -26,18 +26,12 @@ Copyright 2020 Michael Towers
 =-LICENCE========================================
 """
 
-#TODO: Abitur/13
-
-#? ... this one is only for Abitur:
-#    data['FrHr'] = 'Herr' if grades.pdata['SEX'] == 'm' else 'Frau'
-
-
-
 ### Messages
 _INVALID_RTYPE = "Ungültiger Zeugnistyp: '{rtype}'"
 _INVALID_QUALI = "Ungültiges Qualifikationsfeld für Schüler {pid}: '{quali}'"
 
-
+from core.base import Dates
+from local.abitur_config import AbiCalc
 from local.grade_config import GradeConfigError, STREAMS
 
 VERSETZUNG_11_12 = "Durch Konferenzbeschluss vom {grades_d} in die" \
@@ -67,10 +61,10 @@ _NOCOMMENT = '––––––––––'
 
 
 def info_extend(grade_map):
+    term = grade_map['TERM']
     rtype = grade_map['REPORT_TYPE']
     if rtype == 'Zeugnis':
         stream = grade_map['STREAM']
-        term = grade_map['TERM']
         if grade_map['SekII']:
             grade_map['QP12'] = ''
             if term == '1':
@@ -99,7 +93,7 @@ def info_extend(grade_map):
                 # Versetzung 11.Gym -> 12.Gym
                 if (stream == 'Gym' and term == '2'
                         and grade_map['CLASS'] == '11'
-                        and grade_map['*Q'] == 'Erw'):
+                        and grade_map['*Q'] == '12'):
                     comment = grade_map['COMMENT']
                     newcomment = VERSETZUNG_11_12.format(
                             grades_d = grade_map['GRADES_D'])
@@ -109,7 +103,7 @@ def info_extend(grade_map):
         grade_map['NOCOMMENT'] = '' if grade_map['COMMENT'] else _NOCOMMENT
 
     elif rtype == 'Orientierung':
-        grade_map['LEVEL'] = STREAMS[stream] # SekI only
+        grade_map['LEVEL'] = STREAMS[grade_map['STREAM']] # SekI only
 
     elif rtype == 'Abschluss':
         q = grade_map['*Q']
@@ -124,13 +118,11 @@ def info_extend(grade_map):
 
     elif rtype == 'Abgang':
         stream = grade_map['STREAM']
-        term = grade_map['TERM']
         if grade_map['SekII']:
             if grade_map['CYEAR'] == '12':
                 grade_map['QP12'] = QP12_TEXT.format(
                         vom = grade_map['QUALI_D'],
                         bis = grade_map['ISSUE_D'])
-                term = grade_map['TERM']
                 grade_map['GS'] = GS_TEXT['HS']
                 if term == '2':
                     try:
@@ -144,64 +136,14 @@ def info_extend(grade_map):
             grade_map['LEVEL'] = STREAMS[stream]
             # Gleichstellungsvermerk
             klass = grade_map['CYEAR']
-            term = grade_map['TERM']
             q = grade_map['*Q']
             if (klass == '10' and term == '2') or klass in ('11', '12'):
-                if q in ('Erw', 'RS', 'HS'):
+                if q in ('Erw', '12', 'RS', 'HS'):
                     grade_map['GS'] = GS_TEXT['HS']     # only HS-Abschluss
                     grade_map['GSVERMERK'] = "Gleichstellungsvermerk"
+    elif rtype in ('Abi', 'NA', 'FHS'):
+        grade_map['FrHr'] = 'Herr' if grade_map['SEX'] == 'm' else 'Frau'
+        grade_map['FERTIG_D'] = Dates.print_date(grade_map['*F_D'])
     else:
         raise GradeConfigError(_INVALID_RTYPE.format(rtype = rtype))
     grade_map['NOCOMMENT'] = '' if grade_map['COMMENT'] else _NOCOMMENT
-
-###
-
-#Abgang Quali:HS/RS/Erw/-
-#Abschluss Quali:HS/RS/Erw (no Quali => no Abschluss!)
-#Zeugnis 12G/2: Quali must be Erw for Versetzung
-#Zeugnis 11G/2: Average < 3,00 for Versetzung
-# Could calculate a suggested Quali value?
-
-"""
-SCHOOLBIG
-SCHOOL
-SCHOOLYEAR
-ISSUE_D
-COMMENT = ""
-NOCOMMENT = "––––––––––"
-
-SekI:
-    ZEUGNIS
-    Zeugnis
-    LEVEL
-    CLASS
-    +SekI-Abgang:
-        CYEAR (class number)
-        GSVERMERK: "Gleichstellungsvermerk" or ""
-        GS: Gleichstellungsvermerk (HS) or ""
-        +SekI-Abschluss:
-            SEKI: e.g. Erweiterter Sekundarabschluss I
-    COMMENT: Versetzung? (11:Gym/2 only) ... with GRADES_D
-    NOCOMMENT: "" if COMMENT set
-SekII-12:
-    HJ: "1." or "1. und 2."
-    QP12: "hat den 12. Jahrgang der Qualifikationsphase vom 15.08.2019"
-        " bis zum 15.07.2020 besucht." (needs QUALI_D, last-school-day)
-    COMMENT: Versetzung? ... with GRADES_D
-    NOCOMMENT: "" if COMMENT set
-
-SekII-12-Abgang:
-    QP12: see above, but with EXIT_D instead of last-school-day
-    GS: Gleichstellungsvermerk
-SekII-13_1:
-    QUALI_D
-SekII-13-Abgang:
-    QUALI_D
-    EXIT_D
-    all Abitur grades from 12 and 13
-
-Abitur (etc):
-    HOME
-    FrHr
-    calculated abi grades, etc.
-"""

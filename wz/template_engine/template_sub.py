@@ -329,11 +329,12 @@ if __name__ == '__main__':
         'S.K.08': '––––––––––', 'G.K.08': '––––––––––',
     }
 
-    t = Template('Noten/SekI')
+#    t = Template('Noten/SekI')
+    t = Template('Noten/Fachhochschulreife')
     t.FILES_PATH = 'GRADE_REPORTS'
     print("\nKeys:", sorted(t.all_keys()))
 
-#    quit(0)
+    quit(0)
     wdir = os.path.join(DATA, 'testing', 'tmp')
     file_name = '%s_%s' % (sdict0['PSORT'], sdict0['issue_d'])
     fpath = t.make_pdf1(sdict0, file_name, wdir)

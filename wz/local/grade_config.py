@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-12-18
+Last updated:  2020-12-19
 
 Configuration for grade handling.
 ====================================
@@ -50,7 +50,7 @@ _TEMPLATE_PATH = 'Noten/{fname}'
 _NORMAL_GRADES = f"""1+ ; 1 ; 1- ;  +
     2+ ; 2 ; 2- ; 3+ ; 3 ; 3- ; +
     4+ ; 4 ; 4- ; 5+ ; 5 ; 5- ; 6 ; +
-    * ; nt ; t ; nb ; {UNCHOSEN}
+    {NO_GRADE} ; nt ; t ; nb ; {UNCHOSEN}
 """
 
 # *: ("no grade" ->) "––––––"
@@ -63,7 +63,7 @@ _NORMAL_GRADES = f"""1+ ; 1 ; 1- ;  +
 _ABITUR_GRADES = f"""15 ; 14 ; 13 ;  +
     12 ; 11 ; 10 ; 09 ; 08 ; 07 ; +
     06 ; 05 ; 04 ; 03 ; 02 ; 01 ; 00 ; +
-    * ; nt ; t ; nb ; {UNCHOSEN}
+    {NO_GRADE} ; nt ; t ; nb ; {UNCHOSEN}
 """
 
 # Eine Sammlung der Daten für die Zeugnisgruppen.
@@ -257,7 +257,7 @@ class GradeBase(dict):
         '4': "ausreichend",
         '5': "mangelhaft",
         '6': "ungenügend",
-        '*': UNGRADED,
+        NO_GRADE: UNGRADED,
         'nt': "nicht teilgenommen",
         't': "teilgenommen",
 #            'ne': "nicht erteilt",

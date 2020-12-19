@@ -2,7 +2,7 @@
 """
 gui/abitur_pupil_view.py
 
-Last updated:  2020-12-12
+Last updated:  2020-12-18
 
 Editor for Abitur results (single pupil).
 
@@ -47,8 +47,6 @@ VALID_GRADES = (
     '00'
 )
 
-VALID_GRADES_X = VALID_GRADES + ('*',)
-
 ### Messages
 _TITLE_TABLE_CHANGE = "Änderungen speichern"
 _TABLE_CHANGES = "Änderungen für {pupil} nicht gespeichert.\n" \
@@ -64,8 +62,11 @@ from gui.grid import Grid
 from gui.gui_support import QuestionDialog
 
 from local.base_config import FONT, print_schoolyear, SCHOOL_NAME
+from local.grade_config import NO_GRADE
 from local.abitur_config import AbiCalc
 from grades.gradetable import GradeTable
+
+VALID_GRADES_X = VALID_GRADES + (NO_GRADE,)
 
 
 class AbiPupilView(Grid):
@@ -172,9 +173,9 @@ class AbiPupilView(Grid):
 
         ### Totals
         self.tile(11, 11, text = '', rspan = 11, style = 'base',
-                    tag = "TOTAL_1-4")
+                    tag = "s1_4")
         self.tile(24, 11, text = '', rspan = 7, style = 'base',
-                    tag = "TOTAL_5-8")
+                    tag = "s5_8")
 
         ### Evaluation
         i = 0
@@ -245,8 +246,10 @@ class AbiPupilView(Grid):
         self.calc.set_editable_cell('FERTIG_D',
                 self.calc.grade_map['*F_D'] or self.grade_table.grades_d)
         # Set subject names and grades
-        for tag, val in self.calc.all_values():
-            self.set_text_init(tag, val)
+        allvals = self.calc.all_values()
+        for tag, val in allvals:
+            if tag[0] != '*':
+                self.set_text_init(tag, val)
         self.update_calc()
 #
     def update_calc(self):

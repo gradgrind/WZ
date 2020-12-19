@@ -3,22 +3,28 @@
 """
 local/abitur_config.py
 
-Last updated:  2020-12-12
+Last updated:  2020-12-19
 
 Configuration for Abitur-grade handling.
 ====================================
 """
+
+### Configuration
+_GW = ('Ges',)     # Geschichte / Politik-Wirtschaft / Erdkunde
+_NW = ('Bio', 'Ph', 'Ch')   # Naturwissenschaften
+_FS = ('En', 'Fr')  # Fremdsprachen
 
 ### Messages
 _E_WRONG = "{n} Kurse mit „eA“ (erwartet: 3)"
 _G_WRONG = "{n} schriftliche Kurse mit „gA“ (erwartet: 1)"
 _M_WRONG = "{n} mündliche Kurse (erwartet: 4)"
 _X_WRONG = "{n} mündliche Nachprüfungen (erwartet: 4)"
+_X_ORAL = "Nachprüfung ({sid}) in nicht schriftlichem Fach"
 _X_ALONE = "Keine entsprechende schriftliche Prüfung für Fach {sid}"
 _MULTISID = "Fach {sid} doppelt vorhanden"
 _BAD_SID = "Unerwartetes Fach: {sid}"
 
-from local.grade_config import UNCHOSEN
+from local.grade_config import UNCHOSEN, NO_GRADE, UNGRADED
 
 class AbiturError(Exception):
     pass
@@ -35,25 +41,25 @@ class AbiCalc:
 #
     JA = {True: 'Ja', False: 'Nein'}
 #
-    def __init__(self, grade_table, pid):
+    def __init__(self, grade_table, pid, report = False):
         """<grade_table> is the <GradeTable> instance, <pid> the pupil id.
-
-        a list of pairs: [(sid, grade), ...].
-        <snames> is a subject-name mapping: {sid -> name}.
-        The name can have a qualifier suffix ('| ...').
+        <report> is set to <True> if the grades are to be used for report
+        card generation (rather than editing). At present that only
+        affects the representation of the <NO_GRADE> grade.
         """
         def get_name(sid):
             """Return subject name without possible suffix.
             """
             return grade_table.subjects[sid].split('|', 1)[0].rstrip()
 #-
+        self._report = report
         self.grade_map = grade_table[pid]   # {sid -> grade}
         # Indexes for subjects and grades:
         e, g, m = 0, 3, 4
         xsids = []
         # Grade tags:
         self.sid2tag = {}
-        sid2n = {}              # stripped sid (only e and g)
+        self.sid2i   = {}       # {stripped-sid -> index}
         self.tag2sid = {}
         self.tags = {}          # {tag -> value}
         for sid, grade in self.grade_map.items():
@@ -64,9 +70,9 @@ class AbiCalc:
                 self.tags['SUBJECT_%d' % e] = get_name(sid)
                 gtag = 'GRADE_%d' % e
                 sid0 = sid[:-2]
-                if sid0 in sid2n:
+                if sid0 in self.sid2i:
                     raise AbiturError(_MULTISID.format(sid = sid0))
-                sid2n[sid0] = e
+                self.sid2i[sid0] = e
                 self.set_editable_cell(gtag, grade)
                 self.sid2tag[sid] = gtag
                 self.tag2sid[gtag] = sid
@@ -75,9 +81,9 @@ class AbiCalc:
                 self.tags['SUBJECT_%d' % g] = get_name(sid)
                 gtag = 'GRADE_%d' % g
                 sid0 = sid[:-2]
-                if sid0 in sid2n:
+                if sid0 in self.sid2i:
                     raise AbiturError(_MULTISID.format(sid = sid0))
-                sid2n[sid0] = g
+                self.sid2i[sid0] = g
                 self.set_editable_cell(gtag, grade)
                 self.sid2tag[sid] = gtag
                 self.tag2sid[gtag] = sid
@@ -85,17 +91,25 @@ class AbiCalc:
                 m += 1
                 self.tags['SUBJECT_%d' % m] = get_name(sid)
                 gtag = 'GRADE_%d' % m
+                sid0 = sid[:-2]
+                if sid0 in self.sid2i:
+                    raise AbiturError(_MULTISID.format(sid = sid0))
+                self.sid2i[sid0] = m
                 self.set_editable_cell(gtag, grade)
                 self.sid2tag[sid] = gtag
                 self.tag2sid[gtag] = sid
             elif sid.endswith('.x'):
                 xsids.append((sid, grade))
-            elif not sid.startswith('*'):
+            elif sid.startswith('*'):
+                self.tags[sid] = grade
+            else:
                 raise AbiturError(_BAD_SID.format(sid = sid))
-        # This must come after <sid2n> has been completed
+        # This must come after <self.sid2i> has been completed
         for sid, grade in xsids:
             try:
-                n = sid2n[sid[:-2]]
+                n = self.sid2i[sid[:-2]]
+                if int(n) >= 5:
+                    raise AbiturError(_X_ORAL.format(sid = sid))
             except KeyError as e:
                 raise AbiturError(_X_ALONE.format(sid = sid)) from e
             gtag = 'GRADE_%d_m' % n
@@ -125,7 +139,8 @@ class AbiCalc:
     def set_editable_cell(self, tag, value):
         """Enter value in the general <self.tags> mapping.
         """
-        self.tags[tag] = value
+        self.tags[tag] = UNGRADED if self._report and value == NO_GRADE \
+                else value
 #
     def get_all_grades(self):
         """Return a list of all (subject, grade) pairs, including the
@@ -146,8 +161,8 @@ class AbiCalc:
         The grades are available in the mapping <self.tags>.
         All entries are strings. They can be in the range '00' to '15',
         or '' (indicating that the grade is not yet available). The
-        supplemental oral exam grades may also have the value '*', which
-        indicates that the exam didn't / won't take place.
+        supplemental oral exam grades may also have the value <NO_GRADE>,
+        which indicates that the exam didn't / won't take place.
         Return the field values as a mapping: {field -> value (str)}.
         """
         fields = {}     # the result mapping, {field -> value (str)}
@@ -156,51 +171,64 @@ class AbiCalc:
         scaled = []     # 8 scaled averages
         scaled14 = 0    # partial total, subjects 1 – 4
         scaled58 = 0    # partial total, subjects 5 – 8
+        complete = True # flag for "all grades present"
         for n in range(1, 9):   # 1 – 8
             try:
                 g = int(self.tags['GRADE_%d' % n])
             except:
                 g = None
+                complete = False
             if n < 5:
                 factor = 4 if n == 4 else 6
+                _gx = self.tags['GRADE_%d_m' % n]
                 try:
-                    gx = int(self.tags['GRADE_%d_m' % n])
+                    gx = int(_gx)
                     s = (g + gx) * factor
                     scaled.append(s)
                     scaled14 += s
                     fields['SCALED_%d' % n] = str(s)
-                    av2 = g + gx
-                    av = str(av2 // 2)
-                    if av2 % 2:
-                        av += ',5'
-                    fields['AVERAGE_%d' % n] = av
+                    _av2 = g + gx
+                    _av = _av2 // 2
+                    if _av2 % 2:
+                        fields['AVERAGE_%d' % n] = str(_av) + ',5'
+                        fields['AVER_%d' % n] = str(_av + 1).zfill(2)
+                    else:
+                        av = str(_av)
+                        fields['AVERAGE_%d' % n] = av
+                        fields['AVER_%d' % n] = av.zfill(2)
                 except:
-                    # If the extra grade is numerical, but the main
-                    # grade not, treat the subject as ungraded.
-                    if g == None:
+                    # Both fields must be non-empty.
+                    if g == None or not _gx:
+                        complete = False
                         scaled.append(None)
                         fields['SCALED_%d' % n] = ''
                         fields['AVERAGE_%d' % n] = ''
+                        fields['AVER_%d' % n] = ''
                     else:
                         s = g * factor * 2
                         scaled14 += s
                         scaled.append(s)
+                        _g = str(g)
                         fields['SCALED_%d' % n] = str(s)
-                        fields['AVERAGE_%d' % n] = str(g)
+                        fields['AVERAGE_%d' % n] = _g
+                        fields['AVER_%d' % n] = _g.zfill(2)
             elif g == None:
                 scaled.append(None)
                 fields['SCALED_%d' % n] = ''
                 fields['AVERAGE_%d' % n] = ''
+                fields['AVER_%d' % n] = ''
             else:
                 s = g * 4
                 scaled.append(s)
                 scaled58 += s
+                _g = str(g)
                 fields['SCALED_%d' % n] = str(s)
-                fields['AVERAGE_%d' % n] = str(g)
+                fields['AVERAGE_%d' % n] = _g
+                fields['AVER_%d' % n] = _g.zfill(2)
 
         ## partial totals
-        fields['TOTAL_1-4'] = str(scaled14)
-        fields['TOTAL_5-8'] = str(scaled58)
+        fields['s1_4'] = str(scaled14)
+        fields['s5_8'] = str(scaled58)
 
         ## the pass checks
         ok = True
@@ -213,9 +241,9 @@ class AbiCalc:
         # Check 2: at least two of first four >= 5 points
         n = 0
         for i in range(3):
-            if scaled[i] >= 60:
+            if scaled[i] and scaled[i] >= 60:
                 n += 1
-        if scaled[3] >= 40:
+        if scaled[3] and scaled[3] >= 40:
             n += 1
         ja = n >= 2
         fields['JA_2'] = self.JA[ja]
@@ -223,7 +251,7 @@ class AbiCalc:
         # Check 3: at least two of last four >= 5 points
         n = 0
         for i in range(4, 8):
-            if scaled[i] >= 20:
+            if scaled[i] and scaled[i] >= 20:
                 n += 1
         ja = n >= 2
         fields['JA_3'] = self.JA[ja]
@@ -241,112 +269,96 @@ class AbiCalc:
         fields['SUM'] = str(total)
 
         # The final grade
-        if ok:
-            # Calculate final grade using a formula. To avoid rounding
-            # errors, use integer arithmetic.
-            g180 = (1020 - total)
-            g1 = str (g180 // 180)
-            if g1 == '0':
-                g1 = '1'
-                g2 = '0'
+        fields['FINAL_GRADE'] = '–––'
+        if complete:
+            if ok:
+                # Calculate final grade using a formula. To avoid rounding
+                # errors, use integer arithmetic.
+                g180 = (1020 - total)
+                g1 = str (g180 // 180)
+                if g1 == '0':
+                    g1 = '1'
+                    g2 = '0'
+                else:
+                    g2 = str ((g180 % 180) // 18)
+                fields['Note1'] = g1
+                fields['Note2'] = g2
+                fields['NoteT'] = self._gradeText[g1] + ', ' + \
+                        self._gradeText[g2]
+                fields['FINAL_GRADE'] = g1 + ',' + g2
+                fields['REPORT_TYPE'] = 'Abi'
+            elif self.fhs(fields):
+                fields['REPORT_TYPE'] = 'FHS'
             else:
-                g2 = str ((g180 % 180) // 18)
-            fields['FINAL_GRADE'] = g1 + ',' + g2
-            fields['PASS'] = 'true'
+                fields['REPORT_TYPE'] = 'NA'
         else:
-            fields['FINAL_GRADE'] = '–––'
-            fields['PASS'] = 'false'
-# Fachabi, etc?
+            fields['REPORT_TYPE'] = None
         return fields
 
 ###
 
-    def getFullGrades(self):
-        """Return the full tag mapping for an Abitur report.
+    def fhs(self, fields):
+        """Calculations for "Fachhochschulreife".
         """
-        gmap = self.zgrades.copy()
-        errors = []
-        critical = []
-        ### First the 'E' points
-        eN = []
-        n1, n2 = 0, 0
-        for i in range(8):
-            try:
-                s = int(self.sngg[i][2])
-            except:
-                critical.append(_NO_GRADE % self.sngg[i][1])
-                s = 0
-            if i < 4:
-                # written exam
-                f = 4 if i == 3 else 6  # gA / eA
+        def bestof(sids):
+            s = None
+            g = -1
+            for sid in sids:
                 try:
-                    e = s + int(self.sngg[i][3])
-                except:
-                    e = s + s
-                if e >= 10:
-                    n1 += 1
-                e *= f
-            else:
-                # oral exam
-                e = 4 * s
-                if e >= 20:
-                    n2 += 1
-            gmap["E%d" % (i+1)] = str(e)
-            eN.append(e)
-            if e == 0:
-                errors.append(_NULL_ERROR % self.sngg[i][1])
-
-        if critical:
-            for e in critical:
-                REPORT.Error(e)
-            raise GradeError
-
-        t1 = eN[0] + eN[1] + eN[2] + eN[3]
-        gmap["TOTAL1"] = t1
-        if t1 < 220:
-            errors.append(_LOW1_ERROR)
-        t2 = eN[4] + eN[5] + eN[6] + eN[7]
-        gmap["TOTAL2"] = t2
-        if t2 < 80:
-            errors.append(_LOW1_ERROR)
-        if n1 < 2:
-            errors.append(_UNDER2_1_ERROR)
-        if n2 < 2:
-            errors.append(_UNDER2_2_ERROR)
-
-        if errors:
-            gmap["Grade1"] = "–––"
-            gmap["Grade2"] = "–––"
-            gmap["GradeT"] = "–––"
-            for e in errors:
-                REPORT.Warn(_FAILED, error=e)
-            gmap["PASS"] = False
-            return gmap
-
-#TODO: What about Fachabi?
-
+                    _g = s2g[sid]
+                except KeyError:
+                    continue
+                if _g > g:
+                    s = sid
+                    g = _g
+            del(s2g[s])
+            subjects.append(s)
+            grades.append(g)
+        #-
+        s2g = {s: int(fields['AVER_%d' % i]) for s, i in self.sid2i.items()}
+        subjects = []
+        grades = []
+        # Get the best of each group
+        try:
+            subjects.append('De')
+            grades.append(s2g.pop('De'))
+            subjects.append('Ma')
+            grades.append(s2g.pop('Ma'))
+            bestof(_FS)
+            bestof(_NW)
+            bestof(_GW)
+        except:
+            raise Bug("Missing subject/grade")
+        bestof(s2g)
+        bestof(s2g)
+        fields['FINAL_GRADE'] = '–––'
+        n = 0   # ok-grades
+        _n = 0  # grades under 5 points
+        for i in grades:    # check for 0 points and <5 points
+            if not i:
+                return False
+            if i < 5:
+                _n += 1
+                if _n == 4:
+                    # >3 subjects under 5 points
+                    return False
+                if _n == 3 and n == 0:
+                    # >2 "eA"-subjects under 5 points
+                    return False
+        points20 = sum(grades[:4])
+        points35 = points20 + sum(grades[4:])
+        fields['sum'] = str(points35)
+        if points20 < 20:
+            return False
+        if points35 < 35:
+            return False
         # Calculate final grade using a formula. To avoid rounding
         # errors, use integer arithmetic.
-        g180 = (1020 - t1 - t2)
-        g1 = str (g180 // 180)
-        if g1 == '0':
-            g1 = '1'
-            g2 = '0'
-        else:
-            g2 = str ((g180 % 180) // 18)
-        gmap["Grade1"] = g1
-        gmap["Grade2"] = g2
-        gmap["GradeT"] = self._gradeText[g1] + ", " + self._gradeText[g2]
-        gmap["PASS"] = True
-        return gmap
-
-
-#TODO
-    @classmethod
-    def FachAbiGrade (cls, points):
-        """Use a formula to calculate "Abiturnote" (Waldorf/Niedersachsen).
-        To avoid rounding errors, use integer arithmetic.
-        """
-        g420 = 2380 - points*20 + 21
-        p420 = str (g420 // 420) + cls._dp + str ((g420 % 420) // 42)
-        return p420
+        g420 = 2380 - points35*20 + 21
+        g1 = str(g420 // 420)
+        g2 = str((g420 % 420) // 42)
+        fields['Note1'] = g1
+        fields['Note2'] = g2
+        fields['NoteT'] = self._gradeText[g1] + ', ' + self._gradeText[g2]
+        fields['FINAL_GRADE'] = g1 + ',' + g2
+        return True
