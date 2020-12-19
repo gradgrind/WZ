@@ -52,6 +52,7 @@ class AbiCalc:
             """
             return grade_table.subjects[sid].split('|', 1)[0].rstrip()
 #-
+        grade_table[pid].abicalc = self
         self._report = report
         self.grade_map = grade_table[pid]   # {sid -> grade}
         # Indexes for subjects and grades:
@@ -293,10 +294,9 @@ class AbiCalc:
                 fields['REPORT_TYPE'] = 'NA'
         else:
             fields['REPORT_TYPE'] = None
+        self.calc_map = fields
         return fields
-
-###
-
+#
     def fhs(self, fields):
         """Calculations for "Fachhochschulreife".
         """

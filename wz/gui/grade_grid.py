@@ -107,10 +107,10 @@ class GradeGrid(Grid):
             _COLS += (_SEP_SIZE,) + \
                     (_WIDTH_GRADE,) * len(self.grade_table.composites)
         col_averages = len(_COLS) + 1
-# The averages are only used in the grade editor ...
-        self.averages = Grades.averages(self.grade_table.group)
-        if self.averages:
-            _COLS += (_SEP_SIZE,) + (_WIDTH_AVERAGE,) * len(self.averages)
+#? The "averages" are only used in the grade editor ...
+        if self.grade_table.calcs:
+            _COLS += (_SEP_SIZE,) + (_WIDTH_AVERAGE,) * \
+                    len(self.grade_table.calcs)
         col_extras = len(_COLS) + 1
         if self.grade_table.extras:
             _COLS += (_SEP_SIZE,)
@@ -171,7 +171,7 @@ class GradeGrid(Grid):
             self.tile(1, col, text = name, rspan = 6, style = 'v')
             col += 1
         col = col_averages
-        for sid, name in self.averages.items():
+        for sid, name in self.grade_table.calcs.items():
             self.tile(7, col, text = sid, style = 'small')
             self.tile(1, col, text = name, rspan = 6, style = 'v')
             col += 1
@@ -215,13 +215,14 @@ class GradeGrid(Grid):
                 self.tile(row, col, text = grades[sid], style = 'calc',
                         tag = f'${pid}-{sid}')
                 col += 1
-            if self.averages:
+            if self.grade_table.calcs:
                 col = col_averages
-                for sid in self.averages:
+                for sid in self.grade_table.calcs:
                     self.tile(row, col, text = '?', style = 'calc',
                             tag = f'${pid}-{sid}')
                     col += 1
-                self.calc_averages(pid)
+                self.calc_tags(pid)
+
             col = col_extras
             for sid, name in self.grade_table.extras.items():
                 _tag = f'${pid}-{sid}'
@@ -307,55 +308,10 @@ class GradeGrid(Grid):
                 cgrade = grades[csid]
                 self.set_text(ctag, cgrade)
                 self.set_change_mark(ctag, cgrade)
-            # Recalculate the averages
-            self.calc_averages(pid)
+            # Recalculate the averages, etc.
+            self.calc_tags(pid)
 #TODO: Other changes: where to save the new values?
 #
-    def calc_averages(self, pid):
-        for sid in self.averages:
-            tag = f'${pid}-{sid}'
-            if sid == ':D':
-                self.set_text(tag, self.average(pid))
-            elif sid == ':Dx':
-                self.set_text(tag, self.average_dem(pid))
-#
-    def average(self, pid):
-        """Calculate the average of all grades, including composites,
-        but ignoring components and non-numerical grades.
-        """
-        asum = 0
-        ai = 0
-        grades = self.grade_table[pid]
-        for sid in self.grade_table.subjects:
-            if self.grade_table.sid2subject_data[sid].composite:
-                # A component
-                continue
-            gi = grades.i_grade[sid]
-            if gi >= 0:
-                asum += gi
-                ai += 1
-        for sid in self.grade_table.composites:
-            gi = grades.i_grade[sid]
-            if gi >= 0:
-                asum += gi
-                ai += 1
-        if ai:
-            return Frac(asum, ai).round(2)
-        else:
-            return '–––'
-#
-    def average_dem(self, pid):
-        """Special average for "Realschulabschluss": De-En_Ma only.
-        """
-        asum = 0
-        ai = 0
-        grades = self.grade_table[pid]
-        for sid in ('De', 'En', 'Ma'):
-            gi = grades.i_grade[sid]
-            if gi >= 0:
-                asum += gi
-                ai += 1
-        if ai:
-            return Frac(asum, ai).round(2)
-        else:
-            return '–––'
+    def calc_tags(self, pid):
+        for sid, val in self.grade_table.recalc(pid):
+            self.set_text(f'${pid}-{sid}', val)

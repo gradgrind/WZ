@@ -21,7 +21,7 @@ _INVALID_GRADE = "Ungültige \"Note\": {grade}"
 _BAD_XGRADE = "Ungültiges Zusatz-Notenfeld für Gruppe {grp}: {item}"
 _BAD_RTEMPLATE = "Ungültige Zeugnisvorlage für Gruppe {grp}: {item}"
 _NO_RTEMPLATE = "Keine Zeugnisvorlage '{template}' für Gruppe {grp}"
-_BAD_AVERAGE = "Ungültiges Durchschnittsfeld für Gruppe {grp}: {item}"
+_BAD_CALC = "Ungültiges Berechnungsfeld für Gruppe {grp}: {item}"
 
 # Special "grades"
 UNCHOSEN = '/'
@@ -92,8 +92,8 @@ REPORT_GROUPS = f"""
 ######## (extra "grade" fields in internal table):
 ######## Zusätzliche "Notenfelder" in interner Notentabelle
     Notenfelder_X = *ZA/Zeugnis (Art);
-######## Durchschnitte für Notenkonferenz:
-    Durchschnitte = ;
+######## Berechnete Felder, z.B. Durchschnitte für Notenkonferenz:
+    Calc = ;
 ######## (additional report types):
 ######## Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
 ######## können
@@ -108,13 +108,22 @@ REPORT_GROUPS = f"""
     NotenzeugnisVorlage = Zeugnis/SekII-13_1; Abgang/SekII-13-Abgang; +
             Abi/Abitur; FHS/Fachhochschulreife; NA/Abitur-nicht-bestanden;
 ######## (The report type is determined by calculations):
-    Notenfelder_X = *ZA/Zeugnis (Art); *F_D/Fertigstellung;
+    Notenfelder_X = *F_D/Fertigstellung;
 ######## Zeugnis-Art/Abitur automatic?
     *ZA/A = ;
 #Abitur; Fachhochschulreife; Abitur-nicht-bestanden;
     *ZA/1 = Zeugnis; Abgang;
     *ZA/2 = -; Abgang;
     *ZA/S = Abgang;
+    *F_D/A = DATE
+    *F_D/1 =
+    *F_D/2 =
+    *F_D/S =
+    Calc = .Q/Ergebnis;
+    .Q/A = Abi; FHS; NA; -;
+    .Q/1 = ;
+    .Q/2 = ;
+    .Q/S = ;
     NotenWerte = {_ABITUR_GRADES}
 
 :12.G
@@ -137,7 +146,7 @@ REPORT_GROUPS = f"""
     *ZA/2 = Abschluss; Abgang; Zeugnis;
     *ZA/S = Abgang;
     *Q = Erw; RS; HS; -;
-    Durchschnitte = :D/Φ Alle Fächer; :Dx/Φ De-En-Ma;
+    Calc = .D/Φ Alle Fächer; .Dx/Φ De-En-Ma;
 
 :11.G
     Maßstäbe = Gym;
@@ -146,7 +155,7 @@ REPORT_GROUPS = f"""
     *ZA/2 = Zeugnis; Abgang;
     *ZA/S = Abgang; Zeugnis;
     *Q = 12; HS; -;
-    Durchschnitte = :D/Φ Alle Fächer;
+    Calc = .D/Φ Alle Fächer;
 
 :11.R
     Maßstäbe = RS; HS;
@@ -155,7 +164,7 @@ REPORT_GROUPS = f"""
     *ZA/2 = Zeugnis; Abgang; Abschluss;
     *ZA/S = Abgang; Zeugnis;
     *Q = RS; HS; -;
-    Durchschnitte = :D/Φ Alle Fächer; :Dx/Φ De-En-Ma;
+    Calc = .D/Φ Alle Fächer; .Dx/Φ De-En-Ma;
 
 :10
     *ZA/2 = Orientierung; Zeugnis;
@@ -416,7 +425,7 @@ class GradeBase(dict):
                 template = rtype))
 #
     @classmethod
-    def xgradefields(cls, group):
+    def xgradefields(cls, group, term):
         """Return a mapping of additional fields (qualification,
         report type, etc.) which are treated similarly to grades:
             {sid(tag) -> name}
@@ -428,19 +437,21 @@ class GradeBase(dict):
             except ValueError as e:
                 raise GradeConfigError(_BAD_XGRADE.format(
                         grp = group, item = nf))
-            xfmap[k] = v
+            if cls.group_info(group,  k + '/' + term[0]):
+                xfmap[k] = v
         return xfmap
 #
     @classmethod
-    def averages(cls, group):
+    def calc_fields(cls, group, term):
         amap = {}
-        for a in cls.group_info(group,  'Durchschnitte'):
+        for a in cls.group_info(group,  'Calc'):
             try:
                 k, v = a.split('/')
             except ValueError as e:
-                raise GradeConfigError(_BAD_AVERAGE.format(
+                raise GradeConfigError(_BAD_CALC.format(
                         grp = group, item = a))
-            amap[k] = v
+            if cls.group_info(group,  k + '/' + term[0]):
+                amap[k] = v
         return amap
 #
     @staticmethod
