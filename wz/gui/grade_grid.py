@@ -2,7 +2,7 @@
 """
 gui/grade_grid.py
 
-Last updated:  2020-12-13
+Last updated:  2020-12-20
 
 Manage the grid for the grade-editor.
 
@@ -80,7 +80,7 @@ class GradeGrid(Grid):
         """Set the grade table (a <GradeTable> instance) to be used.
         Set up the grid accordingly.
         """
-        self.grade_table = GradeTable.group_table(schoolyear, group, term,
+        self.grade_table = GradeTable(schoolyear, group, term,
                 ok_new = True)
 
 #        print("$$$ pupils:", len(self.grade_table))
@@ -106,8 +106,7 @@ class GradeGrid(Grid):
         if self.grade_table.composites:
             _COLS += (_SEP_SIZE,) + \
                     (_WIDTH_GRADE,) * len(self.grade_table.composites)
-        col_averages = len(_COLS) + 1
-#? The "averages" are only used in the grade editor ...
+        col_calcs = len(_COLS) + 1
         if self.grade_table.calcs:
             _COLS += (_SEP_SIZE,) + (_WIDTH_AVERAGE,) * \
                     len(self.grade_table.calcs)
@@ -120,15 +119,19 @@ class GradeGrid(Grid):
         super().__init__(grades_view, _ROWS, _COLS)
         self.styles()
 
+        # horizontal separator (after headers)
         self.tile(row_pids - 1, 0, cspan = len(_COLS), style = 'padding')
+        # vertical separators
+        _clast = 0
         for col in (col_sids, col_components, col_composites,
-                col_averages, col_extras):
+                col_calcs, col_extras):
+            if col == _clast or col >= len(_COLS):
+                continue
             self.tile(1, col - 1, rspan = len(_ROWS) - 1, style = 'padding')
 
         ### Pop-up editor for grades
         self.addSelect('grade', Grades.group_info(self.grade_table.group,
                 'NotenWerte'))
-
         ### Title area
         self.tile(0, 0, text = "Notentabelle", cspan = 2, style = 'title')
         self.tile(0, 4, text = SCHOOL_NAME, cspan = 10, style = 'titleR')
@@ -170,7 +173,7 @@ class GradeGrid(Grid):
             self.tile(7, col, text = sid, style = 'small')
             self.tile(1, col, text = name, rspan = 6, style = 'v')
             col += 1
-        col = col_averages
+        col = col_calcs
         for sid, name in self.grade_table.calcs.items():
             self.tile(7, col, text = sid, style = 'small')
             self.tile(1, col, text = name, rspan = 6, style = 'v')
@@ -216,7 +219,7 @@ class GradeGrid(Grid):
                         tag = f'${pid}-{sid}')
                 col += 1
             if self.grade_table.calcs:
-                col = col_averages
+                col = col_calcs
                 for sid in self.grade_table.calcs:
                     self.tile(row, col, text = '?', style = 'calc',
                             tag = f'${pid}-{sid}')

@@ -2,7 +2,7 @@
 """
 gui/abitur_pupil_view.py
 
-Last updated:  2020-12-18
+Last updated:  2020-12-20
 
 Editor for Abitur results (single pupil).
 
@@ -93,8 +93,7 @@ class AbiPupilView(Grid):
                 mark = 'E00000')
 #
     def __init__(self, grades_view, schoolyear, group):
-        self.grade_table = GradeTable.group_table(schoolyear, group, 'A',
-                ok_new = True)
+        self.grade_table = GradeTable(schoolyear, group, 'A', ok_new = True)
         super().__init__(grades_view, ROWS, COLUMNS)
         self.styles()
 

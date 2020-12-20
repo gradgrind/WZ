@@ -3,7 +3,7 @@
 """
 local/abitur_config.py
 
-Last updated:  2020-12-19
+Last updated:  2020-12-20
 
 Configuration for Abitur-grade handling.
 ====================================
@@ -19,7 +19,6 @@ _E_WRONG = "{n} Kurse mit „eA“ (erwartet: 3)"
 _G_WRONG = "{n} schriftliche Kurse mit „gA“ (erwartet: 1)"
 _M_WRONG = "{n} mündliche Kurse (erwartet: 4)"
 _X_WRONG = "{n} mündliche Nachprüfungen (erwartet: 4)"
-_X_ORAL = "Nachprüfung ({sid}) in nicht schriftlichem Fach"
 _X_ALONE = "Keine entsprechende schriftliche Prüfung für Fach {sid}"
 _MULTISID = "Fach {sid} doppelt vorhanden"
 _BAD_SID = "Unerwartetes Fach: {sid}"
@@ -41,11 +40,32 @@ class AbiCalc:
 #
     JA = {True: 'Ja', False: 'Nein'}
 #
-    def __init__(self, grade_table, pid, report = False):
+    @staticmethod
+    def subjects(grade_table):
+        """Tweak to add additional (subject) entries for Abitur results.
+        """
+        sdmap = {}
+        smap = {}
+        for sid, sdata in grade_table.sid2subject_data.items():
+            sdmap[sid] = sdata
+            smap[sid] = sdata.name
+            if sid.endswith('.e') or sid.endswith('.g'):
+                new_sdata = sdata._replace(
+                        sid = sdata.sid[:-1] + 'x',
+# <tids> must have a value, otherwise it will not be passed by the
+# composites filter, but is this alright? (rather ['X']?)
+                        tids = 'X',
+                        composite = None,
+                        report_groups = None,
+                        name = sdata.name.split('|', 1)[0] + '| nach'
+                    )
+                sdmap[new_sdata.sid] = new_sdata
+                smap[new_sdata.sid] = new_sdata.name
+        grade_table.sid2subject_data = sdmap
+        grade_table.subjects = smap
+#
+    def __init__(self, grade_table, pid):
         """<grade_table> is the <GradeTable> instance, <pid> the pupil id.
-        <report> is set to <True> if the grades are to be used for report
-        card generation (rather than editing). At present that only
-        affects the representation of the <NO_GRADE> grade.
         """
         def get_name(sid):
             """Return subject name without possible suffix.
@@ -53,7 +73,6 @@ class AbiCalc:
             return grade_table.subjects[sid].split('|', 1)[0].rstrip()
 #-
         grade_table[pid].abicalc = self
-        self._report = report
         self.grade_map = grade_table[pid]   # {sid -> grade}
         # Indexes for subjects and grades:
         e, g, m = 0, 3, 4
@@ -106,17 +125,20 @@ class AbiCalc:
             else:
                 raise AbiturError(_BAD_SID.format(sid = sid))
         # This must come after <self.sid2i> has been completed
+        nxsids = 0
         for sid, grade in xsids:
             try:
                 n = self.sid2i[sid[:-2]]
                 if int(n) >= 5:
-                    raise AbiturError(_X_ORAL.format(sid = sid))
+                    self.grade_map[sid] = UNCHOSEN
+                    continue
             except KeyError as e:
                 raise AbiturError(_X_ALONE.format(sid = sid)) from e
             gtag = 'GRADE_%d_m' % n
             self.set_editable_cell(gtag, grade)
             self.sid2tag[sid] = gtag
             self.tag2sid[gtag] = sid
+            nxsids += 1
         # Check for correct numbers of each type
         if e != 3:
             raise AbiturError(_E_WRONG.format(n = e))
@@ -124,7 +146,7 @@ class AbiCalc:
             raise AbiturError(_G_WRONG.format(n = g - 3))
         if m != 8:
             raise AbiturError(_M_WRONG.format(n = m - 4))
-        if len(xsids) != 4:
+        if nxsids != 4:
             raise AbiturError(_X_WRONG.format(n = len(xsids)))
 #
     def value(self, tag):
@@ -140,8 +162,7 @@ class AbiCalc:
     def set_editable_cell(self, tag, value):
         """Enter value in the general <self.tags> mapping.
         """
-        self.tags[tag] = UNGRADED if self._report and value == NO_GRADE \
-                else value
+        self.tags[tag] = value
 #
     def get_all_grades(self):
         """Return a list of all (subject, grade) pairs, including the
@@ -331,7 +352,6 @@ class AbiCalc:
             raise Bug("Missing subject/grade")
         bestof(s2g)
         bestof(s2g)
-        fields['FINAL_GRADE'] = '–––'
         n = 0   # ok-grades
         _n = 0  # grades under 5 points
         for i in grades:    # check for 0 points and <5 points
@@ -360,5 +380,5 @@ class AbiCalc:
         fields['Note1'] = g1
         fields['Note2'] = g2
         fields['NoteT'] = self._gradeText[g1] + ', ' + self._gradeText[g2]
-        fields['FINAL_GRADE'] = g1 + ',' + g2
+        fields['FINAL_GRADE'] = 'FHS: ' + g1 + ',' + g2
         return True

@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2020-12-19
+Last updated:  2020-12-20
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -62,9 +62,8 @@ from core.base import Dates
 from core.pupils import Pupils
 from core.courses import Subjects
 from local.base_config import year_path, SCHOOL_NAME, class_year, print_schoolyear
-from local.grade_config import UNCHOSEN, MISSING_GRADE, UNGRADED, \
+from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
         GradeConfigError, STREAMS, NO_SUBJECT
-from local.abitur_config import AbiCalc
 from local.grade_template import info_extend
 from template_engine.template_sub import Template, TemplateError
 from grades.gradetable import GradeTable, Grades, GradeTableError
@@ -80,7 +79,7 @@ class GradeReports:
     school-year and "term".
     """
     def __init__(self, schoolyear, group, term):
-        self.grade_table = GradeTable.group_table(schoolyear, group, term)
+        self.grade_table = GradeTable(schoolyear, group, term)
         self.gmap0 = {  ## data shared by all pupils in the group
             'GROUP': group,
             'TERM': term,
@@ -110,8 +109,7 @@ class GradeReports:
             if pids and (pid not in pids):
                 continue
             if self.grade_table.term == 'A':
-                abicalc = AbiCalc(self.grade_table, pid, report = True)
-                rtype = abicalc.calculate()['REPORT_TYPE']
+                rtype = grades.abicalc.calculate()['REPORT_TYPE']
                 if not rtype:
                     REPORT("ERROR: " + _NOT_COMPLETE.format(
                             pupil = self.grade_table.name[pid]))
@@ -188,9 +186,10 @@ class GradeReports:
 
             ## Process the grades themselves ...
             if self.grade_table.term == 'A':
-                abicalc = AbiCalc(self.grade_table, pid, report = True)
-                gmap.update(abicalc.tags)
-                gmap.update(abicalc.calculate())
+                showgrades = {k: UNGRADED if v == NO_GRADE else v
+                        for k, v in grades.abicalc.tags.items()}
+                gmap.update(showgrades)
+                gmap.update(grades.abicalc.calculate())
             else:
                 # Sort into grade groups
                 grade_map = self.sort_grade_keys(pdata.name(), grades, gTemplate)
@@ -321,6 +320,7 @@ if __name__ == '__main__':
     _year = '2016'
 
     # Build reports for a group
-    greports = GradeReports(_year, '13', 'A')
+#    greports = GradeReports(_year, '13', 'A')
+    greports = GradeReports(_year, '12.G', '2')
     for f in greports.makeReports():
         print("\n$$$: %s\n" % f)

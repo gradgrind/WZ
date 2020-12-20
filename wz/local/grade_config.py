@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-12-19
+Last updated:  2020-12-20
 
 Configuration for grade handling.
 ====================================
@@ -18,10 +18,9 @@ _BAD_TERM_REPORT = "Ungültige Noten-Konfiguration für Gruppe {group}:" \
 _BAD_ANLASS = "Ungültiger Anlass: {term}"
 _BAD_TERM = "Ungültiger \"Anlass\" (Halbjahr): {term}"
 _INVALID_GRADE = "Ungültige \"Note\": {grade}"
-_BAD_XGRADE = "Ungültiges Zusatz-Notenfeld für Gruppe {grp}: {item}"
+_BAD_XGRADE = "Ungültiges Konfigurationsfeld ({tag}) für Gruppe {grp}: {item}"
 _BAD_RTEMPLATE = "Ungültige Zeugnisvorlage für Gruppe {grp}: {item}"
 _NO_RTEMPLATE = "Keine Zeugnisvorlage '{template}' für Gruppe {grp}"
-_BAD_CALC = "Ungültiges Berechnungsfeld für Gruppe {grp}: {item}"
 
 # Special "grades"
 UNCHOSEN = '/'
@@ -426,60 +425,33 @@ class GradeBase(dict):
 #
     @classmethod
     def xgradefields(cls, group, term):
+        return cls.xfields('Notenfelder_X', group, term)
+#
+    @classmethod
+    def calc_fields(cls, group, term):
+        return cls.xfields('Calc', group, term)
+#
+    @classmethod
+    def xfields(cls, tag, group, term):
         """Return a mapping of additional fields (qualification,
         report type, etc.) which are treated similarly to grades:
             {sid(tag) -> name}
         """
         xfmap = {}
-        for nf in cls.group_info(group,  'Notenfelder_X'):
+        for nf in cls.group_info(group, tag):
             try:
                 k, v = nf.split('/')
             except ValueError as e:
                 raise GradeConfigError(_BAD_XGRADE.format(
-                        grp = group, item = nf))
-            if cls.group_info(group,  k + '/' + term[0]):
-                xfmap[k] = v
-        return xfmap
-#
-    @classmethod
-    def calc_fields(cls, group, term):
-        amap = {}
-        for a in cls.group_info(group,  'Calc'):
+                        tag = tag, grp = group, item = nf))
             try:
-                k, v = a.split('/')
-            except ValueError as e:
-                raise GradeConfigError(_BAD_CALC.format(
-                        grp = group, item = a))
-            if cls.group_info(group,  k + '/' + term[0]):
-                amap[k] = v
-        return amap
+                if cls.group_info(group,  k + '/' + term[0]):
+                    xfmap[k] = v
+            except GradeConfigError:
+                if cls.group_info(group,  k):
+                    xfmap[k] = v
+        return xfmap
 #
     @staticmethod
     def double_sided(group, rtype):
         return rtype != 'Orientierung'
-
-
-
-#TODO
-    @staticmethod
-    def special_term(termGrade):
-        raise Bug("TODO")
-        if termGrade.term != 'A':
-            raise GradeConfigError(_BAD_TERM.format(term = term))
-        # Add additional oral exam grades
-        slist = []
-        termGrade.sdata_list
-        for sdata in termGrade.sdata_list:
-            slist.append(sdata)
-            if sdata.sid.endswith('.e') or sdata.sid.endswith('.g'):
-                slist.append(sdata._replace(
-                        sid = sdata.sid[:-1] + 'x',
-# <tids> must have a value, otherwise it will not be passed by the
-# composites filter, but is this alright? (rather ['X']?)
-                        tids = 'X',
-                        composite = None,
-                        report_groups = None,
-                        name = sdata.name.split('|', 1)[0] + '| nach'
-                    )
-                )
-        termGrade.sdata_list = slist
