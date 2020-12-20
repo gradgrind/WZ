@@ -204,9 +204,72 @@ class _GradeTable(dict):
         self.subjects = None
         self.composites = None
         self.extras = None
-        self.name = None
+        self.name = {}
         self.calcs = None
         self.abicalc = None
+#
+    def _readtable(self, dbtable, sid2col):
+        """Read the grades from a table with column-mapping <sid2col>.
+        """
+        for row in dbtable:
+            pid = row[0]
+            if pid and pid != '$':
+                gmap = {sid: row[col] for sid, col in sid2col}
+                self.name[pid] = row[1]
+                # stream = row[2]
+                grades = Grades(self.group, row[2],
+                        self._include_grades(gmap))
+                self[pid] = grades
+                for comp in self.composites:
+                    grades.composite_calc(self.sid2subject_data[comp])
+                if self.term == 'A':
+                    grades.abicalc = AbiCalc(self, pid)
+#
+    def _new_group_table(self, pids):
+        """Initialize an empty table for <self.group> and <self.term>.
+        If <pids> is not null, only include these pupils.
+        """
+        ## Initialize the dates (issue at end of term, or end of year)
+        calendar = Dates.get_calendar(self.schoolyear)
+        try:
+            date = calendar['TERM_%d' % (int(self.term) + 1)]
+        except KeyError:
+            date = calendar['LAST_DAY']
+        else:
+            # Previous day, ensure that it is a weekday
+            td = datetime.timedelta(days = 1)
+            d = datetime.date.fromisoformat(date)
+            while True:
+                d -= td
+                if d.weekday() < 5:
+                    date = d.isoformat()
+                    break
+        self.issue_d = date
+        self.grades_d = '*'
+
+        ## Pupil information
+        # Pupil data, select pupils
+        pupils = Pupils(schoolyear)
+        pidset = set(pids) if pids else None
+        for pdata in pupils.group2pupils(group, date = date):
+            pid = pdata['PID']
+            if pids:
+                try:
+                    pidset.remove(pid)
+                except KeyError:
+                    continue
+            self.name[pid] = pdata.name()
+            # Set grades (all empty)
+            grades = Grades(group, pdata['STREAM'],
+                    self._include_grades({}))
+            self[pid] = grades
+            for comp in self.composites:
+                grades.composite_calc(self.sid2subject_data[comp])
+            if term == 'A':
+                grades.abicalc = AbiCalc(self, pid)
+        if pidset:
+            raise GradeTableError(_PIDS_NOT_IN_GROUP.format(
+                    group = group, pids = ', '.join(pidset)))
 #
     def _set_group_term(self, group, term):
         """Set the subjects and extra pupil-data fields for the given
@@ -455,17 +518,7 @@ class GradeTableFile(_GradeTable):
                     # This should be a subject tag
                     sid2col.append((f, col))
             col += 1
-        self.name = {}
-        for row in dbt:
-            pid = row[0]
-            if pid and pid != '$':
-                gmap = {sid: row[col] for sid, col in sid2col}
-                self.name[pid] = row[1]
-                # stream = row[2]
-                self[pid] = Grades(self.group, row[2],
-                        self._include_grades(gmap))
-#?
-                # No need to calculate composites and extras here.
+        self._readtable(dbt, sid2col)
 
 ###
 
@@ -479,46 +532,7 @@ class NewGradeTable(_GradeTable):
         """
         super().__init__(schoolyear)
         self._set_group_term(group, term)
-        # Initialize the dates (issue at end of term, or end of year)
-        calendar = Dates.get_calendar(schoolyear)
-        try:
-            date = calendar['TERM_%d' % (int(term) + 1)]
-        except KeyError:
-            date = calendar['LAST_DAY']
-        else:
-            # Previous day, ensure that it is a weekday
-            td = datetime.timedelta(days = 1)
-            d = datetime.date.fromisoformat(date)
-            while True:
-                d -= td
-                if d.weekday() < 5:
-                    date = d.isoformat()
-                    break
-        self.issue_d = date
-        self.grades_d = '*'
-
-        # Pupil information
-        self.name = {}
-        # Pupil data, select pupils
-        pupils = Pupils(schoolyear)
-        pidset = set(pids) if pids else None
-        pid_list = []
-        for pdata in pupils.group2pupils(group, date = date):
-            pid = pdata['PID']
-            if pids:
-                try:
-                    pidset.remove(pid)
-                except KeyError:
-                    continue
-            self.name[pid] = pdata.name()
-            # Set grades (all empty)
-            self[pid] = Grades(group, pdata['STREAM'],
-                    self._include_grades({}))
-            # No need to calculate composites.
-            pid_list.append(pid)
-        if pidset:
-            raise GradeTableError(_PIDS_NOT_IN_GROUP.format(
-                    group = group, pids = ', '.join(pidset)))
+        self._new_group_table(pids)
 
 ###
 
@@ -531,55 +545,41 @@ class GradeTable(_GradeTable):
         the table must already exist.
         """
         super().__init__(schoolyear)
+        self._set_group_term(group, term)
         # Get file path
         table_path = year_path(schoolyear, self.table_path(group, term))
         try:
             # Read the "internal" table for this group/term
             ss = Spreadsheet(table_path)
-            dbt = ss.dbTable()
-            info = {row[0]: row[1] for row in dbt.info if row[0]}
-            _yr = info.get('SCHOOLYEAR')
-            if _yr != str(schoolyear):
-                raise Bug(_TABLE_YEAR_MISMATCH.format(filepath = filepath))
-            _grp = info.get('GROUP')
-            if _grp != group:
-                raise Bug(_TABLE_CLASS_MISMATCH.format(filepath = table_path))
-            _trm = info.get('TERM')
-            if _trm != term:
-                raise Bug(_TABLE_TERM_MISMATCH.format(filepath = table_path))
-            self._set_group_term(group, term)
-            self.issue_d = info.get('ISSUE_D')
-            self.grades_d = info.get('GRADES_D')
-            sid2col = []
-            col = 0
-            for f in dbt.fieldnames():
-                if col > 2:
-                    if f[0] != '$':
-                        # This should be a subject tag
-                        sid2col.append((f, col))
-                col += 1
-            self.name = {}
-            for row in dbt:
-                pid = row[0]
-                if pid and pid != '$':
-                    gmap = {sid: row[col] for sid, col in sid2col}
-                    self.name[pid] = row[1]
-                    # stream = row[2]
-                    grades = Grades(self.group, row[2],
-                            self._include_grades(gmap))
-                    self[pid] = grades
-                    for comp in self.composites:
-                        grades.composite_calc(self.sid2subject_data[comp])
-#                        print("§§§", pid, comp, grades[comp])
-                    if term == 'A':
-                        grades.abicalc = AbiCalc(self, pid)
-
-#TODO:
         except TableError:
             # File doesn't exist
             if not ok_new:
                 raise
-            return cls.new_group_table(schoolyear, group, term)
+            self._new_group_table(None)
+            return
+
+        dbt = ss.dbTable()
+        info = {row[0]: row[1] for row in dbt.info if row[0]}
+        _yr = info.get('SCHOOLYEAR')
+        if _yr != str(schoolyear):
+            raise Bug(_TABLE_YEAR_MISMATCH.format(filepath = filepath))
+        _grp = info.get('GROUP')
+        if _grp != group:
+            raise Bug(_TABLE_CLASS_MISMATCH.format(filepath = table_path))
+        _trm = info.get('TERM')
+        if _trm != term:
+            raise Bug(_TABLE_TERM_MISMATCH.format(filepath = table_path))
+        self.issue_d = info.get('ISSUE_D')
+        self.grades_d = info.get('GRADES_D')
+        sid2col = []
+        col = 0
+        for f in dbt.fieldnames():
+            if col > 2:
+                if f[0] != '$':
+                    # This should be a subject tag
+                    sid2col.append((f, col))
+            col += 1
+        self._readtable(dbt, sid2col)
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

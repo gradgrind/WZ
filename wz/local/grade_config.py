@@ -65,6 +65,12 @@ _ABITUR_GRADES = f"""15 ; 14 ; 13 ;  +
     {NO_GRADE} ; nt ; t ; nb ; {UNCHOSEN}
 """
 
+class GradeConfigError(Exception):
+    pass
+
+#class GradeError(Exception):
+#    pass
+
 # Eine Sammlung der Daten für die Zeugnisgruppen.
 # Nur für die hier eingetragenen Gruppen können Notenzeugnisse erstellt
 # werden.
@@ -97,6 +103,9 @@ REPORT_GROUPS = f"""
 ######## Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
 ######## können
     *ZA/S = Abgang; Zeugnis;
+######## Normalerweise sollen erklärte Durchschnitte angezeigt werden:
+    .D = AVERAGE
+    .Dx = AVERAGE
 ######## gültige "Noten":
     NotenWerte = {_NORMAL_GRADES}
 
@@ -115,14 +124,10 @@ REPORT_GROUPS = f"""
     *ZA/2 = -; Abgang;
     *ZA/S = Abgang;
     *F_D/A = DATE
-    *F_D/1 =
-    *F_D/2 =
-    *F_D/S =
+    *F_D =
     Calc = .Q/Ergebnis;
     .Q/A = Abi; FHS; NA; -;
-    .Q/1 = ;
-    .Q/2 = ;
-    .Q/S = ;
+    .Q = ;
     NotenWerte = {_ABITUR_GRADES}
 
 :12.G
@@ -209,12 +214,6 @@ for line in REPORT_GROUPS.splitlines():
     info[tag.strip()] = vals
 ###########################
 
-
-class GradeConfigError(Exception):
-    pass
-
-#class GradeError(Exception):
-#    pass
 
 def all_streams(klass):
     """Return a list of streams available in the given class.

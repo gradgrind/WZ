@@ -321,6 +321,6 @@ if __name__ == '__main__':
 
     # Build reports for a group
 #    greports = GradeReports(_year, '13', 'A')
-    greports = GradeReports(_year, '12.G', '2')
+    greports = GradeReports(_year, '11.G', '2')
     for f in greports.makeReports():
         print("\n$$$: %s\n" % f)
