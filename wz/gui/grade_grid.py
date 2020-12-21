@@ -2,7 +2,7 @@
 """
 gui/grade_grid.py
 
-Last updated:  2020-12-20
+Last updated:  2020-12-21
 
 Manage the grid for the grade-editor.
 
@@ -184,7 +184,7 @@ class GradeGrid(Grid):
             self.tile(1, col, text = name, rspan = 6, style = 'v')
             if sid == '*ZA':
                 _ZA_vals = Grades.group_info(self.grade_table.group,
-                        f'*ZA/{self.grade_table.term}')
+                        f'*ZA/{self.grade_table.term[0]}')
                 self.addSelect(sid, _ZA_vals)
                 ZA_default = _ZA_vals[0] if _ZA_vals else ''
 #            elif sid.endswith('_D'):

@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-13
+Last updated:  2020-12-21
 
 Editor for grades.
 
@@ -27,11 +27,12 @@ Copyright 2020 Michael Towers
 
 ### Messages
 
-
+### Labels, etc.
 _TITLE = "WZ: Noten"
 _PUPIL = "Schüler"
 _STREAM = "Maßstab"
 _ALL_PUPILS = "Gesamttabelle"
+_NEW_REPORT = "Neues Zeugnis"
 
 _SCHULJAHR = "Schuljahr:"
 _TERM = "Anlass:"
@@ -42,7 +43,7 @@ _REPORT_PDF = "Zeugnis(se) erstellen"
 #####################################################
 
 
-import sys, os
+import sys, os, glob
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
@@ -56,7 +57,7 @@ from gui.grade_grid import GradeGrid
 from gui.abitur_pupil_view import AbiPupilView
 from gui.gui_support import VLine, KeySelect#, ZIcon
 from core.base import Dates
-from local.base_config import print_schoolyear
+from local.base_config import print_schoolyear, year_path
 from local.grade_config import GradeBase
 
 ###
@@ -166,68 +167,29 @@ class _GradeEdit(QDialog):
         # Needed to call <leaving> before (re)loading the grade table:
         self.gradeView.clear()
         self.group = group
-        self.pselect.setVisible(False)
-        if self.term[0] == 'S':
-            self.pselect.setVisible(True)
-            print("TODO: special report")
-            return
-
+#        self.pselect.setVisible(False)
         self.group_scene = GradeGrid(self.gradeView, self.schoolyear,
                 self.group, self.term)
         self.gradeView.set_scene(self.group_scene)
         self.grade_scene = self.group_scene
         self.pupil_scene = None
-        if self.term == 'A':
-            # Show pupil choice ...
-            self.pselect.setVisible(True)
-            plist = [('', _ALL_PUPILS)] + self.grade_scene.pupils()
-            self.pselect.set_items(plist)
+        if self.term[0] == 'S':
+            # Get list of existing reports for the group
+            table_path = year_path(self.schoolyear,
+                    GradeBase.table_path(group, 'S*'))
+            date_list = [f.rsplit('_', 1)[1].split('.', 1)[0]
+                    for f in glob.glob(table_path)]
+            plist = [('', _NEW_REPORT)] + [('S' + d, d) for d in date_list]
         else:
-            #TODO: hide select element?
-            self.pselect.set_items(None)
-
-#TODO
-
-
-
-
-
-#        if key == 'A':
-#            self.grade_edit.addWidget(self.gradeView)
-##TODO: choices -> ???
-##        categories = Grades.categories()
+            plist = [('', _ALL_PUPILS)] + self.grade_scene.pupils()
+        self.pselect.set_items(plist)
 #
-#
-##        self.choices = GRADE_REPORT_CATEGORY[key]
-#        self.pselect.clear()
-#
-#        if key == 'A':
-#            # Abitur, examination results
-#            pass
-#        elif key == 'S':
-#            # A non-scheduled report
-#            pass
-#        else:
-#            ### A term report, select the pupil group.
-#            # Get a list of (group, default-report-type) pairs for this term.
-#            # (Note that this will fail for 'A' and 'S'.)
-#            self.group_choices = term2group_rtype_list(key)
-#
-#            self.select.addItems([g for g, _ in self.group_choices])
-## This doesn't initially select any entry
-
-
-
-
-#TODO: Updating database ... (save button? ... or immediate update?)
-
     def pupil_changed(self, pid):
         """A new pupil has been selected: reset the grid accordingly.
         """
         self.pid = pid
         print("SELECT Pupil:", pid)
         if pid:
-#TODO
             if self.term == 'A':
                 self.gradeView.clear()
                 if not self.pupil_scene:
@@ -238,6 +200,7 @@ class _GradeEdit(QDialog):
                 self.pupil_scene.set_pupil(pid)
                 return
 
+#TODO
             else:
                 pass
 

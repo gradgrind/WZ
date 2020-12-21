@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-12-20
+Last updated:  2020-12-21
 
 Configuration for grade handling.
 ====================================
@@ -252,10 +252,10 @@ class GradeBase(dict):
         ('S*', 'Sonderzeugnisse')
     )
     #
-    GRADE_PATH = 'NOTEN_{term[0]}/Noten_{group}_{term}'  # grade table: file-name
+    GRADE_PATH = 'NOTEN_{term[0]}/Noten_{group}'  # grade table: file-name
     #
     REPORT_DIR = 'Notenzeugnisse_{term[0]}' # grade report: folder
-    REPORT_NAME = '{rtype}_{group}_{term}'  # grade report: file name
+    REPORT_NAME = '{group}_{rtype}'         # grade report: file name
     #
     _PRINT_GRADE = {
         '1': "sehr gut",
@@ -282,6 +282,15 @@ class GradeBase(dict):
         except KeyError as e:
             raise GradeConfigError(_BAD_INFOTAG.format(group = group,
                     tag = tag)) from e
+#
+    @classmethod
+    def table_path(cls, group, term):
+        """Get file path for the grade table.
+        """
+        path = cls.GRADE_PATH.format(term = term[0], group = group)
+        if term[0] == 'S':
+            return path + '_' + term[1:]
+        return path
 #
     @classmethod
     def _group2klass_streams(cls, group):
