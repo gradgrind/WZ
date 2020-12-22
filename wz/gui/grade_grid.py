@@ -2,7 +2,7 @@
 """
 gui/grade_grid.py
 
-Last updated:  2020-12-21
+Last updated:  2020-12-22
 
 Manage the grid for the grade-editor.
 
@@ -146,14 +146,14 @@ class GradeGrid(Grid):
         self.tile(3, 1, text = Grades.term2text(self.grade_table.term),
                 cspan = 2, style = 'info')
         # These are editable dates:
-        self.tile(4, 0, text = self.grade_table.ISSUE_D, style = 'info')
-        self.tile(4, 1, text = self.grade_table.issue_d,
-                cspan = 2, style = 'info_edit',
-                validation = 'DATE', tag = 'ISSUE_D')
-        self.tile(5, 0, text = self.grade_table.GRADES_D, style = 'info')
-        self.tile(5, 1, text = self.grade_table.grades_d,
+        self.tile(4, 0, text = self.grade_table.GRADES_D, style = 'info')
+        self.tile(4, 1, text = self.grade_table.grades_d,
                 cspan = 2, style = 'info_edit',
                 validation = 'DATE', tag = 'GRADES_D')
+        self.tile(5, 0, text = self.grade_table.ISSUE_D, style = 'info')
+        self.tile(5, 1, text = self.grade_table.issue_d,
+                cspan = 2, style = 'info_edit',
+                validation = 'DATE', tag = 'ISSUE_D')
 
         # Subject lines
         self.tile(7, 0, text = _PUPIL, cspan = 2, style = 'small')
@@ -260,18 +260,18 @@ class GradeGrid(Grid):
                 highlight = ':002562', mark = 'E00000')
         self.new_style('padding', bg = '666666')
 #
-    def leaving(self):
+    def leaving(self, force):
         """When setting a scene (or clearing one), or exiting the program
         (or dialog), this check for changed data should be made.
         """
-        if self.changes() and QuestionDialog(_TITLE_TABLE_CHANGE,
+        if self.changes() and (force or QuestionDialog(_TITLE_TABLE_CHANGE,
                 _TABLE_CHANGES.format(year = self.grade_table.schoolyear,
-                        term = Grades.term2text(self.grade_table.term),
-                        group = self.grade_table.group)):
+                    term = Grades.term2text(self.grade_table.term),
+                    group = self.grade_table.group))):
             self.save_changes()
 #
     def save_changes(self):
-        self.grade_table.save()
+        self.grade_table.save(self.change_values())
 #
     def to_pdf(self):
         fname = os.path.basename(self.grade_table.table_path(

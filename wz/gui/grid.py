@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2020-12-13
+Last updated:  2020-12-22
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -89,14 +89,14 @@ class GridView(QGraphicsView):
         # (pop-ups could otherwise extend it)
         self.setSceneRect(scene._sceneRect)
 #
-    def clear(self):
+    def clear(self, force = False):
         """Call this before <set_scene> to ensure that <leaving> is called.
         It should also be called when closing the application window.
         """
         s = self.scene()
         if s:
-            s.leaving()
-        self.setScene(None)
+            s.leaving(force)
+            self.setScene(None)
 #
     def mousePressEvent(self, event):
         point = event.pos()
@@ -170,6 +170,9 @@ class Grid(QGraphicsScene):
     def changes(self):
         return list(self._changes)
 #
+    def change_values(self):
+        return {tag: self.tagmap[tag].value() for tag in self.changes()}
+#
     def changes_init(self):
         self._changes = set()
         self._gview.set_changed(False)
@@ -184,7 +187,7 @@ class Grid(QGraphicsScene):
             self._gview.set_changed(True)
         self._changes.add(tag)
 #
-    def leaving(self):
+    def leaving(self, force):
         """Override this to handle scene-changing.
         """
         pass

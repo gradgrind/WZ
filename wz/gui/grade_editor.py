@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-21
+Last updated:  2020-12-22
 
 Editor for grades.
 
@@ -26,6 +26,7 @@ Copyright 2020 Michael Towers
 """
 
 ### Messages
+_SAVE_FAILED = "Speicherung der Änderungen ist fehlgeschlagen:\n  {msg}"
 
 ### Labels, etc.
 _TITLE = "WZ: Noten"
@@ -55,10 +56,11 @@ from qtpy.QtWidgets import QApplication, QDialog, \
 from gui.grid import GridView
 from gui.grade_grid import GradeGrid
 from gui.abitur_pupil_view import AbiPupilView
-from gui.gui_support import VLine, KeySelect#, ZIcon
+from gui.gui_support import VLine, KeySelect, QuestionDialog#, ZIcon
 from core.base import Dates
 from local.base_config import print_schoolyear, year_path
 from local.grade_config import GradeBase
+from grades.gradetable import FailedSave
 
 ###
 
@@ -139,8 +141,8 @@ class _GradeEdit(QDialog):
 
 #
     def closeEvent(self, e):
-        self.gradeView.clear()
-        super().closeEvent(e)
+        if self.clear():
+            super().closeEvent(e)
 #
     def init(self):
         years = [(y, print_schoolyear(y)) for y in Dates.get_years()]
@@ -148,86 +150,102 @@ class _GradeEdit(QDialog):
 #        self.gradeView.clear()
         self.year_select.trigger()
 #
+    def clear(self, force = False):
+        """Check for changes in the current "scene", allowing these to
+        be saved if desired, then clear the scene.
+        """
+        try:
+            self.gradeView.clear(force)
+        except FailedSave as e:
+            REPORT(_SAVE_FAILED.format(msg = e))
+            return False
+        return True
+#
     def year_changed(self, schoolyear):
+        if not self.clear():
+            self.year_select.reset(self.schoolyear)
+            return
         print("Change Year:", schoolyear)
         self.schoolyear = schoolyear
-#        self.gradeView.clear()
         self.term_select.trigger()
 #
     def term_changed(self, key):
+        if not self.clear():
+            self.term_select.reset(self.term)
+            return
         self.term = key
         groups = [(grp, grp)
                 for grp, rtype in GradeBase.term2group_rtype_list(key[0])]
         print("Change Category:", key, [grp[0] for grp in groups])
-#        self.gradeView.clear()
         self.group_select.set_items(groups)
         self.group_select.trigger()
 #
     def group_changed(self, group):
-        # Needed to call <leaving> before (re)loading the grade table:
-        self.gradeView.clear()
-        self.group = group
+        if group:
+            if not self.clear():
+                self.group_select.reset(self.group)
+                return
+            self.group = group
+            self.pid = ''
 #        self.pselect.setVisible(False)
-        self.group_scene = GradeGrid(self.gradeView, self.schoolyear,
-                self.group, self.term)
-        self.gradeView.set_scene(self.group_scene)
-        self.grade_scene = self.group_scene
-        self.pupil_scene = None
         if self.term[0] == 'S':
+            self.term = self.pid if self.pid else 'S*'
             # Get list of existing reports for the group
             table_path = year_path(self.schoolyear,
-                    GradeBase.table_path(group, 'S*'))
-            date_list = [f.rsplit('_', 1)[1].split('.', 1)[0]
-                    for f in glob.glob(table_path)]
+                    GradeBase.table_path(self.group, 'S*'))
+            date_list = sorted([f.rsplit('_', 1)[1].split('.', 1)[0]
+                    for f in glob.glob(table_path)], reverse = True)
+            if group and date_list:
+                # Show next date
+                today = Dates.today()
+                for date in date_list:
+                    if today > date:
+                        break
+                    # Select this date initially
+                    self.pid = 'S' + latest
+                    self.term = self.pid
+            self.grade_scene = GradeGrid(self.gradeView, self.schoolyear,
+                    self.group, self.term)
             plist = [('', _NEW_REPORT)] + [('S' + d, d) for d in date_list]
         else:
+            self.grade_scene = GradeGrid(self.gradeView, self.schoolyear,
+                    self.group, self.term)
             plist = [('', _ALL_PUPILS)] + self.grade_scene.pupils()
         self.pselect.set_items(plist)
+        if self.pid:
+            self.pselect.reset(self.pid)
+        self.gradeView.set_scene(self.grade_scene)
 #
     def pupil_changed(self, pid):
         """A new pupil has been selected: reset the grid accordingly.
         """
+        if not self.clear():
+            self.pselect.reset(self.pid)
+            return
         self.pid = pid
-        print("SELECT Pupil:", pid)
         if pid:
             if self.term == 'A':
-                self.gradeView.clear()
-                if not self.pupil_scene:
-                    self.pupil_scene = AbiPupilView(self.gradeView,
-                            self.schoolyear, self.group)
-                    self.grade_scene = self.pupil_scene
-                self.gradeView.set_scene(self.pupil_scene)
-                self.pupil_scene.set_pupil(pid)
+                self.grade_scene = AbiPupilView(self.gradeView,
+                        self.schoolyear, self.group)
+                self.gradeView.set_scene(self.grade_scene)
+                self.grade_scene.set_pupil(pid)
                 return
-
-#TODO
-            else:
-                pass
-
-                self.gradeView.clear()
-        else:
-            self.group_changed(self.group)
-        return
-#
-#?
-    def update_calc(self):
-        """Update all the calculated parts of the grid from the current
-        grades.
-        """
-        for tag, val in self.calc.calculate().items():
-            try:
-                self.grade_scene.tagmap[tag].setText(val)
-            except:
-                pass
-#                print("NO FIELD:", tag)
+            if self.term[0] != 'S':
+#TODO:
+                REPORT("TODO: Change pupil %s" % pid)
+                return
+        self.group_changed(None)
 #
     def save(self):
-        self.grade_scene.save_changes()
-        self.grade_scene.clear_changes()
+        if self.clear(force = True):    # no question dialog
+            if self.term[0] == 'S':
+                self.pid = self.grade_scene.grade_table.term
+            self.group_changed(None)
 #
     def make_reports(self):
         """Generate the grade report(s).
         """
+#TODO
         print("TODO: make_reports")
 
 #

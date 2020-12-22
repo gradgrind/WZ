@@ -2,7 +2,7 @@
 """
 gui/abitur_pupil_view.py
 
-Last updated:  2020-12-20
+Last updated:  2020-12-22
 
 Editor for Abitur results (single pupil).
 
@@ -221,12 +221,12 @@ class AbiPupilView(Grid):
         else:
             raise Bug("Invalid cell change, %s: %s" % (tag, text))
 #
-    def leaving(self):
+    def leaving(self, force):
         """When setting a scene (or clearing one), or exiting the program
         (or dialog), this check for changed data should be made.
         """
-        if self.changes() and QuestionDialog(_TITLE_TABLE_CHANGE,
-                _TABLE_CHANGES.format(pupil = self.name)):
+        if self.changes() and (force or QuestionDialog(_TITLE_TABLE_CHANGE,
+                _TABLE_CHANGES.format(pupil = self.name))):
             self.save_changes()
 #
     def set_pupil(self, pid):

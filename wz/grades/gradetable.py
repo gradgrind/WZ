@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2020-12-21
+grades/gradetable.py - last updated 2020-12-22
 
 Access grade data, read and build grade tables.
 
@@ -71,6 +71,9 @@ from local.grade_config import GradeBase, UNCHOSEN, NO_GRADE
 from local.abitur_config import AbiCalc
 
 class GradeTableError(Exception):
+    pass
+
+class FailedSave(Exception):
     pass
 
 ###
@@ -231,20 +234,24 @@ class _GradeTable(dict):
         If <pids> is not null, only include these pupils.
         """
         ## Initialize the dates (issue at end of term, or end of year)
-        calendar = Dates.get_calendar(self.schoolyear)
-        try:
-            date = calendar['TERM_%d' % (int(self.term) + 1)]
-        except:
-            date = calendar['LAST_DAY']
+        if self.term[0] == 'S':
+            # ... unless it is a special table
+            date = '*'
         else:
-            # Previous day, ensure that it is a weekday
-            td = datetime.timedelta(days = 1)
-            d = datetime.date.fromisoformat(date)
-            while True:
-                d -= td
-                if d.weekday() < 5:
-                    date = d.isoformat()
-                    break
+            calendar = Dates.get_calendar(self.schoolyear)
+            try:
+                date = calendar['TERM_%d' % (int(self.term) + 1)]
+            except:
+                date = calendar['LAST_DAY']
+            else:
+                # Previous day, ensure that it is a weekday
+                td = datetime.timedelta(days = 1)
+                d = datetime.date.fromisoformat(date)
+                while True:
+                    d -= td
+                    if d.weekday() < 5:
+                        date = d.isoformat()
+                        break
         self.issue_d = date
         self.grades_d = '*'
 
@@ -378,16 +385,12 @@ class _GradeTable(dict):
         table.protectSheet()
         return table.save()
 #
-    def save(self):
+    def save(self, changes):
         """Save the data to the "database".
+        <changes> is a mapping: {tag -> value}
         """
-        info = (
-            ('SCHOOLYEAR',    self.schoolyear),
-            ('GROUP',         self.group),
-            ('TERM',          self.term),
-            ('GRADES_D',      self.grades_d),
-            ('ISSUE_D',       self.issue_d)
-        )
+        grades_d = changes.get('GRADES_D') or self.grades_d
+        issue_d = changes.get('ISSUE_D') or self.issue_d
         fields = ['PID', 'PUPIL', 'STREAM']
         for sid in self.subjects:
             fields.append(sid)
@@ -403,14 +406,37 @@ class _GradeTable(dict):
                     'STREAM': grades.stream}
             dmap.update(grades)
             dlist.append(dmap)
-        # "Title"
-        dt = datetime.datetime.now().isoformat(sep=' ', timespec='minutes')
-        bstream = make_db_table(dt,         # "title"
-                fields, dlist, info = info)
         suffix = '.xlsx' if USE_XLSX else '.tsv'
         # Get file path and write file
         table_path = year_path(self.schoolyear,
                 GradeBase.table_path(self.group, self.term))
+        if self.term[0] == 'S':
+#TODO: check validity of date?
+            if issue_d == '*':
+                raise FailedSave('NO_DATE')
+            if self.term[1:] != issue_d:
+                # Date-of-issue – and thus also "term" – changed
+                new_term = 'S' + issue_d
+                table_path_new = year_path(self.schoolyear,
+                        GradeBase.table_path(self.group, new_term))
+                if os.path.isfile(table_path_new + suffix):
+                    raise FailedSave('DATE_EXISTS')
+                xfile = table_path + suffix
+                if os.path.isfile(xfile):
+                    os.remove(xfile)
+                self.term = new_term
+                table_path = table_path_new
+        info = (
+            ('SCHOOLYEAR',    self.schoolyear),
+            ('GROUP',         self.group),
+            ('TERM',          self.term),
+            ('GRADES_D',      grades_d),
+            ('ISSUE_D',       issue_d)
+        )
+        # "Title"
+        dt = datetime.datetime.now().isoformat(sep=' ', timespec='minutes')
+        bstream = make_db_table(dt,         # "title"
+                fields, dlist, info = info)
         tpdir = os.path.dirname(table_path)
         os.makedirs(tpdir, exist_ok = True)
         tfile = table_path + suffix
@@ -496,14 +522,14 @@ class GradeTableFile(_GradeTable):
         ss = Spreadsheet(filepath)
         dbt = ss.dbTable()
         info = {row[0]: row[1] for row in dbt.info if row[0]}
+        self.issue_d = info.get(_ISSUE_D)
+        self.grades_d = info.get(_GRADES_D)
         self._set_group_term(info.get(_GROUP),
-                GradeBase.text2term(info.get(_TERM)))
+                GradeBase.text2term(info.get(_TERM), self.issue_d))
         year = info.get(_SCHOOLYEAR)
         if year != str(self.schoolyear):
             raise GradeTableError(_TABLE_YEAR_MISMATCH.format(
                         filepath = filepath))
-        self.issue_d = info.get(_ISSUE_D)
-        self.grades_d = info.get(_GRADES_D)
         sid2col = []
         col = 0
         for f in dbt.fieldnames():
