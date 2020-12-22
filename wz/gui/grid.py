@@ -33,6 +33,7 @@ FONT_SIZE_DEFAULT = 11
 LINE_WIDTH = (0, 1.0, 2.0, 3.0)
 
 _DATE_POPUP = "Datum wählen"
+_TEXT_POPUP = "Text eingeben"
 
 #####################
 
@@ -44,13 +45,13 @@ _NOTSTRING          = "In <grid::Tile>: Zeichenkette erwartet: {val}"
 
 #####################################################
 
-import sys, os, copy
+import sys, os, copy, base64
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
 
-from qtpy.QtWidgets import (QLineEdit,
+from qtpy.QtWidgets import (QLineEdit, QTextEdit,
     QGraphicsView, QGraphicsScene,
     QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsLineItem,
     QGraphicsProxyWidget,
@@ -161,9 +162,12 @@ class Grid(QGraphicsScene):
 # Allow a little margin? e.g.(-1.0, -1.0, x + 1.0, y + 1.0)
         self._sceneRect = QRectF(0.0, 0.0, x, y)
         # For popup editors
+        _text_edit = PopupTextEdit(self)
         self.editors = {
             'LINE': PopupLineEdit(self),
-            'DATE': PopupDate(self)
+            'DATE': PopupDate(self),
+            'TEXT': _text_edit,
+            'TEXT_64': _text_edit
         }
         self._popup = None  # the "active" pop-up editor
 #
@@ -227,14 +231,14 @@ class Grid(QGraphicsScene):
         return (spoint.x(), spoint.y())
 #
     ### Methods dealing with cell editing
-    def editCell(self, tile, x, y, validation):
+    def editCell(self, tile, x, y):
         self.popdown(True)
-        editor = self.editors[validation]
+        editor = self.editors[tile.validation]
         self._popup = editor
         if editor:
             editor.activate(tile, x, y)
 #
-    def popdown (self, force = False):
+    def popdown(self, force = False):
         if self._popup != None and self._popup.hideMe(force):
             self._popup = None
 #
@@ -302,7 +306,7 @@ class Grid(QGraphicsScene):
 ### ---------------
 #
     def tile(self, row, col, text = None, cspan = 1, rspan = 1,
-            style = None, validation = None, tag = None):
+            style = None, validation = None, tag = None, label = None):
         """Add a tile to the grid.
         If <tag> is not set, it will be set to '#row:col'.
         """
@@ -319,7 +323,7 @@ class Grid(QGraphicsScene):
         if not tag:
             tag = '#%d:%d' % (row, col)
         cell_style = self._styles[style or '*']
-        t = Tile(self, tag, x, y, w, h, text, cell_style, validation)
+        t = Tile(self, tag, x, y, w, h, text, cell_style, validation, label)
         self.addItem(t)
         self.tagmap[tag] = t
         self.value0[tag] = text # initial value
@@ -504,13 +508,14 @@ class Tile(QGraphicsRectItem):
     """The graphical representation of a table cell.
     This cell can span rows and columns.
     """
-    def __init__(self, grid, tag, x, y, w, h, text, style, validation):
+    def __init__(self, grid, tag, x, y, w, h, text, style, validation, label):
         self._style = style
         self._grid = grid
         self.tag = tag
         self.height0 = h
         self.width0 = w
         self.validation = validation
+        self.label = label
         super().__init__(0, 0, w, h)
         self.setFlag(self.ItemClipsChildrenToShape, True)
         self.setAcceptedMouseButtons(Qt.LeftButton)
@@ -557,12 +562,15 @@ class Tile(QGraphicsRectItem):
         return 1.0 * self._grid._gview.MM2PT
 #
     def value(self):
-        return None if self.textItem == None else self.textItem.text()
+        return None if self.textItem == None else self._text
 #
     def setText(self, text):
         if type(text) != str:
             raise Bug(_NOTSTRING.format(val = repr(text)))
-        self.textItem.setText(text)
+        self._text = text
+        # Display base64-encoded texts specially
+        self.textItem.setText('###' if text and self.validation == 'TEXT_64'
+                else text)
         w = self.textItem.boundingRect().width()
 
         if self.rotation:
@@ -603,8 +611,7 @@ class Tile(QGraphicsRectItem):
 #            point = event.scenePos ()
             point = self.pos()
             # Select type of popup and activate it
-            self._grid.editCell(self, point.x(), point.y(),
-                    self.validation)
+            self._grid.editCell(self, point.x(), point.y())
         else:
             # This should cause any existing pop-up to be cancelled
             self._grid.popdown(True)
@@ -784,6 +791,53 @@ class PopupDate(QDialog):
     def newDate(self, date):
         self.lbl.setText(QLocale().toString(date))
         self.date = date.toString('yyyy-MM-dd')
+#
+    def hideMe(self, force):
+        """This should be called only by <Grid.popdown>.
+        Here it is a dummy function because <PopupDate> is a modal
+        dialog.
+        """
+        return True
+
+###
+
+class PopupTextEdit(QDialog):
+    def __init__(self, grid):
+        self._grid = grid
+        super().__init__()
+        vbox = QVBoxLayout(self)
+        self.textedit = QTextEdit(self)
+        vbox.addWidget(self.textedit)
+        self.lbl = QLabel(self)
+        vbox.addWidget(self.lbl)
+        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok
+                | QDialogButtonBox.Cancel)
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        vbox.addWidget(buttonBox)
+        self.setLayout(vbox)
+        self.setWindowTitle(_TEXT_POPUP)
+#        self.setWindowFlags(Qt.SplashScreen)
+#
+    def activate(self, tile, x, y):
+        """With <tile.validation == 'TEXT_64'>, the text to be edited is
+        base64-encoded (but as <str>, as normal).
+        """
+        _base64 = tile.validation == 'TEXT_64'
+# base64 is certainly not "optimal", but there is no good way of
+# putting a long text in a tsv (or any other table format)!
+        self.lbl.setText(tile.label)
+        self.tile = tile
+        text = tile.value()
+        if text and _base64:
+            text = base64.b64decode(text.encode('ASCII')).decode('utf-8')
+        self.textedit.setPlainText(text)
+        self.move(self._grid.screen_coordinates(x, y))
+        if self.exec_():
+            text = self.textedit.toPlainText()
+            if text and _base64:
+                text = base64.b64encode(text.encode('utf-8')).decode('ASCII')
+            self.tile.newValue(text)
 #
     def hideMe(self, force):
         """This should be called only by <Grid.popdown>.

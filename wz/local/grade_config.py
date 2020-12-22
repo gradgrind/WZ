@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2020-12-21
+Last updated:  2020-12-22
 
 Configuration for grade handling.
 ====================================
@@ -96,13 +96,15 @@ REPORT_GROUPS = f"""
     Anlässe = ;
 ######## (extra "grade" fields in internal table):
 ######## Zusätzliche "Notenfelder" in interner Notentabelle
-    Notenfelder_X = *ZA/Zeugnis (Art);
+    Notenfelder_X = *ZA/Zeugnis (Art); *B/Bemerkungen;
 ######## Berechnete Felder, z.B. Durchschnitte für Notenkonferenz:
     Calc = ;
 ######## (additional report types):
 ######## Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
 ######## können
-    *ZA/S = Abgang; Zeugnis;
+    *ZA/S = -; Abgang; Zeugnis;
+######## Angeben, dass es Bemerkungen gibt:
+    *B = X;
 ######## Normalerweise sollen erklärte Durchschnitte angezeigt werden:
     .D = AVERAGE
     .Dx = AVERAGE
@@ -116,15 +118,16 @@ REPORT_GROUPS = f"""
     NotenzeugnisVorlage = Zeugnis/SekII-13_1; Abgang/SekII-13-Abgang; +
             Abi/Abitur; FHS/Fachhochschulreife; NA/Abitur-nicht-bestanden;
 ######## (The report type is determined by calculations):
-    Notenfelder_X = *F_D/Fertigstellung;
+    Notenfelder_X = *ZA/Zeugnis (Art); *F_D/Fertigstellung; *B/Bemerkungen;
 ######## Zeugnis-Art/Abitur automatic?
     *ZA/A = ;
 #Abitur; Fachhochschulreife; Abitur-nicht-bestanden;
     *ZA/1 = Zeugnis; Abgang;
     *ZA/2 = -; Abgang;
-    *ZA/S = Abgang;
+    *ZA/S = -; Abgang;
     *F_D/A = DATE
     *F_D =
+    *B/A =
     Calc = .Q/Ergebnis;
     .Q/A = Abi; FHS; NA; -;
     .Q = ;
@@ -136,37 +139,35 @@ REPORT_GROUPS = f"""
     NotenzeugnisVorlage = Zeugnis/SekII-12; Abgang/SekII-12-Abgang;
     Nullgruppen = X;
     Maßstäbe = Gym;
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation; *B/Bemerkungen;
     *ZA/1 = Zeugnis; Abgang;
     *ZA/2 = Zeugnis; Abgang;
-    *ZA/S = Abgang;
+    *ZA/S = -; Abgang;
     *Q = Erw; RS; HS;
     NotenWerte = {_ABITUR_GRADES}
 
 :12.R
     Maßstäbe = RS; HS;
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation; *B/Bemerkungen;
     *ZA/1 = Zeugnis; Abgang;
     *ZA/2 = Abschluss; Abgang; Zeugnis;
-    *ZA/S = Abgang;
+    *ZA/S = -; Abgang;
     *Q = Erw; RS; HS; -;
     Calc = .D/Φ Alle Fächer; .Dx/Φ De-En-Ma;
 
 :11.G
     Maßstäbe = Gym;
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation; *B/Bemerkungen;
     *ZA/1 = Orientierung; Abgang; Zeugnis;
     *ZA/2 = Zeugnis; Abgang;
-    *ZA/S = Abgang; Zeugnis;
     *Q = 12; HS; -;
     Calc = .D/Φ Alle Fächer;
 
 :11.R
     Maßstäbe = RS; HS;
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation;
+    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation; *B/Bemerkungen;
     *ZA/1 = Orientierung; Abgang; Zeugnis;
     *ZA/2 = Zeugnis; Abgang; Abschluss;
-    *ZA/S = Abgang; Zeugnis;
     *Q = RS; HS; -;
     Calc = .D/Φ Alle Fächer; .Dx/Φ De-En-Ma;
 
@@ -384,15 +385,15 @@ class GradeBase(dict):
     def term2text(cls, term):
         """For grade tables, produce readable "term" entries.
         """
+        if term[0] == 'S':
+            term = 'S*'
         for t, text in cls.terms():
             if term == t:
                 return text
-        if term[0] == 'S':
-            return term
         raise Bug("INVALID term: %s" % term)
 #
     @classmethod
-    def text2term(cls, text):
+    def text2term(cls, text, issue_d):
         """For grade tables, convert the readable "term" entries to
         the corresponding tag.
         """
@@ -400,7 +401,7 @@ class GradeBase(dict):
             if text == txt:
                 return term
         if text[0] == 'S':
-            return text
+            return 'S' + issue_d
         raise Bug("INVALID term text: %s" % text)
 #
     @classmethod

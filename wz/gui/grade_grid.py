@@ -36,6 +36,7 @@ _TABLE_CHANGES = "Änderungen für Klasse/Gruppe {group}, {term}" \
 ### Display texts
 _PUPIL = "Schüler"
 _STREAM = "Maßstab"
+_COMMENT = "Bemerkungen für {name}"
 
 #####################################################
 
@@ -62,6 +63,7 @@ COL_WIDTH = {
     '*ZA': 30,
     '*Q': 8,
     '*F_D': 20,
+    '*B': 8,
 }
 
 ROWS = (
@@ -197,7 +199,8 @@ class GradeGrid(Grid):
         # Pupil lines
         row = row_pids
         for pid, grades in self.grade_table.items():
-            self.tile(row, 0, text = self.grade_table.name[pid],
+            pname = self.grade_table.name[pid]
+            self.tile(row, 0, text = pname,
                     cspan = 2, style = 'name')
             self.tile(row, 2, text = grades.stream,
                     style = 'small')
@@ -230,9 +233,16 @@ class GradeGrid(Grid):
             for sid, name in self.grade_table.extras.items():
                 _tag = f'${pid}-{sid}'
                 _val = grades[sid]
+                _label = None
+                if sid.endswith('_D'):
+                    validation = 'DATE'
+                elif sid == '*B':
+                    validation = 'TEXT_64'
+                    _label = _COMMENT.format(name = pname)
+                else:
+                    validation = sid
                 self.tile(row, col, text = _val, style = 'entry',
-                        validation = 'DATE' if sid.endswith('_D') else sid,
-                        tag = _tag)
+                        validation = validation, tag = _tag, label = _label)
                 # Default values if empty?
                 if (not _val) and sid == '*ZA':
                     self.set_text(_tag, ZA_default)

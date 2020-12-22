@@ -25,12 +25,12 @@ Copyright 2019-2020 Michael Towers
 =-LICENCE========================================
 """
 
-import os
+import os, builtins
 
 from qtpy.QtWidgets import (QApplication, QStyle,
         QHBoxLayout, QVBoxLayout,
         QLabel, QPushButton, QComboBox,
-        QFrame,
+        QFrame, QTextEdit,
         QButtonGroup, QBoxLayout,
         QDialog, QCalendarWidget, QMessageBox,
         QProgressDialog,
@@ -41,7 +41,7 @@ from qtpy.QtCore import Qt, QDate, QObject, Signal, Slot
 ### Messages
 _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
 
-# Dialog buttons
+# Dialog buttons, etc.
 _CANCEL = "Abbrechen"
 _ACCEPT = "Übernehmen"
 _OK = "OK"
@@ -52,6 +52,11 @@ _BUSY = "Fortschritt ..."
 
 _DATE = "Datum"
 
+_INFO_TITLE = "Information"
+_WARN_TITLE = "Warnung"
+_ERROR_TITLE = "Fehler"
+
+###
 
 class GuiError(Exception):
     pass
@@ -143,8 +148,8 @@ def QuestionDialog(title, message):
     qd = QDialog()
     qd.setWindowTitle(title)
     vbox = QVBoxLayout(qd)
-    vbox.addWidget(QLabel (message))
-    vbox.addWidget(HLine ())
+    vbox.addWidget(QLabel(message))
+    vbox.addWidget(HLine())
     bbox = QHBoxLayout()
     vbox.addLayout(bbox)
     bbox.addStretch(1)
@@ -156,3 +161,63 @@ def QuestionDialog(title, message):
     bbox.addWidget(ok)
     cancel.setDefault(True)
     return qd.exec_() == QDialog.Accepted
+
+###
+
+def TextDialog(title, text):
+    td = QDialog()
+    td.setWindowTitle(title)
+    vbox = QVBoxLayout(td)
+    textedit = QTextEdit(text)
+    vbox.addWidget(textedit)
+    vbox.addWidget(HLine())
+    bbox = QHBoxLayout()
+    vbox.addLayout(bbox)
+    bbox.addStretch(1)
+    cancel = QPushButton(_CANCEL)
+    cancel.clicked.connect(td.reject)
+    bbox.addWidget(cancel)
+    ok = QPushButton(_OK)
+    ok.clicked.connect(td.accept)
+    bbox.addWidget(ok)
+    cancel.setDefault(True)
+    if td.exec_() == QDialog.Accepted:
+        return textedit.toPlainText()
+    return None
+
+###
+
+def PopupInfo(title, message):
+    _InfoDialog(title, message, QMessageBox.Information)
+#
+def PopupWarning(title, message):
+    _InfoDialog(title, message, QMessageBox.Warning)
+#
+def PopupError(title, message):
+    _InfoDialog(title, message, QMessageBox.Critical)
+#
+def _InfoDialog(title, message, mtype):
+    mbox = QMessageBox(mtype, title, message,
+            QMessageBox.NoButton)
+    mbox.addButton(_OK, QMessageBox.AcceptRole)
+    mbox.exec_()
+
+###
+
+def report(msg):
+    """Pop-up reports.
+    """
+    try:
+        mtype, text = msg.split(';')
+    except:
+        mtype = 'INFO'
+        text = msg
+    if mtype == 'INFO':
+        PopupInfo(_INFO_TITLE, text)
+    elif mtype == 'WARN':
+        PopupWarning(_WARN_TITLE, text)
+    elif mtype == 'ERROR':
+        PopupError(_ERROR_TITLE, text)
+    else:
+        PopupInfo(mtype, text)
+builtins.REPORT = report

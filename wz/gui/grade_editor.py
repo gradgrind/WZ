@@ -53,11 +53,11 @@ if __name__ == '__main__':
 from qtpy.QtWidgets import QApplication, QDialog, \
     QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
+from core.base import Dates     # <core.base> must be the first WZ-import
 from gui.grid import GridView
 from gui.grade_grid import GradeGrid
 from gui.abitur_pupil_view import AbiPupilView
-from gui.gui_support import VLine, KeySelect, QuestionDialog#, ZIcon
-from core.base import Dates
+from gui.gui_support import VLine, KeySelect
 from local.base_config import print_schoolyear, year_path
 from local.grade_config import GradeBase
 from grades.gradetable import FailedSave
