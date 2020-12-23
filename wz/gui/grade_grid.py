@@ -2,7 +2,7 @@
 """
 gui/grade_grid.py
 
-Last updated:  2020-12-22
+Last updated:  2020-12-23
 
 Manage the grid for the grade-editor.
 
@@ -237,7 +237,7 @@ class GradeGrid(Grid):
                 if sid.endswith('_D'):
                     validation = 'DATE'
                 elif sid == '*B':
-                    validation = 'TEXT_64'
+                    validation = 'TEXT'
                     _label = _COMMENT.format(name = pname)
                 else:
                     validation = sid

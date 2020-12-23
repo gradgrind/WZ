@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2020-12-22
+Last updated:  2020-12-23
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -35,6 +35,7 @@ LINE_WIDTH = (0, 1.0, 2.0, 3.0)
 _DATE_POPUP = "Datum wählen"
 _TEXT_POPUP = "Text eingeben"
 
+_LINEBREAK = '¶'    # character used as paragraph separator in text cells
 #####################
 
 ### Messages
@@ -45,7 +46,7 @@ _NOTSTRING          = "In <grid::Tile>: Zeichenkette erwartet: {val}"
 
 #####################################################
 
-import sys, os, copy, base64
+import sys, os, copy
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
@@ -162,12 +163,10 @@ class Grid(QGraphicsScene):
 # Allow a little margin? e.g.(-1.0, -1.0, x + 1.0, y + 1.0)
         self._sceneRect = QRectF(0.0, 0.0, x, y)
         # For popup editors
-        _text_edit = PopupTextEdit(self)
         self.editors = {
             'LINE': PopupLineEdit(self),
             'DATE': PopupDate(self),
-            'TEXT': _text_edit,
-            'TEXT_64': _text_edit
+            'TEXT': PopupTextEdit(self)
         }
         self._popup = None  # the "active" pop-up editor
 #
@@ -568,9 +567,10 @@ class Tile(QGraphicsRectItem):
         if type(text) != str:
             raise Bug(_NOTSTRING.format(val = repr(text)))
         self._text = text
-        # Display base64-encoded texts specially
-        self.textItem.setText('###' if text and self.validation == 'TEXT_64'
-                else text)
+        if text and self.validation == 'TEXT':
+            # Display '###' instead of the text
+            text = '###'
+        self.textItem.setText(text)
         w = self.textItem.boundingRect().width()
 
         if self.rotation:
@@ -820,23 +820,22 @@ class PopupTextEdit(QDialog):
 #        self.setWindowFlags(Qt.SplashScreen)
 #
     def activate(self, tile, x, y):
-        """With <tile.validation == 'TEXT_64'>, the text to be edited is
-        base64-encoded (but as <str>, as normal).
+        """The text to be edited has <_LINEBREAK> instead of line-breaks.
         """
-        _base64 = tile.validation == 'TEXT_64'
-# base64 is certainly not "optimal", but there is no good way of
-# putting a long text in a tsv (or any other table format)!
+# There is no good way of putting a long text in a tsv (or any other table
+# format), but at least it is possible by replacing line-breaks, and
+# banning tabs!
         self.lbl.setText(tile.label)
         self.tile = tile
         text = tile.value()
-        if text and _base64:
-            text = base64.b64decode(text.encode('ASCII')).decode('utf-8')
+        if text:
+            text = '\n'.join(text.split(_LINEBREAK))
         self.textedit.setPlainText(text)
         self.move(self._grid.screen_coordinates(x, y))
         if self.exec_():
             text = self.textedit.toPlainText()
-            if text and _base64:
-                text = base64.b64encode(text.encode('utf-8')).decode('ASCII')
+            if text:
+                text = _LINEBREAK.join(text.splitlines()).rstrip()
             self.tile.newValue(text)
 #
     def hideMe(self, force):
