@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2020-12-17
+Last updated:  2020-12-23
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -113,7 +113,7 @@ def libre_office(odt_list, pdf_dir):
 # instance (e.g. desktop) was running seems to be no longer the case,
 # at least on linux.
     def extern_out(line):
-        REPORT(" ---> %s" % line)
+        REPORT(": ---> %s" % line)
 
     rc, msg = run_extern(LIBREOFFICE, '--headless',
             '--convert-to', 'pdf',

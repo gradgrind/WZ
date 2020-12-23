@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2020-12-01
+Last updated:  2020-12-23
 
 General configuration items.
 ============================
@@ -23,6 +23,8 @@ DATEFORMAT = '%d.%m.%Y'
 CALENDAR_FILE = 'Kalender'
 
 USE_XLSX = False
+
+LINEBREAK = '¶'    # character used as paragraph separator in text cells
 
 
 import os, glob
