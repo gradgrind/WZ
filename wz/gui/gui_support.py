@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-12-22
+Last updated:  2020-12-23
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -205,13 +205,18 @@ def _InfoDialog(title, message, mtype):
 ###
 
 def report(msg):
-    """Pop-up reports.
+    """Pop-up reports, and logging ... (TODO!).
     """
+#TODO: logging
     try:
-        mtype, text = msg.split(';')
+        mtype, text = msg.split(':', 1)
     except:
         mtype = 'INFO'
         text = msg
+    if not mtype:
+#TODO: logging only
+        print(msg)
+        return
     if mtype == 'INFO':
         PopupInfo(_INFO_TITLE, text)
     elif mtype == 'WARN':

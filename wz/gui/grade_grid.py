@@ -284,7 +284,7 @@ class GradeGrid(Grid):
         self.grade_table.save(self.change_values())
 #
     def to_pdf(self):
-        fname = os.path.basename(self.grade_table.table_path(
+        fname = os.path.basename(Grades.table_path(
                 self.grade_table.group, self.grade_table.term))
         super().to_pdf(fname)
 #

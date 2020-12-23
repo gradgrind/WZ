@@ -35,7 +35,6 @@ LINE_WIDTH = (0, 1.0, 2.0, 3.0)
 _DATE_POPUP = "Datum wählen"
 _TEXT_POPUP = "Text eingeben"
 
-_LINEBREAK = '¶'    # character used as paragraph separator in text cells
 #####################
 
 ### Messages
@@ -43,6 +42,10 @@ _TILE_OUT_OF_BOUNDS = ("Kachel außerhalb Tabellenbereich:\n"
         " Zeile {row}, Höhe {rspan}, Spalte {col}, Breite {cspan}")
 _INVALIDLINEWIDTH = "Ungültige Strichbreite: {val}"
 _NOTSTRING          = "In <grid::Tile>: Zeichenkette erwartet: {val}"
+
+### Dialog labels
+_FILESAVE = "Datei speichern"
+_PDF_FILE = "PDF-Datei (*.pdf)"
 
 #####################################################
 
@@ -63,6 +66,7 @@ from qtpy.QtGui import (QFont, QPen, QColor, QBrush, QTransform,
 from qtpy.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
         QLocale
 
+from local.base_config import LINEBREAK
 
 class GridError(Exception):
     pass
@@ -294,9 +298,8 @@ class Grid(QGraphicsScene):
                 filename += '.pdf'
         else:
             filename = 'grid.pdf'
-        fpath = QFileDialog.getSaveFileName(self._gview, "Save File",
-                           os.path.join(dir0, filename),
-                           "pdf-Datei (*.pdf)")[0]
+        fpath = QFileDialog.getSaveFileName(self._gview, _FILESAVE,
+                           os.path.join(dir0, filename), _PDF_FILE)[0]
         if fpath:
             self.set_savedir(os.path.dirname(fpath))
             with open(fpath, 'wb') as fh:
@@ -820,7 +823,8 @@ class PopupTextEdit(QDialog):
 #        self.setWindowFlags(Qt.SplashScreen)
 #
     def activate(self, tile, x, y):
-        """The text to be edited has <_LINEBREAK> instead of line-breaks.
+        """The text to be edited has <LINEBREAK> instead of line-breaks.
+        Leading and trailing whitespace is removed from each line.
         """
 # There is no good way of putting a long text in a tsv (or any other table
 # format), but at least it is possible by replacing line-breaks, and
@@ -829,13 +833,13 @@ class PopupTextEdit(QDialog):
         self.tile = tile
         text = tile.value()
         if text:
-            text = '\n'.join(text.split(_LINEBREAK))
+            text = '\n'.join(text.split(LINEBREAK))
         self.textedit.setPlainText(text)
         self.move(self._grid.screen_coordinates(x, y))
         if self.exec_():
             text = self.textedit.toPlainText()
             if text:
-                text = _LINEBREAK.join(text.splitlines()).rstrip()
+                text = LINEBREAK.join([l.strip() for l in text.splitlines()])
             self.tile.newValue(text)
 #
     def hideMe(self, force):

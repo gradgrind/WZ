@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2020-12-20
+Last updated:  2020-12-23
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -61,7 +61,8 @@ _NO_SLOT = "Kein Platz mehr für Fach mit Kürzel {sid} in Fachgruppe {tag}." \
 from core.base import Dates
 from core.pupils import Pupils
 from core.courses import Subjects
-from local.base_config import year_path, SCHOOL_NAME, class_year, print_schoolyear
+from local.base_config import year_path, SCHOOL_NAME, class_year, \
+        print_schoolyear, LINEBREAK
 from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
         GradeConfigError, STREAMS, NO_SUBJECT
 from local.grade_template import info_extend
@@ -181,8 +182,10 @@ class GradeReports:
             # Grade parameters
             gmap['STREAM'] = grades.stream
             gmap['SekII'] = grades.sekII
-#TODO: 'COMMENT' field ...
-            gmap['COMMENT'] = ''
+            comment = grades.pop('*B', '')
+            if comment:
+                comment = comment.replace(LINEBREAK, '\n')
+            gmap['COMMENT'] = comment
 
             ## Process the grades themselves ...
             if self.grade_table.term == 'A':
@@ -321,6 +324,7 @@ if __name__ == '__main__':
 
     # Build reports for a group
 #    greports = GradeReports(_year, '13', 'A')
-    greports = GradeReports(_year, '11.G', '2')
+#    greports = GradeReports(_year, '11.G', '2')
+    greports = GradeReports(_year, '13', '1')
     for f in greports.makeReports():
         print("\n$$$: %s\n" % f)

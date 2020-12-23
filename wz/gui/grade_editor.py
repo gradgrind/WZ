@@ -27,6 +27,8 @@ Copyright 2020 Michael Towers
 
 ### Messages
 _SAVE_FAILED = "Speicherung der Änderungen ist fehlgeschlagen:\n  {msg}"
+_MADE_REPORTS = "Notenzeugnisse erstellt"
+_NO_REPORTS = "Keine Notenzeugnisse erstellt"
 
 ### Labels, etc.
 _TITLE = "WZ: Noten"
@@ -39,8 +41,14 @@ _SCHULJAHR = "Schuljahr:"
 _TERM = "Anlass:"
 _GROUP = "Klasse/Gruppe:"
 _SAVE = "Änderungen speichern"
+_TABLE_XLSX = "Noteneingabe-Tabelle"
 _TABLE_PDF = "Tabelle als PDF"
 _REPORT_PDF = "Zeugnis(se) erstellen"
+_TABLE_IN1 = "Notentabelle einlesen"
+_TABLE_IN_DIR = "Notentabellen einlesen"
+_FILESAVE = "Datei speichern"
+_EXCEL_FILE = "Excel-Datei (*.xlsx)"
+
 #####################################################
 
 
@@ -51,7 +59,7 @@ if __name__ == '__main__':
     sys.path[0] = os.path.dirname(this)
 
 from qtpy.QtWidgets import QApplication, QDialog, \
-    QHBoxLayout, QVBoxLayout, QLabel, QPushButton
+    QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFileDialog
 
 from core.base import Dates     # <core.base> must be the first WZ-import
 from gui.grid import GridView
@@ -61,6 +69,7 @@ from gui.gui_support import VLine, KeySelect
 from local.base_config import print_schoolyear, year_path
 from local.grade_config import GradeBase
 from grades.gradetable import FailedSave
+from grades.makereports import GradeReports
 
 ###
 
@@ -71,6 +80,11 @@ class GView(GridView):
 ###
 
 class _GradeEdit(QDialog):
+    _savedir = None
+    @classmethod
+    def set_savedir(cls, path):
+        cls._savedir = path
+#
     def __init__(self):
         super().__init__()
         self.setWindowTitle(_TITLE)
@@ -127,12 +141,24 @@ class _GradeEdit(QDialog):
         self.gradeView.pbSave.clicked.connect(self.save)
 
         cbox.addStretch(1)
-        pbReport = QPushButton(_REPORT_PDF)
-        cbox.addWidget(pbReport)
-        pbReport.clicked.connect(self.make_reports)
+        pbTable = QPushButton(_TABLE_XLSX)
+        cbox.addWidget(pbTable)
+        pbTable.clicked.connect(self.make_table)
+        cbox.addSpacing(10)
+        pbTableIn1 = QPushButton(_TABLE_IN1)
+        cbox.addWidget(pbTableIn1)
+        pbTableIn1.clicked.connect(self.input_table)
+        pbTableInDir = QPushButton(_TABLE_IN_DIR)
+        cbox.addWidget(pbTableInDir)
+        pbTableInDir.clicked.connect(self.input_tables)
+        cbox.addSpacing(30)
         pbPdf = QPushButton(_TABLE_PDF)
         cbox.addWidget(pbPdf)
         pbPdf.clicked.connect(self.print_table)
+        cbox.addSpacing(10)
+        pbReport = QPushButton(_REPORT_PDF)
+        cbox.addWidget(pbReport)
+        pbReport.clicked.connect(self.make_reports)
         topbox.addLayout(cbox)
 
 # after "showing"?
@@ -236,22 +262,59 @@ class _GradeEdit(QDialog):
                 return
         self.group_changed(None)
 #
-    def save(self):
-        if self.clear(force = True):    # no question dialog
+    def save(self, force = True):
+        if self.clear(force):    # no question dialog
             if self.term[0] == 'S':
                 self.pid = self.grade_scene.grade_table.term
             self.group_changed(None)
 #
+    def make_table(self):
+        """Generate input table for the grades.
+        """
+        self.save(force = False)
+        gtable = self.grade_scene.grade_table
+        qbytes = gtable.make_grade_table()
+        dir0 = self._savedir or os.path.expanduser('~')
+        filename = os.path.basename(GradeBase.table_path(
+                gtable.group, gtable.term)) + '.xlsx'
+        fpath = QFileDialog.getSaveFileName(self.gradeView, _FILESAVE,
+                os.path.join(dir0, filename), _EXCEL_FILE)[0]
+        if fpath:
+            self.set_savedir(os.path.dirname(fpath))
+            with open(fpath, 'wb') as fh:
+                fh.write(bytes(qbytes))
+#
+    def input_table(self):
+        """Import a single grade table, replacing the internal table.
+        """
+#TODO
+        print("TODO: input_table")
+
+#
+    def input_tables(self):
+        """Import a folder of grade tables, replacing affected internal
+        tables.
+        """
+#TODO
+        print("TODO: input_tables")
+
+#
     def make_reports(self):
         """Generate the grade report(s).
         """
-#TODO
-        print("TODO: make_reports")
-
+        self.save(force = False)
+        greports = GradeReports(self.schoolyear, self.group, self.term)
+        files = greports.makeReports()
+        if files:
+            REPORT("INFO: %s:\n  --> %s" % (_MADE_REPORTS,
+                '\n  --> '.join(files)))
+        else:
+            REPORT("ERROR: %s" % _NO_REPORTS)
 #
     def print_table(self):
         """Output the table as pdf.
         """
+        self.save(force = False)
         if self.grade_scene:
             self.grade_scene.to_pdf()
 
