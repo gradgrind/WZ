@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-22
+Last updated:  2020-12-25
 
 Editor for grades.
 
@@ -61,11 +61,12 @@ if __name__ == '__main__':
 from qtpy.QtWidgets import QApplication, QDialog, \
     QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFileDialog
 
-from core.base import Dates     # <core.base> must be the first WZ-import
+# <core.base> must be the first WZ-import
+from core.base import Dates, ThreadFunction
 from gui.grid import GridView
 from gui.grade_grid import GradeGrid
 from gui.abitur_pupil_view import AbiPupilView
-from gui.gui_support import VLine, KeySelect
+from gui.gui_support import VLine, KeySelect, ProgressMessages
 from local.base_config import print_schoolyear, year_path
 from local.grade_config import GradeBase
 from grades.gradetable import FailedSave
@@ -132,14 +133,13 @@ class _GradeEdit(QDialog):
 
         ### List of pupils – not for term 1, 2?
         self.pselect = KeySelect(changed_callback = self.pupil_changed)
-        self.pselect.setMaximumWidth(150)
+#        self.pselect.setMaximumWidth(150)
         cbox.addWidget(self.pselect)
 
         cbox.addSpacing(30)
         self.gradeView.pbSave = QPushButton(_SAVE)
         cbox.addWidget(self.gradeView.pbSave)
         self.gradeView.pbSave.clicked.connect(self.save)
-
         cbox.addStretch(1)
         pbTable = QPushButton(_TABLE_XLSX)
         cbox.addWidget(pbTable)
@@ -288,6 +288,9 @@ class _GradeEdit(QDialog):
         """Import a single grade table, replacing the internal table.
         """
 #TODO
+        fn = ThreadFunction()
+        qp = ProgressMessages(fn)
+
         print("TODO: input_table")
 
 #
@@ -317,6 +320,29 @@ class _GradeEdit(QDialog):
         self.save(force = False)
         if self.grade_scene:
             self.grade_scene.to_pdf()
+
+class _Test:
+    def __init__(self):
+        self._message = None
+
+    def run(self):
+        self._cc = 0
+        import time
+        for i in range(10):
+            if self._cc:
+                return self._cc
+            time.sleep(1) # artificial time delay
+            self.message("Hello %d" % i)
+        return self._cc
+
+    def message(self, msg):
+        if self._message:
+            self._message(msg)
+        else:
+            print(msg)
+
+    def terminate(self):
+        self._cc = 1
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -348,5 +374,6 @@ if __name__ == '__main__':
 #    ge.set_table(year_path(_year, 'NOTEN/Noten_13_A.xlsx'))
 #    ge.set_table(os.path.join(DATA, 'testing', 'NOTEN', 'Noten_13_A.xlsx'))
 #    ge.gradeView.set_table(_year, '12.R', '2')
+
     ge.exec_()
 

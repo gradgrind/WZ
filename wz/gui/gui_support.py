@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-12-23
+Last updated:  2020-12-25
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -25,7 +25,7 @@ Copyright 2019-2020 Michael Towers
 =-LICENCE========================================
 """
 
-import os, builtins
+import os, builtins, traceback
 
 from qtpy.QtWidgets import (QApplication, QStyle,
         QHBoxLayout, QVBoxLayout,
@@ -33,10 +33,10 @@ from qtpy.QtWidgets import (QApplication, QStyle,
         QFrame, QTextEdit,
         QButtonGroup, QBoxLayout,
         QDialog, QCalendarWidget, QMessageBox,
-        QProgressDialog,
+        QProgressBar,
         QTableWidget, QTableWidgetItem, QListWidgetItem)
-from qtpy.QtGui import QIcon #, QFont
-from qtpy.QtCore import Qt, QDate, QObject, Signal, Slot
+from qtpy.QtGui import QIcon, QMovie#, QFont
+from qtpy.QtCore import Qt, QDate, QObject, QThread, Signal, Slot
 
 ### Messages
 _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
@@ -226,3 +226,108 @@ def report(msg):
     else:
         PopupInfo(mtype, text)
 builtins.REPORT = report
+
+
+############# Using threads for long-running tasks #############
+# There is so much – sometimes conflicting – information on this theme
+# that I'm not sure this approach is optimal, or even 100% correct ...
+
+class ProgressMessages(QDialog):
+    """A modal dialog for lengthier function calls.
+    The function is run in a separate thread and while it is running,
+    a modal dialog is presented which can show messages from the
+    running code.
+    The "function" should actually be a class with a <run> method.
+    There is a cancel-button which can try to terminate the running code.
+    This can only work if the code is designed to allow this. This
+    involves implementing a <terminate> method on the function-class.
+    """
+    _title0 = "Progress ..."    # default title
+#
+    def __init__(self, fn, title = None):
+        super().__init__()
+        self.setWindowFlag(Qt.FramelessWindowHint)
+
+        vbox = QVBoxLayout(self)
+        self._title = QLabel("<h3>%s</h3>" % (title or self._title0))
+        self._title.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self._title.setAlignment(Qt.AlignCenter)
+        vbox.addWidget(self._title)
+
+#        self.prog = QProgressBar()
+#        #self.prog.setMinimumWidth(100)
+#        vbox.addWidget(self.prog)
+#        self.prog.setRange(0,0)
+
+        pm = QLabel()
+        pm.setAlignment(Qt.AlignCenter)
+        pmx = QMovie('busy.gif')
+        pm.setMovie(pmx)
+        vbox.addWidget(pm)
+        pmx.start()
+
+        self.text = QTextEdit()
+        self.text.setReadOnly(True)
+        vbox.addWidget(self.text)
+
+        vbox.addWidget(HLine())
+        bbox = QHBoxLayout()
+        vbox.addLayout(bbox)
+        bbox.addStretch(1)
+        cancel = QPushButton(_CANCEL)
+        bbox.addWidget(cancel)
+
+        # Handle the function to be called
+        self.workerT = WorkerT(fn)
+        fn._message = self.workerT.message
+        # The cancel button should try to stop the function
+        cancel.clicked.connect(self.workerT._cancel)
+        self.workerT._message.connect(self.cb2)
+        self.workerT.finished.connect(self.cb1)
+#        self.workerT._progress.connect(self._call)
+        self.workerT.start()
+        self.exec_()
+#
+    @Slot()
+    def cb1(self):
+        print("cb1: %d" % self.workerT.runResult)
+        self.reject()
+#
+    @Slot()
+    def cb2(self, msg):
+        print("cb2: " + msg)
+        self.text.append(msg)
+#
+#    def _call (self, msg, percent):
+#        print("$1:", percent, msg)
+
+###
+
+class WorkerT(QThread):
+    _message = Signal(str)
+#    _progress = Signal(str, int)
+
+    def __init__(self, op):
+        super().__init__()
+        self._op = op
+        op._message = self.message
+#
+    def run(self):
+        # Run the code in a try-block because errors may not be handled
+        # clearly.
+        try:
+            self.runResult = self._op.run()
+        except RuntimeError as e:
+            print ("?1")
+            self.runResult = None
+        except:
+            tb = traceback.format_exc()
+            print ("?2\n%s" % tb)
+            self.runResult = None
+#
+    def message(self, msg):
+        self._message.emit(msg)
+#
+    @Slot()
+    def _cancel(self):
+        self._op.terminate()

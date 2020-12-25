@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2020-12-01
+Last updated:  2020-12-25
 
 Basic configuration and structural stuff.
 
@@ -298,9 +298,37 @@ def asciify(string):
     lookup = CONFIG.ASCII_SUB
     return re.sub (_invalid_re, rsub, string)
 
+###
+
+class ThreadFunction:
+    """Functions which are to be run in a background thread (for GUI
+    interaction) must be based on this structure.
+    Override <run> with the actual function code.
+    """
+    def __init__(self):
+        self._message = None
+
+    def run(self):
+        self._cc = 0
+        import time
+        for i in range(10):
+            if self._cc:
+                return self._cc
+            time.sleep(1) # artificial time delay
+            self.message("Hello %d" % i)
+        return self._cc
+
+    def message(self, msg):
+        if self._message:
+            self._message(msg)
+        else:
+            print(msg)
+
+    def terminate(self):
+        self._cc = 1
 
 
-
+#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
     init('TESTDATA')
