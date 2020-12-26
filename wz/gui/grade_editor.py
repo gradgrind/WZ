@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-25
+Last updated:  2020-12-26
 
 Editor for grades.
 
@@ -29,6 +29,7 @@ Copyright 2020 Michael Towers
 _SAVE_FAILED = "Speicherung der Änderungen ist fehlgeschlagen:\n  {msg}"
 _MADE_REPORTS = "Notenzeugnisse erstellt"
 _NO_REPORTS = "Keine Notenzeugnisse erstellt"
+_NOT_INTERRUPTABLE = "+++ Der Prozess kann nicht unterbrochen werden +++"
 
 ### Labels, etc.
 _TITLE = "WZ: Noten"
@@ -66,7 +67,7 @@ from core.base import Dates, ThreadFunction
 from gui.grid import GridView
 from gui.grade_grid import GradeGrid
 from gui.abitur_pupil_view import AbiPupilView
-from gui.gui_support import VLine, KeySelect, ProgressMessages
+from gui.gui_support import VLine, KeySelect
 from local.base_config import print_schoolyear, year_path
 from local.grade_config import GradeBase
 from grades.gradetable import FailedSave
@@ -289,8 +290,12 @@ class _GradeEdit(QDialog):
         """
 #TODO
         fn = ThreadFunction()
-        qp = ProgressMessages(fn)
-
+#        qp = ProgressMessages(fn)
+        cc = REPORT('RUN', runme = fn)
+        if cc:
+            REPORT("ERROR: Interrupted")
+        else:
+            REPORT("INFO: Completed")
         print("TODO: input_table")
 
 #
@@ -299,6 +304,9 @@ class _GradeEdit(QDialog):
         tables.
         """
 #TODO
+        REPORT("INFO: <input_tables> needs doing.")
+        REPORT("WARN: <input_tables> is not yet implemented.")
+        REPORT("ERROR: <input_tables> is still not yet implemented.")
         print("TODO: input_tables")
 
 #
@@ -307,7 +315,8 @@ class _GradeEdit(QDialog):
         """
         self.save(force = False)
         greports = GradeReports(self.schoolyear, self.group, self.term)
-        files = greports.makeReports()
+        fn = _MakeReports(greports)
+        files = REPORT('RUN', runme = fn)
         if files:
             REPORT("INFO: %s:\n  --> %s" % (_MADE_REPORTS,
                 '\n  --> '.join(files)))
@@ -321,28 +330,18 @@ class _GradeEdit(QDialog):
         if self.grade_scene:
             self.grade_scene.to_pdf()
 
-class _Test:
-    def __init__(self):
-        self._message = None
+###
+
+class _MakeReports(ThreadFunction):
+    def __init__(self, grade_reports):
+        super().__init__()
+        self._grade_reports = grade_reports
 
     def run(self):
-        self._cc = 0
-        import time
-        for i in range(10):
-            if self._cc:
-                return self._cc
-            time.sleep(1) # artificial time delay
-            self.message("Hello %d" % i)
-        return self._cc
-
-    def message(self, msg):
-        if self._message:
-            self._message(msg)
-        else:
-            print(msg)
+        return self._grade_reports.makeReports()
 
     def terminate(self):
-        self._cc = 1
+        self.message(_NOT_INTERRUPTABLE)
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-12-25
+Last updated:  2020-12-26
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -35,7 +35,7 @@ from qtpy.QtWidgets import (QApplication, QStyle,
         QDialog, QCalendarWidget, QMessageBox,
         QProgressBar,
         QTableWidget, QTableWidgetItem, QListWidgetItem)
-from qtpy.QtGui import QIcon, QMovie#, QFont
+from qtpy.QtGui import QIcon, QMovie, QPixmap#, QFont
 from qtpy.QtCore import Qt, QDate, QObject, QThread, Signal, Slot
 
 ### Messages
@@ -55,6 +55,7 @@ _DATE = "Datum"
 _INFO_TITLE = "Information"
 _WARN_TITLE = "Warnung"
 _ERROR_TITLE = "Fehler"
+_RUN_TITLE = "in Bearbeitung ..."
 
 ###
 
@@ -187,130 +188,36 @@ def TextDialog(title, text):
 
 ###
 
-def PopupInfo(title, message):
-    _InfoDialog(title, message, QMessageBox.Information)
-#
-def PopupWarning(title, message):
-    _InfoDialog(title, message, QMessageBox.Warning)
-#
-def PopupError(title, message):
-    _InfoDialog(title, message, QMessageBox.Critical)
-#
-def _InfoDialog(title, message, mtype):
-    mbox = QMessageBox(mtype, title, message,
-            QMessageBox.NoButton)
-    mbox.addButton(_OK, QMessageBox.AcceptRole)
-    mbox.exec_()
-
-###
-
-def report(msg):
-    """Pop-up reports, and logging ... (TODO!).
-    """
-#TODO: logging
-    try:
-        mtype, text = msg.split(':', 1)
-    except:
-        mtype = 'INFO'
-        text = msg
-    if not mtype:
-#TODO: logging only
-        print(msg)
-        return
-    if mtype == 'INFO':
-        PopupInfo(_INFO_TITLE, text)
-    elif mtype == 'WARN':
-        PopupWarning(_WARN_TITLE, text)
-    elif mtype == 'ERROR':
-        PopupError(_ERROR_TITLE, text)
-    else:
-        PopupInfo(mtype, text)
-builtins.REPORT = report
+#def PopupInfo(title, message):
+#    _InfoDialog(title, message, QMessageBox.Information)
+##
+#def PopupWarning(title, message):
+#    _InfoDialog(title, message, QMessageBox.Warning)
+##
+#def PopupError(title, message):
+#    _InfoDialog(title, message, QMessageBox.Critical)
+##
+#def _InfoDialog(title, message, mtype):
+#    mbox = QMessageBox(mtype, title, message,
+#            QMessageBox.NoButton)
+#    mbox.addButton(_OK, QMessageBox.AcceptRole)
+#    mbox.exec_()
 
 
 ############# Using threads for long-running tasks #############
 # There is so much – sometimes conflicting – information on this theme
 # that I'm not sure this approach is optimal, or even 100% correct ...
 
-class ProgressMessages(QDialog):
-    """A modal dialog for lengthier function calls.
-    The function is run in a separate thread and while it is running,
-    a modal dialog is presented which can show messages from the
-    running code.
-    The "function" should actually be a class with a <run> method.
-    There is a cancel-button which can try to terminate the running code.
-    This can only work if the code is designed to allow this. This
-    involves implementing a <terminate> method on the function-class.
-    """
-    _title0 = "Progress ..."    # default title
-#
-    def __init__(self, fn, title = None):
-        super().__init__()
-        self.setWindowFlag(Qt.FramelessWindowHint)
-
-        vbox = QVBoxLayout(self)
-        self._title = QLabel("<h3>%s</h3>" % (title or self._title0))
-        self._title.setFrameStyle(QFrame.Panel | QFrame.Sunken)
-        self._title.setAlignment(Qt.AlignCenter)
-        vbox.addWidget(self._title)
-
-#        self.prog = QProgressBar()
-#        #self.prog.setMinimumWidth(100)
-#        vbox.addWidget(self.prog)
-#        self.prog.setRange(0,0)
-
-        pm = QLabel()
-        pm.setAlignment(Qt.AlignCenter)
-        pmx = QMovie('busy.gif')
-        pm.setMovie(pmx)
-        vbox.addWidget(pm)
-        pmx.start()
-
-        self.text = QTextEdit()
-        self.text.setReadOnly(True)
-        vbox.addWidget(self.text)
-
-        vbox.addWidget(HLine())
-        bbox = QHBoxLayout()
-        vbox.addLayout(bbox)
-        bbox.addStretch(1)
-        cancel = QPushButton(_CANCEL)
-        bbox.addWidget(cancel)
-
-        # Handle the function to be called
-        self.workerT = WorkerT(fn)
-        fn._message = self.workerT.message
-        # The cancel button should try to stop the function
-        cancel.clicked.connect(self.workerT._cancel)
-        self.workerT._message.connect(self.cb2)
-        self.workerT.finished.connect(self.cb1)
-#        self.workerT._progress.connect(self._call)
-        self.workerT.start()
-        self.exec_()
-#
-    @Slot()
-    def cb1(self):
-        print("cb1: %d" % self.workerT.runResult)
-        self.reject()
-#
-    @Slot()
-    def cb2(self, msg):
-        print("cb2: " + msg)
-        self.text.append(msg)
-#
-#    def _call (self, msg, percent):
-#        print("$1:", percent, msg)
-
-###
-
 class WorkerT(QThread):
     _message = Signal(str)
 #    _progress = Signal(str, int)
 
-    def __init__(self, op):
-        super().__init__()
+    def toBackground(self, op):
+        if self.isRunning():
+            raise Bug("Thread already in use")
         self._op = op
         op._message = self.message
+        self.start()
 #
     def run(self):
         # Run the code in a try-block because errors may not be handled
@@ -331,3 +238,172 @@ class WorkerT(QThread):
     @Slot()
     def _cancel(self):
         self._op.terminate()
+
+###
+
+class _Feedback(QDialog):
+    """A modal dialog for reporting back to the user.
+    It can simply present a piece of information, such as a warning or
+    error message, or it can show the progress of a longer-running
+    function (running in a separate thread).
+...
+    The "function" should actually be a class with a <run> method.
+    There is a cancel-button which can try to terminate the running code.
+    This can only work if the code is designed to allow this. This
+    involves implementing a <terminate> method on the function-class.
+    """
+    _instance = None
+    _report = Signal(str, str)
+#
+    @classmethod
+    def fetch(cls):
+        """This method is necessary because the class is instantiated
+        only once, but this must wait until the QApplication has been
+        started.
+        """
+        if not cls._instance:
+            cls._instance = cls()
+        return cls._instance
+#
+    def __init__(self):
+        super().__init__()
+        self.resize(600, 400)
+        #self.setWindowFlag(Qt.FramelessWindowHint)
+        vbox = QVBoxLayout(self)
+
+        # Header
+        hbox = QHBoxLayout()
+        vbox.addLayout(hbox)
+        self._pixmap = QLabel()
+        hbox.addWidget(self._pixmap)
+
+        self._title = QLabel()
+        #self._title.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self._title.setAlignment(Qt.AlignCenter)
+        hbox.addWidget(self._title, 1)
+
+#        self.prog = QProgressBar()
+#        #self.prog.setMinimumWidth(100)
+#        vbox.addWidget(self.prog)
+#        self.prog.setRange(0,0)
+
+        self.text = QTextEdit()
+        self.text.setReadOnly(True)
+        vbox.addWidget(self.text)
+
+        vbox.addWidget(HLine())
+        bbox = QHBoxLayout()
+        vbox.addLayout(bbox)
+        bbox.addStretch(1)
+        self._cancel = QPushButton(_CANCEL)
+        self._cancel.clicked.connect(self.do_cancel)
+        bbox.addWidget(self._cancel)
+        self._report.connect(self.report)
+        self.workerT = WorkerT()
+        self.workerT._message.connect(self._output)
+        self.workerT.finished.connect(self._done)
+#        self.workerT._progress.connect(self._call)
+#
+    def closeEvent(self, e):
+        """Clicking window-close should have the same effect as pressing
+        the "Cancel" button.
+        """
+        e.ignore()
+        self._cancel.click()
+#
+    def do_cancel(self):
+        if self.workerT.isRunning():
+            self.workerT._cancel()
+        else:
+            self.reject()
+#
+    def info(self, message, header = None):
+        self.setWindowTitle(_INFO_TITLE)
+        self._title.setText("<h3>%s</h3>" % (header or _INFO_TITLE))
+        self._pixmap.setPixmap(QPixmap('info.png'))
+        self.text.setPlainText(message)
+        self.exec_()
+#
+    def warn(self, message, header = None):
+        self.setWindowTitle(_WARN_TITLE)
+        self._title.setText("<h3>%s</h3>" % (header or _WARN_TITLE))
+        self._pixmap.setPixmap(QPixmap('warning.png'))
+        self.text.setPlainText(message)
+        self.exec_()
+#
+    def error(self, message, header = None):
+        self.setWindowTitle(_ERROR_TITLE)
+        self._title.setText("<h3>%s</h3>" % (header or _ERROR_TITLE))
+        self._pixmap.setPixmap(QPixmap('error.png'))
+        self.text.setPlainText(message)
+        self.exec_()
+#
+    def progress(self, fn, header):
+        if self.workerT.isRunning():
+            raise Bug("Background thread in use")
+        self.setWindowTitle(_RUN_TITLE)
+        self._title.setText("<h3>%s</h3>" % (header or _RUN_TITLE))
+        self.text.clear()
+        _m = QMovie('busy.gif')
+        self._pixmap.setMovie(_m)
+        _m.start()
+        # Handle the function to be called
+        self.workerT.toBackground(fn)
+        self.exec_()
+        return self.workerT.runResult
+#
+    @Slot()
+    def report(self, mtype, msg):
+        if mtype == 'INFO':
+            if self.workerT.isRunning():
+                self._output(msg)
+            else:
+                self.info(msg)
+        elif mtype == 'WARN':
+            if self.workerT.isRunning():
+                self._output('%s: %s'(_WARN_TITLE.upper(), _msg))
+            else:
+                self.warn(msg)
+        elif mtype == 'ERROR':
+            if self.workerT.isRunning():
+                self._output('%s: %s'(_ERROR_TITLE.upper(), _msg))
+            else:
+                self.error(msg)
+        else:
+            if mtype:
+                msg = '?%s: %s' % ('' if mtype == '?' else mtype, msg)
+            if self.workerT.isRunning():
+                self._output(msg)
+            else:
+                print(msg)
+#
+    @Slot()
+    def _done(self):
+        print("DONE!")
+        self.reject()
+#
+    @Slot()
+    def _output(self, msg):
+        print("output: " + msg)
+        self.text.append(msg)
+#
+#    def _call (self, msg, percent):
+#        print("$1:", percent, msg)
+
+###
+
+def report(msg, header = None, runme = None):
+    """Pop-up reports, and logging ... (TODO!).
+    """
+#TODO: logging
+    if msg == 'RUN':
+        return _Feedback.fetch().progress(runme, header)
+    try:
+        mtype, text = msg.split(':', 1)
+    except:
+        mtype = '?'
+        text = msg
+    _Feedback.fetch()._report.emit(mtype, text)
+
+#++++++++++++++++++++++++++++++++++++++++++
+builtins.REPORT = report
