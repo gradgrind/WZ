@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2020-11-29
+core/pupils.py - last updated 2020-12-26
 
 Database access for reading pupil data.
 
@@ -294,8 +294,8 @@ class Pupils(PupilsBase):
 
         # Save old files as zip-archive
         files = glob.glob(self.read_class_path('*'))
+        bakdir = self.read_class_path()
         if files:
-            bakdir = self.read_class_path()
             bakzip = os.path.join(bakdir,
                     'BAK_%s.zip' % datetime.date.today().isoformat())
             try:
@@ -308,7 +308,7 @@ class Pupils(PupilsBase):
 
         # Create new tables, at first in temporary directory
         tmpdir = os.path.join(bakdir, 'tmp')
-        os.mkdir(tmpdir)
+        os.makedirs(tmpdir)
         tables = []
         for klass, dlist in newclasses:
             info = (
@@ -405,6 +405,21 @@ class Pupils(PupilsBase):
 
 if __name__ == '__main__':
     from core.base import init
+#************** Start new year from raw data **************#
+#    from local.base_config import year_path
+#    init('DATA')
+#    _year = '2021'
+#    pupils = Pupils(_year)
+#    _ptables = pupils.read_source_table(year_path(_year,
+#            'Quelldaten/new_pupils.xlsx'))
+#    _delta = pupils.compare_new_data(_ptables)
+#    for k, dlist in _delta.items():
+#        print("\n --- KLASSE:", k)
+#        for d in dlist:
+#            print("  ", d)
+#    pupils.update_table(_delta)
+#    quit(0)
+#----------------------------------------------------------#
     init('TESTDATA')
 
     _year = '2016'

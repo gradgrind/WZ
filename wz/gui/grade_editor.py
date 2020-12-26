@@ -349,8 +349,9 @@ class _MakeReports(ThreadFunction):
 if __name__ == '__main__':
     from core.base import init
     init('TESTDATA')
-
     _year = '2016'
+#    init('DATA')
+#    _year = '2021'
 
     import sys
     from qtpy.QtWidgets import QApplication, QStyleFactory

@@ -231,6 +231,7 @@ class WorkerT(QThread):
             tb = traceback.format_exc()
             print ("?2\n%s" % tb)
             self.runResult = None
+        self._op = None
 #
     def message(self, msg):
         self._message.emit(msg)
@@ -295,7 +296,7 @@ class _Feedback(QDialog):
         bbox = QHBoxLayout()
         vbox.addLayout(bbox)
         bbox.addStretch(1)
-        self._cancel = QPushButton(_CANCEL)
+        self._cancel = QPushButton()
         self._cancel.clicked.connect(self.do_cancel)
         bbox.addWidget(self._cancel)
         self._report.connect(self.report)
@@ -318,6 +319,7 @@ class _Feedback(QDialog):
             self.reject()
 #
     def info(self, message, header = None):
+        self._cancel.setText(_OK)
         self.setWindowTitle(_INFO_TITLE)
         self._title.setText("<h3>%s</h3>" % (header or _INFO_TITLE))
         self._pixmap.setPixmap(QPixmap('info.png'))
@@ -325,6 +327,7 @@ class _Feedback(QDialog):
         self.exec_()
 #
     def warn(self, message, header = None):
+        self._cancel.setText(_OK)
         self.setWindowTitle(_WARN_TITLE)
         self._title.setText("<h3>%s</h3>" % (header or _WARN_TITLE))
         self._pixmap.setPixmap(QPixmap('warning.png'))
@@ -332,6 +335,7 @@ class _Feedback(QDialog):
         self.exec_()
 #
     def error(self, message, header = None):
+        self._cancel.setText(_OK)
         self.setWindowTitle(_ERROR_TITLE)
         self._title.setText("<h3>%s</h3>" % (header or _ERROR_TITLE))
         self._pixmap.setPixmap(QPixmap('error.png'))
@@ -341,6 +345,7 @@ class _Feedback(QDialog):
     def progress(self, fn, header):
         if self.workerT.isRunning():
             raise Bug("Background thread in use")
+        self._cancel.setText(_CANCEL)
         self.setWindowTitle(_RUN_TITLE)
         self._title.setText("<h3>%s</h3>" % (header or _RUN_TITLE))
         self.text.clear()
@@ -379,12 +384,12 @@ class _Feedback(QDialog):
 #
     @Slot()
     def _done(self):
-        print("DONE!")
+        #print("DONE!")
         self.reject()
 #
     @Slot()
     def _output(self, msg):
-        print("output: " + msg)
+        #print("output: " + msg)
         self.text.append(msg)
 #
 #    def _call (self, msg, percent):
