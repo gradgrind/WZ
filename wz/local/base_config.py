@@ -74,7 +74,8 @@ class SubjectsBase:
         'SGROUPS'   : 'Fachgruppe'
     }
 #
-    CLASS = 'Klasse'    # info-line
+    SCHOOLYEAR = 'Schuljahr'    # info-line
+    CLASS = 'Klasse'            # info-line
 #
     # The path to the class tables. This must end with '_{klass}' for
     # determining the class.

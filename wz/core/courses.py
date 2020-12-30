@@ -22,8 +22,9 @@ Copyright 2020 Michael Towers
 """
 
 ### Messages
-_TABLE_MISMATCH = "Schuljahr oder Klasse ungültig in Tabelle:\n  {path}"
-_CLASS_MISSING = "Info-Feld {cl} fehlt in Fachliste:\n  {fpath}"
+_YEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {path}"
+_CLASS_MISMATCH = "Falsche Klasse in Tabelle:\n  {path}"
+_INFO_MISSING = "Info-Feld „{field}“ fehlt in Fachliste:\n  {fpath}"
 _FIELD_MISSING = "Feld „{field}“ fehlt in Fachliste:\n  {fpath}"
 _MULTI_COMPOSITE = "Fach mit Kürzel „{sid}“ ist Unterfach für mehrere" \
         " Sammelfächer"
@@ -32,8 +33,10 @@ _NOT_A_COMPOSITE = "Unterfach {sid}: „{sidc}“ ist kein Sammelfach"
 _COMPOSITE_IS_COMPONENT = "Fach-Kürzel „{sid}“ ist sowohl als „Sammelfach“" \
         " als auch als „Unterfach“ definiert"
 
+### Fields
+_SCHOOLYEAR = 'Schuljahr'
 
-import sys, os
+import sys, os, shutil
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
@@ -91,9 +94,10 @@ class Subjects(SubjectsBase):
             fpath = self.read_class_path(klass)
             dbtable = Spreadsheet(fpath).dbTable()
             info = {r[0]:r[1] for r in dbtable.info}
-            if info.get('SCHOOLYEAR') != self.schoolyear or \
-                    info.get('CLASS') != klass:
-                raise TableError(_TABLE_MISMATCH.format(path = fpath))
+            if info.get('SCHOOLYEAR') != self.schoolyear:
+                raise TableError(_YEAR_MISMATCH.format(path = fpath))
+            if info.get('CLASS') != klass:
+                raise TableError(_CLASS_MISMATCH.format(path = fpath))
             table = _SubjectList(klass)
             self._klasses[klass] = table
             # Read table rows
@@ -116,10 +120,17 @@ class Subjects(SubjectsBase):
         dbtable = Spreadsheet(filepath).dbTable()
         info = {r[0]:r[1] for r in dbtable.info}
         try:
+            _year = info[self.SCHOOLYEAR]
+        except KeyError as e:
+            raise TableError(_INFO_MISSING.format(
+                    field = self.SCHOOLYEAR, fpath = filepath)) from e
+        if _year != self.schoolyear:
+            raise TableError(_YEAR_MISMATCH.format(path = filepath))
+        try:
             klass = info[self.CLASS]
-        except KeyError:
-            raise TableError(_CLASS_MISSING.format(
-                    cl = self.CLASS, fpath = filepath))
+        except KeyError as e:
+            raise TableError(_INFO_MISSING.format(
+                    field = self.CLASS, fpath = filepath)) from e
         table = _SubjectList(klass)
         # Get column mapping: {field -> column index}
         # Convert the localized names to uppercase to avoid case problems.
@@ -247,11 +258,14 @@ class Subjects(SubjectsBase):
         fpath = self.read_class_path(table.klass)
         suffix = '.xlsx' if USE_XLSX else '.tsv'
         tfpath = fpath + suffix
+        if os.path.isfile(tfpath):
+            shutil.copyfile(tfpath, tfpath + '.bak')
         with open(tfpath, 'wb') as fh:
             fh.write(bstream)
         return tfpath
 
 
+#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
     _year = '2016'
