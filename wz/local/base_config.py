@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2020-12-23
+Last updated:  2020-12-31
 
 General configuration items.
 ============================
@@ -118,6 +118,8 @@ class PupilsBase:
         'EXIT_D'    : 'Schulaustritt',
         'QUALI_D'   : 'Eintritt-SekII'  # not in imported data
     }
+#
+    SEX = ('m', 'w')    # Permissible values for a field
 #
     SCHOOLYEAR = 'Schuljahr'
 #

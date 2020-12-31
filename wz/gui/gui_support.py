@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-12-26
+Last updated:  2020-12-31
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -25,18 +25,16 @@ Copyright 2019-2020 Michael Towers
 =-LICENCE========================================
 """
 
-import os, builtins, traceback
+import sys, os, builtins, traceback
 
-from qtpy.QtWidgets import (QApplication, QStyle,
-        QHBoxLayout, QVBoxLayout,
-        QLabel, QPushButton, QComboBox,
-        QFrame, QTextEdit,
-        QButtonGroup, QBoxLayout,
-        QDialog, QCalendarWidget, QMessageBox,
-        QProgressBar,
-        QTableWidget, QTableWidgetItem, QListWidgetItem)
-from qtpy.QtGui import QIcon, QMovie, QPixmap#, QFont
-from qtpy.QtCore import Qt, QDate, QObject, QThread, Signal, Slot
+from qtpy.QtWidgets import QApplication, \
+        QWidget, QHBoxLayout, QVBoxLayout, \
+        QLabel, QPushButton, QComboBox, \
+        QFrame, QTextEdit, \
+        QButtonGroup, QBoxLayout, \
+        QDialog, QCalendarWidget, QMessageBox#, QProgressBar
+from qtpy.QtGui import QMovie, QPixmap
+from qtpy.QtCore import Qt, QObject, QThread, Signal, Slot
 
 ### Messages
 _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
@@ -55,6 +53,7 @@ _DATE = "Datum"
 _INFO_TITLE = "Information"
 _WARN_TITLE = "Warnung"
 _ERROR_TITLE = "Fehler"
+_TRAP_TITLE = "Kritischer Fehler"
 _RUN_TITLE = "in Bearbeitung ..."
 
 ###
@@ -185,6 +184,36 @@ def TextDialog(title, text):
     if td.exec_() == QDialog.Accepted:
         return textedit.toPlainText()
     return None
+
+###
+
+class TabPage(QWidget):
+    """Base class for widgets to be used as a tab page in the admin gui.
+    Subclass this to add the required functionality.
+    """
+    def __init__(self, name):
+        super().__init__()
+#        self.setMaximumWidth(800)
+        self.setMinimumWidth(600)
+        self.vbox = QVBoxLayout(self)
+        self.name = name
+        l = QLabel('<b>%s</b>' % name)
+        l.setAlignment(Qt.AlignCenter)
+        self.vbox.addWidget(l)
+        self.vbox.addWidget(HLine())
+#        self.vbox.addStretch(1)
+#
+    def enter(self):
+        pass
+#
+    def leave(self):
+        pass
+#
+    def clear(self):
+        return True
+#
+    def year_changed(self):
+        pass
 
 ###
 
@@ -342,6 +371,14 @@ class _Feedback(QDialog):
         self.text.setPlainText(message)
         self.exec_()
 #
+    def trap(self, message, header = None):
+        self._cancel.setText(_OK)
+        self.setWindowTitle(_TRAP_TITLE)
+        self._title.setText("<h3>%s</h3>" % (header or _TRAP_TITLE))
+        self._pixmap.setPixmap(QPixmap('error.png'))
+        self.text.setPlainText(message)
+        self.exec_()
+#
     def progress(self, fn, header):
         if self.workerT.isRunning():
             raise Bug("Background thread in use")
@@ -374,6 +411,12 @@ class _Feedback(QDialog):
                 self._output('%s: %s'(_ERROR_TITLE.upper(), _msg))
             else:
                 self.error(msg)
+        elif mtype == 'TRAP':
+            msg = msg.split('$$', 1)[0]
+            if self.workerT.isRunning():
+                self._output('%s: %s'(_TRAP_TITLE.upper(), _msg))
+            else:
+                self.trap(msg)
         else:
             if mtype:
                 msg = '?%s: %s' % ('' if mtype == '?' else mtype, msg)
@@ -408,7 +451,39 @@ def report(msg, header = None, runme = None):
     except:
         mtype = '?'
         text = msg
+    if mtype == 'TRAP':
+# TODO: log rather than print:
+        text, emsg = text.split('$$', 1)
+        print('%s: %s' % (mtype, text))
+        print(emsg)
     _Feedback.fetch()._report.emit(mtype, text)
 
 #++++++++++++++++++++++++++++++++++++++++++
 builtins.REPORT = report
+
+# Handle uncaught exceptions
+class UncaughtHook(QObject):
+#    _exception_caught = Signal(object)
+#
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # This registers the <exception_hook> method as hook with
+        # the Python interpreter
+        sys.excepthook = self.exception_hook
+        # Connect signal to execute the message box function always
+        # on main thread
+#        self._exception_caught.connect(REPORT)
+#
+    def exception_hook(self, exc_type, exc_value, exc_traceback):
+        """Function handling uncaught exceptions.
+        It is triggered each time an uncaught exception occurs.
+        """
+        log_msg = 'TRAP: {val}$${emsg}'.format(
+                val = exc_value, emsg = ''.join(traceback.format_exception(
+                        exc_type, exc_value, exc_traceback)))
+        # Show message
+#        self._exception_caught.emit(log_msg)
+        REPORT(log_msg)
+
+# Create a global instance of <UncaughtHook> to register the hook
+qt_exception_hook = UncaughtHook()

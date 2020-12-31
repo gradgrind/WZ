@@ -2,7 +2,7 @@
 """
 gui/admin.py
 
-Last updated:  2020-12-29
+Last updated:  2020-12-31
 
 Administration interface.
 
@@ -61,17 +61,18 @@ if __name__ == '__main__':
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
 
-from qtpy.QtWidgets import QApplication, QDialog, QWidget, QFrame, \
+from qtpy.QtWidgets import QApplication, QDialog, QFrame, \
     QStackedWidget, QTreeWidget, QTreeWidgetItem, \
     QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, \
-    QPushButton, QRadioButton, QButtonGroup, \
+    QPushButton, QButtonGroup, \
     QFileDialog
 from qtpy.QtCore import Qt
 
 # <core.base> must be the first WZ-import
 from core.base import Dates
-from gui.gui_support import VLine, HLine, KeySelect, QuestionDialog
-from local.base_config import print_schoolyear, year_path
+from gui.gui_support import HLine, KeySelect, TabPage
+from gui.pupil_editor import PupilEdit
+from local.base_config import print_schoolyear
 from core.pupils import Pupils
 from core.courses import Subjects
 
@@ -90,7 +91,7 @@ class Admin(QDialog):
         cls._loaddir = path
 #
     def year(self):
-        return self.choose_year.selected()
+        return self.year_select.selected()
 #
     def __init__(self):
         super().__init__()
@@ -99,13 +100,8 @@ class Admin(QDialog):
         # ---------- Title Box ---------- #
         titlebox = QHBoxLayout()
         topbox.addLayout(titlebox)
-        years = Dates.get_years()
-        self.choose_year = KeySelect([(y, print_schoolyear(y)) for y in years])
-        thisyear = Dates.get_schoolyear()
-        chosenyear = self.choose_year.selected()
-        if chosenyear != thisyear and thisyear in years:
-            choose_year.reset(thisyear)
-        titlebox.addWidget(self.choose_year)
+        self.year_select = KeySelect(changed_callback = self.year_changed)
+        titlebox.addWidget(self.year_select)
         titlebox.addStretch(1)
         topbox.addWidget(HLine())
         # ---------- Tab Box ---------- #
@@ -126,10 +122,10 @@ class Admin(QDialog):
 
         self._addPage(UpdateSubjects())
         self._addPage(UpdatePupils())
+        self._addPage(PupilEdit())
         self._lbox.addStretch(1)
 
         self.selectPage.idToggled.connect(self._switchPage)
-
 #
     def _addPage(self, tab):
         b = QPushButton(tab.name)
@@ -149,49 +145,33 @@ class Admin(QDialog):
         else:
             self._stack.widget(i).leave()
 #
-#    def closeEvent(self, e):
-#        if self.clear():
-#            super().closeEvent(e)
+    def closeEvent(self, e):
+        tabpage = self._stack.currentWidget()
+        if tabpage.clear():
+            super().closeEvent(e)
 #
     def init(self):
         years = [(y, print_schoolyear(y)) for y in Dates.get_years()]
         self.year_select.set_items(years)
+        thisyear = Dates.get_schoolyear()
+        chosenyear = self.year_select.selected()
+        if chosenyear != thisyear and thisyear in years:
+            self.year_select.reset(thisyear)
         self.year_select.trigger()
 #
     def year_changed(self, schoolyear):
-        if not self.clear():
+        tabpage = self._stack.currentWidget()
+        if not tabpage.clear():
             self.year_select.reset(self.schoolyear)
             return
-        print("Change Year:", schoolyear)
         self.schoolyear = schoolyear
-        self.term_select.trigger()
+        tabpage.year_changed()
 #
     def save(self, force = True):
         if self.clear(force):    # no question dialog
             if self.term[0] == 'S':
                 self.pid = self.grade_scene.grade_table.term
             self.group_changed(None)
-
-###
-
-class TabPage(QWidget):
-    def __init__(self, name):
-        super().__init__()
-#        self.setMaximumWidth(800)
-        self.setMinimumWidth(600)
-        self.vbox = QVBoxLayout(self)
-        self.name = name
-        l = QLabel('<b>%s</b>' % name)
-        l.setAlignment(Qt.AlignCenter)
-        self.vbox.addWidget(l)
-        self.vbox.addWidget(HLine())
-        self.vbox.addStretch(1)
-#
-    def enter(self):
-        pass
-#
-    def leave(self):
-        pass
 
 ##
 
@@ -366,6 +346,6 @@ if __name__ == '__main__':
 
     admin = Admin()
     builtins.ADMIN = admin
-#    admin.init()
+    admin.init()
     admin.exec_()
 
