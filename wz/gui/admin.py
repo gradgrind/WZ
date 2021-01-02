@@ -2,7 +2,7 @@
 """
 gui/admin.py
 
-Last updated:  2021-01-01
+Last updated:  2021-01-02
 
 Administration interface.
 
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
 
-from qtpy.QtWidgets import QApplication, QDialog, QFrame, \
+from qtpy.QtWidgets import QApplication, QWidget, QFrame, \
     QStackedWidget, QTreeWidget, QTreeWidgetItem, \
     QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, \
     QPushButton, QButtonGroup, \
@@ -78,7 +78,7 @@ from core.courses import Subjects
 
 ###
 
-class Admin(QDialog):
+class Admin(QWidget):
     _savedir = None
     _loaddir = None
 #
@@ -341,5 +341,9 @@ if __name__ == '__main__':
     admin = Admin()
     builtins.ADMIN = admin
     admin.init()
-    admin.exec_()
+    screen = app.primaryScreen()
+    screensize = screen.availableSize()
+    admin.resize(screensize.width()*0.8, screensize.height()*0.8)
+    admin.show()
+    sys.exit(app.exec_())
 
