@@ -2,13 +2,12 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-31
+Last updated:  2021-01-02
 
 Editor for pupil data.
 
-
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -24,8 +23,6 @@ Copyright 2020 Michael Towers
 
 =-LICENCE========================================
 """
-
-#TODO ...
 
 ### Messages
 _SAVE_FAILED = "Speicherung der Änderungen ist fehlgeschlagen:\n  {msg}"
@@ -63,7 +60,7 @@ from qtpy.QtWidgets import QApplication, QWidget, \
 from core.pupils import Pupils
 from gui.grid import GridView
 from gui.pupil_grid import PupilGrid
-from gui.gui_support import VLine, KeySelect, TabPage
+from gui.gui_support import VLine, KeySelect, TabPage, GuiError
 
 ###
 
@@ -84,6 +81,7 @@ class PupilEdit(TabPage):
 
         #*********** The "main" widget ***********
         self.pupilView = GView()
+        self.pupil_scene = None
         topbox.addWidget(self.pupilView)
         topbox.addWidget(VLine())
 
@@ -133,67 +131,58 @@ class PupilEdit(TabPage):
 #
     def leave(self):
         self.clear()
+        self.pupil_scene = None
 #
     def year_changed(self):
         if not self.clear():
             return False
-        self.schoolyear = ADMIN.schoolyear
-        self.pupils = Pupils(self.schoolyear)
-        classes = self.pupils.classes()
-        self.class_select.set_items([(c, c) for c in classes])
+        self.pupil_scene = PupilGrid(self.pupilView, ADMIN.schoolyear)
+        self.pupilView.set_scene(self.pupil_scene)
+        self.class_select.set_items([(c, c)
+                for c in self.pupil_scene.classes()])
         self.class_select.trigger()
         return True
 #
-    def class_changed(self, klass):
-#TODO
-        if klass:
-            if not self.clear():
-                self.class_select.reset(self.klass)
-                return
-            self.klass = klass
-            self.pid = ''
-        else:
-            raise Exception("TODO")
-
-        pdlist = self.pupils.class_pupils(self.klass)
-        plist = [(pdata['PID'], pdata.name()) for pdata in pdlist]
-        self.pid = pdlist[0]['PID']
-        self.pselect.set_items(plist)
-        self.pupil_scene = PupilGrid(self.pupilView, self.schoolyear,
-                self.klass, self.pid)
-#        if self.pid:
-#            self.pselect.reset(self.pid)
-        self.pupilView.set_scene(self.pupil_scene)
+    def class_changed(self, klass, pid = None):
+        # If <pid> is supplied there are no unsaved changes.
+        if (not pid) and (not self.clear()):
+            self.class_select.reset(self.pupil_scene.klass)
+            return
+        if self.pupil_scene:
+            self.pupilView.set_scene(self.pupil_scene)
+        pdlist = self.pupil_scene.set_class(klass)
+        self.pselect.set_items([(pdata['PID'], pdata.name())
+                for pdata in pdlist])
+        try:
+            self.pselect.reset(pid)
+        except GuiError:
+            pid = pdlist[0]['PID']
+        self.pupil_scene.set_pupil(pid)
 #
     def pupil_changed(self, pid):
         """A new pupil has been selected: reset the grid accordingly.
         """
-#TODO
         if not self.clear():
-            self.pselect.reset(self.pid)
+            self.pselect.reset(self.pupil_scene.pid)
             return
-        self.pid = pid
-        if pid:
-            if self.term == 'A':
-                self.grade_scene = AbiPupilView(self.gradeView,
-                        self.schoolyear, self.group)
-                self.gradeView.set_scene(self.grade_scene)
-                self.grade_scene.set_pupil(pid)
-                return
-            if self.term[0] != 'S':
-#TODO:
-                REPORT("TODO: Change pupil %s" % pid)
-                return
-        self.group_changed(None)
+        if self.pupil_scene:
+            self.pupilView.set_scene(self.pupil_scene)
+        self.pupil_scene.set_pupil(pid)
 #
     def new_pupil(self):
-        print("TODO: new_pupil")
+        if not self.clear():
+            return
+        if self.pupil_scene:
+            self.pupilView.set_scene(self.pupil_scene)
+        self.pupil_scene.set_pupil(None)
 #
     def remove_pupil(self):
-        print("TODO: remove_pupil")
+        self.pupil_scene.remove_pupil()
+        # Pass dummy argument to suppress "changed" dialog.
+        self.class_changed(self.pupil_scene.klass, 'DUMMY')
 #
     def save(self, force = True):
-        if self.clear(force):    # no question dialog
-            if self.term[0] == 'S':
-                self.pid = self.grade_scene.grade_table.term
-            self.group_changed(None)
+        self.pupil_scene.save_changes()
+        klass = self.pupil_scene.pupil_data['CLASS']
+        pid = self.pupil_scene.pupil_data['PID']
+        self.class_changed(klass, pid)

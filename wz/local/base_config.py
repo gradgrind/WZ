@@ -3,10 +3,24 @@
 """
 local/base_config.py
 
-Last updated:  2020-12-31
+Last updated:  2021-01-01
 
 General configuration items.
-============================
+
+==============================
+Copyright 2021 Michael Towers
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 """
 
 SCHOOL_NAME = 'Freie Michaelschule'
@@ -66,6 +80,7 @@ def class_year(klass):
 ###
 
 class SubjectsBase:
+    TITLE = "Fachliste"
     FIELDS = {
         'SID'       : 'Fach-Kürzel',
         'SUBJECT'   : 'Fach',
@@ -153,6 +168,17 @@ class PupilsBase:
         """
         klass, streams = GradeBase._group2klass_streams(group)
         return self.class_pupils(klass, *streams, date = date)
+#
+    @staticmethod
+    def check_new_pid_valid(pid):
+        """Check that the pid is of the correct form.
+        """
+        try:
+            int(pid)
+            return
+        except:
+            _PID_INVALID = "Ungültige Schülerkennung: '{pid}'"
+            raise ValueError(_PID_INVALID.format(pid = pid or ''))
 
 ###
 

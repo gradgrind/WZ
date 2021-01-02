@@ -2,13 +2,13 @@
 """
 gui/admin.py
 
-Last updated:  2020-12-31
+Last updated:  2021-01-01
 
 Administration interface.
 
 
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -166,12 +166,6 @@ class Admin(QDialog):
             return
         self.schoolyear = schoolyear
         tabpage.year_changed()
-#
-    def save(self, force = True):
-        if self.clear(force):    # no question dialog
-            if self.term[0] == 'S':
-                self.pid = self.grade_scene.grade_table.term
-            self.group_changed(None)
 
 ##
 

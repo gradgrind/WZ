@@ -2,13 +2,13 @@
 """
 grid.py
 
-Last updated:  2020-12-23
+Last updated:  2021-01-02
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
 
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -348,6 +348,7 @@ class Grid(QGraphicsScene):
         if tile._style.colour_marked:
             # Only if the cell _can_ highlight "changed" ...
             tile.unmark()
+            self.changes_discard(tag)
 #
     def clear_changes(self):
         """Used after saving changes to clear markings.
@@ -896,10 +897,21 @@ class PopupLineEdit(QGraphicsProxyWidget):
 # If signal "editingFinished" is used in place of "returnPressed", this
 # method is called twice on pressing "Enter".
     def onDone(self):
-        self._grid.popdown(True)
-        text = self.lineedit.text()
-        self.tile.textItem.setText(text)
-        self.tile.newValue(text)
+        if self.tile:
+            tile = self.tile
+            self.tile = None
+            self._grid.popdown(True)
+            text = self.lineedit.text()
+            tile.textItem.setText(text)
+            tile.newValue(text)
+#
+# This prevents other focussed widgets from getting an 'Enter' key-press ...
+# (Apparently in Qt more than one widget can have focus!)
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Return:
+            self.onDone()
+        else:
+            super().keyPressEvent(e)
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

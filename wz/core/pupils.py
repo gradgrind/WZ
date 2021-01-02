@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2020-12-29
+core/pupils.py - last updated 2021-01-02
 
 Database access for reading pupil data.
 
 ==============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -32,14 +32,15 @@ _TABLE_MISMATCH = "Schuljahr oder Klasse ungültig in Tabelle:\n  {path}"
 _BAK_EXISTS = "WARNING: Backup-Archiv für heute existiert schon," \
         " keine neue wird erstellt:\n  {fpath}"
 _UNKNOWN_PID = "Schüler „{pid}“ ist nicht bekannt"
-
+_PID_EXISTS = "Ungültiges Schülerkennzeichen, es gehört schon {name} in" \
+        " Klasse {klass}"
 
 import datetime, glob, zipfile
 from collections import UserList
 
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from local.base_config import PupilsBase, USE_XLSX
-from core.base import name_filter
+from core.base import name_filter, Dates
 
 
 class _PupilData(dict):
@@ -118,29 +119,59 @@ class _PupilData(dict):
             ('PSORT', _ndata[3])
         ))
         self.tweak(_changes)
+##
+def NullPupilData(klass):
+    """Return a "dummy" pupil-data instance, which can be used as a
+    starting point for adding a new pupil.
+    """
+    data = {
+        'CLASS': klass, 'FIRSTNAME': 'Hansi',
+        'LASTNAME': 'von Meierhausen', 'FIRSTNAMES': 'Hans Herbert',
+        'SEX': 'm', 'ENTRY_D': Dates.today()
+    }
+    fmap = []
+    fvals = []
+    i = 0
+    for field in PupilsBase.FIELDS:
+        fmap.append((field, i))
+        i += 1
+        try:
+            val = data[field]
+        except KeyError:
+            val = ''
+        fvals.append(val)
+    return _PupilData(fvals, fmap, klass)
 
 ###
 
 class _PupilList(list):
     """Representation for a list of <_PupilData> instances.
     It also maintains a mapping {pid -> <_PupilData> instance}.
-    The resulting list should be regarded as immutable!
+    The resulting list should be regarded as immutable, except for the
+    methods provided here.
     """
     def __init__(self):
         super().__init__()
         self._pidmap = {}
-
+#
     def append(self, item):
         super().append(item)
         self._pidmap[item['PID']] = item
+#
+    def remove(self, item):
+        super().remove(item)
+        del(self._pidmap[item['PID']])
+#
+    def pid2pdata(self, pid):
+        return self._pidmap[pid]
 
 ###
 
 class Pupils(PupilsBase):
     def __init__(self, schoolyear):
         self.schoolyear = schoolyear
-        self._klasses = {}  # cache
-        self._pid2data = None  # cache
+        self._klasses = {}      # cache for classes {class -> pupil-data list}
+        self.clear_pid_cache()  # cache for pupils {pid -> pupil-data}
 #
     def read_source_table(self, filepath):
         """Read in the file containing the "master" pupil data.
@@ -316,7 +347,8 @@ class Pupils(PupilsBase):
         for klass, dlist in newclasses:
             info = (
                 ('SCHOOLYEAR', self.schoolyear),
-                ('CLASS', klass)
+                ('CLASS', klass),
+                ('changed', Dates.today())
             )
             bstream = make_db_table(self.TITLE, self.FIELDS,
                     dlist, info = info)
@@ -350,6 +382,9 @@ class Pupils(PupilsBase):
             plist = self.class_pupils(k)
             self._pid2data.update(plist._pidmap)
         return self._pid2data
+#
+    def clear_pid_cache(self):
+        self._pid2data = None
 #
     def pid2name(self, pid):
         """Return the short name of a pupil given the PID.
@@ -402,6 +437,59 @@ class Pupils(PupilsBase):
                     continue
                 ptable.append(pdata)
         return ptable
+#
+    def modify_pupil(self, pupil_data, changes):
+        oldpid = pupil_data['PID']
+        oldclass = pupil_data['CLASS']
+        try:
+            newpid = changes['PID']
+        except KeyError:
+            newpid = oldpid
+        else:
+            # Check that the PID doesn't exist already
+            try:
+                pdata = self[newpid]
+            except TableError:
+                pass
+            else:
+                raise TableError(_PID_EXISTS.format(
+                        klass = pdata['CLASS'], name = pdata.name()))
+        # Check PID validity
+        self.check_new_pid_valid(newpid)
+        newclass = changes.get('CLASS', oldclass)
+        # Modify all changed fields in <pupil_data>
+        if changes:
+            pupil_data.tweak([(k, v) for k, v in changes.items()])
+            pupil_data.namesort()
+        if newclass:
+            npdlist = self.class_pupils(newclass)
+            if oldclass != newclass or not oldpid:
+                # Add pupil to <newclass>
+                npdlist.append(pupil_data)
+                npdlist.sort(key = lambda pdata: pdata.get('PSORT'))
+            self.save_class(newclass, npdlist)
+        if oldclass and oldclass != newclass:
+            # Remove pupil from current class
+            opdlist = self.class_pupils(oldclass)
+            opdlist.remove(pupil_data)
+            self.save_class(oldclass, opdlist)
+        # Invalidate global pid-mapping
+        self.clear_pid_cache()
+#
+    def save_class(self, klass, pdlist):
+        """Save the modified pupil-data list for the given class.
+        """
+        info = (
+            ('SCHOOLYEAR', self.schoolyear),
+            ('CLASS', klass),
+            ('changed', Dates.today())
+        )
+        bstream = make_db_table(self.TITLE, self.FIELDS,
+                pdlist, info = info)
+        fpath = self.read_class_path(klass)
+        suffix = '.xlsx' if USE_XLSX else '.tsv'
+        with open(fpath + suffix, 'wb') as fh:
+            fh.write(bstream)
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

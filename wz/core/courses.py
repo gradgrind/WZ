@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2020-11-28
+core/courses.py - last updated 2020-12-31
 
 Handle course data.
 
@@ -249,11 +249,12 @@ class Subjects(SubjectsBase):
         """
         info = (
             ('SCHOOLYEAR', self.schoolyear),
-            ('CLASS', table.klass)
+            ('CLASS', table.klass),
+            ('changed', Dates.today())
         )
         # <make_db_table> requires a list of <dict>s, not tuples
         dlist = [row._asdict() for row in table]
-        bstream = make_db_table(Dates.today(), self.FIELDS,
+        bstream = make_db_table(self.TITLE, self.FIELDS,
                 dlist, info = info)
         fpath = self.read_class_path(table.klass)
         suffix = '.xlsx' if USE_XLSX else '.tsv'
