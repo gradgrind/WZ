@@ -71,11 +71,6 @@ class GView(GridView):
 ###
 
 class GradeEdit(TabPage):
-    _savedir = None
-    @classmethod
-    def set_savedir(cls, path):
-        cls._savedir = path
-#
     def __init__(self):
         super().__init__(_EDIT_GRADES)
         topbox = QHBoxLayout()
@@ -230,13 +225,13 @@ class GradeEdit(TabPage):
         self.save(force = False)
         gtable = self.grade_scene.grade_table
         qbytes = gtable.make_grade_table()
-        dir0 = self._savedir or os.path.expanduser('~')
+        dir0 = ADMIN._savedir or os.path.expanduser('~')
         filename = os.path.basename(GradeBase.table_path(
                 gtable.group, gtable.term)) + '.xlsx'
         fpath = QFileDialog.getSaveFileName(self.gradeView, _FILESAVE,
                 os.path.join(dir0, filename), _EXCEL_FILE)[0]
         if fpath:
-            self.set_savedir(os.path.dirname(fpath))
+            ADMIN.set_savedir(os.path.dirname(fpath))
             with open(fpath, 'wb') as fh:
                 fh.write(bytes(qbytes))
 #

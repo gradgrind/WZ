@@ -6,7 +6,6 @@ Last updated:  2021-01-02
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
-
 =+LICENCE=============================
 Copyright 2021 Michael Towers
 
@@ -251,7 +250,7 @@ class Grid(QGraphicsScene):
         self.editors[tag] = PopupTable(self, valuelist)
 #
     ### pdf output
-    def setPdfMargins(self, left = 20, top = 20, right = 20, bottom = 20):
+    def setPdfMargins(self, left = 15, top = 15, right = 15, bottom = 15):
         self._pdfmargins = (left, top, right, bottom)
         return self._pdfmargins
 #
@@ -265,13 +264,9 @@ class Grid(QGraphicsScene):
         """Produce and save a pdf of the table.
         <filename> is a suggestion for the save dialog.
         The output orientation is selected according to the aspect ratio
-        of the table.
+        of the table. If the table is too big for the page area, it will
+        be shrunk to fit.
         """
-#TODO:
-#    - Fixed / selectable page orientation.
-#    - Select page size
-#    - Shrink to page size
-
         qbytes = QByteArray()
         qbuf = QBuffer(qbytes)
         qbuf.open(qbuf.WriteOnly)
@@ -284,10 +279,29 @@ class Grid(QGraphicsScene):
         sh = sceneRect.height()
         if sw > sh:
             printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+        pdf_dpmm = printer.resolution() / 25.4 # pdf resolution, dots per mm
+        scene_dpmm = self._gview.MM2PT      # scene resolution, dots per mm
+        natural_scale = pdf_dpmm / scene_dpmm
+        page_layout = printer.pageLayout()
+        pdf_rect = page_layout.paintRect(QPageLayout.Millimeter)
+        swmm = sw / self._gview.MM2PT
+        shmm = sh / self._gview.MM2PT
+        print("PAGE:", page_layout.paintRect(QPageLayout.Millimeter), '\n',
+                page_layout.paintRectPixels(printer.resolution()), '\n',
+                page_layout.paintRectPoints())
         painter = QPainter(printer)
-        scale = printer.resolution() / self._gview.ldpi
-        pdfRect = QRectF(0, 0, sw * scale, sh * scale)
-        self.render(painter, pdfRect, sceneRect)
+        pdf_wmm = pdf_rect.width()
+        pdf_hmm = pdf_rect.height()
+        if swmm > pdf_wmm or shmm > pdf_hmm:
+            # Shrink to fit page
+            print("SHRINK:", swmm, shmm, pdf_wmm, pdf_hmm)
+            self.render(painter)
+        else:
+            # Scale resolution to keep size
+            pdf_rect.setWidth(sw * natural_scale)
+            pdf_rect.setHeight(sh * natural_scale)
+            print("SCALE:", natural_scale)
+            self.render(painter, pdf_rect)
         painter.end()
         qbuf.close()
         # Write resulting file
