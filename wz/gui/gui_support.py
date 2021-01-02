@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-12-31
+Last updated:  2020-01-02
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -403,18 +403,18 @@ class _Feedback(QDialog):
                 self.info(msg)
         elif mtype == 'WARN':
             if self.workerT.isRunning():
-                self._output('%s: %s'(_WARN_TITLE.upper(), _msg))
+                self._output('%s: %s' % (_WARN_TITLE.upper(), _msg))
             else:
                 self.warn(msg)
         elif mtype == 'ERROR':
             if self.workerT.isRunning():
-                self._output('%s: %s'(_ERROR_TITLE.upper(), _msg))
+                self._output('%s: %s' % (_ERROR_TITLE.upper(), _msg))
             else:
                 self.error(msg)
         elif mtype == 'TRAP':
             msg = msg.split('$$', 1)[0]
             if self.workerT.isRunning():
-                self._output('%s: %s'(_TRAP_TITLE.upper(), _msg))
+                self._output('%s: %s' % (_TRAP_TITLE.upper(), _msg))
             else:
                 self.trap(msg)
         else:
