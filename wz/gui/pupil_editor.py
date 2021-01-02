@@ -32,30 +32,11 @@ _EDIT_PUPIL = "Schüler verwalten"
 _CLASS = "Klasse:"
 _NEW_PUPIL = "Neuer Schüler"
 _REMOVE_PUPIL = "Schüler löschen"
-
-
-
-_PUPIL = "Schüler"
-_STREAM = "Maßstab"
-_ALL_PUPILS = "Gesamttabelle"
-_NEW_REPORT = "Neues Zeugnis"
-
-_SCHULJAHR = "Schuljahr:"
-_TERM = "Anlass:"
-_GROUP = "Klasse/Gruppe:"
 _SAVE = "Änderungen speichern"
-_TABLE_XLSX = "Noteneingabe-Tabelle"
-_TABLE_PDF = "Tabelle als PDF"
-_REPORT_PDF = "Zeugnis(se) erstellen"
-_TABLE_IN1 = "Notentabelle einlesen"
-_TABLE_IN_DIR = "Notentabellen einlesen"
-_FILESAVE = "Datei speichern"
 
 #####################################################
 
-
-from qtpy.QtWidgets import QApplication, QWidget, \
-    QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFileDialog
+from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
 from core.pupils import Pupils
 from gui.grid import GridView
@@ -73,9 +54,6 @@ class GView(GridView):
 class PupilEdit(TabPage):
     def __init__(self):
         super().__init__(_EDIT_PUPIL)
-#        self.resize(w, h)
-#TODO: It might be desirable to adjust to the scene size?
-
         topbox = QHBoxLayout()
         self.vbox.addLayout(topbox)
 
@@ -110,10 +88,6 @@ class PupilEdit(TabPage):
         cbox.addWidget(pdel)
         pdel.clicked.connect(self.remove_pupil)
         topbox.addLayout(cbox)
-#
-    def closeEvent(self, e):
-        if self.clear():
-            super().closeEvent(e)
 #
     def clear(self, force = False):
         """Check for changes in the current "scene", allowing these to

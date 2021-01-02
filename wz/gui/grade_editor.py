@@ -2,13 +2,12 @@
 """
 gui/grade_editor.py
 
-Last updated:  2020-12-26
+Last updated:  2021-01-02
 
 Editor for grades.
 
-
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -32,13 +31,9 @@ _NO_REPORTS = "Keine Notenzeugnisse erstellt"
 _NOT_INTERRUPTABLE = "+++ Der Prozess kann nicht unterbrochen werden +++"
 
 ### Labels, etc.
-_TITLE = "WZ: Noten"
-_PUPIL = "Schüler"
-_STREAM = "Maßstab"
+_EDIT_GRADES = "Noten verwalten"
 _ALL_PUPILS = "Gesamttabelle"
 _NEW_REPORT = "Neues Zeugnis"
-
-_SCHULJAHR = "Schuljahr:"
 _TERM = "Anlass:"
 _GROUP = "Klasse/Gruppe:"
 _SAVE = "Änderungen speichern"
@@ -52,22 +47,16 @@ _EXCEL_FILE = "Excel-Datei (*.xlsx)"
 
 #####################################################
 
-
 import sys, os, glob
-if __name__ == '__main__':
-    # Enable package import if running as module
-    this = sys.path[0]
-    sys.path[0] = os.path.dirname(this)
 
-from qtpy.QtWidgets import QApplication, QDialog, \
-    QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFileDialog
+from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
+        QPushButton, QFileDialog
 
-# <core.base> must be the first WZ-import
 from core.base import Dates, ThreadFunction
 from gui.grid import GridView
 from gui.grade_grid import GradeGrid
 from gui.abitur_pupil_view import AbiPupilView
-from gui.gui_support import VLine, KeySelect
+from gui.gui_support import VLine, KeySelect, TabPage
 from local.base_config import print_schoolyear, year_path
 from local.grade_config import GradeBase
 from grades.gradetable import FailedSave
@@ -81,47 +70,24 @@ class GView(GridView):
 
 ###
 
-class _GradeEdit(QDialog):
+class GradeEdit(TabPage):
     _savedir = None
     @classmethod
     def set_savedir(cls, path):
         cls._savedir = path
 #
     def __init__(self):
-        super().__init__()
-        self.setWindowTitle(_TITLE)
-        screen = QApplication.instance().primaryScreen()
-#        ldpi = screen.logicalDotsPerInchY()
-        screensize = screen.availableSize()
-        self.resize(screensize.width()*0.8, screensize.height()*0.8)
-#TODO: It might be more desirable to adjust to the scene size.
+        super().__init__(_EDIT_GRADES)
+        topbox = QHBoxLayout()
+        self.vbox.addLayout(topbox)
 
-# Class select and separate stream select?
-        topbox = QHBoxLayout(self)
-#        self.gridtitle = QLabel ("GRID TITLE")
-#        self.gridtitle.setAlignment (Qt.AlignCenter)
-
-#*********** The "main" widget ***********
+        #*********** The "main" widget ***********
         self.gradeView = GView()
+        self.grade_scene = None
         topbox.addWidget(self.gradeView)
-
         topbox.addWidget(VLine())
 
-#        self.gradeView.setToolTip ('This shows the <b>grades</b> for a class')
-#        bbox = QHBoxLayout()
-#        pbSmaller = QPushButton(ZIcon('zoom-out'), '')
-#        pbSmaller.clicked.connect(self.gradeView.scaleDn)
-#        pbLarger = QPushButton(ZIcon('zoom-in'), '')
-#        pbLarger.clicked.connect(self.gradeView.scaleUp)
-#        bbox.addWidget(pbLarger)
-#        bbox.addWidget(pbSmaller)
-
         cbox = QVBoxLayout()
-#        cbox.addLayout(bbox)
-
-        self.year_select = KeySelect(changed_callback = self.year_changed)
-        cbox.addWidget(QLabel(_SCHULJAHR))
-        cbox.addWidget(self.year_select)
 
         self.term_select = KeySelect(GradeBase.terms(), self.term_changed)
         cbox.addWidget(QLabel(_TERM))
@@ -132,9 +98,9 @@ class _GradeEdit(QDialog):
         cbox.addWidget(QLabel(_GROUP))
         cbox.addWidget(self.group_select)
 
-        ### List of pupils – not for term 1, 2?
+        ### List of pupils
+#TODO: not for term 1, 2?
         self.pselect = KeySelect(changed_callback = self.pupil_changed)
-#        self.pselect.setMaximumWidth(150)
         cbox.addWidget(self.pselect)
 
         cbox.addSpacing(30)
@@ -161,21 +127,6 @@ class _GradeEdit(QDialog):
         cbox.addWidget(pbReport)
         pbReport.clicked.connect(self.make_reports)
         topbox.addLayout(cbox)
-
-# after "showing"?
-#        pbSmaller.setFixedWidth (pbSmaller.height ())
-#        pbLarger.setFixedWidth (pbLarger.height ())
-
-#
-    def closeEvent(self, e):
-        if self.clear():
-            super().closeEvent(e)
-#
-    def init(self):
-        years = [(y, print_schoolyear(y)) for y in Dates.get_years()]
-        self.year_select.set_items(years)
-#        self.gradeView.clear()
-        self.year_select.trigger()
 #
     def clear(self, force = False):
         """Check for changes in the current "scene", allowing these to
@@ -188,12 +139,17 @@ class _GradeEdit(QDialog):
             return False
         return True
 #
-    def year_changed(self, schoolyear):
+    def enter(self):
+        self.year_changed()
+#
+    def leave(self):
+        self.clear()
+        self.grade_scene = None
+#
+    def year_changed(self):
         if not self.clear():
-            self.year_select.reset(self.schoolyear)
+            self.year_select.reset(ADMIN.schoolyear)
             return
-        print("Change Year:", schoolyear)
-        self.schoolyear = schoolyear
         self.term_select.trigger()
 #
     def term_changed(self, key):
@@ -203,7 +159,6 @@ class _GradeEdit(QDialog):
         self.term = key
         groups = [(grp, grp)
                 for grp, rtype in GradeBase.term2group_rtype_list(key[0])]
-        print("Change Category:", key, [grp[0] for grp in groups])
         self.group_select.set_items(groups)
         self.group_select.trigger()
 #
@@ -218,7 +173,7 @@ class _GradeEdit(QDialog):
         if self.term[0] == 'S':
             self.term = self.pid if self.pid else 'S*'
             # Get list of existing reports for the group
-            table_path = year_path(self.schoolyear,
+            table_path = year_path(ADMIN.schoolyear,
                     GradeBase.table_path(self.group, 'S*'))
             date_list = sorted([f.rsplit('_', 1)[1].split('.', 1)[0]
                     for f in glob.glob(table_path)], reverse = True)
@@ -231,11 +186,11 @@ class _GradeEdit(QDialog):
                     # Select this date initially
                     self.pid = 'S' + latest
                     self.term = self.pid
-            self.grade_scene = GradeGrid(self.gradeView, self.schoolyear,
+            self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
                     self.group, self.term)
             plist = [('', _NEW_REPORT)] + [('S' + d, d) for d in date_list]
         else:
-            self.grade_scene = GradeGrid(self.gradeView, self.schoolyear,
+            self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
                     self.group, self.term)
             plist = [('', _ALL_PUPILS)] + self.grade_scene.pupils()
         self.pselect.set_items(plist)
@@ -253,7 +208,7 @@ class _GradeEdit(QDialog):
         if pid:
             if self.term == 'A':
                 self.grade_scene = AbiPupilView(self.gradeView,
-                        self.schoolyear, self.group)
+                        ADMIN.schoolyear, self.group)
                 self.gradeView.set_scene(self.grade_scene)
                 self.grade_scene.set_pupil(pid)
                 return
@@ -314,7 +269,7 @@ class _GradeEdit(QDialog):
         """Generate the grade report(s).
         """
         self.save(force = False)
-        greports = GradeReports(self.schoolyear, self.group, self.term)
+        greports = GradeReports(ADMIN.schoolyear, self.group, self.term)
         fn = _MakeReports(greports)
         files = REPORT('RUN', runme = fn)
         if files:
@@ -342,38 +297,3 @@ class _MakeReports(ThreadFunction):
 
     def terminate(self):
         self.message(_NOT_INTERRUPTABLE)
-
-
-#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
-
-if __name__ == '__main__':
-    from core.base import init
-    init('TESTDATA')
-    _year = '2016'
-#    init('DATA')
-#    _year = '2021'
-
-    import sys
-    from qtpy.QtWidgets import QApplication, QStyleFactory
-    from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo
-
-#    print(QStyleFactory.keys())
-#    QApplication.setStyle('windows')
-
-    app = QApplication(sys.argv)
-    LOCALE = QLocale(QLocale.German, QLocale.Germany)
-    QLocale.setDefault(LOCALE)
-    qtr = QTranslator()
-    qtr.load("qt_" + LOCALE.name(),
-            QLibraryInfo.location(QLibraryInfo.TranslationsPath))
-    app.installTranslator(qtr)
-
-    ge = _GradeEdit()
-    ge.init()
-
-#    ge.set_table(year_path(_year, 'NOTEN/Noten_13_A.xlsx'))
-#    ge.set_table(os.path.join(DATA, 'testing', 'NOTEN', 'Noten_13_A.xlsx'))
-#    ge.gradeView.set_table(_year, '12.R', '2')
-
-    ge.exec_()
-

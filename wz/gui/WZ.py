@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-gui/admin.py
+gui/WZ.py
 
 Last updated:  2021-01-02
 
@@ -31,7 +31,7 @@ _WARN_NO_CHANGES = "WARN: Keine Änderungen sind vorgemerkt"
 _BAD_PUPIL_TABLE = "ERROR: Schülerdaten fehlerhaft:\n  {path}"
 
 ### Labels, etc.
-_TITLE = "WZ - Administration"
+_TITLE = "WZ"
 
 _FILEOPEN = "Datei öffnen"
 _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
@@ -72,6 +72,7 @@ from qtpy.QtCore import Qt
 from core.base import Dates
 from gui.gui_support import HLine, KeySelect, TabPage
 from gui.pupil_editor import PupilEdit
+from gui.grade_editor import GradeEdit
 from local.base_config import print_schoolyear
 from core.pupils import Pupils
 from core.courses import Subjects
@@ -123,6 +124,7 @@ class Admin(QWidget):
         self._addPage(UpdateSubjects())
         self._addPage(UpdatePupils())
         self._addPage(PupilEdit())
+        self._addPage(GradeEdit())
         self._lbox.addStretch(1)
 
         self.selectPage.idToggled.connect(self._switchPage)
@@ -320,8 +322,6 @@ if __name__ == '__main__':
     # Persistent Settings:
     builtins.SETTINGS = QSettings(os.path.join(DATA, 'wz-settings'),
                 QSettings.IniFormat)
-
-#    _year = '2021'
 
     import sys
     from qtpy.QtWidgets import QApplication, QStyleFactory
