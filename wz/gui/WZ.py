@@ -317,8 +317,8 @@ if __name__ == '__main__':
     import builtins
     from core.base import init
     from qtpy.QtCore import QSettings
-    init('DATA')
-#    init('TESTDATA')
+#    init('DATA')
+    init('TESTDATA')
     # Persistent Settings:
     builtins.SETTINGS = QSettings(os.path.join(DATA, 'wz-settings'),
                 QSettings.IniFormat)

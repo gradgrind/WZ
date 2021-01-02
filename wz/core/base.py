@@ -327,6 +327,15 @@ class ThreadFunction:
     def terminate(self):
         self._cc = 1
 
+#TODO: To test the thread function (in GUI)
+#        fn = ThreadFunction()
+##        qp = ProgressMessages(fn)
+#        cc = REPORT('RUN', runme = fn)
+#        if cc:
+#            REPORT("ERROR: Interrupted")
+#        else:
+#            REPORT("INFO: Completed")
+
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 

@@ -286,21 +286,16 @@ class Grid(QGraphicsScene):
         pdf_rect = page_layout.paintRect(QPageLayout.Millimeter)
         swmm = sw / self._gview.MM2PT
         shmm = sh / self._gview.MM2PT
-        print("PAGE:", page_layout.paintRect(QPageLayout.Millimeter), '\n',
-                page_layout.paintRectPixels(printer.resolution()), '\n',
-                page_layout.paintRectPoints())
         painter = QPainter(printer)
         pdf_wmm = pdf_rect.width()
         pdf_hmm = pdf_rect.height()
         if swmm > pdf_wmm or shmm > pdf_hmm:
             # Shrink to fit page
-            print("SHRINK:", swmm, shmm, pdf_wmm, pdf_hmm)
             self.render(painter)
         else:
             # Scale resolution to keep size
             pdf_rect.setWidth(sw * natural_scale)
             pdf_rect.setHeight(sh * natural_scale)
-            print("SCALE:", natural_scale)
             self.render(painter, pdf_rect)
         painter.end()
         qbuf.close()

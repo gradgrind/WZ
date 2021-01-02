@@ -43,7 +43,10 @@ _REPORT_PDF = "Zeugnis(se) erstellen"
 _TABLE_IN1 = "Notentabelle einlesen"
 _TABLE_IN_DIR = "Notentabellen einlesen"
 _FILESAVE = "Datei speichern"
+_FILEOPEN = "Datei öffnen"
+_DIROPEN = "Ordner öffnen"
 _EXCEL_FILE = "Excel-Datei (*.xlsx)"
+_TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
 
 #####################################################
 
@@ -59,7 +62,7 @@ from gui.abitur_pupil_view import AbiPupilView
 from gui.gui_support import VLine, KeySelect, TabPage
 from local.base_config import print_schoolyear, year_path
 from local.grade_config import GradeBase
-from grades.gradetable import FailedSave
+from grades.gradetable import FailedSave, GradeTableFile
 from grades.makereports import GradeReports
 
 ###
@@ -213,7 +216,8 @@ class GradeEdit(TabPage):
                 return
         self.group_changed(None)
 #
-    def save(self, force = True):
+    def save(self, checked = None, force = True):
+        # The 'checked' argument is needed for the 'clicked' signal.
         if self.clear(force):    # no question dialog
             if self.term[0] == 'S':
                 self.pid = self.grade_scene.grade_table.term
@@ -238,27 +242,44 @@ class GradeEdit(TabPage):
     def input_table(self):
         """Import a single grade table, replacing the internal table.
         """
-#TODO
-        fn = ThreadFunction()
-#        qp = ProgressMessages(fn)
-        cc = REPORT('RUN', runme = fn)
-        if cc:
-            REPORT("ERROR: Interrupted")
-        else:
-            REPORT("INFO: Completed")
-        print("TODO: input_table")
-
+        self.clear()
+        dir0 = ADMIN._loaddir or os.path.expanduser('~')
+        fpath = QFileDialog.getOpenFileName(self.gradeView, _FILEOPEN,
+                dir0, _TABLE_FILE)[0]
+        if fpath:
+            ADMIN.set_loaddir(os.path.dirname(fpath))
+            gtable = GradeTableFile(ADMIN.schoolyear, fpath)
+            gtable.save()
+            self.year_changed()
 #
     def input_tables(self):
         """Import a folder of grade tables, replacing affected internal
         tables.
         """
-#TODO
-        REPORT("INFO: <input_tables> needs doing.")
-        REPORT("WARN: <input_tables> is not yet implemented.")
-        REPORT("ERROR: <input_tables> is still not yet implemented.")
-        print("TODO: input_tables")
-
+#TODO: The purpose of this method is not yet clear. It could load
+# complete tables for several groups, or it could load multiple tables
+# for a single group ... or both of these!
+# The first possibility is perhaps a bit superfluous, individual table
+# loading should be no big deal.
+# The second might be more useful – it could check for conflicts, where
+# two tables provide a grade for one subjects, etc.
+# If that use case is implemented, it might also make sense to allow
+# multiple groups within the folder.
+        self.clear()
+        dir0 = ADMIN._loaddir or os.path.expanduser('~')
+        dpath = QFileDialog.getExistingDirectory(self.gradeView,
+                _DIROPEN, dir0,
+                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+        if dpath:
+            ADMIN.set_loaddir(dpath)
+            for f in os.listdir(dpath):
+                fpath = os.path.join(dpath, f)
+                try:
+                    gtable = GradeTableFile(ADMIN.schoolyear, fpath)
+                except:
+                    print("LOADING FAILED: %s", f)
+                else:
+                    print("LOADED %s: %s / %s" % (f, gtable.group, gtable.term))
 #
     def make_reports(self):
         """Generate the grade report(s).

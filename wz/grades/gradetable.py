@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2020-12-22
+grades/gradetable.py - last updated 2021-01-02
 
 Access grade data, read and build grade tables.
 
 ==============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -385,12 +385,18 @@ class _GradeTable(dict):
         table.protectSheet()
         return table.save()
 #
-    def save(self, changes):
+    def save(self, changes = None):
         """Save the data to the "database".
         <changes> is a mapping: {tag -> value}
         """
-        grades_d = changes.get('GRADES_D') or self.grades_d
-        issue_d = changes.get('ISSUE_D') or self.issue_d
+        try:
+            grades_d = changes['GRADES_D']
+        except:
+            grades_d = self.grades_d
+        try:
+            issue_d = changes['ISSUE_D']
+        except:
+            issue_d = self.issue_d
         fields = ['PID', 'PUPIL', 'STREAM']
         for sid in self.subjects:
             fields.append(sid)
