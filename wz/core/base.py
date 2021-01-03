@@ -2,12 +2,12 @@
 """
 core/base.py
 
-Last updated:  2020-12-25
+Last updated:  2021-01-03
 
 Basic configuration and structural stuff.
 
 =+LICENCE=================================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -27,8 +27,9 @@ Copyright 2020 Michael Towers
 ### Messages
 _BAD_DATE = "Ungültiges Datum im Kalender: {line}"
 _INVALID_SCHOOLYEAR = "Ungültiges Schuljahr: {year}"
-_BAD_CALENDAR_LINE = "Ungültige Zeile im Kalender: {line}"
-_DOUBLE_DATE_TAG = "Mehrfacher Kalendereintrag: {tag} = ..."
+_BAD_CONFIG_LINE = "In Konfigurationsdatei {cfile}:\n  ungültige Zeile: {line}"
+_DOUBLE_CONFIG_TAG = "In Konfigurationsdatei {cfile}:\n" \
+        "  mehrfacher Eintrag: {tag} = ..."
 
 _CALENDAR = 'Kalender'  # Calendar file (in year folder)
 
@@ -44,13 +45,45 @@ builtins.Bug = Bug
 
 import local.base_config as CONFIG
 
-#
+###
+
+class DataError(Exception):
+    pass
+
+def read_config(filepath):
+    """Read a file containing very simply formatted configuration info.
+    Each line is: key = value. Only <str> values are supported.
+    A line starting with '#' is a comment.
+    Empty lines are ignored.
+    Encoding is utf-8.
+    """
+    data = {}
+    with open(filepath, encoding = 'utf-8') as fi:
+        for l in fi:
+            line = l.strip()
+            if (not line) or line[0] == '#':
+                continue
+            try:
+                k, v = line.split('=')
+            except ValueError as e:
+                raise DataError(_BAD_CONFIG_LINE.format(
+                        line = l)) from e
+            k = k.rstrip()
+            if not k:
+                raise DataError(_BAD_CONFIG_LINE.format(line = l))
+            if k in data:
+                raise DataError(_DOUBLE_CONFIG_TAG.format(tag = k))
+            data[k] = v.lstrip()
+    return data
+
+###
 
 def init(datadir = 'DATA'):
     appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     builtins.ZEUGSDIR = os.path.join(os.path.dirname (appdir))
     builtins.DATA = os.path.join(ZEUGSDIR, datadir)
     builtins.RESOURCES = os.path.join(DATA, 'RESOURCES')
+    builtins.SCHOOL_DATA = read_config(os.path.join(DATA, 'SCHOOL_DATA'))
 
 
 def report(text):
@@ -80,14 +113,12 @@ def str2list(string, sep = ','):
 
 ###
 
-class DateError(Exception):
-    pass
 class Dates:
     @staticmethod
     def print_date(date, trap = True):
         """Convert a date string from the program format (e.g. "2016-12-06")
         to the format used for output (e.g. "06.12.2016").
-        If an invalid date is passed, a <DateError> is raised, unless
+        If an invalid date is passed, a <DataError> is raised, unless
         <trap> is false. In that case <None> – an invalid date – is returned.
         """
         try:
@@ -95,7 +126,7 @@ class Dates:
             return d.strftime(CONFIG.DATEFORMAT)
         except:
             if trap:
-                raise DateError("Ungültiges Datum: '%s'" % date)
+                raise DataError("Ungültiges Datum: '%s'" % date)
         return None
 
     @classmethod
@@ -110,7 +141,7 @@ class Dates:
             if key.endswith('_D'):
                 try:
                     mapping[key] = cls.print_date(val)
-                except DateError:
+                except DataError:
                     fails.append(key)
         return fails
 
@@ -176,39 +207,26 @@ class Dates:
         """Read the calendar file for the given school year.
         """
         fpath = CONFIG.year_path(schoolyear, CONFIG.CALENDAR_FILE)
+        rawdata = read_config(fpath)
         calendar = {}
-        with open(fpath, encoding = 'utf-8') as fi:
-            for l in fi:
-                line = l.strip()
-                if (not line) or line[0] == '#':
+        for k, v in rawdata.items():
+            try:
+                v1, v2 = v.split(':')
+            except:
+                # single day
+                date = v.strip()
+                # check validity
+                if cls.check_schoolyear(schoolyear, date):
+                    calendar[k] = date
                     continue
-                try:
-                    k, v = line.split('=')
-                except ValueError as e:
-                    raise DateError(_BAD_CALENDAR_LINE.format(
-                            line = l)) from e
-                k = k.strip()
-                if not k:
-                    raise DateError(_BAD_CALENDAR_LINE.format(line = l))
-                if k in calendar:
-                    raise DateError(_DOUBLE_DATE_TAG.format(tag = k))
-                try:
-                    v1, v2 = v.split(':')
-                except:
-                    # single day
-                    date = v.strip()
-                    # check validity
-                    if cls.check_schoolyear(schoolyear, date):
-                        calendar[k] = date
-                        continue
-                else:
-                    # range of days
-                    date1, date2 = v1.strip(), v2.strip()
-                    if (cls.check_schoolyear(schoolyear, date1)
-                            and cls.check_schoolyear(schoolyear, date2)):
-                        calendar[k] = (date1, date2)
-                        continue
-                raise DateError(_BAD_DATE.format(line = l))
+            else:
+                # range of days
+                date1, date2 = v1.rstrip(), v2.lstrip()
+                if (cls.check_schoolyear(schoolyear, date1)
+                        and cls.check_schoolyear(schoolyear, date2)):
+                    calendar[k] = (date1, date2)
+                    continue
+            raise DataError(_BAD_DATE.format(line = l))
         return calendar
 
 ###
@@ -345,6 +363,6 @@ if __name__ == '__main__':
     print("DATE:", Dates.print_date('2016-04-25'))
     try:
         print("BAD Date:", Dates.print_date('2016-02-30'))
-    except DateError as e:
+    except DataError as e:
         print(" ... trapped:", e)
-    print("\nCalendar for 2016:\n", Dates.get_calendar(2016))
+    print("\nCalendar for 2016:\n", Dates.get_calendar('2016'))

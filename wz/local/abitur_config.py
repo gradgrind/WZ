@@ -3,7 +3,7 @@
 """
 local/abitur_config.py
 
-Last updated:  2020-12-20
+Last updated:  2021-01-03
 
 Configuration for Abitur-grade handling.
 ====================================
@@ -23,7 +23,7 @@ _X_ALONE = "Keine entsprechende schriftliche Prüfung für Fach {sid}"
 _MULTISID = "Fach {sid} doppelt vorhanden"
 _BAD_SID = "Unerwartetes Fach: {sid}"
 
-from local.grade_config import UNCHOSEN, NO_GRADE, UNGRADED
+from local.grade_config import UNCHOSEN#, NO_GRADE
 
 class AbiturError(Exception):
     pass

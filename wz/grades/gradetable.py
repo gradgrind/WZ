@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-01-02
+grades/gradetable.py - last updated 2021-01-03
 
 Access grade data, read and build grade tables.
 
@@ -61,7 +61,7 @@ if __name__ == '__main__':
 import datetime
 from fractions import Fraction
 
-from core.base import str2list, Dates
+from core.base import Dates
 from core.pupils import Pupils
 from core.courses import Subjects
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table

@@ -1,7 +1,7 @@
 ### python >= 3.7
 # -*- coding: utf-8 -*-
 """
-tables/matrix.py - last updated 2020-08-30
+tables/matrix.py - last updated 2021-01-03
 
 Edit a table template (xlsx).
 
@@ -10,7 +10,7 @@ The base class is <Table>.
 <KlassMatrix> handles pupil-subject matrices.
 
 ==============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -36,9 +36,7 @@ import datetime
 from io import BytesIO
 
 from openpyxl import load_workbook
-from openpyxl.worksheet.properties import WorksheetProperties, PageSetupProperties
-from openpyxl.utils import get_column_letter, column_index_from_string
-from openpyxl.styles import Alignment, Border, Side, PatternFill, NamedStyle
+from openpyxl.utils import get_column_letter#, column_index_from_string
 
 
 class Table:

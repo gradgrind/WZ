@@ -2,13 +2,13 @@
 """
 gui/abitur_grid.py
 
-Last updated:  2020-12-05
+Last updated:  2021-01-03
 
 Editor for Abitur results.
 
 
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -66,10 +66,10 @@ from qtpy.QtWidgets import QApplication, QDialog, QStackedWidget, \
 #from qtpy.QtGui import QFont
 #from qtpy.QtCore import Qt
 
-from gui.grid import Grid, CellStyle, PopupDate, PopupTable
+from gui.grid import Grid, PopupDate, PopupTable
 from gui.gui_support import VLine, KeySelect#, ZIcon
 from grades.gradetable import GradeTable, Grades
-from local.base_config import FONT, print_schoolyear, SCHOOL_NAME, year_path
+from local.base_config import print_schoolyear#, year_path
 from local.abitur_config import AbiCalc
 
 
@@ -77,13 +77,13 @@ class AbiturGrid(Grid):
     def styles(self):
         """Set up the styles used in the table view.
         """
-        self.new_style('base', font = FONT, size = 11)
+        self.new_style('base', font = SCHOOL_DATA.FONT, size = 11)
         self.new_style('info', base = 'base', border = 0)
         self.new_style('infoL', base = 'info', align = 'l')
         self.new_style('label', base = 'infoL', highlight = 'b')
 
-        self.new_style('title', font = FONT, size = 12, align = 'l',
-                    border = 0, highlight = 'b')
+        self.new_style('title', font = SCHOOL_DATA.FONT, size = 12,
+                align = 'l', border = 0, highlight = 'b')
         self.new_style('titleR', base = 'title', align = 'r')
         self.new_style('underline', base = 'base', border = 2)
         self.new_style('small', base = 'base', size = 10)
@@ -110,7 +110,8 @@ class AbiturGrid(Grid):
         ### Title area
         self.tile(0, 0, text = "Abitur-Berechnungsbogen", cspan = 4,
                 style = 'title')
-        self.tile(0, 4, text = SCHOOL_NAME, cspan = 10, style = 'titleR')
+        self.tile(0, 4, text = SCHOOL_DATA.SCHOOL_NAME, cspan = 10,
+                style = 'titleR')
         self.tile(2, 7, text = "Schuljahr:", cspan = 3, style = 'titleR')
         self.tile(2, 10, text = '', cspan = 4, style = 'title',
                 tag = 'SCHOOLYEAR')
@@ -418,7 +419,7 @@ if __name__ == '__main__':
     _year = '2016'
 
     import sys
-    from qtpy.QtWidgets import QApplication, QStyleFactory
+    from qtpy.QtWidgets import QApplication#, QStyleFactory
     from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo
 
 #    print(QStyleFactory.keys())

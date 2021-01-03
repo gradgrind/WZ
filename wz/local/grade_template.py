@@ -3,13 +3,13 @@
 """
 local/grade_template.py
 
-Last updated:  2020-12-18
+Last updated:  2021-01-03
 
 Manage template-specific fields for grade reports.
 
 
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ _INVALID_RTYPE = "Ungültiger Zeugnistyp: '{rtype}'"
 _INVALID_QUALI = "Ungültiges Qualifikationsfeld für Schüler {pid}: '{quali}'"
 
 from core.base import Dates
-from local.abitur_config import AbiCalc
 from local.grade_config import GradeConfigError, STREAMS
 
 VERSETZUNG_11_12 = "Durch Konferenzbeschluss vom {grades_d} in die" \

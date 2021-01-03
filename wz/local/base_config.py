@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-01-01
+Last updated:  2021-01-03
 
 General configuration items.
 
@@ -22,10 +22,6 @@ Copyright 2021 Michael Towers
    See the License for the specific language governing permissions and
    limitations under the License.
 """
-
-SCHOOL_NAME = 'Freie Michaelschule'
-FONT = 'Droid Sans'
-
 
 DECIMAL_SEP = ','
 

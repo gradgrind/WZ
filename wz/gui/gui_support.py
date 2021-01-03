@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-01-02
+Last updated:  2020-01-03
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -25,14 +25,11 @@ Copyright 2019-2020 Michael Towers
 =-LICENCE========================================
 """
 
-import sys, os, builtins, traceback
+import sys, builtins, traceback
 
-from qtpy.QtWidgets import QApplication, \
-        QWidget, QHBoxLayout, QVBoxLayout, \
-        QLabel, QPushButton, QComboBox, \
-        QFrame, QTextEdit, \
-        QButtonGroup, QBoxLayout, \
-        QDialog, QCalendarWidget, QMessageBox#, QProgressBar
+from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
+        QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
+        QDialog#, QMessageBox, QProgressBar
 from qtpy.QtGui import QMovie, QPixmap
 from qtpy.QtCore import Qt, QObject, QThread, Signal, Slot
 

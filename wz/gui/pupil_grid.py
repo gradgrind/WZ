@@ -2,7 +2,7 @@
 """
 gui/pupil_grid.py
 
-Last updated:  2021-01-02
+Last updated:  2021-01-03
 
 Manage the grid for the pupil-data editor.
 
@@ -36,13 +36,11 @@ _REMOVE_PUPIL = "Wollen Sie wirklich {name} aus der Datenbank entfernen?"
 
 # To test this module, use it via admin.py
 
-import os
-
 from gui.grid import Grid
 from gui.gui_support import QuestionDialog
 
 from core.pupils import Pupils, NullPupilData
-from local.base_config import FONT, PupilsBase
+from local.base_config import PupilsBase
 from local.grade_config import STREAMS
 
 ## Measurements are in mm ##
@@ -94,9 +92,9 @@ class PupilGrid(Grid):
     def styles(self):
         """Set up the styles used in the table view.
         """
-        self.new_style('base', font = FONT, size = 11)
-        self.new_style('title', font = FONT, size = 12, align = 'c',
-                    border = 0, highlight = 'b')
+        self.new_style('base', font = SCHOOL_DATA.FONT, size = 11)
+        self.new_style('title', font = SCHOOL_DATA.FONT, size = 12,
+                align = 'c', border = 0, highlight = 'b')
         self.new_style('key', base = 'base', align = 'l')
         self.new_style('fixed', base = 'key', highlight = ':808080')
         self.new_style('value', base = 'key',

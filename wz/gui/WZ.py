@@ -55,7 +55,7 @@ _DELTA_LEN_MAX = 80
 #####################################################
 
 
-import sys, os, glob
+import sys, os
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
@@ -324,7 +324,7 @@ if __name__ == '__main__':
                 QSettings.IniFormat)
 
     import sys
-    from qtpy.QtWidgets import QApplication, QStyleFactory
+    from qtpy.QtWidgets import QApplication#, QStyleFactory
     from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo
 
 #    print(QStyleFactory.keys())

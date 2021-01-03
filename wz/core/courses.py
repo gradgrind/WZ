@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2020-12-31
+core/courses.py - last updated 2021-01-03
 
 Handle course data.
 
 ==============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
 from collections import namedtuple
 
-from core.base import str2list, Dates
+from core.base import Dates
 from local.base_config import SubjectsBase, USE_XLSX
 from local.grade_config import (NULL_COMPOSITE, NOT_GRADED)
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table

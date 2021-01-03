@@ -2,13 +2,13 @@
 """
 gui/grade_grid.py
 
-Last updated:  2020-12-23
+Last updated:  2021-01-03
 
 Manage the grid for the grade-editor.
 
 
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -47,8 +47,7 @@ import os
 from gui.grid import Grid
 from gui.gui_support import QuestionDialog
 
-from grades.gradetable import GradeTable, Grades, Frac
-from local.base_config import FONT, SCHOOL_NAME
+from grades.gradetable import GradeTable, Grades
 from local.grade_config import UNCHOSEN
 
 ## Measurements are in mm ##
@@ -136,7 +135,8 @@ class GradeGrid(Grid):
                 'NotenWerte'))
         ### Title area
         self.tile(0, 0, text = "Notentabelle", cspan = 2, style = 'title')
-        self.tile(0, 4, text = SCHOOL_NAME, cspan = 10, style = 'titleR')
+        self.tile(0, 4, text = SCHOOL_DATA.SCHOOL_NAME, cspan = 10,
+                style = 'titleR')
         ### General Info
         self.tile(1, 0, text = self.grade_table.SCHOOLYEAR, style = 'info')
         self.tile(1, 1, text = self.grade_table.schoolyear,
@@ -253,11 +253,11 @@ class GradeGrid(Grid):
     def styles(self):
         """Set up the styles used in the table view.
         """
-        self.new_style('base', font = FONT, size = 11)
+        self.new_style('base', font = SCHOOL_DATA.FONT, size = 11)
         self.new_style('calc', base = 'base', highlight = ':006000')
         self.new_style('name', base = 'base', align = 'l')
-        self.new_style('title', font = FONT, size = 12, align = 'l',
-                    border = 0, highlight = 'b')
+        self.new_style('title', font = SCHOOL_DATA.FONT, size = 12,
+                align = 'l', border = 0, highlight = 'b')
         self.new_style('info', base = 'base', border = 0, align = 'l')
         self.new_style('underline', base = 'base', border = 2)
         self.new_style('titleR', base = 'title', align = 'r')

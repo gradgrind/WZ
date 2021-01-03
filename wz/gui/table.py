@@ -3,7 +3,7 @@
 """
 gui/table.py
 
-Last updated:  2020-12-30
+Last updated:  2021-01-03
 
 A slight modification of "TableWidget.py" from the "silx" project
 (www.silx.org), thanks to P. Knobel.
@@ -18,7 +18,7 @@ A slight modification of "TableWidget.py" from the "silx" project
   - Added "changed" handling (could be used for undo/redo, save-popup, etc.?)
   - Various other tweaks ...
 
-Modifications Copyright (c) 2019, 2020 Michael Towers
+Modifications Copyright (c) 2021 Michael Towers
 
 Original Licence below.
 """
@@ -121,8 +121,8 @@ _DELETE1 = "Um Zeilen zu löschen, müssen sie eindeutig selektiert sein"
 
 
 import sys
-from qtpy.QtWidgets import QApplication, QMenu, \
-        QAction, QTableView, QTableWidget, QMessageBox
+from qtpy.QtWidgets import QApplication, \
+        QAction, QTableView, QTableWidget, QMessageBox#, QMenu
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QKeySequence
 
@@ -709,7 +709,6 @@ class TableWidget(QTableWidget):
 
 
 if __name__ == "__main__":
-    from qtpy.QtGui import QStandardItemModel
     app = QApplication([])
 
     tablewidget = TableWidget(row_add_del = True, cut = True, paste = True)

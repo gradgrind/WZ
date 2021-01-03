@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2021-01-02
+Last updated:  2021-01-03
 
 Editor for grades.
 
@@ -50,7 +50,7 @@ _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
 
 #####################################################
 
-import sys, os, glob
+import os, glob
 
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
         QPushButton, QFileDialog
@@ -60,7 +60,7 @@ from gui.grid import GridView
 from gui.grade_grid import GradeGrid
 from gui.abitur_pupil_view import AbiPupilView
 from gui.gui_support import VLine, KeySelect, TabPage
-from local.base_config import print_schoolyear, year_path
+from local.base_config import year_path
 from local.grade_config import GradeBase
 from grades.gradetable import FailedSave, GradeTableFile
 from grades.makereports import GradeReports

@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2020-12-23
+Last updated:  2021-01-03
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -13,7 +13,7 @@ In the templates there are grouped and numbered slots for subject names
 and the corresponding grades.
 
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -60,11 +60,10 @@ _NO_SLOT = "Kein Platz mehr für Fach mit Kürzel {sid} in Fachgruppe {tag}." \
 
 from core.base import Dates
 from core.pupils import Pupils
-from core.courses import Subjects
-from local.base_config import year_path, SCHOOL_NAME, class_year, \
+from local.base_config import year_path, class_year, \
         print_schoolyear, LINEBREAK
 from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
-        GradeConfigError, STREAMS, NO_SUBJECT
+        GradeConfigError, NO_SUBJECT
 from local.grade_template import info_extend
 from template_engine.template_sub import Template, TemplateError
 from grades.gradetable import GradeTable, Grades, GradeTableError
@@ -88,8 +87,8 @@ class GradeReports:
             'issue_d': self.grade_table.issue_d,  # for file-names
             'ISSUE_D': Dates.print_date(self.grade_table.issue_d),
             'GRADES_D': Dates.print_date(self.grade_table.grades_d),
-            'SCHOOL': SCHOOL_NAME,
-            'SCHOOLBIG': SCHOOL_NAME.upper(),
+            'SCHOOL': SCHOOL_DATA.SCHOOL_NAME,
+            'SCHOOLBIG': SCHOOL_DATA.SCHOOL_NAME.upper(),
             'schoolyear': schoolyear,
             'SCHOOLYEAR': print_schoolyear(schoolyear)
         }

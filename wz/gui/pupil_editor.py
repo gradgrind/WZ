@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2021-01-02
+Last updated:  2021-01-03
 
 Editor for pupil data.
 
@@ -38,7 +38,6 @@ _SAVE = "Änderungen speichern"
 
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
-from core.pupils import Pupils
 from gui.grid import GridView
 from gui.pupil_grid import PupilGrid
 from gui.gui_support import VLine, KeySelect, TabPage, GuiError

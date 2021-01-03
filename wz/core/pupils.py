@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-01-02
+core/pupils.py - last updated 2021-01-03
 
 Database access for reading pupil data.
 
@@ -36,7 +36,6 @@ _PID_EXISTS = "Ungültiges Schülerkennzeichen, es gehört schon {name} in" \
         " Klasse {klass}"
 
 import datetime, glob, zipfile
-from collections import UserList
 
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from local.base_config import PupilsBase, USE_XLSX
