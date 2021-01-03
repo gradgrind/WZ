@@ -2,7 +2,7 @@
 """
 gui/WZ.py
 
-Last updated:  2021-01-02
+Last updated:  2021-01-03
 
 Administration interface.
 
@@ -31,7 +31,7 @@ _WARN_NO_CHANGES = "WARN: Keine Änderungen sind vorgemerkt"
 _BAD_PUPIL_TABLE = "ERROR: Schülerdaten fehlerhaft:\n  {path}"
 
 ### Labels, etc.
-_TITLE = "WZ"
+_TITLE = "WZ – Zeugnisverwaltung"
 
 _FILEOPEN = "Datei öffnen"
 _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"

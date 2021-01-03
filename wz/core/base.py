@@ -43,6 +43,7 @@ class Bug(Exception):
     pass
 builtins.Bug = Bug
 
+from keyword import iskeyword
 import local.base_config as CONFIG
 
 ###
@@ -50,31 +51,38 @@ import local.base_config as CONFIG
 class DataError(Exception):
     pass
 
-def read_config(filepath):
+class ConfigFile(dict):
     """Read a file containing very simply formatted configuration info.
     Each line is: key = value. Only <str> values are supported.
     A line starting with '#' is a comment.
     Empty lines are ignored.
     Encoding is utf-8.
+    The keys can be used for item-access as well as attribute-access
+    (e.g. cfile["A"] or cfile.A). However, only valid "identifiers" which
+    are not keywords can be used for attribute-access.
     """
-    data = {}
-    with open(filepath, encoding = 'utf-8') as fi:
-        for l in fi:
-            line = l.strip()
-            if (not line) or line[0] == '#':
-                continue
-            try:
-                k, v = line.split('=')
-            except ValueError as e:
-                raise DataError(_BAD_CONFIG_LINE.format(
-                        line = l)) from e
-            k = k.rstrip()
-            if not k:
-                raise DataError(_BAD_CONFIG_LINE.format(line = l))
-            if k in data:
-                raise DataError(_DOUBLE_CONFIG_TAG.format(tag = k))
-            data[k] = v.lstrip()
-    return data
+    def __init__(self, filepath):
+        super().__init__()
+        with open(filepath, encoding = 'utf-8') as fi:
+            for l in fi:
+                line = l.strip()
+                if (not line) or line[0] == '#':
+                    continue
+                try:
+                    k, v = line.split('=')
+                except ValueError as e:
+                    raise DataError(_BAD_CONFIG_LINE.format(
+                            line = l)) from e
+                k = k.rstrip()
+                if not k:
+                    raise DataError(_BAD_CONFIG_LINE.format(line = l))
+                if k in self:
+                    raise DataError(_DOUBLE_CONFIG_TAG.format(tag = k))
+                v = v.lstrip()
+                self[k] = v
+                if not hasattr(self, k):
+                    if k.isidentifier() and not iskeyword(k):
+                        setattr(self, k, v)
 
 ###
 
@@ -83,7 +91,7 @@ def init(datadir = 'DATA'):
     builtins.ZEUGSDIR = os.path.join(os.path.dirname (appdir))
     builtins.DATA = os.path.join(ZEUGSDIR, datadir)
     builtins.RESOURCES = os.path.join(DATA, 'RESOURCES')
-    builtins.SCHOOL_DATA = read_config(os.path.join(DATA, 'SCHOOL_DATA'))
+    builtins.SCHOOL_DATA = ConfigFile(os.path.join(DATA, 'SCHOOL_DATA'))
 
 
 def report(text):
@@ -207,7 +215,7 @@ class Dates:
         """Read the calendar file for the given school year.
         """
         fpath = CONFIG.year_path(schoolyear, CONFIG.CALENDAR_FILE)
-        rawdata = read_config(fpath)
+        rawdata = ConfigFile(fpath)
         calendar = {}
         for k, v in rawdata.items():
             try:
