@@ -30,6 +30,14 @@ _MADE_REPORTS = "Notenzeugnisse erstellt"
 _NO_REPORTS = "Keine Notenzeugnisse erstellt"
 _NOT_INTERRUPTABLE = "+++ Der Prozess kann nicht unterbrochen werden +++"
 
+_TITLE_TABLE_REPLACE = "Neue Tabelle speichern"
+# Would need to be a bit different for individual pupils:
+_TABLE_REPLACE = "Die neue Tabelle wird die alte ersetzen.\n" \
+        "Soll sie jetzt gespeichert werden?"
+_NO_GRADE_FILES = "Keine Tabellen zur Aktualisierung"
+_BAD_GRADE_FILE = "Ungültige Tabellendatei:\n  {fpath}"
+_UPDATED_GRADES = "Notentabelle aktualisiert: {n} QUelldatei(en)"
+
 ### Labels, etc.
 _EDIT_GRADES = "Noten verwalten"
 _ALL_PUPILS = "Gesamttabelle"
@@ -54,12 +62,13 @@ import os, glob
 
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
         QPushButton, QFileDialog
+from qtpy.QtCore import SIGNAL, QObject
 
 from core.base import Dates, ThreadFunction
 from gui.grid import GridView
 from gui.grade_grid import GradeGrid
 from gui.abitur_pupil_view import AbiPupilView
-from gui.gui_support import VLine, KeySelect, TabPage
+from gui.gui_support import VLine, KeySelect, TabPage, QuestionDialog
 from local.base_config import year_path
 from local.grade_config import GradeBase
 from grades.gradetable import FailedSave, GradeTableFile
@@ -104,7 +113,8 @@ class GradeEdit(TabPage):
         cbox.addSpacing(30)
         self.gradeView.pbSave = QPushButton(_SAVE)
         cbox.addWidget(self.gradeView.pbSave)
-        self.gradeView.pbSave.clicked.connect(self.save)
+        # Special connection, see <self.save>
+        QObject.connect(self.gradeView.pbSave, SIGNAL('clicked()'), self.save)
         cbox.addStretch(1)
         pbTable = QPushButton(_TABLE_XLSX)
         cbox.addWidget(pbTable)
@@ -133,7 +143,7 @@ class GradeEdit(TabPage):
         try:
             self.gradeView.clear(force)
         except FailedSave as e:
-            REPORT(_SAVE_FAILED.format(msg = e))
+            REPORT('ERROR', _SAVE_FAILED.format(msg = e))
             return False
         return True
 #
@@ -216,8 +226,9 @@ class GradeEdit(TabPage):
                 return
         self.group_changed(None)
 #
-    def save(self, checked = None, force = True):
-        # The 'checked' argument is needed for the 'clicked' signal.
+# Must connect to this specifying signal with no argument:
+#  QObject.connect(button, SIGNAL('clicked()'), self.save)
+    def save(self, force = True):
         if self.clear(force):    # no question dialog
             if self.term[0] == 'S':
                 self.pid = self.grade_scene.grade_table.term
@@ -249,43 +260,52 @@ class GradeEdit(TabPage):
         if fpath:
             ADMIN.set_loaddir(os.path.dirname(fpath))
             gtable = GradeTableFile(ADMIN.schoolyear, fpath)
-            gtable.save()
-            self.year_changed()
+            # Check that it matches the currently selected group/term
+            self.grade_scene.grade_table.check_group_term(gtable)
+            # ... only returns if ok
+            if QuestionDialog(_TITLE_TABLE_REPLACE, _TABLE_REPLACE):
+                gtable.save()       # save table
+        # Redisplay table
+        self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
+                self.group, self.term)
+        self.gradeView.set_scene(self.grade_scene)
 #
     def input_tables(self):
-        """Import a folder of grade tables, replacing affected internal
-        tables.
+        """Import a folder of grade tables, collate the contents and
+        update the internal table.
+        Only non-empty cells in the imported tables are taken into
+        consideration and only one imported table may supply the
+        value for a given cell.
+        The "information" fields are not affected.
         """
-#TODO: The purpose of this method is not yet clear. It could load
-# complete tables for several groups, or it could load multiple tables
-# for a single group ... or both of these!
-# The first possibility is perhaps a bit superfluous, individual table
-# loading should be no big deal.
-# The second might be more useful – it could check for conflicts, where
-# two tables provide a grade for one subjects, etc.
-# If that use case is implemented, it might also make sense to allow
-# multiple groups within the folder.
-        self.clear()
-        dir0 = ADMIN._loaddir or os.path.expanduser('~')
-        dpath = QFileDialog.getExistingDirectory(self.gradeView,
-                _DIROPEN, dir0,
-                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+#TODO
+        fn = ThreadFunction()
+        cc = REPORT('RUN', runme = fn)
+        print("cc:", cc)
+        return
+
+        dpath = '/home/mt/WZ/TESTDATA/SCHULJAHRE/2016/NOTEN_1_11.G'
+
+#        self.clear()
+#        dir0 = ADMIN._loaddir or os.path.expanduser('~')
+#        dpath = QFileDialog.getExistingDirectory(self.gradeView,
+#                _DIROPEN, dir0,
+#                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
         if dpath:
             ADMIN.set_loaddir(dpath)
-            for f in os.listdir(dpath):
-                fpath = os.path.join(dpath, f)
-                try:
-                    gtable = GradeTableFile(ADMIN.schoolyear, fpath)
-                except:
-                    print("LOADING FAILED: %s", f)
-                else:
-                    print("LOADED %s: %s / %s" % (f, gtable.group, gtable.term))
+            fn = _UpdateGrades(self.grade_scene.grade_table, dpath)
+            cc = REPORT('RUN', runme = fn)
+        # Redisplay table
+#        self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
+#                self.group, self.term)
+#        self.gradeView.set_scene(self.grade_scene)
 #
     def make_reports(self):
         """Generate the grade report(s).
         """
         self.save(force = False)
         greports = GradeReports(ADMIN.schoolyear, self.group, self.term)
+#TODO: completion reports in _MakeReports
         fn = _MakeReports(greports)
         files = REPORT('RUN', runme = fn)
         if files:
@@ -307,9 +327,51 @@ class _MakeReports(ThreadFunction):
     def __init__(self, grade_reports):
         super().__init__()
         self._grade_reports = grade_reports
-
+#
     def run(self):
         return self._grade_reports.makeReports()
-
+#
     def terminate(self):
         self.message(_NOT_INTERRUPTABLE)
+
+###
+
+class _UpdateGrades(ThreadFunction):
+    def __init__(self, grade_table, dpath):
+        super().__init__()
+        self.grade_table = grade_table
+        self.dpath = dpath
+#
+#    def run(self):
+#        self._halt = False
+#        gtables = []
+#        for f in ("one", "two", "three"):
+#        for f in os.listdir(self.dpath):
+#TODO
+#            self.message("FILE: %s" % f)
+#            REPORT("INFO", FILE: %s" % f)
+#            if self._halt:
+#                return -1
+#            fpath = os.path.join(self.dpath, f)
+#            try:
+#                gtable = GradeTableFile(ADMIN.schoolyear, fpath,
+#                        full_table = False)
+#            except:
+#                REPORT('WARN', _BAD_GRADE_FILE.format(fpath = fpath))
+#            else:
+#                # Check that it matches the currently selected group/term
+#                self.grade_table.check_group_term(gtable)
+#                # ... only returns if ok
+##                    print("LOADED %s: %s / %s" % (f, gtable.group, gtable.term))
+#                key = (gtable.group, gtable.term)
+#                gtables.append(gtable)
+#        if gtables:
+#            self.grade_table.integrate_partial_data(*gtables)
+#            REPORT('INFO', _UPDATED_GRADES.format(n = len(gtables)))
+#            return len(gtables)
+#        else:
+#            REPORT('WARN', _NO_GRADE_FILES)
+#            return 0
+#
+#    def terminate(self):
+#        self._halt = True

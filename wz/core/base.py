@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-01-03
+Last updated:  2021-01-04
 
 Basic configuration and structural stuff.
 
@@ -94,11 +94,14 @@ def init(datadir = 'DATA'):
     builtins.SCHOOL_DATA = ConfigFile(os.path.join(DATA, 'SCHOOL_DATA'))
 
 
-def report(text):
+def report(mtype, text = None):
     """The default reporting function prints to stdout.
     It can be overridden later.
     """
-    print(text)
+    if text:
+        print('%s: %s' % (mtype, text))
+    else:
+        print('???: %s' % mtype)
 builtins.REPORT = report
 
 #
@@ -330,37 +333,39 @@ class ThreadFunction:
     """Functions which are to be run in a background thread (for GUI
     interaction) must be based on this structure.
     Override <run> with the actual function code.
+    <self._message> can be set to a function to display messages (with
+    a single <str> argument).
     """
     def __init__(self):
         self._message = None
-
+#
     def run(self):
         self._cc = 0
         import time
         for i in range(10):
             if self._cc:
-                return self._cc
+                REPORT('ERROR', 'Interrupted')
+                break
             time.sleep(1) # artificial time delay
             self.message("Hello %d" % i)
+            REPORT('INFO', 'call %d' % i)
+        else:
+            REPORT('INFO', 'Completed')
         return self._cc
-
+#
     def message(self, msg):
         if self._message:
             self._message(msg)
         else:
             print(msg)
-
+#
     def terminate(self):
+        """This can be called before the thread is started to check
+        whether it is possible to terminate the thread prematurely.
+        Return <True> if a terminate is possible, otherwise <False>.
+        """
         self._cc = 1
-
-#TODO: To test the thread function (in GUI)
-#        fn = ThreadFunction()
-##        qp = ProgressMessages(fn)
-#        cc = REPORT('RUN', runme = fn)
-#        if cc:
-#            REPORT("ERROR: Interrupted")
-#        else:
-#            REPORT("INFO: Completed")
+        return True     # indicate that there is a terminate function
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

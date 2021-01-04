@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2021-01-03
+Last updated:  2021-01-04
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -111,7 +111,7 @@ class GradeReports:
             if self.grade_table.term == 'A':
                 rtype = grades.abicalc.calculate()['REPORT_TYPE']
                 if not rtype:
-                    REPORT("ERROR: " + _NOT_COMPLETE.format(
+                    REPORT("ERROR", _NOT_COMPLETE.format(
                             pupil = self.grade_table.name[pid]))
             else:
                 # Split group according to report type
@@ -236,7 +236,7 @@ class GradeReports:
             # Get the subject data
             sdata = self.grade_table.sid2subject_data[sid]
             if g == MISSING_GRADE:
-                REPORT("WARN: " + _NO_GRADE.format(pname = name,
+                REPORT("WARN", _NO_GRADE.format(pname = name,
                         sbj = sdata.name))
             if not g:
                 # Subject "not chosen", no report entry

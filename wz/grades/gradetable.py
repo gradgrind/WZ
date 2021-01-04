@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-01-03
+grades/gradetable.py - last updated 2021-01-04
 
 Access grade data, read and build grade tables.
 
@@ -20,15 +20,6 @@ Copyright 2021 Michael Towers
    limitations under the License.
 """
 
-#TODO: Change file names:
-# grade tables: Noten_11.G, Noten_13, Noten_11.G_2016-04-17, ...
-# report cards: as above but without the "Noten_" prefix, with "_type" suffix.
-# Where dates are included, these should be the date of issue, so the
-# file names can change and there would need to be clash-avoidance methods.
-
-#TODO: comments – where should these be stored? It is not straightforward
-# to have them in tables, especially not in a tsv.
-
 ### Grade table "info" items
 _SCHOOLYEAR = 'Schuljahr'
 _GROUP = 'Klasse/Gruppe'
@@ -37,17 +28,17 @@ _ISSUE_D = 'Ausgabedatum'      # or 'Ausstellungsdatum'?
 _GRADES_D = 'Notendatum'
 
 ### Messages
-_TABLE_CLASS_MISMATCH = "Falsche Klasse in Notentabelle:\n  {filepath}"
+_TABLE_CLASS_MISMATCH = "Falsche Klasse/Gruppe in Notentabelle:\n  {filepath}"
 _TABLE_TERM_MISMATCH = "Falscher \"Anlass\" in Notentabelle:\n  {filepath}"
 _TABLE_YEAR_MISMATCH = "Falsches Schuljahr in Notentabelle:\n  {filepath}"
 _PIDS_NOT_IN_GROUP = "Schüler nicht in Gruppe {group}: {pids}"
-
-_NO_GRADES_ENTRY = "Keine Noten für Schüler {pid} zum {zum}"
-_EXCESS_SUBJECTS = "Unerwartete Fachkürzel in der Notenliste: {sids}"
-_TEACHER_MISMATCH = "Fach {sid}: Alte Note wurde von {tid0}," \
-        " neue Note von {tid}"
+_WARN_EXTRA_PUPIL = "Unerwarteter Schüler ({name}) in" \
+        " Notentabelle:\n  {tfile}"
+_WARN_EXTRA_SUBJECT = "Unerwartetes Fach ({sid}) in" \
+        " Notentabelle:\n  {tfile}"
+_ERROR_OVERWRITE = "Neue Note für {name} im Fach {sid} mehrmals" \
+        " vorhanden:\n  {tfile1}\n  {tfile2}"
 _BAD_GRADE = "Ungültige Note im Fach {sid}: {g}"
-
 
 _TITLE2 = "Tabelle erstellt am {time}"
 
@@ -108,7 +99,7 @@ class Grades(GradeBase):
                 except ValueError:
                     pass
             else:
-                REPORT("ERROR: " + _BAD_GRADE.format(sid = sid, g = g))
+                REPORT('ERROR', _BAD_GRADE.format(sid = sid, g = g))
                 g = ''
         else:
             g = ''  # ensure that the grade is a <str>
@@ -514,7 +505,7 @@ class _GradeTable(dict):
 ###
 
 class GradeTableFile(_GradeTable):
-    def __init__(self, schoolyear, filepath):
+    def __init__(self, schoolyear, filepath, full_table = True):
         """Read the header info and pupils' grades from the given table file.
         The "spreadsheet" module is used as backend so .ods, .xlsx and .tsv
         formats are possible. The filename may be passed without extension –
@@ -523,9 +514,13 @@ class GradeTableFile(_GradeTable):
         with attribute 'filename' (so that the type-extension can be read).
         The <info> mapping of the table should contain the keys:
             'SCHOOLYEAR', 'GROUP', 'TERM', 'ISSUE_D', 'GRADES_D'
+        If <full_table> is true, all grade information will be included,
+        including calculations where appropriate. Otherwise, only the
+        non-empty cells from the source table will be included.
         """
         super().__init__(schoolyear)
         ss = Spreadsheet(filepath)
+        self.filepath = ss.filepath
         dbt = ss.dbTable()
         info = {row[0]: row[1] for row in dbt.info if row[0]}
         self.issue_d = info.get(_ISSUE_D)
@@ -542,9 +537,26 @@ class GradeTableFile(_GradeTable):
             if col > 2:
                 if f[0] != '$':
                     # This should be a subject tag
-                    sid2col.append((f, col))
+                    if f in self.subjects or f in self.extras:
+                        sid2col.append((f, col))
+                    else:
+                        REPORT('WARN', _WARN_EXTRA_SUBJECT.format(sid = f,
+                                tfile = self.filepath))
             col += 1
-        self._readtable(dbt, sid2col)
+        if full_table:
+            self._readtable(dbt, sid2col)
+        else:
+            # Only include non-empty cells from the source table
+            for row in dbt:
+                pid = row[0]
+                if pid and pid != '$':
+                    gmap = {}
+                    for sid, col in sid2col:
+                        val = row[col]
+                        if val:
+                            gmap[sid] = val
+                    self.name[pid] = row[1]
+                    self[pid] = gmap
 
 ###
 
@@ -602,6 +614,60 @@ class GradeTable(_GradeTable):
                     sid2col.append((f, col))
             col += 1
         self._readtable(dbt, sid2col)
+#
+    def check_group_term(self, gtable):
+        """Check that year, group and term in <gtable> match those of
+        the current instance.
+        """
+        if gtable.schoolyear != self.schoolyear:
+            raise GradeTableError(_TABLE_YEAR_MISMATCH.format(
+                    filepath = gtable.filepath))
+        if gtable.group != self.group:
+            raise GradeTableError(_TABLE_CLASS_MISMATCH.format(
+                    filepath = gtable.filepath))
+        if gtable.term != self.term:
+            raise GradeTableError(_TABLE_TERM_MISMATCH.format(
+                    filepath = gtable.filepath))
+#
+    def integrate_partial_data(self, *gtables):
+        """Include the data from the given (partial) tables.
+         - Only non-empty source table fields will be used for updating.
+         - Check validity of pupils and subjects (warn if mismatch).
+         - Only update empty fields (warn if there are attempts to overwrite).
+        """
+        tfiles = {}     # {pid:sid -> table file} (keep track of sources)
+        for gtable in gtables:
+            # Check year, group, term
+            self.check_group_term(gtable)
+            for pid, grades in gtable.items():
+                try:
+                    pgrades = self[pid]
+                except KeyError:
+                    REPORT('WARN', _WARN_EXTRA_PUPIL.format(
+                            name = gtable.name[pid],
+                            tfile = gtable.filepath))
+                    continue
+                for sid, g in grades.items():
+                    g0 = pgrades[sid]
+                    key = '%s:%s' % (pid, sid)
+                    tfile1 = tfiles.get(key)
+                    tfile2 = gtable.filepath
+                    tfiles[key] = tfile2
+                    if g != g0:
+                        if (not g0) and tfile1:
+                            REPORT('ERROR', _ERROR_OVERWRITE.format(
+                                    sid = sid,
+                                    name = gtable.name[pid],
+                                    tfile1 = tfile1,
+                                    tfile2 = tfile2))
+                            continue    # don't update
+                        pgrades[sid] = g
+        # A "recalc" should not be necessary if the grade file is
+        # reloaded after saving – which is the expected usage.
+        # Otherwise the calculations should probably be redone:
+        #for pid in self:
+        #    self.recalc(pid)
+        self.save()
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

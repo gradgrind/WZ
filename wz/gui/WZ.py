@@ -2,7 +2,7 @@
 """
 gui/WZ.py
 
-Last updated:  2021-01-03
+Last updated:  2021-01-04
 
 Administration interface.
 
@@ -27,8 +27,8 @@ Copyright 2021 Michael Towers
 
 ### Messages
 _SUBJECTS_CLASS = " ... Tabelle für Klasse {klass} aktualisiert"
-_WARN_NO_CHANGES = "WARN: Keine Änderungen sind vorgemerkt"
-_BAD_PUPIL_TABLE = "ERROR: Schülerdaten fehlerhaft:\n  {path}"
+_WARN_NO_CHANGES = "Keine Änderungen sind vorgemerkt"
+_BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
 
 ### Labels, etc.
 _TITLE = "WZ – Zeugnisverwaltung"
@@ -254,7 +254,7 @@ class UpdatePupils(TabPage):
             try:
                 self.ptables = self.pupils.read_source_table(fpath)
             except:
-                REPORT(_BAD_PUPIL_TABLE.format(path = fpath))
+                REPORT('ERROR', _BAD_PUPIL_TABLE.format(path = fpath))
                 return
         _delta = self.pupils.compare_new_data(self.ptables)
         changes = False
@@ -308,7 +308,7 @@ class UpdatePupils(TabPage):
             self._cleartree()
             self.update(True)
         else:
-            REPORT(_WARN_NO_CHANGES)
+            REPORT('WARN', _WARN_NO_CHANGES)
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

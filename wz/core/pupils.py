@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-01-03
+core/pupils.py - last updated 2021-01-04
 
 Database access for reading pupil data.
 
@@ -337,7 +337,7 @@ class Pupils(PupilsBase):
                     for f in files:
                         zipo.write(f, arcname = os.path.basename(f))
             except FileExistsError:
-                REPORT(_BAK_EXISTS.format(fpath = bakzip))
+                REPORT('ERROR', _BAK_EXISTS.format(fpath = bakzip))
 
         # Create new tables, at first in temporary directory
         tmpdir = os.path.join(bakdir, 'tmp')

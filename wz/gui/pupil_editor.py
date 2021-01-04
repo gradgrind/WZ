@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2021-01-03
+Last updated:  2021-01-04
 
 Editor for pupil data.
 
@@ -95,7 +95,7 @@ class PupilEdit(TabPage):
         try:
             self.pupilView.clear(force)
         except FailedSave as e:
-            REPORT(_SAVE_FAILED.format(msg = e))
+            REPORT('ERROR', _SAVE_FAILED.format(msg = e))
             return False
         return True
 #

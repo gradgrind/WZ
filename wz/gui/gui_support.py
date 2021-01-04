@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-01-03
+Last updated:  2020-01-04
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -25,33 +25,28 @@ Copyright 2019-2020 Michael Towers
 =-LICENCE========================================
 """
 
-import sys, builtins, traceback
+import sys, os, builtins, traceback
 
 from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
         QDialog#, QMessageBox, QProgressBar
 from qtpy.QtGui import QMovie, QPixmap
-from qtpy.QtCore import Qt, QObject, QThread, Signal, Slot
+from qtpy.QtCore import Qt, QObject, QThread, Signal, Slot, QCoreApplication
 
 ### Messages
 _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
 
 # Dialog buttons, etc.
 _CANCEL = "Abbrechen"
-_ACCEPT = "Übernehmen"
 _OK = "OK"
-_SETALL = "Alle setzen"
-_RESETALL = "Alle zurücksetzen"
-
-_BUSY = "Fortschritt ..."
-
-_DATE = "Datum"
 
 _INFO_TITLE = "Information"
 _WARN_TITLE = "Warnung"
 _ERROR_TITLE = "Fehler"
 _TRAP_TITLE = "Kritischer Fehler"
 _RUN_TITLE = "in Bearbeitung ..."
+_DONE_TITLE = "... fertig!"
+_OTHER_TITLE = "Rückmeldung"
 
 ###
 
@@ -268,8 +263,16 @@ class WorkerT(QThread):
 
 ###
 
-class _Feedback(QDialog):
-    """A modal dialog for reporting back to the user.
+MESSAGES = {
+    'INFO': '$',
+    'WARN': 'WARNUNG',
+    'ERROR': 'FEHLER',
+    'TRAP': 'KRITISCHER FEHLER'
+}
+
+class _Report(QDialog):
+    """A modal dialog for reporting back to the user. It is a "singleton",
+    i.e. only one instance may exist.
     It can simply present a piece of information, such as a warning or
     error message, or it can show the progress of a longer-running
     function (running in a separate thread).
@@ -280,19 +283,89 @@ class _Feedback(QDialog):
     involves implementing a <terminate> method on the function-class.
     """
     _instance = None
-    _report = Signal(str, str)
+    _active = False
+    _report = Signal(str)
 #
     @classmethod
-    def fetch(cls):
-        """This method is necessary because the class is instantiated
-        only once, but this must wait until the QApplication has been
-        started.
-        """
-        if not cls._instance:
+    def report(cls, mtype, msg = None, header = None, runme = None):
+        # The first call must be in the main thread (which is no problem
+        # as the worker thread can only be started by a call here).
+        # The QApplication must have been started before calling this.
+        mkey = MESSAGES.get(mtype)
+        if not mkey:
+            if msg:
+                mkey = '???'
+            else:
+                mkey = '#'
+                msg = mtype
+        if cls._instance:
+            if cls._active:
+                if mtype == 'RUN':
+                    raise Bug("Background thread within background thread")
+                # If the dialog is active, pass reports directly
+                # (via signal-slot) to the output window.
+                # Note that the signal mechanism requires that
+                # <cls._instance> be used here, not just <cls>.
+                cls._instance._report.emit((
+                        '+++++++++++++++++++++++++++++++++++++++++++\n'
+                        '  ** %s **\n%s: %s\n'
+                        '-------------------------------------------')
+                        % (header or 'REPORT', mkey, msg or '–––'))
+                return None
+        else:
             cls._instance = cls()
-        return cls._instance
+        self = cls._instance
+        # Reset the dialog (text, icon, etc.).
+        # If 'RUN', mark as "active", start the background thread,
+        # then exec_().
+        self.text.clear()
+        if mtype == 'RUN':
+            self._ok.setEnabled(False)
+            self._cancel.setVisible(runme.terminate())
+            if self.workerT.isRunning():
+                raise Bug("Background thread in use")
+            self.setWindowTitle(_RUN_TITLE)
+            self._title.setText("<h3>%s</h3>" % (header or _RUN_TITLE))
+            self.busy = QMovie(os.path.join('icons', 'busy.gif'))
+            self._pixmap.setMovie(self.busy)
+            self.busy.start()
+            # Handle the function to be called
+            cls._active = True
+            self.workerT.toBackground(runme)
+            self.exec_()
+            cls._active = False
+            return self.workerT.runResult
+        if mtype == 'INFO':
+            self.setWindowTitle(_INFO_TITLE)
+            self._title.setText("<h3>%s</h3>" % (header or _INFO_TITLE))
+            self._pixmap.setPixmap(QPixmap(os.path.join('icons', 'info.png')))
+            self.text.setPlainText(msg)
+        elif mtype == 'WARN':
+            self.setWindowTitle(_WARN_TITLE)
+            self._title.setText("<h3>%s</h3>" % (header or _WARN_TITLE))
+            self._pixmap.setPixmap(QPixmap(os.path.join('icons', 'warning.png')))
+            self.text.setPlainText(msg)
+        elif mtype == 'ERROR':
+            self.setWindowTitle(_ERROR_TITLE)
+            self._title.setText("<h3>%s</h3>" % (header or _ERROR_TITLE))
+            self._pixmap.setPixmap(QPixmap(os.path.join('icons', 'error.png')))
+            self.text.setPlainText(msg)
+        elif mtype == 'TRAP':
+            self.setWindowTitle(_TRAP_TITLE)
+            self._title.setText("<h3>%s</h3>" % (header or _TRAP_TITLE))
+            self._pixmap.setPixmap(QPixmap(os.path.join('icons', 'error.png')))
+            self.text.setPlainText(msg)
+        else:
+            self.setWindowTitle(_OTHER_TITLE)
+            self._title.setText("<h3>%s</h3>" % (header or _OTHER_TITLE))
+            self._pixmap.setPixmap(QPixmap(os.path.join('icons', 'other.png')))
+            self.text.setPlainText('%s: %s' % (mkey, msg))
+        self.exec_()
+        return None
 #
     def __init__(self):
+        if self._instance:
+            raise Bug("Report dialog exists already")
         super().__init__()
         self.resize(600, 400)
         #self.setWindowFlag(Qt.FramelessWindowHint)
@@ -322,165 +395,73 @@ class _Feedback(QDialog):
         bbox = QHBoxLayout()
         vbox.addLayout(bbox)
         bbox.addStretch(1)
-        self._cancel = QPushButton()
-        self._cancel.clicked.connect(self.do_cancel)
+        self._cancel = QPushButton(_CANCEL)
+        self._cancel.hide()
         bbox.addWidget(self._cancel)
-        self._report.connect(self.report)
+        self._ok = QPushButton(_OK)
+        self._ok.setDefault(True)
+        bbox.addWidget(self._ok)
+
         self.workerT = WorkerT()
         self.workerT._message.connect(self._output)
-        self.workerT.finished.connect(self._done)
-#        self.workerT._progress.connect(self._call)
-#
-    def closeEvent(self, e):
-        """Clicking window-close should have the same effect as pressing
-        the "Cancel" button.
-        """
-        e.ignore()
-        self._cancel.click()
-#
-    def do_cancel(self):
-        if self.workerT.isRunning():
-            self.workerT._cancel()
-        else:
-            self.reject()
-#
-    def info(self, message, header = None):
-        self._cancel.setText(_OK)
-        self.setWindowTitle(_INFO_TITLE)
-        self._title.setText("<h3>%s</h3>" % (header or _INFO_TITLE))
-        self._pixmap.setPixmap(QPixmap('info.png'))
-        self.text.setPlainText(message)
-        self.exec_()
-#
-    def warn(self, message, header = None):
-        self._cancel.setText(_OK)
-        self.setWindowTitle(_WARN_TITLE)
-        self._title.setText("<h3>%s</h3>" % (header or _WARN_TITLE))
-        self._pixmap.setPixmap(QPixmap('warning.png'))
-        self.text.setPlainText(message)
-        self.exec_()
-#
-    def error(self, message, header = None):
-        self._cancel.setText(_OK)
-        self.setWindowTitle(_ERROR_TITLE)
-        self._title.setText("<h3>%s</h3>" % (header or _ERROR_TITLE))
-        self._pixmap.setPixmap(QPixmap('error.png'))
-        self.text.setPlainText(message)
-        self.exec_()
-#
-    def trap(self, message, header = None):
-        self._cancel.setText(_OK)
-        self.setWindowTitle(_TRAP_TITLE)
-        self._title.setText("<h3>%s</h3>" % (header or _TRAP_TITLE))
-        self._pixmap.setPixmap(QPixmap('error.png'))
-        self.text.setPlainText(message)
-        self.exec_()
-#
-    def progress(self, fn, header):
-        if self.workerT.isRunning():
-            raise Bug("Background thread in use")
-        self._cancel.setText(_CANCEL)
-        self.setWindowTitle(_RUN_TITLE)
-        self._title.setText("<h3>%s</h3>" % (header or _RUN_TITLE))
-        self.text.clear()
-        _m = QMovie('busy.gif')
-        self._pixmap.setMovie(_m)
-        _m.start()
-        # Handle the function to be called
-        self.workerT.toBackground(fn)
-        self.exec_()
-        return self.workerT.runResult
-#
-    @Slot()
-    def report(self, mtype, msg):
-        if mtype == 'INFO':
-            if self.workerT.isRunning():
-                self._output(msg)
-            else:
-                self.info(msg)
-        elif mtype == 'WARN':
-            if self.workerT.isRunning():
-                self._output('%s: %s' % (_WARN_TITLE.upper(), _msg))
-            else:
-                self.warn(msg)
-        elif mtype == 'ERROR':
-            if self.workerT.isRunning():
-                self._output('%s: %s' % (_ERROR_TITLE.upper(), _msg))
-            else:
-                self.error(msg)
-        elif mtype == 'TRAP':
-            msg = msg.split('$$', 1)[0]
-            if self.workerT.isRunning():
-                self._output('%s: %s' % (_TRAP_TITLE.upper(), _msg))
-            else:
-                self.trap(msg)
-        else:
-            if mtype:
-                msg = '?%s: %s' % ('' if mtype == '?' else mtype, msg)
-            if self.workerT.isRunning():
-                self._output(msg)
-            else:
-                print(msg)
-#
-    @Slot()
-    def _done(self):
-        #print("DONE!")
-        self.reject()
+        self.workerT.finished.connect(self.thread_done)
+        self._cancel.clicked.connect(self.workerT._cancel)
+        self._cancel.clicked.connect(self.hide_cancel)
+        self._ok.clicked.connect(self.accept)
+        self._report.connect(self._output)
 #
     @Slot()
     def _output(self, msg):
         #print("output: " + msg)
         self.text.append(msg)
 #
-#    def _call (self, msg, percent):
-#        print("$1:", percent, msg)
-
-###
-
-def report(msg, header = None, runme = None):
-    """Pop-up reports, and logging ... (TODO!).
-    """
-#TODO: logging
-    if msg == 'RUN':
-        return _Feedback.fetch().progress(runme, header)
-    try:
-        mtype, text = msg.split(':', 1)
-    except:
-        mtype = '?'
-        text = msg
-    if mtype == 'TRAP':
-# TODO: log rather than print:
-        text, emsg = text.split('$$', 1)
-        print('%s: %s' % (mtype, text))
-        print(emsg)
-    _Feedback.fetch()._report.emit(mtype, text)
+    def hide_cancel(self):
+        """The cancel button was pressed. This is only relevant in
+        "RUN" dialogs.
+        There is a separate connection to the worker (see <__init__>).
+        """
+        self._cancel.hide()
+#
+    @Slot()
+    def thread_done(self):
+        self._cancel.hide()
+        self._ok.setEnabled(True)
+        # Adjust the header
+        self._title.setText("<h3>%s</h3>" % _DONE_TITLE)
+        self.busy.stop()
+#
+    def accept(self):
+        #print("ACCEPT")
+        super().accept()
+#
+    def reject(self):
+        #print("REJECT")
+        if self._cancel.isVisible():
+            self._cancel.clicked.emit()
+        if self._ok.isEnabled():
+            super().reject()
 
 #++++++++++++++++++++++++++++++++++++++++++
-builtins.REPORT = report
+builtins.REPORT = _Report.report
+#++++++++++++++++++++++++++++++++++++++++++
 
 # Handle uncaught exceptions
 class UncaughtHook(QObject):
-#    _exception_caught = Signal(object)
-#
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # This registers the <exception_hook> method as hook with
         # the Python interpreter
         sys.excepthook = self.exception_hook
-        # Connect signal to execute the message box function always
-        # on main thread
-#        self._exception_caught.connect(REPORT)
 #
     def exception_hook(self, exc_type, exc_value, exc_traceback):
         """Function handling uncaught exceptions.
         It is triggered each time an uncaught exception occurs.
         """
-        log_msg = 'TRAP: {val}$${emsg}'.format(
+        log_msg = '{val}$${emsg}'.format(
                 val = exc_value, emsg = ''.join(traceback.format_exception(
                         exc_type, exc_value, exc_traceback)))
         # Show message
-#        self._exception_caught.emit(log_msg)
-        REPORT(log_msg)
+        REPORT('TRAP', log_msg)
 
 # Create a global instance of <UncaughtHook> to register the hook
 qt_exception_hook = UncaughtHook()

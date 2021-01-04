@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2021-01-02
+Last updated:  2021-01-04
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -85,7 +85,7 @@ class GridView(QGraphicsView):
         self.setViewportUpdateMode(self.BoundingRectViewportUpdate)
         self.ldpi = self.logicalDpiX()
         if self.logicalDpiY() != self.ldpi:
-            REPORT("WARNING: LOGICAL DPI different for x and y")
+            REPORT('WARNING', "LOGICAL DPI different for x and y")
         self.MM2PT = self.ldpi / 25.4
 #
     def set_scene(self, scene):
