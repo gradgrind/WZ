@@ -286,6 +286,7 @@ class _Report(QDialog):
     _active = False
     _report = Signal(str)
 #
+#TODO: logging!
     @classmethod
     def report(cls, mtype, msg = None, header = None, runme = None):
         # The first call must be in the main thread (which is no problem

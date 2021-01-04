@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2021-01-03
+Last updated:  2021-01-04
 
 Editor for grades.
 
@@ -37,6 +37,8 @@ _TABLE_REPLACE = "Die neue Tabelle wird die alte ersetzen.\n" \
 _NO_GRADE_FILES = "Keine Tabellen zur Aktualisierung"
 _BAD_GRADE_FILE = "Ungültige Tabellendatei:\n  {fpath}"
 _UPDATED_GRADES = "Notentabelle aktualisiert: {n} QUelldatei(en)"
+_GRADE_TABLE_MISMATCH = "{error}:\n  Jahr: {year}, Gruppe: {group}," \
+        " Anlass: {term}"
 
 ### Labels, etc.
 _EDIT_GRADES = "Noten verwalten"
@@ -71,7 +73,8 @@ from gui.abitur_pupil_view import AbiPupilView
 from gui.gui_support import VLine, KeySelect, TabPage, QuestionDialog
 from local.base_config import year_path
 from local.grade_config import GradeBase
-from grades.gradetable import FailedSave, GradeTableFile
+from grades.gradetable import FailedSave, GradeTableFile, \
+        GradeTable, GradeTableError
 from grades.makereports import GradeReports
 
 ###
@@ -261,10 +264,16 @@ class GradeEdit(TabPage):
             ADMIN.set_loaddir(os.path.dirname(fpath))
             gtable = GradeTableFile(ADMIN.schoolyear, fpath)
             # Check that it matches the currently selected group/term
-            self.grade_scene.grade_table.check_group_term(gtable)
-            # ... only returns if ok
-            if QuestionDialog(_TITLE_TABLE_REPLACE, _TABLE_REPLACE):
-                gtable.save()       # save table
+            try:
+                self.grade_scene.grade_table.check_group_term(gtable)
+                # ... only returns if ok
+            except GradeTableError as e:
+                REPORT('ERROR', _GRADE_TABLE_MISMATCH.format(error = e,
+                        year = gtable.schoolyear, group = gtable.group,
+                        term = gtable.term))
+            else:
+                if QuestionDialog(_TITLE_TABLE_REPLACE, _TABLE_REPLACE):
+                        gtable.save()       # save table
         # Redisplay table
         self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
                 self.group, self.term)
@@ -278,41 +287,30 @@ class GradeEdit(TabPage):
         value for a given cell.
         The "information" fields are not affected.
         """
-#TODO
-        fn = ThreadFunction()
-        cc = REPORT('RUN', runme = fn)
-        print("cc:", cc)
-        return
-
-        dpath = '/home/mt/WZ/TESTDATA/SCHULJAHRE/2016/NOTEN_1_11.G'
-
-#        self.clear()
-#        dir0 = ADMIN._loaddir or os.path.expanduser('~')
-#        dpath = QFileDialog.getExistingDirectory(self.gradeView,
-#                _DIROPEN, dir0,
-#                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+        self.clear()
+        dir0 = ADMIN._loaddir or os.path.expanduser('~')
+        dpath = QFileDialog.getExistingDirectory(self.gradeView,
+                _DIROPEN, dir0,
+                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
         if dpath:
             ADMIN.set_loaddir(dpath)
-            fn = _UpdateGrades(self.grade_scene.grade_table, dpath)
+            # Reload grade table, in case changes were not saved
+            grade_table = GradeTable(ADMIN.schoolyear, self.group,
+                    self.term, ok_new = True)
+            fn = _UpdateGrades(grade_table, dpath)
             cc = REPORT('RUN', runme = fn)
         # Redisplay table
-#        self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
-#                self.group, self.term)
-#        self.gradeView.set_scene(self.grade_scene)
+        self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
+                self.group, self.term)
+        self.gradeView.set_scene(self.grade_scene)
 #
     def make_reports(self):
         """Generate the grade report(s).
         """
         self.save(force = False)
         greports = GradeReports(ADMIN.schoolyear, self.group, self.term)
-#TODO: completion reports in _MakeReports
         fn = _MakeReports(greports)
         files = REPORT('RUN', runme = fn)
-        if files:
-            REPORT("INFO: %s:\n  --> %s" % (_MADE_REPORTS,
-                '\n  --> '.join(files)))
-        else:
-            REPORT("ERROR: %s" % _NO_REPORTS)
 #
     def print_table(self):
         """Output the table as pdf.
@@ -329,10 +327,15 @@ class _MakeReports(ThreadFunction):
         self._grade_reports = grade_reports
 #
     def run(self):
-        return self._grade_reports.makeReports()
+        files = self._grade_reports.makeReports()
+        if files:
+            REPORT('INFO', "%s:\n  --> %s" % (_MADE_REPORTS,
+                '\n  --> '.join(files)))
+        else:
+            REPORT('ERROR', _NO_REPORTS)
 #
     def terminate(self):
-        self.message(_NOT_INTERRUPTABLE)
+        return False
 
 ###
 
@@ -342,36 +345,33 @@ class _UpdateGrades(ThreadFunction):
         self.grade_table = grade_table
         self.dpath = dpath
 #
-#    def run(self):
-#        self._halt = False
-#        gtables = []
-#        for f in ("one", "two", "three"):
-#        for f in os.listdir(self.dpath):
-#TODO
-#            self.message("FILE: %s" % f)
-#            REPORT("INFO", FILE: %s" % f)
-#            if self._halt:
-#                return -1
-#            fpath = os.path.join(self.dpath, f)
-#            try:
-#                gtable = GradeTableFile(ADMIN.schoolyear, fpath,
-#                        full_table = False)
-#            except:
-#                REPORT('WARN', _BAD_GRADE_FILE.format(fpath = fpath))
-#            else:
-#                # Check that it matches the currently selected group/term
-#                self.grade_table.check_group_term(gtable)
-#                # ... only returns if ok
-##                    print("LOADED %s: %s / %s" % (f, gtable.group, gtable.term))
-#                key = (gtable.group, gtable.term)
-#                gtables.append(gtable)
-#        if gtables:
-#            self.grade_table.integrate_partial_data(*gtables)
-#            REPORT('INFO', _UPDATED_GRADES.format(n = len(gtables)))
-#            return len(gtables)
-#        else:
-#            REPORT('WARN', _NO_GRADE_FILES)
-#            return 0
-#
-#    def terminate(self):
-#        self._halt = True
+    def run(self):
+        self._cc = 0
+        gtables = []
+        for f in os.listdir(self.dpath):
+            self.message("FILE: %s" % f)
+            if self._cc:
+                return -1
+            fpath = os.path.join(self.dpath, f)
+            try:
+                gtable = GradeTableFile(ADMIN.schoolyear, fpath,
+                        full_table = False)
+            except:
+                REPORT('WARN', _BAD_GRADE_FILE.format(fpath = fpath))
+            else:
+                # Check that it matches the currently selected group/term
+                try:
+                    self.grade_table.check_group_term(gtable)
+                    # ... only returns if ok
+                except GradeTableError as e:
+                    REPORT('ERROR', _GRADE_TABLE_MISMATCH.format(error = e,
+                            year = gtable.schoolyear, group = gtable.group,
+                            term = gtable.term))
+                gtables.append(gtable)
+        if gtables:
+            self.grade_table.integrate_partial_data(*gtables)
+            REPORT('INFO', _UPDATED_GRADES.format(n = len(gtables)))
+            return len(gtables)
+        else:
+            REPORT('WARN', _NO_GRADE_FILES)
+            return 0
