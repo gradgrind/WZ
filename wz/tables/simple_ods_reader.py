@@ -4,7 +4,7 @@
 """
 tables/simple_ods_reader.py
 
-Last updated:  2020-09-08
+Last updated:  2021-01-05
 
 OdsReader:
 Read the data from the sheets of an ods-file ignoring all formatting and
@@ -13,7 +13,7 @@ An ods-file is a zipped archive, the content is found in the file
 member file "content.xml".
 
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -301,7 +301,7 @@ def readOdsFile(filepath, ignore_covered_cells):
 
 if __name__ == '__main__':
     from core.base import init
-    init('TESTDATA')
+    init()
     import io
 
     filepath = os.path.join(DATA, 'testing', 'Test1.ods')

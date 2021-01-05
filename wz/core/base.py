@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-01-04
+Last updated:  2021-01-05
 
 Basic configuration and structural stuff.
 
@@ -86,10 +86,15 @@ class ConfigFile(dict):
 
 ###
 
-def init(datadir = 'DATA'):
+def init(datadir = None):
     appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     builtins.ZEUGSDIR = os.path.join(os.path.dirname (appdir))
-    builtins.DATA = os.path.join(ZEUGSDIR, datadir)
+    if not datadir:
+        datadir = os.path.join(ZEUGSDIR, 'TESTDATA')
+    if not os.path.isfile(os.path.join(datadir, 'SCHOOL_DATA')):
+        print("ERROR: Invalid data directory: %s" % datadir)
+        quit(1)
+    builtins.DATA = datadir
     builtins.RESOURCES = os.path.join(DATA, 'RESOURCES')
     builtins.SCHOOL_DATA = ConfigFile(os.path.join(DATA, 'SCHOOL_DATA'))
 
@@ -371,7 +376,7 @@ class ThreadFunction:
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    init('TESTDATA')
+    init()
     print("Current school year:", Dates.get_schoolyear())
     print("DATE:", Dates.print_date('2016-04-25'))
     try:

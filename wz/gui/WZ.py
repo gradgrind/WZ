@@ -2,7 +2,7 @@
 """
 gui/WZ.py
 
-Last updated:  2021-01-04
+Last updated:  2021-01-05
 
 Administration interface.
 
@@ -315,22 +315,25 @@ class UpdatePupils(TabPage):
 
 if __name__ == '__main__':
     import builtins
-    from core.base import init
-    from qtpy.QtCore import QSettings
-#    init('DATA')
-    init('TESTDATA')
-    # Persistent Settings:
-    builtins.SETTINGS = QSettings(os.path.join(DATA, 'wz-settings'),
-                QSettings.IniFormat)
 
-    import sys
     from qtpy.QtWidgets import QApplication#, QStyleFactory
-    from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo
+    from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
+    from qtpy.QtGui import QIcon
 
 #    print(QStyleFactory.keys())
 #    QApplication.setStyle('windows')
 
-    app = QApplication(sys.argv)
+    from core.base import init
+    app = QApplication([])
+    if len(sys.argv) == 2:
+        datadir = sys.argv[1]
+    else:
+        datadir = None
+    init(datadir)
+    # Persistent Settings:
+    builtins.SETTINGS = QSettings(os.path.join(DATA, 'wz-settings'),
+                QSettings.IniFormat)
+
     LOCALE = QLocale(QLocale.German, QLocale.Germany)
     QLocale.setDefault(LOCALE)
     qtr = QTranslator()
@@ -339,6 +342,7 @@ if __name__ == '__main__':
     app.installTranslator(qtr)
 
     admin = Admin()
+    admin.setWindowIcon(QIcon(os.path.join('icons', 'WZ1.png')))
     builtins.ADMIN = admin
     admin.init()
     screen = app.primaryScreen()

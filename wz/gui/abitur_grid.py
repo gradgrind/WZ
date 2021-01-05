@@ -2,7 +2,7 @@
 """
 gui/abitur_grid.py
 
-Last updated:  2021-01-03
+Last updated:  2021-01-05
 
 Editor for Abitur results.
 
@@ -414,7 +414,7 @@ class _GradeEdit(QDialog):
 
 if __name__ == '__main__':
     from core.base import init
-    init('TESTDATA')
+    init()
 
     _year = '2016'
 

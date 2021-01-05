@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2020-11-25
+Last updated:  2021-01-05
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -14,7 +14,7 @@ For writing, only simple tsv files (no quoting, no escapes) are supported.
 Dates are read and written as strings in the format 'yyyy-mm-dd'.
 
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -519,7 +519,7 @@ class NewSpreadsheet:
 
 if __name__ == '__main__':
     from core.base import init
-    init('TESTDATA')
+    init()
 
     filepath = os.path.join(DATA, 'testing', 'Test1.tsv')
     fname = os.path.basename(filepath)
@@ -548,13 +548,10 @@ if __name__ == '__main__':
 #    print("\n*** 20th row:", dbt[19])
 
     print("\nGRADES 10:")
-    ss = Spreadsheet(os.path.join(DATA, 'testing', 'NOTEN', 'Noten_2', 'Noten_10'))
+    ss = Spreadsheet(os.path.join(DATA, 'testing', 'NOTEN', 'NOTEN_2', 'Noten_10_2'))
     dbt = ss.dbTable()
     print("\nINFO:", dbt.info)
     print("\nFIELDS:", dbt.fieldnames())
     print("\nCONTENT:")
     for row in dbt:
         print(" :::", row)
-
-    print("\n\nFAIL: This should be an error ...")
-    Spreadsheet(filepath.rsplit('.', 1)[0])

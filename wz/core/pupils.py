@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-01-04
+core/pupils.py - last updated 2021-01-05
 
 Database access for reading pupil data.
 
@@ -510,7 +510,7 @@ if __name__ == '__main__':
 #    pupils.update_table(_delta)
 #    quit(0)
 #----------------------------------------------------------#
-    init('TESTDATA')
+    init()
 
     _year = '2016'
     pupils = Pupils(_year)

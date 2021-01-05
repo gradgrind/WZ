@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2021-01-04
+Last updated:  2021-01-05
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -317,7 +317,7 @@ def group_grades(all_keys):
 
 if __name__ == '__main__':
     from core.base import init
-    init('TESTDATA')
+    init()
 
     _year = '2016'
 

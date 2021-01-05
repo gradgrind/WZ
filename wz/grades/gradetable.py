@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-01-04
+grades/gradetable.py - last updated 2021-01-05
 
 Access grade data, read and build grade tables.
 
@@ -674,7 +674,7 @@ class GradeTable(_GradeTable):
 
 if __name__ == '__main__':
     from core.base import init
-    init('TESTDATA')
+    init()
     _schoolyear = '2016'
 
     if True:

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-simpleodt.py - last updated 2020-11-04
+simpleodt.py - last updated 2021-01-05
 
 1) OdtReader
 =============
@@ -14,7 +14,7 @@ Read the text content of odt files ignoring all formatting/style information.
 (b) Fill the "fields" in a LibreOfffice Writer file.
 
 ==============================
-Copyright 2017-2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -292,7 +292,7 @@ class OdtReader:
 
 if __name__ == '__main__':
     from core.base import init
-    init('TESTDATA')
+    init()
 
     _odtfile = os.path.join(DATA, 'testing', 'testdoc.odt')
 
@@ -300,7 +300,7 @@ if __name__ == '__main__':
     for l in OdtReader.readOdtFile(_odtfile):
         print("§§§", l)
 
-    _odtfile = os.path.join(RESOURCES, 'templates', 'grades', 'SekI.odt')
+    _odtfile = os.path.join(RESOURCES, 'templates', 'Noten', 'SekI.odt')
     _odir = os.path.join(DATA, 'testing', 'template-out')
     os.makedirs(_odir, exist_ok = True)
     print("\n USER FIELDS:")
@@ -335,7 +335,7 @@ if __name__ == '__main__':
     print("\n  ... not supplied:", sorted(notsub))
 #    quit(0)
 
-    _dirpath = os.path.join(RESOURCES, 'templates', 'grades')
+    _dirpath = os.path.join(RESOURCES, 'templates', 'Noten')
     _itemdict = {}  # Just test that fields are ok
     for f in os.listdir(_dirpath):
         print("\nINPUT:", f)

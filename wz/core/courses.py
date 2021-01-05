@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-01-03
+core/courses.py - last updated 2021-01-05
 
 Handle course data.
 
@@ -271,7 +271,7 @@ class Subjects(SubjectsBase):
 if __name__ == '__main__':
     _year = '2016'
     from core.base import init
-    init('TESTDATA')
+    init()
 
     _subjects = Subjects(_year)
     _filepath = os.path.join(DATA, 'testing', 'FACHLISTEN', 'Fachliste-09')
