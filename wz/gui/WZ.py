@@ -73,6 +73,7 @@ from core.base import Dates
 from gui.gui_support import HLine, KeySelect, TabPage
 from gui.pupil_editor import PupilEdit
 from gui.grade_editor import GradeEdit
+#from gui.text_editor import TextCover
 from local.base_config import print_schoolyear
 from core.pupils import Pupils
 from core.courses import Subjects
@@ -118,13 +119,12 @@ class Admin(QWidget):
 
         page1 = TabPage("Page 1")
         self._addPage(page1)
-        page2 = TabPage("Another tab name")
-        self._addPage(page2)
 
         self._addPage(UpdateSubjects())
         self._addPage(UpdatePupils())
         self._addPage(PupilEdit())
         self._addPage(GradeEdit())
+#        self._addPage(TextCover())
         self._lbox.addStretch(1)
 
         self.selectPage.idToggled.connect(self._switchPage)

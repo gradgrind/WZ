@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-01-04
+Last updated:  2020-01-05
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -246,11 +246,11 @@ class WorkerT(QThread):
         try:
             self.runResult = self._op.run()
         except RuntimeError as e:
-            print ("?1")
+            REPORT('ERROR', e)
             self.runResult = None
         except:
             tb = traceback.format_exc()
-            print ("?2\n%s" % tb)
+            REPORT('TRAP', tb)
             self.runResult = None
         self._op = None
 #

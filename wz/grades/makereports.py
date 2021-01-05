@@ -56,6 +56,7 @@ _UNEXPECTED_GRADE_GROUP = "Ungültiger Fachgruppe ({tag}) in Vorlage:\n" \
 _NO_SUBJECT_GROUP = "Keine passende Fach-Gruppe für Fach {sbj}"
 _NO_SLOT = "Kein Platz mehr für Fach mit Kürzel {sid} in Fachgruppe {tag}." \
         " Bisher: {done}"
+_BAD_REPORT_TYPE = "Ungültiger Zeugnistyp: '{rtype}'"
 
 
 from core.base import Dates
@@ -85,8 +86,10 @@ class GradeReports:
             'TERM': term,
             'CYEAR': class_year(group),
             'issue_d': self.grade_table.issue_d,  # for file-names
-            'ISSUE_D': Dates.print_date(self.grade_table.issue_d),
-            'GRADES_D': Dates.print_date(self.grade_table.grades_d),
+            'ISSUE_D': Dates.print_date(self.grade_table.issue_d,
+                    trap = False),
+            'GRADES_D': Dates.print_date(self.grade_table.grades_d,
+                    trap = False),
             'SCHOOL': SCHOOL_DATA.SCHOOL_NAME,
             'SCHOOLBIG': SCHOOL_DATA.SCHOOL_NAME.upper(),
             'schoolyear': schoolyear,
@@ -115,7 +118,7 @@ class GradeReports:
                             pupil = self.grade_table.name[pid]))
             else:
                 # Split group according to report type
-                rtype = grades[_REPORT_TYPE_FIELD]
+                rtype = grades.get(_REPORT_TYPE_FIELD, '-')
             if rtype:
                 try:
                     greport_type[rtype].append(pid)
@@ -130,22 +133,25 @@ class GradeReports:
         ### Build reports for each report-type separately
         fplist = []
         for rtype, pid_list in greport_type.items():
-            template, gmaplist = self.prepare_report_data(rtype,
-                    pid_list)
-            # make_pdf: data_list, dir_name, working_dir, double_sided
-            fplist.append(template.make_pdf(gmaplist,
-                    grades.REPORT_NAME.format(
-                        rtype = rtype,
-                        group = self.grade_table.group,
-                        term = self.grade_table.term
-                    ),
-                    year_path(self.grade_table.schoolyear,
-                        grades.REPORT_DIR.format(
-                            term = self.grade_table.term)
-                    ),
-                    double_sided = grades.double_sided(
-                            self.grade_table.group, rtype)
-            ))
+            if rtype == '-':
+                continue        # Skip these pupils
+            _tg = self.prepare_report_data(rtype, pid_list)
+            if _tg:
+                template, gmaplist = _tg
+                # make_pdf: data_list, dir_name, working_dir, double_sided
+                fplist.append(template.make_pdf(gmaplist,
+                        grades.report_name(
+                                group = self.grade_table.group,
+                                term = self.grade_table.term,
+                                rtype = rtype
+                        ),
+                        year_path(self.grade_table.schoolyear,
+                            grades.REPORT_DIR.format(
+                                term = self.grade_table.term)
+                        ),
+                        double_sided = grades.double_sided(
+                                self.grade_table.group, rtype)
+                ))
         return fplist
 #
     def prepare_report_data(self, rtype, pid_list):
@@ -160,7 +166,11 @@ class GradeReports:
         # The subject data is available at <self.grade_table.subjects>
         # and <self.sid2subject_data>.
         ### Grade report template
-        template_tag = Grades.report_template(self.grade_table.group, rtype)
+        try:
+            template_tag = Grades.report_template(self.grade_table.group, rtype)
+        except GradeConfigError:
+            REPORT('ERROR', _BAD_REPORT_TYPE.format(rtype = rtype))
+            return None
         gTemplate = Template(template_tag)
         ### Build the data mappings and generate the reports
         gmaplist = []

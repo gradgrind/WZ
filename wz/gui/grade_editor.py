@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2021-01-04
+Last updated:  2021-01-05
 
 Editor for grades.
 
@@ -36,7 +36,7 @@ _TABLE_REPLACE = "Die neue Tabelle wird die alte ersetzen.\n" \
         "Soll sie jetzt gespeichert werden?"
 _NO_GRADE_FILES = "Keine Tabellen zur Aktualisierung"
 _BAD_GRADE_FILE = "Ungültige Tabellendatei:\n  {fpath}"
-_UPDATED_GRADES = "Notentabelle aktualisiert: {n} QUelldatei(en)"
+_UPDATED_GRADES = "Notentabelle aktualisiert: {n} Quelldatei(en)"
 _GRADE_TABLE_MISMATCH = "{error}:\n  Jahr: {year}, Gruppe: {group}," \
         " Anlass: {term}"
 
@@ -181,11 +181,13 @@ class GradeEdit(TabPage):
             self.group = group
             self.pid = ''
 #        self.pselect.setVisible(False)
-        if self.term[0] == 'S':
-            self.term = self.pid if self.pid else 'S*'
+        term0 = self.term[0]
+        if term0 in ('S', 'T'):
+            termnull = term0 + '*'
+            self.term = self.pid if self.pid else termnull
             # Get list of existing reports for the group
             table_path = year_path(ADMIN.schoolyear,
-                    GradeBase.table_path(self.group, 'S*'))
+                    GradeBase.table_path(self.group, termnull))
             date_list = sorted([f.rsplit('_', 1)[1].split('.', 1)[0]
                     for f in glob.glob(table_path)], reverse = True)
             if group and date_list:
@@ -195,11 +197,11 @@ class GradeEdit(TabPage):
                     if today > date:
                         break
                     # Select this date initially
-                    self.pid = 'S' + latest
+                    self.pid = term0 + date
                     self.term = self.pid
             self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
                     self.group, self.term)
-            plist = [('', _NEW_REPORT)] + [('S' + d, d) for d in date_list]
+            plist = [('', _NEW_REPORT)] + [(term0 + d, d) for d in date_list]
         else:
             self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
                     self.group, self.term)
@@ -223,7 +225,7 @@ class GradeEdit(TabPage):
                 self.gradeView.set_scene(self.grade_scene)
                 self.grade_scene.set_pupil(pid)
                 return
-            if self.term[0] != 'S':
+            if self.term[0] not in ('S', 'T'):
 #TODO:
                 REPORT("TODO: Change pupil %s" % pid)
                 return
@@ -233,7 +235,7 @@ class GradeEdit(TabPage):
 #  QObject.connect(button, SIGNAL('clicked()'), self.save)
     def save(self, force = True):
         if self.clear(force):    # no question dialog
-            if self.term[0] == 'S':
+            if self.term[0] in ('S', 'T'):
                 self.pid = self.grade_scene.grade_table.term
             self.group_changed(None)
 #

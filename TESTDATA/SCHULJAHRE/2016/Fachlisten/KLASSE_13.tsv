@@ -2,17 +2,17 @@
 
 +++	SCHOOLYEAR	2016
 +++	CLASS	13
-+++	changed	2020-12-31
++++	changed	2021-01-05
 
 SID	SUBJECT	TIDS	FLAGS	SGROUPS
-De.e	Deutsch | eA	BW BTH		E
-En.e	Englisch | eA	BD		E
-Ges.e	Geschichte | eA	KW		E
-Bio.e	Biologie | eA	KK		E
-Ma.g	Mathematik | gA	VP		G
-En.m	Englisch | mdl	BD		M
-Fr.m	Französisch | mdl	ESM		M
-Bio.m	Biologie | mdl	KK		M
+De.e	Deutsch | eA	BW BTH		E T
+En.e	Englisch | eA	BD		E T
+Ges.e	Geschichte | eA	KW		E T
+Bio.e	Biologie | eA	KK		E T
+Ma.g	Mathematik | gA	VP		G T
+En.m	Englisch | mdl	BD		M T
+Fr.m	Französisch | mdl	ESM		M T
+Bio.m	Biologie | mdl	KK		M T
 Ku.m	Kunst | mdl	GM		M
 Mu.m	Musik | mdl	BS		M
 Sp.m	Sport | mdl	MS		M

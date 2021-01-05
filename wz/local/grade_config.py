@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-01-01
+Last updated:  2021-01-05
 
 Configuration for grade handling.
 
@@ -136,15 +136,18 @@ REPORT_GROUPS = f"""
 ######## Zeugnis-Art/Abitur automatic?
     *ZA/A = ;
 #Abitur; Fachhochschulreife; Abitur-nicht-bestanden;
+    *ZA/T = ;
     *ZA/1 = Zeugnis; Abgang;
     *ZA/2 = -; Abgang;
     *ZA/S = -; Abgang;
     *F_D/A = DATE
     *F_D =
     *B/A =
-    Calc = .Q/Ergebnis;
+    Calc = .Q/Ergebnis; .D/Φ Alle Fächer;
     .Q/A = Abi; FHS; NA; -;
     .Q = ;
+    .D/T = AVERAGE
+    .D =
     NotenWerte = {_ABITUR_GRADES}
 
 :12.G
@@ -261,6 +264,7 @@ class GradeBase(dict):
     """
     _ANLASS = (
         # term/category-tag, text version
+        ('T*', 'Klausuren'),
         ('1', '1. Halbjahr'),
         ('2', '2. Halbjahr'),
         ('A', 'Abitur'),
@@ -303,9 +307,18 @@ class GradeBase(dict):
         """Get file path for the grade table.
         """
         path = cls.GRADE_PATH.format(term = term[0], group = group)
-        if term[0] == 'S':
+        if term[0] in ('S', 'T'):
             return path + '_' + term[1:]
         return path
+#
+    @classmethod
+    def report_name(cls, group, term, rtype):
+        """Get file name for the grade report.
+        """
+        name = cls.REPORT_NAME.format(group = group, rtype = rtype)
+        if term[0] in ('S', 'T'):
+            return name + '_' + term[1:]
+        return name
 #
     @classmethod
     def _group2klass_streams(cls, group):
@@ -399,8 +412,9 @@ class GradeBase(dict):
     def term2text(cls, term):
         """For grade tables, produce readable "term" entries.
         """
-        if term[0] == 'S':
-            term = 'S*'
+        term0 = term[0]
+        if term0 in ('S', 'T'):
+            term = term0 + '*'
         for t, text in cls.terms():
             if term == t:
                 return text
@@ -413,9 +427,9 @@ class GradeBase(dict):
         """
         for term, txt in cls.terms():
             if text == txt:
+                if term.endswith('*'):
+                    term = term[:-1] + issue_d
                 return term
-        if text[0] == 'S':
-            return 'S' + issue_d
         raise Bug("INVALID term text: %s" % text)
 #
     @classmethod

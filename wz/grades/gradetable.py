@@ -39,6 +39,8 @@ _WARN_EXTRA_SUBJECT = "Unerwartetes Fach ({sid}) in" \
 _ERROR_OVERWRITE = "Neue Note für {name} im Fach {sid} mehrmals" \
         " vorhanden:\n  {tfile1}\n  {tfile2}"
 _BAD_GRADE = "Ungültige Note im Fach {sid}: {g}"
+_NO_DATE = "Kein Ausgabedatum angegeben"
+_DATE_EXISTS = "Ausgabedatum existiert schon"
 
 _TITLE2 = "Tabelle erstellt am {time}"
 
@@ -51,6 +53,7 @@ if __name__ == '__main__':
 
 import datetime
 from fractions import Fraction
+from collections import namedtuple
 
 from core.base import Dates
 from core.pupils import Pupils
@@ -225,7 +228,7 @@ class _GradeTable(dict):
         If <pids> is not null, only include these pupils.
         """
         ## Initialize the dates (issue at end of term, or end of year)
-        if self.term[0] == 'S':
+        if self.term[0] in ('S', 'T'):
             # ... unless it is a special table
             date = '*'
         else:
@@ -285,6 +288,10 @@ class _GradeTable(dict):
         for gs in subjects.grade_subjects(group):
             sid = gs.sid
             self.sid2subject_data[sid] = gs
+            if term[0] == 'T':
+                # Only include if in 'T' group
+                if 'T' not in gs.report_groups:
+                    continue
             if gs.tids:
                 # "real" (taught) subject
                 self.subjects[sid] = gs.name
@@ -407,17 +414,17 @@ class _GradeTable(dict):
         # Get file path and write file
         table_path = year_path(self.schoolyear,
                 GradeBase.table_path(self.group, self.term))
-        if self.term[0] == 'S':
+        if self.term[0] in ('S', 'T'):
 #TODO: check validity of date?
             if issue_d == '*':
-                raise FailedSave('NO_DATE')
+                raise FailedSave(_NO_DATE)
             if self.term[1:] != issue_d:
                 # Date-of-issue – and thus also "term" – changed
-                new_term = 'S' + issue_d
+                new_term = self.term[0] + issue_d
                 table_path_new = year_path(self.schoolyear,
                         GradeBase.table_path(self.group, new_term))
                 if os.path.isfile(table_path_new + suffix):
-                    raise FailedSave('DATE_EXISTS')
+                    raise FailedSave(_DATE_EXISTS)
                 xfile = table_path + suffix
                 if os.path.isfile(xfile):
                     os.remove(xfile)
@@ -560,6 +567,9 @@ class GradeTableFile(_GradeTable):
 
 ###
 
+gtable_info = namedtuple('gtable_info', ('schoolyear', 'group', 'term',
+        'filepath'))
+
 class NewGradeTable(_GradeTable):
     """An empty grade table.
     """
@@ -594,15 +604,9 @@ class GradeTable(_GradeTable):
 
         dbt = ss.dbTable()
         info = {row[0]: row[1] for row in dbt.info if row[0]}
-        _yr = info.get('SCHOOLYEAR')
-        if _yr != str(schoolyear):
-            raise Bug(_TABLE_YEAR_MISMATCH.format(filepath = filepath))
-        _grp = info.get('GROUP')
-        if _grp != group:
-            raise Bug(_TABLE_CLASS_MISMATCH.format(filepath = table_path))
-        _trm = info.get('TERM')
-        if _trm != term:
-            raise Bug(_TABLE_TERM_MISMATCH.format(filepath = table_path))
+        gtable = gtable_info(info.get('SCHOOLYEAR'), info.get('GROUP'),
+                info.get('TERM'), table_path)
+        self.check_group_term(gtable)
         self.issue_d = info.get('ISSUE_D')
         self.grades_d = info.get('GRADES_D')
         sid2col = []
