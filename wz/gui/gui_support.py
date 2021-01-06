@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2020-01-05
+Last updated:  2020-01-06
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -264,7 +264,7 @@ class WorkerT(QThread):
 ###
 
 MESSAGES = {
-    'INFO': '$',
+    'INFO': '::',
     'WARN': 'WARNUNG',
     'ERROR': 'FEHLER',
     'TRAP': 'KRITISCHER FEHLER'
@@ -307,11 +307,12 @@ class _Report(QDialog):
                 # (via signal-slot) to the output window.
                 # Note that the signal mechanism requires that
                 # <cls._instance> be used here, not just <cls>.
+                line0 = ('  ** %s **\n' % header) if header else ''
                 cls._instance._report.emit((
                         '+++++++++++++++++++++++++++++++++++++++++++\n'
-                        '  ** %s **\n%s: %s\n'
+                        '%s  %s: %s\n'
                         '-------------------------------------------')
-                        % (header or 'REPORT', mkey, msg or '–––'))
+                        % (line0, mkey, msg or '–––'))
                 return None
         else:
             cls._instance = cls()

@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-01-05
+Last updated:  2021-01-06
 
 Basic configuration and structural stuff.
 
@@ -30,8 +30,6 @@ _INVALID_SCHOOLYEAR = "Ungültiges Schuljahr: {year}"
 _BAD_CONFIG_LINE = "In Konfigurationsdatei {cfile}:\n  ungültige Zeile: {line}"
 _DOUBLE_CONFIG_TAG = "In Konfigurationsdatei {cfile}:\n" \
         "  mehrfacher Eintrag: {tag} = ..."
-
-_CALENDAR = 'Kalender'  # Calendar file (in year folder)
 
 import sys, os, re, builtins, datetime
 if __name__ == '__main__':
@@ -212,7 +210,8 @@ class Dates:
         for d in os.listdir(sypath):
             try:
                 y = int(d)
-                if os.path.exists(os.path.join(sypath, d, _CALENDAR)):
+                if os.path.exists(os.path.join(sypath, d,
+                        CONFIG.CALENDAR_FILE)):
                     years.append(d)
             except:
                 pass

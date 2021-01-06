@@ -2,7 +2,7 @@
 """
 gui/WZ.py
 
-Last updated:  2021-01-05
+Last updated:  2021-01-06
 
 Administration interface.
 
@@ -74,6 +74,7 @@ from gui.gui_support import HLine, KeySelect, TabPage
 from gui.pupil_editor import PupilEdit
 from gui.grade_editor import GradeEdit
 #from gui.text_editor import TextCover
+from gui.calendar import Calendar
 from local.base_config import print_schoolyear
 from core.pupils import Pupils
 from core.courses import Subjects
@@ -125,6 +126,7 @@ class Admin(QWidget):
         self._addPage(PupilEdit())
         self._addPage(GradeEdit())
 #        self._addPage(TextCover())
+        self._addPage(Calendar())
         self._lbox.addStretch(1)
 
         self.selectPage.idToggled.connect(self._switchPage)

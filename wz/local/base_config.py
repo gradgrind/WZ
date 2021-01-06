@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-01-03
+Last updated:  2021-01-06
 
 General configuration items.
 
@@ -36,6 +36,15 @@ USE_XLSX = False
 
 LINEBREAK = '¶'    # character used as paragraph separator in text cells
 
+CALENDER_HEADER = \
+"""### Ferien und andere Jahresdaten
+### Version: {date}
+############################################################
+# Diese Zeilen können vom Kalender-Editor automatisch
+# aktualisiert werden.
+#-----------------------------------------------------------
+
+"""
 
 import os, glob
 
