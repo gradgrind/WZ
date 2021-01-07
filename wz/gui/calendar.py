@@ -72,7 +72,6 @@ class Calendar(TabPage):
 
         #*********** The "main" widget ***********
         self.edit = QTextEdit()
-        #self.edit.setWordWrapMode(QTextOption.NoWrap)
         self.edit.setLineWrapMode(self.edit.NoWrap)
         self.edit.setAcceptRichText(False)
         self.edit.setUndoRedoEnabled(True)

@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-01-06
+Last updated:  2021-01-07
 
 General configuration items.
 
@@ -40,8 +40,8 @@ CALENDER_HEADER = \
 """### Ferien und andere Jahresdaten
 ### Version: {date}
 ############################################################
-# Diese Zeilen können vom Kalender-Editor automatisch
-# aktualisiert werden.
+# Diese Kopfzeilen sollten nicht geändert werden, das Datum
+# wird beim Speichern automatisch aktualisiert.
 #-----------------------------------------------------------
 
 """
@@ -69,6 +69,13 @@ def print_schoolyear(schoolyear):
     """Convert a school-year (<str>) to the format used for output
     """
     return '%d – %s' % (int(schoolyear) - 1, schoolyear)
+
+###
+
+def print_class(klass):
+    """Return the class name as used in text reports.
+    """
+    return klass.lstrip('0')
 
 ###
 

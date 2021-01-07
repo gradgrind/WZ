@@ -48,7 +48,7 @@ _tags = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul",
         "Aug", "Sep", "Okt", "Nov", "Dez"]
 
 
-import sys, os, builtins, datetime
+import sys, os
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]

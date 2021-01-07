@@ -73,7 +73,7 @@ from core.base import Dates
 from gui.gui_support import HLine, KeySelect, TabPage
 from gui.pupil_editor import PupilEdit
 from gui.grade_editor import GradeEdit
-#from gui.text_editor import TextCover
+from gui.text_reports import TextReports
 from gui.calendar import Calendar
 from local.base_config import print_schoolyear
 from core.pupils import Pupils
@@ -125,7 +125,7 @@ class Admin(QWidget):
         self._addPage(UpdatePupils())
         self._addPage(PupilEdit())
         self._addPage(GradeEdit())
-#        self._addPage(TextCover())
+        self._addPage(TextReports())
         self._addPage(Calendar())
         self._lbox.addStretch(1)
 

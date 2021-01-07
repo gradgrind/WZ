@@ -1,8 +1,8 @@
 ### Ferien und andere Jahresdaten
-### Version: 2021-01-06
+### Version: 2021-01-07
 ############################################################
-# Diese Zeilen können vom Kalender-Editor automatisch
-# aktualisiert werden.
+# Diese Kopfzeilen sollten nicht geändert werden, das Datum
+# wird beim Speichern automatisch aktualisiert.
 #-----------------------------------------------------------
 
 # Zeilen, die mit '#' beginnen, sind Kommentare.

@@ -3,12 +3,12 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2020-12-23
+Last updated:  2021-01-06
 
 Manage the substitution of "special" fields in an odt template.
 
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -36,7 +36,9 @@ of the window) and then reselecting the desired style. If that doesn't
 help, it may be necessary to retype the field.
 """
 
-LIBREOFFICE = 'libreoffice'     # external program (command to run)
+# External program (command to run):
+LIBREOFFICE = 'libreoffice'
+#LIBREOFFICE = 'LibreOffice-fresh.standard.help-x86_64.AppImage'
 
 ### Messages:
 _MISSING_PDFS = "pdf-Erstellung schlug fehl:\n  von {spath}\n  nach {dpath}"
@@ -139,7 +141,7 @@ class Template:
         <template_path> and will normally not be passed in.
         """
         self.template_path = os.path.join(RESOURCES, 'templates',
-                *template_path.split('/')) + '.odt'
+                *template_path.split('/'))
         if not self.template_path.endswith('.odt'):
             self.template_path += '.odt'
 #
