@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-01-06
+Last updated:  2021-01-11
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -144,6 +144,15 @@ class Template:
                 *template_path.split('/'))
         if not self.template_path.endswith('.odt'):
             self.template_path += '.odt'
+#
+    def fields(self):
+        """Return the fields as a list of pairs:
+            [(tag, style or <None>), ...]
+        If the tag is the only entry in a paragraph in the template file,
+        the paragraph style should be returned as the second value. This
+        indicates that a multi-line text may be substituted here.
+        """
+        return OdtFields.listUserFields(self.template_path)
 #
     def all_keys(self):
         return {k for k,s in OdtFields.listUserFields(self.template_path)}

@@ -2,7 +2,7 @@
 """
 gui/text_reports.py
 
-Last updated:  2021-01-07
+Last updated:  2021-01-09
 
 Manage text reports
 
@@ -50,13 +50,13 @@ if __name__ == '__main__':
 import core.base as CORE
 
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
-        QPushButton, QTextEdit, QFileDialog, QDateEdit
-from qtpy.QtGui import QTextOption
+        QPushButton, QTextEdit, QDateEdit
+#from qtpy.QtGui import QTextOption
 from qtpy.QtCore import QDate
 
-from gui.gui_support import VLine, HLine, KeySelect, TabPage, GuiError
+from gui.gui_support import VLine, HLine, KeySelect, TabPage
 from core.pupils import Pupils
-from local.base_config import year_path
+#from local.base_config import year_path
 from template_engine.coversheet import CoverSheets
 
 ###
@@ -106,7 +106,8 @@ class TextReports(TabPage):
         self.year_changed()
 #
     def leave(self):
-        self.check_saved()
+        pass
+#        self.check_saved()      # see calendar.py
 #
     def year_changed(self):
 #TODO: check changes?
@@ -117,11 +118,6 @@ class TextReports(TabPage):
         self.class_select.set_items([(c, c)
                 for c in self.pupils.classes() if c < '13'])
         self.class_select.trigger()
-#
-    def check_saved(self):
-        if self.pbSave.isEnabled() and QuestionDialog(
-                _TITLE_CALENDAR_SAVE, _CALENDAR_SAVE):
-            self.save()
 #
     def save(self):
         header = CALENDER_HEADER.format(date = CORE.Dates.today())

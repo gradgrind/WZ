@@ -3,7 +3,7 @@
 """
 local/text_config.py
 
-Last updated:  2021-01-07
+Last updated:  2021-01-11
 
 Configuration items for text (Waldorf) reports.
 
@@ -27,7 +27,7 @@ COVER_NAME = '{klass}'      # report cover sheet: file name
 COVER_DIR = 'MANTEL'        # report cover sheet: folder
 
 def cover_template(klass):
-    tp = 'Text/Zeugnis'
+    tp = 'Text/Mantel'
     if klass >= '12':
         tp += '-Abgang'
 #    if klass[-1] == 'K':       # currently using the "normal" template

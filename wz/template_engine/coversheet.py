@@ -1,10 +1,9 @@
-### python >= 3.7
 # -*- coding: utf-8 -*-
 
 """
 template_engine/coversheet.py
 
-Last updated:  2021-01-07
+Last updated:  2021-01-11
 
 Build the outer sheets (cover sheets) for the text reports.
 User fields in template files are replaced by the report information.
@@ -43,7 +42,7 @@ if __name__ == '__main__':
 from core.base import Dates
 
 from core.pupils import Pupils
-from template_engine.template_sub import Template, TemplateError
+from template_engine.template_sub import Template
 from local.base_config import print_schoolyear, print_class, year_path
 from local.text_config import cover_template, COVER_NAME, COVER_DIR
 

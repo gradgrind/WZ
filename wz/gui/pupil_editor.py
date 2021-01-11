@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-gui/grade_editor.py
+gui/pupil_editor.py
 
-Last updated:  2021-01-04
+Last updated:  2021-01-09
 
 Editor for pupil data.
 

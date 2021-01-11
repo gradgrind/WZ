@@ -2,7 +2,7 @@
 """
 grid.py
 
-Last updated:  2021-01-04
+Last updated:  2021-01-11
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -580,12 +580,12 @@ class Tile(QGraphicsRectItem):
         if type(text) != str:
             raise Bug(_NOTSTRING.format(val = repr(text)))
         self._text = text
-        if text and self.validation == 'TEXT':
-            # Display '###' instead of the text
-            text = '###'
         self.textItem.setText(text)
         w = self.textItem.boundingRect().width()
-
+        if text and self.validation == 'TEXT':
+            if w > self.width0:
+                # Display '###' instead of the text
+                self.textItem.setText('###')
         if self.rotation:
             maxh = self.height0 - self.margin() * 2
             if w > maxh:
