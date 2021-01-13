@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-01-11
+Last updated:  2021-01-13
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -135,13 +135,16 @@ class Template:
     The method <all_keys> returns a <set> of all field names from the
     template.
     """
-    def __init__(self, template_path):
-        """<template_path> is the path to the template file relative to
-        the templates folder. The '.odt' ending is optional in
-        <template_path> and will normally not be passed in.
+    def __init__(self, template_path, full_path = False):
+        """<template_path> is the path to the template file.
+        If <full_path> is true, the path is absolute;
+        if false, the path is relative to the templates folder.
+        The '.odt' ending is optional in <template_path> and will
+        normally not be passed in.
         """
-        self.template_path = os.path.join(RESOURCES, 'templates',
-                *template_path.split('/'))
+        self.template_path = (template_path if full_path
+                else os.path.join(RESOURCES, 'templates',
+                        *template_path.split('/')))
         if not self.template_path.endswith('.odt'):
             self.template_path += '.odt'
 #
@@ -221,19 +224,8 @@ class Template:
             return pdf_path
         else:
             return pdf_bytes
-
-# For odt-templates, there needs to be a folder to receive the odt-files.
-# These would then be batch-converted to pdf-files – in another folder.
-# The pdf-files can then be concatenated and, if necessary, padded with
-# empty pages – using pikepdf/gs(/pdfrw)? – to produce the final pdf.
-# Suggestion:
-#     SCHOOLYEARS – 2016 – <Grades> – <TERM2> – 12.G_Zeugnis (individual, odt)
-#                                         – pdf (individual, temporary)
-#                                         – 12.G_Zeugnis.pdf
-#                                   – <Single> – Behrens_Fritz_2016-03-12_Zwischen.odt
-#                                              – Behrens_Fritz_2016-03-12_Zwischen.pdf
-
-    def make_pdf1(self, datamap, file_name, working_dir = None):
+#
+    def make_pdf1(self, datamap, file_name = None, working_dir = None):
         """From the supplied data mapping produce a pdf of the
         corresponding report.
         Files are built in <working_dir>, which will normally be a path
@@ -247,6 +239,8 @@ class Template:
             With <working_dir>: path to resulting pdf-file
             No <working_dir>: pdf-bytes
         """
+        if not file_name:
+            file_name = '_TMP_'
         if working_dir:
             wdir = working_dir
             if not os.path.isdir(wdir):
@@ -272,8 +266,18 @@ class Template:
         else:
             with open(pdf_file, 'rb') as fin:
                 return fin.read()
+#
+    def make_odt1(self, datamap):
+        """From the supplied data mapping produce an odt of the
+        corresponding report, returning the file content as <bytes>.
+        """
+        odtBytes, used, notsub = OdtFields.fillUserFields(
+                self.template_path, datamap)
+#TODO: Do something with <used> and <notsub>?
+        return odtBytes
 
 
+#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
     from core.base import init

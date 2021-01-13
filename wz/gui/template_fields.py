@@ -2,7 +2,7 @@
 """
 gui/template_fields.py
 
-Last updated:  2021-01-11
+Last updated:  2021-01-13
 
 Show template fields, set values and process template.
 
@@ -24,17 +24,19 @@ Copyright 2021 Michael Towers
 =-LICENCE========================================
 """
 
-#TODO
-
 ### Messages
 
 ### Labels, etc.
 _EDIT_FIELDS = "Vorlage ausfüllen"
 _CLASS = "Klasse:"
+_GEN_ODT = "ODT erstellen"
 _GEN_PDF = "PDF erstellen"
 _CHOOSE_TEMPLATE = "Vorlage wählen"
 _FILEOPEN = "Datei öffnen"
+_FILESAVE = "Datei speichern"
 _TEMPLATE_FILE = "LibreOffice Text-Vorlage (*.odt)"
+_ODT_FILE = "LibreOffice Text-Dokument (*.odt)"
+_PDF_FILE = "PDF-Dokument (*.pdf)"
 
 #####################################################
 
@@ -53,7 +55,8 @@ from gui.grid import GridView, Grid
 from gui.gui_support import VLine, KeySelect, TabPage, GuiError
 
 from core.pupils import Pupils, NullPupilData
-from local.base_config import PupilsBase, class_year, print_schoolyear
+from local.base_config import PupilsBase, class_year, print_schoolyear, \
+        print_class
 from local.grade_config import STREAMS
 from template_engine.template_sub import Template, TemplateError
 
@@ -64,7 +67,6 @@ class GView(GridView):
 
 ###
 
-#TODO
 ## Measurements are in mm ##
 _HEIGHT_LINE = 6
 COLUMNS = (40, 60)
@@ -75,15 +77,35 @@ ROWS = (
 
 ###
 
-#TODO
-# Import stuff from pupil_grid rather than repeating it here?
 class FieldGrid(Grid):
     """Present the data for a template, allowing editing of the
     individual fields.
     There is special handling for certain pupil fields.
     """
-    def __init__(self, view, fields_style):
-        _ROWS = ROWS + (_HEIGHT_LINE,) * len(fields)
+    def __init__(self, view, template):
+        """<view> is the QGraphicsView in which the grid is to be shown.
+        <template> is a <Template> instance.
+        """
+        # Get template fields: [(field, style or <None>), ...]
+        fields_style = template.fields()
+        # The fields are in order of appearance in the template file,
+        # keys may be present more than once!
+        # The style is only present for fields which are alone within a
+        # paragraph. It indicates that multiple lines are possible, so
+        # normally a multi-line editor will be provided.
+        # Reduce to one entry per field, collect number of each field.
+        self.fields = {}
+        multiline = {}
+        for field, fstyle in fields_style:
+            try:
+                self.fields[field] += 1
+                if not fstyle:
+                    # all occurrences must allow multi-line values
+                    multiline[field] = False
+            except KeyError:
+                self.fields[field] = 1
+                multiline[field] = bool(fstyle)
+        _ROWS = ROWS + (_HEIGHT_LINE,) * len(self.fields)
         super().__init__(view, _ROWS, COLUMNS)
         self.styles()
         ### Non-editable fields
@@ -92,9 +114,7 @@ class FieldGrid(Grid):
         self.tile(0, 0, text = '', cspan = 2, style = 'title', tag = 'title')
         ### field - value lines
         row = 1
-        self.fields = []
-        for field, fstyle in fields_style:
-            self.fields.append(field)
+        for field in self.fields:
             self.tile(row, 0, text = field, style = 'key')
             vstyle = 'value'
             if field in noneditable:
@@ -111,7 +131,7 @@ class FieldGrid(Grid):
                 elif field == 'STREAM':
                     validation = 'STREAM'   # Special pop-up editor
                     self.addSelect('STREAM', STREAMS)
-                elif fstyle:
+                elif multiline[field]:
                     validation = 'TEXT'
                 else:
                     validation = 'LINE'
@@ -134,37 +154,15 @@ class FieldGrid(Grid):
         for field in self.fields:
             self.set_text_init(field, mapping.get(field) or '')
 #
-#    def valueChanged(self, tag, text):
-#        """Called when a cell value is changed by the editor.
-#        """
-#        super().valueChanged(tag, text)
-#        ...
-
-########################### old
-    def classes(self):
-        return self.pupils.classes()
-#
-    def set_class(self, klass):
-        self.pupil_list = self.pupils.class_pupils(klass)
-        self.klass = klass
-        return self.pupil_list
-#
-    def set_pupil(self, pid):
-        if pid:
-            self.pupil_data = self.pupil_list.pid2pdata(pid)
-            self.pid = pid
-            self.set_text('title', self.pupil_data.name())
-        else:
-            # Present an "empty" table
-            self.pupil_data = NullPupilData(self.klass)
-            self.pid = self.pupil_data['PID']
-            self.set_text('title', 'Neu: ' + self.pupil_data.name())
-        for field in PupilsBase.FIELDS:
-            self.set_text_init(field, self.pupil_data[field])
+    def valueChanged(self, tag, text):
+        """Called when a cell value is changed by the editor.
+        """
+        super().valueChanged(tag, text)
+        if tag in self.values:
+            self.values[tag] = text
 
 ###
 
-#TODO
 class FieldEdit(TabPage):
     def __init__(self):
         super().__init__(_EDIT_FIELDS)
@@ -195,12 +193,14 @@ class FieldEdit(TabPage):
         choose_template.clicked.connect(self.get_template)
         cbox.addStretch(1)
 
-        pgen = QPushButton(_GEN_PDF)
-        cbox.addWidget(pgen)
-        pgen.clicked.connect(self.gen_pdf)
+        odtgen = QPushButton(_GEN_ODT)
+        cbox.addWidget(odtgen)
+        odtgen.clicked.connect(self.gen_odt)
+        pdfgen = QPushButton(_GEN_PDF)
+        cbox.addWidget(pdfgen)
+        pdfgen.clicked.connect(self.gen_pdf)
 #
     def enter(self):
-#?
         self.year_changed()
 #
     def leave(self):
@@ -208,16 +208,10 @@ class FieldEdit(TabPage):
 #
     def year_changed(self):
         self.pupils = Pupils(ADMIN.schoolyear)
-
-
-        if not self.clear():
-            return False
-
-        self.pupilView.set_scene(self.pupil_scene)
+# Should there be an entry for "NO CLASS"
         self.class_select.set_items([(c, c)
-                for c in self.pupil_scene.classes()])
+                for c in self.pupils.classes()])
         self.class_select.trigger()
-        return True
 #
     def class_changed(self, klass):
         self.klass = klass
@@ -225,43 +219,33 @@ class FieldEdit(TabPage):
 # Should there be an entry for "NO PUPIL"
         self.pselect.set_items([(pdata['PID'], pdata.name())
                 for pdata in self.pdlist])
-        try:
-            self.pselect.reset(pid)
-        except GuiError:
-            pid = pdlist[0]['PID']
-        self.pupil_scene.set_pupil(pid)
+        self.pselect.trigger()
 #
     def pupil_changed(self, pid):
         """A new pupil has been selected: reset the grid accordingly.
         """
         self.pid = pid
-
         if pid:
             # Replace pupil data
-            self.pdata = self.pdlist[pid]
-
+            self.pdata = self.pdlist.pid2pdata(pid)
         else:
             # Clear pupil data
             self.pdata = {'CLASS': self.klass}
-
-
         if not self.clear():
             self.pselect.reset(self.pupil_scene.pid)
             return
-        if self.pupil_scene:
-            self.pupilView.set_scene(self.pupil_scene)
-        self.pupil_scene.set_pupil(pid)
+        if self.field_scene:
+            self.renew()
 #
     def get_template(self):
         # file dialog – start at template folder
-        dir0 = os.path.join('RESOURCES', 'templates')
+        dir0 = os.path.join(RESOURCES, 'templates')
         fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
                 dir0, _TEMPLATE_FILE)[0]
         if not fpath:
             return
-        self.template = Template(fpath)
-        self.fields_style = self.template.fields()
-        self.field_scene = FieldGrid(self.fieldView, self.fields_style)
+        self.template = Template(fpath, full_path = True)
+        self.field_scene = FieldGrid(self.fieldView, self.template)
         self.fieldView.set_scene(self.field_scene)
         self.renew()
 #
@@ -270,21 +254,57 @@ class FieldEdit(TabPage):
         _sy = ADMIN.schoolyear
         _syL = print_schoolyear(_sy)
         _cl = print_class(self.klass)
-        self.base_values = {
+        self.field_values = {
             'schoolyear': _sy,
             'SCHOOLYEAR': _syL,
             'SYEAR': _syL,
             'CL': _cl,
             'CYEAR': class_year(self.klass),
             'SCHOOL': SCHOOL_DATA.SCHOOL_NAME,
-            'SCHOOLBIG': SCHOOL_DATA.SCHOOL_NAME.upper(),
+            'SCHOOLBIG': SCHOOL_DATA.SCHOOL_NAME.upper()
+        }
         # Add pupil data
-        values = self.base_values.copy()
-        values.update(self.pdata)
-        self.field_scene.reset(values)
+        self.field_values.update(self.pdata)
+        self.field_scene.set_fields(self.field_values)
+#
+#TODO: Note that empty fields will (at present) cause the tag to be left.
+# It might be desirable to have fields which are actually empty ...
+    def gen_odt(self):
+        odtBytes = self.template.make_odt1(self.field_values)
+        dir0 = ADMIN._savedir or os.path.expanduser('~')
+        try:
+            filename = self.pdata.name() + '_'
+        except:
+            filename = '_'
+        filename += os.path.basename(self.template.template_path).rsplit(
+                '.', 1)[0]
+        fpath = QFileDialog.getSaveFileName(self.fieldView, _FILESAVE,
+                os.path.join(dir0, filename), _ODT_FILE)[0]
+        if fpath:
+            ADMIN.set_savedir(os.path.dirname(fpath))
+            if not fpath.endswith('.odt'):
+                fpath += '.odt'
+            with open(fpath, 'wb') as fh:
+                fh.write(odtBytes)
 #
     def gen_pdf(self):
-        REPORT("TODO")
+#TODO: use background thread because of potential delay
+        pdfBytes = self.template.make_pdf1(self.field_values)
+        dir0 = ADMIN._savedir or os.path.expanduser('~')
+        try:
+            filename = self.pdata.name() + '_'
+        except:
+            filename = '_'
+        filename += os.path.basename(self.template.template_path).rsplit(
+                '.', 1)[0]
+        fpath = QFileDialog.getSaveFileName(self.fieldView, _FILESAVE,
+                os.path.join(dir0, filename), _PDF_FILE)[0]
+        if fpath:
+            ADMIN.set_savedir(os.path.dirname(fpath))
+            if not fpath.endswith('.pdf'):
+                fpath += '.pdf'
+            with open(fpath, 'wb') as fh:
+                fh.write(pdfBytes)
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
