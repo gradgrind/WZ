@@ -29,6 +29,7 @@ Copyright 2021 Michael Towers
 ### Labels, etc.
 _EDIT_FIELDS = "Vorlage ausfüllen"
 _CLASS = "Klasse:"
+_TEST_FIELDS = "Felder testen"
 _GEN_ODT = "ODT erstellen"
 _GEN_PDF = "PDF erstellen"
 _CHOOSE_TEMPLATE = "Vorlage wählen"
@@ -37,6 +38,7 @@ _FILESAVE = "Datei speichern"
 _TEMPLATE_FILE = "LibreOffice Text-Vorlage (*.odt)"
 _ODT_FILE = "LibreOffice Text-Dokument (*.odt)"
 _PDF_FILE = "PDF-Dokument (*.pdf)"
+_NULLEMPTY = "Null-Felder leer"
 
 #####################################################
 
@@ -45,11 +47,14 @@ if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
+    from qtpy.QtWidgets import QApplication
+#    app = QApplication(['test', '-style=windows'])
+    app = QApplication([])
 # <core.base> must be the first WZ-import
 import core.base as CORE
 
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
-        QPushButton, QFileDialog
+        QPushButton, QCheckBox, QFileDialog
 
 from gui.grid import GridView, Grid
 from gui.gui_support import VLine, KeySelect, TabPage, GuiError
@@ -115,6 +120,7 @@ class FieldGrid(Grid):
         ### field - value lines
         row = 1
         for field in self.fields:
+#TODO: show count if > 1?
             self.tile(row, 0, text = field, style = 'key')
             vstyle = 'value'
             if field in noneditable:
@@ -193,6 +199,12 @@ class FieldEdit(TabPage):
         choose_template.clicked.connect(self.get_template)
         cbox.addStretch(1)
 
+        testfields = QPushButton(_TEST_FIELDS)
+        cbox.addWidget(testfields)
+        testfields.clicked.connect(self.test_fields)
+        self.nullempty = QCheckBox(_NULLEMPTY)
+        self.nullempty.setChecked(False)
+        cbox.addWidget(self.nullempty)
         odtgen = QPushButton(_GEN_ODT)
         cbox.addWidget(odtgen)
         odtgen.clicked.connect(self.gen_odt)
@@ -267,10 +279,31 @@ class FieldEdit(TabPage):
         self.field_values.update(self.pdata)
         self.field_scene.set_fields(self.field_values)
 #
-#TODO: Note that empty fields will (at present) cause the tag to be left.
-# It might be desirable to have fields which are actually empty ...
+#TODO: It might be more useful to use this module only for testing
+# templates – all discovered fields can be substituted, so that one
+# can see which fields are faulty.
+# For manual filling out of templates, a single pupil mode for reports
+# might be better, as special fields may be pre-filled, subjects may be
+# entered, etc.
+#
+    def test_fields(self):
+        """Substitute all fields with *<field>* (to be easily visible)
+        and display the result.
+        """
+        all_fields = {f: '*%s*' % f for f in self.field_scene.fields}
+        fn = _MakePdf(self.template, all_fields, show_only = True)
+        files = REPORT('RUN', runme = fn)
+#
     def gen_odt(self):
-        odtBytes = self.template.make_odt1(self.field_values)
+        """If the "nullempty" checkbox is true, fields for which no
+        value is supplied will be cleared. Otherwise the "tag" is left.
+        """
+        if self.nullempty.isChecked():
+            all_fields = {f: self.field_values.get(f, '')
+                    for f in self.field_scene.fields}
+            odtBytes = self.template.make_odt1(all_fields)
+        else:
+            odtBytes = self.template.make_odt1(self.field_values)
         dir0 = ADMIN._savedir or os.path.expanduser('~')
         try:
             filename = self.pdata.name() + '_'
@@ -288,8 +321,16 @@ class FieldEdit(TabPage):
                 fh.write(odtBytes)
 #
     def gen_pdf(self):
+        """If the "nullempty" checkbox is true, fields for which no
+        value is supplied will be cleared. Otherwise the "tag" is left.
+        """
 #TODO: use background thread because of potential delay
-        pdfBytes = self.template.make_pdf1(self.field_values)
+        if self.nullempty.isChecked():
+            all_fields = {self.field_values.get(f, '')
+                    for f in self.field_scene.fields}
+            pdfBytes = self.template.make_pdf1(all_fields)
+        else:
+            pdfBytes = self.template.make_pdf1(self.field_values)
         dir0 = ADMIN._savedir or os.path.expanduser('~')
         try:
             filename = self.pdata.name() + '_'
@@ -306,13 +347,31 @@ class FieldEdit(TabPage):
             with open(fpath, 'wb') as fh:
                 fh.write(pdfBytes)
 
+###
+
+class _MakePdf(CORE.ThreadFunction):
+    def __init__(self, template, all_fields, show_only = False):
+        super().__init__()
+        self._template = template
+        self._fields = all_fields
+        self._show_only = show_only
+#
+    def run(self):
+        cc = self._template.make_pdf1(self._fields,
+                show_only = self._show_only)
+        if cc:
+#TODO: texts
+            REPORT('INFO', "Done: %s:" % cc)
+        else:
+            REPORT('INFO', "DONE")
+#
+    def terminate(self):
+        return False
+
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    from qtpy.QtWidgets import QApplication
-#    app = QApplication(['test', '-style=windows'])
-    app = QApplication([])
     CORE.init()
 
     class ADMIN:

@@ -2,13 +2,13 @@
 """
 gui_support.py
 
-Last updated:  2020-01-06
+Last updated:  2021-01-14
 
 Support stuff for the GUI: dialogs, etc.
 
 
 =+LICENCE=============================
-Copyright 2019-2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.

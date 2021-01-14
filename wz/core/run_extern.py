@@ -1,13 +1,12 @@
-### python >= 3.7
 # -*- coding: utf-8 -*-
 """
 core/run_extern.py
 
-Last updated:  2020-10-27
+Last updated:  2021-01-14
 
 
 =+LICENCE=============================
-Copyright 2020 Michael Towers
+Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -51,15 +50,13 @@ def run_extern(command, *args, cwd = None, xpath = None, feedback = None):
     If return-code >= 0, return the output as the message.
     If return-code = -1, return a message reporting the command.
     """
-#TODO: Is timeout appropriate?
-# Not for subprocess.Popen!
+    # Note that using the <timeout> parameter will probably not work,
+    # at least not as one might expect it to.
     params = {
         'stdout': subprocess.PIPE,
         'stderr': subprocess.STDOUT,
         'universal_newlines':True
     }
-    if not feedback:
-        params['timeout'] = 30  # timeout in seconds
     my_env = os.environ.copy()
     if platform.system() == 'Windows':
         # Suppress the console
