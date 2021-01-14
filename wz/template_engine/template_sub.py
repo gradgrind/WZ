@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-01-13
+Last updated:  2021-01-14
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -36,6 +36,7 @@ of the window) and then reselecting the desired style. If that doesn't
 help, it may be necessary to retype the field.
 """
 
+#TODO: This needs to be set according to the platform!
 # External program (command to run):
 LIBREOFFICE = 'libreoffice'
 #LIBREOFFICE = 'LibreOffice-fresh.standard.help-x86_64.AppImage'
@@ -124,6 +125,12 @@ def libre_office(odt_list, pdf_dir):
             feedback = extern_out
         )
 
+###
+
+def open_odt(filepath):
+    rc, msg = run_extern(LIBREOFFICE, filepath)
+
+###
 
 class Template:
     """Manage a template file.
@@ -225,7 +232,8 @@ class Template:
         else:
             return pdf_bytes
 #
-    def make_pdf1(self, datamap, file_name = None, working_dir = None):
+    def make_pdf1(self, datamap, file_name = None, working_dir = None,
+            show_only = False):
         """From the supplied data mapping produce a pdf of the
         corresponding report.
         Files are built in <working_dir>, which will normally be a path
@@ -234,14 +242,17 @@ class Template:
         If <working_dir> is not supplied, a temporary directory is created,
         which is removed automatically when the function completes. In
         this case only the pdf file remains.
-        Note that the return value varies according to whether <working_dir>
-        is provided:
+        However, if <show_only> is true, <working_dir> is forced to <None>.
+        Also the resulting file is opened in a viewer (at present the
+        odt-file, the pdf is not generated).
+        Note that the return value depends on <working_dir> and <show_only>:
+            If <show_only> is true, <None> is returned.
             With <working_dir>: path to resulting pdf-file
             No <working_dir>: pdf-bytes
         """
         if not file_name:
             file_name = '_TMP_'
-        if working_dir:
+        if working_dir and not show_only:
             wdir = working_dir
             if not os.path.isdir(wdir):
                 os.makedirs(wdir)
@@ -255,6 +266,10 @@ class Template:
         # Save the <bytes>
         with open(_outfile, 'bw') as fout:
             fout.write(odtBytes)
+        if show_only:
+            # Open in external viewer
+            open_odt(_outfile)
+            return None
         libre_office([_outfile], wdir)
         pdf_file = os.path.join(wdir, file_name + '.pdf')
         if not os.path.isfile(pdf_file):
@@ -281,14 +296,7 @@ class Template:
 
 if __name__ == '__main__':
     from core.base import init
-    init('TESTDATA')
-
-#    pdfdir = '/home/mt/test/pdf'
-#    ifile_list = sorted([os.path.join(pdfdir, f) for f in os.listdir(pdfdir)])
-#    bfile = merge_pdf(ifile_list, pad2sided = True)
-#    with open('/home/mt/test/pdf_file.pdf', 'wb') as fout:
-#            fout.write(bfile)
-#    quit(0)
+    init()
 
     sdict0 = {
         'SCHOOL': 'Freie Michaelschule',
@@ -349,7 +357,10 @@ if __name__ == '__main__':
     t.FILES_PATH = 'GRADE_REPORTS'
     print("\nKeys:", sorted(t.all_keys()))
 
+    t.make_pdf1(sdict0, show_only = True)
+
     quit(0)
+
     wdir = os.path.join(DATA, 'testing', 'tmp')
     file_name = '%s_%s' % (sdict0['PSORT'], sdict0['issue_d'])
     fpath = t.make_pdf1(sdict0, file_name, wdir)
