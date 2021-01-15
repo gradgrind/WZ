@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-01-07
+Last updated:  2021-01-15
 
 General configuration items.
 
@@ -22,6 +22,19 @@ Copyright 2021 Michael Towers
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+
+### External program (command to run, depends on system and platform):
+import platform
+
+if platform.system() == 'Windows':
+    LIBREOFFICE = ''
+else:
+    LIBREOFFICE = 'libreoffice'
+    #LIBREOFFICE = 'LibreOffice-fresh.standard.help-x86_64.AppImage'
+
+#LUALATEX = 'lualatex'
+
+#######################################################################
 
 DECIMAL_SEP = ','
 

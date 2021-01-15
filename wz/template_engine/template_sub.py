@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-01-14
+Last updated:  2021-01-15
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -36,11 +36,6 @@ of the window) and then reselecting the desired style. If that doesn't
 help, it may be necessary to retype the field.
 """
 
-#TODO: This needs to be set according to the platform!
-# External program (command to run):
-LIBREOFFICE = 'libreoffice'
-#LIBREOFFICE = 'LibreOffice-fresh.standard.help-x86_64.AppImage'
-
 ### Messages:
 _MISSING_PDFS = "pdf-Erstellung schlug fehl:\n  von {spath}\n  nach {dpath}"
 _MISSING_PDF = "pdf-Erstellung schlug fehl: {fpath}"
@@ -64,6 +59,7 @@ from pikepdf import Pdf, Page
 
 from core.run_extern import run_extern
 from template_engine.simpleodt import OdtFields
+from local.base_config import LIBREOFFICE
 
 
 class TemplateError(Exception):
@@ -232,34 +228,42 @@ class Template:
         else:
             return pdf_bytes
 #
-    def make_pdf1(self, datamap, file_name = None, working_dir = None,
-            show_only = False):
+    def make1pdf(self, datamap, show_only = False, file_path = None):
         """From the supplied data mapping produce a pdf of the
         corresponding report.
-        Files are built in <working_dir>, which will normally be a path
-        within the data area for the school-year being processed. Both
-        an odt and pdf file are produced.
-        If <working_dir> is not supplied, a temporary directory is created,
-        which is removed automatically when the function completes. In
-        this case only the pdf file remains.
-        However, if <show_only> is true, <working_dir> is forced to <None>.
-        Also the resulting file is opened in a viewer (at present the
-        odt-file, the pdf is not generated).
-        Note that the return value depends on <working_dir> and <show_only>:
-            If <show_only> is true, <None> is returned.
-            With <working_dir>: path to resulting pdf-file
-            No <working_dir>: pdf-bytes
+        1) <show_only> is false (default).
+           The behaviour depends on whether <file_path> is supplied.
+            (a) If <file_path> is empty, the resulting files are placed
+                in a temporary folder, which is deleted on return. The
+                pdf-file is returned as <bytes>.
+            (b) <file_path> is the full path to the resulting pdf-file.
+                Intermediate folders will be created, if necessary.
+                The '.pdf' ending need not be supplied, it will be added
+                automatically. Also the '.odt' file is produced (using
+                the same file path, but with appropriate file suffix).
+        2) <show_only> is true.
+           In this case, <file_path> should be empty.
+           The resulting file is shown in a viewer, at present only the
+           odt-file is generated and shown in LibreOffice. The file is
+           not saved anywhere (but could be within LibreOffice).
         """
-        if not file_name:
-            file_name = '_TMP_'
-        if working_dir and not show_only:
-            wdir = working_dir
+        if file_path:
+            if show_only:
+                raise Bug("make1pdf: If <show_only> is true, no"
+                        " <file_path> should be given")
+            if file_path.endswith('.pdf'):
+                # Remove pdf ending
+                fpath = file_path.rsplit('.', 1)[0]
+            else:
+                fpath = file_path
+            wdir = os.path.dirname(fpath)
             if not os.path.isdir(wdir):
                 os.makedirs(wdir)
         else:
+            # This can be to return the file-bytes, or for "show_only".
             wdirTD = tempfile.TemporaryDirectory()
-            wdir = wdirTD.name
-        _outfile = os.path.join(wdir, file_name + '.odt')
+            fpath = os.path.join(wdirTD.name, '_TMP_')
+        _outfile = fpath + '.odt'
         odtBytes, used, notsub = OdtFields.fillUserFields(
                 self.template_path, datamap)
 #TODO: Do something with <used> and <notsub>?
@@ -270,21 +274,20 @@ class Template:
             # Open in external viewer
             open_odt(_outfile)
             return None
-        libre_office([_outfile], wdir)
-        pdf_file = os.path.join(wdir, file_name + '.pdf')
+        libre_office([_outfile], os.path.dirname(_outfile))
+        pdf_file = fpath + '.pdf'
         if not os.path.isfile(pdf_file):
             raise TemplateError(_MISSING_PDF.format(fpath = pdf_file))
 # Maybe there's output from libreoffice somewhere?
-
-        if working_dir:
+        if file_path:
             return pdf_file
         else:
             with open(pdf_file, 'rb') as fin:
                 return fin.read()
 #
-    def make_odt1(self, datamap):
-        """From the supplied data mapping produce an odt of the
-        corresponding report, returning the file content as <bytes>.
+    def make_doc(self, datamap):
+        """From the supplied data mapping produce a text document (odt)
+        of the corresponding report, returning the file content as <bytes>.
         """
         odtBytes, used, notsub = OdtFields.fillUserFields(
                 self.template_path, datamap)
@@ -357,7 +360,7 @@ if __name__ == '__main__':
     t.FILES_PATH = 'GRADE_REPORTS'
     print("\nKeys:", sorted(t.all_keys()))
 
-    t.make_pdf1(sdict0, show_only = True)
+    t.make1pdf(sdict0, show_only = True)
 
     quit(0)
 

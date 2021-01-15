@@ -2,7 +2,7 @@
 """
 core/run_extern.py
 
-Last updated:  2021-01-14
+Last updated:  2021-01-15
 
 
 =+LICENCE=============================
@@ -23,10 +23,7 @@ Copyright 2021 Michael Towers
 =-LICENCE========================================
 """
 
-# Commands
-LUALATEX = 'lualatex'
-
-# Messages
+### Messages
 _COMMANDNOTPOSSIBLE = "Befehl '{cmd}' konnte nicht ausgeführt werden"
 _NOPDF              = "Keine PDF-Datei wurde erstellt"
 
@@ -92,62 +89,65 @@ def run_extern(command, *args, cwd = None, xpath = None, feedback = None):
         return (-1, _COMMANDNOTPOSSIBLE.format(cmd=repr(cmd)))
 
 
-def lualatex2pdf(tex, runs=1, errorhandler=None):
-    """Run lualatex on the given string (<tex>).
-    Return the generated pdf as <bytes>.
-    If the conversion fails, call <errorhandler> with a message and
-    return <None>.
-    If there is no <errorhandler>, <print> is used.
-    """
-    def texcompile(texfile):
-        rc, msg = run_extern(LUALATEX,
-                '-interaction=batchmode',
-                '-halt-on-error',
-                texfile,
-                cwd=os.path.dirname(texfile))
-        if rc == 0:
-            return None
-        elif rc == 1:
-            with open(texfile.rsplit('.', 1)[0] + '.log', 'r',
-                    encoding='utf-8') as fin:
-                log = []
-                for line in fin:
-                    if log or line[0] == '!':
-                        log.append(line.rstrip())
-            return '\n'.join(log)
-        else:
-            return msg
-
-#TODO:
-    wdir = os.path.join(os.path.dirname(os.path.dirname(
-            os.path.realpath(__file__))), 'workingdir')
-
-    with tempfile.TemporaryDirectory(dir=wdir) as td:
-        filebase = os.path.join(td, 'file')
-        texfile = filebase + '.tex'
-        with open(texfile, 'w', encoding='utf-8') as fout:
-            fout.write(tex)
-        run = 0
-        while runs > run:
-            run += 1
-            msg = texcompile(texfile)
-            if msg:
-                if errorhandler:
-                    errorhandler(msg)
-                else:
-                    print(msg, flush=True)
-                return None
-
-        # Get pdf as bytes
-        try:
-            with open(filebase + '.pdf', 'rb') as fin:
-                pdf = fin.read()
-        except FileNotFoundError:
-            msg = _NOPDF
-            if errorhandler:
-                errorhandler(msg)
-            else:
-                print(msg, flush=True)
-            return None
-
-    return pdf
+### A handler for lualatex files
+#from local.base_config import LUALATEX
+#
+#def lualatex2pdf(tex, runs=1, errorhandler=None):
+#    """Run lualatex on the given string (<tex>).
+#    Return the generated pdf as <bytes>.
+#    If the conversion fails, call <errorhandler> with a message and
+#    return <None>.
+#    If there is no <errorhandler>, <print> is used.
+#    """
+#    def texcompile(texfile):
+#        rc, msg = run_extern(LUALATEX,
+#                '-interaction=batchmode',
+#                '-halt-on-error',
+#                texfile,
+#                cwd=os.path.dirname(texfile))
+#        if rc == 0:
+#            return None
+#        elif rc == 1:
+#            with open(texfile.rsplit('.', 1)[0] + '.log', 'r',
+#                    encoding='utf-8') as fin:
+#                log = []
+#                for line in fin:
+#                    if log or line[0] == '!':
+#                        log.append(line.rstrip())
+#            return '\n'.join(log)
+#        else:
+#            return msg
+#
+##TODO:
+#    wdir = os.path.join(os.path.dirname(os.path.dirname(
+#            os.path.realpath(__file__))), 'workingdir')
+#
+#    with tempfile.TemporaryDirectory(dir=wdir) as td:
+#        filebase = os.path.join(td, 'file')
+#        texfile = filebase + '.tex'
+#        with open(texfile, 'w', encoding='utf-8') as fout:
+#            fout.write(tex)
+#        run = 0
+#        while runs > run:
+#            run += 1
+#            msg = texcompile(texfile)
+#            if msg:
+#                if errorhandler:
+#                    errorhandler(msg)
+#                else:
+#                    print(msg, flush=True)
+#                return None
+#
+#        # Get pdf as bytes
+#        try:
+#            with open(filebase + '.pdf', 'rb') as fin:
+#                pdf = fin.read()
+#        except FileNotFoundError:
+#            msg = _NOPDF
+#            if errorhandler:
+#                errorhandler(msg)
+#            else:
+#                print(msg, flush=True)
+#            return None
+#
+#    return pdf

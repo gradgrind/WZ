@@ -2,7 +2,7 @@
 """
 gui/template_fields.py
 
-Last updated:  2021-01-13
+Last updated:  2021-01-15
 
 Show template fields, set values and process template.
 
@@ -25,6 +25,8 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
+_DONE_PDF = "Neue Dateien erstellt:\n  {fodt}\n  {fpdf}"
+_DONE_SHOW = "Zwischendateien gelöscht"
 
 ### Labels, etc.
 _EDIT_FIELDS = "Vorlage ausfüllen"
@@ -207,7 +209,7 @@ class FieldEdit(TabPage):
         cbox.addWidget(self.nullempty)
         odtgen = QPushButton(_GEN_ODT)
         cbox.addWidget(odtgen)
-        odtgen.clicked.connect(self.gen_odt)
+        odtgen.clicked.connect(self.gen_doc)
         pdfgen = QPushButton(_GEN_PDF)
         cbox.addWidget(pdfgen)
         pdfgen.clicked.connect(self.gen_pdf)
@@ -290,20 +292,21 @@ class FieldEdit(TabPage):
         """Substitute all fields with *<field>* (to be easily visible)
         and display the result.
         """
+        # Run as background thread because of potential delay.
         all_fields = {f: '*%s*' % f for f in self.field_scene.fields}
-        fn = _MakePdf(self.template, all_fields, show_only = True)
-        files = REPORT('RUN', runme = fn)
+        fn = _MakePdf(self.template, all_fields)
+        REPORT('RUN', runme = fn)
 #
-    def gen_odt(self):
+    def gen_doc(self):
         """If the "nullempty" checkbox is true, fields for which no
         value is supplied will be cleared. Otherwise the "tag" is left.
         """
         if self.nullempty.isChecked():
             all_fields = {f: self.field_values.get(f, '')
                     for f in self.field_scene.fields}
-            odtBytes = self.template.make_odt1(all_fields)
+            odtBytes = self.template.make_doc(all_fields)
         else:
-            odtBytes = self.template.make_odt1(self.field_values)
+            odtBytes = self.template.make_doc(self.field_values)
         dir0 = ADMIN._savedir or os.path.expanduser('~')
         try:
             filename = self.pdata.name() + '_'
@@ -324,13 +327,7 @@ class FieldEdit(TabPage):
         """If the "nullempty" checkbox is true, fields for which no
         value is supplied will be cleared. Otherwise the "tag" is left.
         """
-#TODO: use background thread because of potential delay
-        if self.nullempty.isChecked():
-            all_fields = {self.field_values.get(f, '')
-                    for f in self.field_scene.fields}
-            pdfBytes = self.template.make_pdf1(all_fields)
-        else:
-            pdfBytes = self.template.make_pdf1(self.field_values)
+        # Run as background thread because of potential delay.
         dir0 = ADMIN._savedir or os.path.expanduser('~')
         try:
             filename = self.pdata.name() + '_'
@@ -344,26 +341,34 @@ class FieldEdit(TabPage):
             ADMIN.set_savedir(os.path.dirname(fpath))
             if not fpath.endswith('.pdf'):
                 fpath += '.pdf'
-            with open(fpath, 'wb') as fh:
-                fh.write(pdfBytes)
+        else:
+            return
+        if self.nullempty.isChecked():
+            all_fields = {self.field_values.get(f, '')
+                    for f in self.field_scene.fields}
+        else:
+            all_fields = self.field_values
+        fn = _MakePdf(self.template, all_fields, fpath)
+        REPORT('RUN', runme = fn)
 
 ###
 
 class _MakePdf(CORE.ThreadFunction):
-    def __init__(self, template, all_fields, show_only = False):
+    def __init__(self, template, all_fields, filepath = None):
         super().__init__()
         self._template = template
         self._fields = all_fields
-        self._show_only = show_only
+        self._filepath = filepath
+        self._show_only = not filepath
 #
     def run(self):
-        cc = self._template.make_pdf1(self._fields,
-                show_only = self._show_only)
+        cc = self._template.make1pdf(self._fields,
+                show_only = self._show_only, file_path = self._filepath)
         if cc:
-#TODO: texts
-            REPORT('INFO', "Done: %s:" % cc)
+            REPORT('INFO', _DONE_PDF.format(fpdf = cc,
+                    fodt = cc.rsplit('.', 1)[0] + '.odt'))
         else:
-            REPORT('INFO', "DONE")
+            REPORT('INFO', _DONE_SHOW)
 #
     def terminate(self):
         return False
