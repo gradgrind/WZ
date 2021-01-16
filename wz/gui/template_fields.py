@@ -2,9 +2,10 @@
 """
 gui/template_fields.py
 
-Last updated:  2021-01-15
+Last updated:  2021-01-16
 
 Show template fields, set values and process template.
+This module is intended primarily for testing purposes.
 
 =+LICENCE=============================
 Copyright 2021 Michael Towers
@@ -41,6 +42,8 @@ _TEMPLATE_FILE = "LibreOffice Text-Vorlage (*.odt)"
 _ODT_FILE = "LibreOffice Text-Dokument (*.odt)"
 _PDF_FILE = "PDF-Dokument (*.pdf)"
 _NULLEMPTY = "Null-Felder leer"
+_NULLEMPTY_TIP = "Felder, für die keinen Wert gesetzt ist werden leer" \
+        " dargestellt. Ansonsten bleibt die Feldmarke."
 
 #####################################################
 
@@ -56,7 +59,7 @@ if __name__ == '__main__':
 import core.base as CORE
 
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
-        QPushButton, QCheckBox, QFileDialog
+        QPushButton, QCheckBox, QFileDialog, QSpacerItem
 
 from gui.grid import GridView, Grid
 from gui.gui_support import VLine, KeySelect, TabPage, GuiError
@@ -66,6 +69,7 @@ from local.base_config import PupilsBase, class_year, print_schoolyear, \
         print_class
 from local.grade_config import STREAMS
 from template_engine.template_sub import Template, TemplateError
+from template_engine.simpleodt import metadata
 
 ###
 
@@ -101,8 +105,8 @@ class FieldGrid(Grid):
         # paragraph. It indicates that multiple lines are possible, so
         # normally a multi-line editor will be provided.
         # Reduce to one entry per field, collect number of each field.
-        self.fields = {}
-        multiline = {}
+        self.fields = {}    # {field-name -> number of occurrences}
+        multiline = {}      # {field-name -> <bool>}
         for field, fstyle in fields_style:
             try:
                 self.fields[field] += 1
@@ -121,9 +125,11 @@ class FieldGrid(Grid):
         self.tile(0, 0, text = '', cspan = 2, style = 'title', tag = 'title')
         ### field - value lines
         row = 1
-        for field in self.fields:
-#TODO: show count if > 1?
-            self.tile(row, 0, text = field, style = 'key')
+        for field, n in self.fields.items():
+            text = field
+            if n > 1:
+                text += ' (*%d)' % n
+            self.tile(row, 0, text = text, style = 'key')
             vstyle = 'value'
             if field in noneditable:
                 vstyle = 'fixed'
@@ -185,6 +191,12 @@ class FieldEdit(TabPage):
 
         cbox = QVBoxLayout()
         topbox.addLayout(cbox)
+        cbox.addSpacerItem(QSpacerItem(180, 0))
+
+        ### Select template
+        choose_template = QPushButton(_CHOOSE_TEMPLATE)
+        cbox.addWidget(choose_template)
+        choose_template.clicked.connect(self.get_template)
 
         ### Select class
         self.class_select = KeySelect(changed_callback = self.class_changed)
@@ -196,15 +208,14 @@ class FieldEdit(TabPage):
         cbox.addWidget(self.pselect)
 
         cbox.addSpacing(30)
-        choose_template = QPushButton(_CHOOSE_TEMPLATE)
-        cbox.addWidget(choose_template)
-        choose_template.clicked.connect(self.get_template)
         cbox.addStretch(1)
 
         testfields = QPushButton(_TEST_FIELDS)
         cbox.addWidget(testfields)
         testfields.clicked.connect(self.test_fields)
+        cbox.addSpacing(30)
         self.nullempty = QCheckBox(_NULLEMPTY)
+        self.nullempty.setToolTip(_NULLEMPTY_TIP)
         self.nullempty.setChecked(False)
         cbox.addWidget(self.nullempty)
         odtgen = QPushButton(_GEN_ODT)
@@ -222,22 +233,24 @@ class FieldEdit(TabPage):
 #
     def year_changed(self):
         self.pupils = Pupils(ADMIN.schoolyear)
-# Should there be an entry for "NO CLASS"
-        self.class_select.set_items([(c, c)
+        self.class_select.set_items([('', '–––')] + [(c, c)
                 for c in self.pupils.classes()])
         self.class_select.trigger()
 #
     def class_changed(self, klass):
         self.klass = klass
-        self.pdlist = self.pupils.class_pupils(klass)
-# Should there be an entry for "NO PUPIL"
-        self.pselect.set_items([(pdata['PID'], pdata.name())
-                for pdata in self.pdlist])
+        if klass:
+            self.pdlist = self.pupils.class_pupils(klass)
+            self.pselect.set_items([('', '–––')] + [(pdata['PID'],
+                    pdata.name())   for pdata in self.pdlist])
+        else:
+            self.pselect.clear()
         self.pselect.trigger()
 #
     def pupil_changed(self, pid):
         """A new pupil has been selected: reset the grid accordingly.
         """
+        print("§§§", pid)
         self.pid = pid
         if pid:
             # Replace pupil data
@@ -252,6 +265,22 @@ class FieldEdit(TabPage):
             self.renew()
 #
     def get_template(self):
+#TODO: select from existing files?
+        for (root, dirs, files) in os.walk(os.path.join(RESOURCES, 'templates')):
+            print("Folder: ", root)
+            #print("The directories are: ")
+            #print(dirs)
+            print("The files are: ")
+            tfiles = []
+            for f in files:
+                if f.endswith('.odt'):
+                    title, subject = metadata(os.path.join(root, f))
+                    if title and title.startswith('WZ-template'):
+                        tfiles.append(f)
+            print(tfiles)
+            print('--------------------------------')
+
+
         # file dialog – start at template folder
         dir0 = os.path.join(RESOURCES, 'templates')
         fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
@@ -280,13 +309,6 @@ class FieldEdit(TabPage):
         # Add pupil data
         self.field_values.update(self.pdata)
         self.field_scene.set_fields(self.field_values)
-#
-#TODO: It might be more useful to use this module only for testing
-# templates – all discovered fields can be substituted, so that one
-# can see which fields are faulty.
-# For manual filling out of templates, a single pupil mode for reports
-# might be better, as special fields may be pre-filled, subjects may be
-# entered, etc.
 #
     def test_fields(self):
         """Substitute all fields with *<field>* (to be easily visible)
@@ -393,4 +415,5 @@ if __name__ == '__main__':
     main = FieldEdit()
     main.enter()
     main.show()
+    main.resize(700, 400)
     sys.exit(app.exec_())

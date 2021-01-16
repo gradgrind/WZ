@@ -2,7 +2,7 @@
 """
 gui_support.py
 
-Last updated:  2021-01-14
+Last updated:  2021-01-16
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -459,7 +459,7 @@ class UncaughtHook(QObject):
         """Function handling uncaught exceptions.
         It is triggered each time an uncaught exception occurs.
         """
-        log_msg = '{val}$${emsg}'.format(
+        log_msg = '{val}\n\n$${emsg}'.format(
                 val = exc_value, emsg = ''.join(traceback.format_exception(
                         exc_type, exc_value, exc_traceback)))
         # Show message

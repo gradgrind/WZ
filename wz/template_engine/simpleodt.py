@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-simpleodt.py - last updated 2021-01-05
+simpleodt.py - last updated 2021-01-16
 
 1) OdtReader
 =============
@@ -31,8 +31,6 @@ Copyright 2021 Michael Towers
 
 ### Messages
 _MULTILINE_NO_PARA = "Mehrzeiliger Feld-Text, aber Feld ({tag}) nicht Absatz"
-
-#_TEMPLATE_FILE = 'textTemplate.odt'
 
 import sys, os
 if __name__ == '__main__':
@@ -74,9 +72,13 @@ import io, re
 """
 
 _ODT_CONTENT_FILE = 'content.xml'
+_ODT_META_FILE = 'meta.xml'
+
 
 from xml.parsers.expat import ParserCreate
 from xml.sax.saxutils import escape
+
+###
 
 def xmlescape(text):
     return escape(text, entities = {
@@ -84,26 +86,33 @@ def xmlescape(text):
             "\"": "&quot;"
         })
 
+###
+
 class OdtError(Exception):
     pass
 
+###
 
-def substituteZipContent(infile, process):
+def substituteZipContent(infile, process, metadata = False):
     """Process the contents of an odt file using the function <process>.
     Return the resulting odt file as a <bytes> array.
+    Normally the contents will be read.
+    However, by setting <metadata> to true, the metadata can be read.
     """
+    xmlfile = _ODT_META_FILE if metadata else _ODT_CONTENT_FILE
     sio = io.BytesIO()
     with zf.ZipFile(sio, "w", compression=zf.ZIP_DEFLATED) as zio:
         with zf.ZipFile(infile, "r") as za:
             for fin in za.namelist():
                 indata = za.read(fin)
-                if fin == _ODT_CONTENT_FILE:
+                if fin == xmlfile:
                     indata = process(indata)
                     if not indata:
                         return None
                 zio.writestr(fin, indata)
     return sio.getvalue()
 
+###
 
 class OdtFields:
     """Manage substitution of "fields" in an odt document.
@@ -154,9 +163,9 @@ class OdtFields:
     def fillUserFields(cls, odtfile, itemdict):
         useditems = set()
         nonitems = set()
-
+#
         def _sub(rem):
-#            print(":::", rem.group(0), "->")
+            #print(":::", rem.group(0), "->")
             style = rem.group(1) or None
             # The tags are converted to <str> so that the item mapping
             # doesn't need to work with <bytes>.
@@ -186,9 +195,9 @@ class OdtFields:
                 sub_string = b''.join(sub_lines)
             elif len(lines) > 1:
                 raise OdtError(_MULTILINE_NO_PARA.format(tag = tag))
-#            print(sub_string)
+            #print(sub_string)
             return sub_string
-
+#
         def _process(xmldata):
             """Use the regular expression to find all field declarations.
             Those for which an entry is provided in <itemdict> will have
@@ -199,11 +208,30 @@ class OdtFields:
         odtBytes = substituteZipContent(odtfile, _process)
         return (odtBytes, useditems, nonitems)
 
+###
 
+def metadata(odtfile):
+    """Read metatdata: "Title" and "Subject".
+    Return a tuple: (title field, subject field)
+    The regular expression parses
+        <dc:title>The Title</dc:title>
+    and
+        <dc:subject>A description</dc:subject>
+    in the xml metadata file.
+    """
+    _dcrex = br'<dc:([a-zA-Z]+)>([^<]*)</dc:\1>'
+    tagmap = {}
+    def _process(xmldata):
+        #print("$:", xmldata)
+        for vals in re.findall(_dcrex, xmldata):
+            tagmap[vals[0].decode('utf-8')] = vals[1].decode('utf-8')
+        return None
 
-#Setting a variable (which is already defined in the file) in an odt:
-#<text:variable-set text:name="hide1" office:value-type="float" office:value="0" style:data-style-name="N0">0</text:variable-set>
+    substituteZipContent(odtfile, _process, metadata = True)
+    #print("§§§", tagmap)
+    return (tagmap.get('title'), tagmap.get('subject'))
 
+###
 
 class OdtReader:
     """Uses the expat parser to get at the paragraphs and their contained data.
@@ -220,10 +248,9 @@ class OdtReader:
     An instance of the expat parser can only handle a single file, so
     a new instance must be created for each file to be parsed.
     """
-
     _lines = None
     _text = None
-
+#
     @classmethod
     def parseXML(cls, xmldata):
         parser = ParserCreate()
@@ -235,44 +262,41 @@ class OdtReader:
         cls._lines = []
         parser.Parse(xmldata)
         return cls._lines
-
-
+#
     ############ 3 handler functions ############
-
+#
     @classmethod
     def _start_element(cls, name, attrs):
-#        print('>>> Start element:', name, attrs)
+        #print('>>> Start element:', name, attrs)
         if name == 'text:p':
             if cls._text != None:
                 raise OdtError('OdtNestedParagraph')
             cls._text = ""
-
+#
     @classmethod
     def _end_element(cls, name):
-#        print('>>> End element:', name)
+        #print('>>> End element:', name)
         if name == 'text:p':
             if cls._text == None:
                 raise OdtError('OdtParagraphEnd')
             cls._lines.append(cls._text)
             cls._text = None
-
+#
     @classmethod
     def _char_data(cls, data):
-#        print('>>> Character data:', type (data), repr(data))
+        #print('>>> Character data:', type (data), repr(data))
         if cls._text == None:
             raise OdtError('OdtBadData')
         else:
             cls._text += data
-
+#
     ############ end handler functions ############
-
-
+#
     @classmethod
     def readOdtFile(cls, filepath):
         xmldata = cls._getOdtContent(filepath)
         return cls.parseXML(xmldata)
-
-
+#
     @staticmethod
     def _getOdtContent(filepath):
         """Returns the content xml file – I assume always bytes encoded as utf-8.
@@ -280,8 +304,7 @@ class OdtReader:
         with zf.ZipFile(filepath) as zipfile:
             xmlbytes = zipfile.read(_ODT_CONTENT_FILE)
         return xmlbytes
-
-
+#
     @classmethod
     def readFile(cls, xmlfile):
         with open(xmlfile, "rb") as fi:
@@ -289,12 +312,20 @@ class OdtReader:
         return cls.parseXML(xmldata)
 
 
+#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+
+########################################################################
+#Setting a variable (which is already defined in the file) in an odt:
+#<text:variable-set text:name="hide1" office:value-type="float" office:value="0" style:data-style-name="N0">0</text:variable-set>
+########################################################################
 
 if __name__ == '__main__':
     from core.base import init
     init()
 
     _odtfile = os.path.join(DATA, 'testing', 'testdoc.odt')
+    print("METADATA:", metadata(_odtfile))
+#    quit(0)
 
     print("\nREAD:", _odtfile)
     for l in OdtReader.readOdtFile(_odtfile):
