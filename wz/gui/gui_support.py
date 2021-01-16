@@ -29,7 +29,7 @@ import sys, os, builtins, traceback
 
 from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
-        QDialog#, QMessageBox, QProgressBar
+        QDialog, QTreeWidget, QTreeWidgetItem#, QMessageBox, QProgressBar
 from qtpy.QtGui import QMovie, QPixmap
 from qtpy.QtCore import Qt, QObject, QThread, Signal, Slot, QCoreApplication
 
@@ -208,6 +208,57 @@ class TabPage(QWidget):
         pass
 
 ###
+
+def TreeDialog(title, message, data, button = None):
+    """A simple two-level tree widget as selection dialog.
+    Top level items may not be selected, they serve only as categories.
+    Can take additional buttons ...?
+    """
+    select = QDialog()
+    select.setWindowTitle(title)
+#-
+    def select_item(qtwi, col):
+        p = qtwi.parent()
+        if p:
+            select.result = (p.text(0), qtwi.text(0))
+            select.accept()
+#-
+    def xb_clicked():
+        select.result = (None, button)
+        select.accept()
+#-
+    layout = QVBoxLayout(select)
+    layout.addWidget(QLabel(message))
+    tree = QTreeWidget()
+    layout.addWidget(tree)
+    tree.setColumnCount(1)
+    tree.setHeaderHidden(True)
+    tree.itemClicked.connect(select_item)
+    for category, items in data:
+        tline = QTreeWidgetItem(tree)
+        tline.setText(0, category)
+        for item in items:
+            tatom = QTreeWidgetItem(tline)
+            tatom.setText(0, item)
+    tree.expandAll()
+    select.resize(500, 300)
+    select.result = None
+    # Now the buttons
+    layout.addWidget(HLine())
+    bbox = QHBoxLayout()
+    layout.addLayout(bbox)
+    bbox.addStretch(1)
+    cancel = QPushButton(_CANCEL)
+    cancel.setDefault(True)
+    cancel.clicked.connect(select.reject)
+    bbox.addWidget(cancel)
+    if button:
+        xb = QPushButton(button)
+        xb.clicked.connect(xb_clicked)
+        bbox.addWidget(xb)
+    select.exec_()
+    return select.result
+
 
 #def PopupInfo(title, message):
 #    _InfoDialog(title, message, QMessageBox.Information)

@@ -44,6 +44,8 @@ _PDF_FILE = "PDF-Dokument (*.pdf)"
 _NULLEMPTY = "Null-Felder leer"
 _NULLEMPTY_TIP = "Felder, für die keinen Wert gesetzt ist werden leer" \
         " dargestellt. Ansonsten bleibt die Feldmarke."
+_SELECT_OR_BROWSE = "Datei wählen – oder suchen"
+_BROWSE = "Suchen"
 
 #####################################################
 
@@ -62,7 +64,7 @@ from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
         QPushButton, QCheckBox, QFileDialog, QSpacerItem
 
 from gui.grid import GridView, Grid
-from gui.gui_support import VLine, KeySelect, TabPage, GuiError
+from gui.gui_support import VLine, KeySelect, TabPage, GuiError, TreeDialog
 
 from core.pupils import Pupils, NullPupilData
 from local.base_config import PupilsBase, class_year, print_schoolyear, \
@@ -245,12 +247,13 @@ class FieldEdit(TabPage):
                     pdata.name())   for pdata in self.pdlist])
         else:
             self.pselect.clear()
+            self.pid = None
+            self.pdata = None
         self.pselect.trigger()
 #
     def pupil_changed(self, pid):
         """A new pupil has been selected: reset the grid accordingly.
         """
-        print("§§§", pid)
         self.pid = pid
         if pid:
             # Replace pupil data
@@ -265,49 +268,56 @@ class FieldEdit(TabPage):
             self.renew()
 #
     def get_template(self):
-#TODO: select from existing files?
-        for (root, dirs, files) in os.walk(os.path.join(RESOURCES, 'templates')):
-            print("Folder: ", root)
-            #print("The directories are: ")
-            #print(dirs)
-            print("The files are: ")
+        data = []
+        for (root, dirs, files) in os.walk(os.path.join(RESOURCES,
+                'templates')):
             tfiles = []
             for f in files:
                 if f.endswith('.odt'):
                     title, subject = metadata(os.path.join(root, f))
                     if title and title.startswith('WZ-template'):
-                        tfiles.append(f)
-            print(tfiles)
-            print('--------------------------------')
-
-
-        # file dialog – start at template folder
-        dir0 = os.path.join(RESOURCES, 'templates')
-        fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
-                dir0, _TEMPLATE_FILE)[0]
-        if not fpath:
+                        tfiles.append('%s:: %s' % (f, subject))
+            if tfiles:
+                data.append((root, tfiles))
+        cc = TreeDialog(_CHOOSE_TEMPLATE, _SELECT_OR_BROWSE,
+                data, button = _BROWSE)
+        if not cc:
             return
+        if cc[0]:
+            fpath = os.path.join(cc[0], cc[1].split('::', 1)[0])
+        else:
+            # file dialog – start at template folder
+            dir0 = os.path.join(RESOURCES, 'templates')
+            fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
+                    dir0, _TEMPLATE_FILE)[0]
+            if not fpath:
+                return
         self.template = Template(fpath, full_path = True)
         self.field_scene = FieldGrid(self.fieldView, self.template)
         self.fieldView.set_scene(self.field_scene)
+        title = fpath
+        if len(title) > 42:
+            title = '... ' + title[-40:]
+        self.field_scene.set_text_init('title', title)
         self.renew()
 #
     def renew(self):
         ### Initial fields
         _sy = ADMIN.schoolyear
         _syL = print_schoolyear(_sy)
-        _cl = print_class(self.klass)
+        _cl = print_class(self.klass) if self.klass else ''
         self.field_values = {
             'schoolyear': _sy,
             'SCHOOLYEAR': _syL,
             'SYEAR': _syL,
             'CL': _cl,
-            'CYEAR': class_year(self.klass),
+            'CYEAR': class_year(self.klass) if self.klass else '',
             'SCHOOL': SCHOOL_DATA.SCHOOL_NAME,
             'SCHOOLBIG': SCHOOL_DATA.SCHOOL_NAME.upper()
         }
         # Add pupil data
-        self.field_values.update(self.pdata)
+        if self.pdata:
+            self.field_values.update(self.pdata)
         self.field_scene.set_fields(self.field_values)
 #
     def test_fields(self):
