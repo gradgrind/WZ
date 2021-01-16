@@ -278,7 +278,9 @@ class FieldEdit(TabPage):
                     if title and title.startswith('WZ-template'):
                         tfiles.append('%s:: %s' % (f, subject))
             if tfiles:
+                tfiles.sort()
                 data.append((root, tfiles))
+        data.sort()
         cc = TreeDialog(_CHOOSE_TEMPLATE, _SELECT_OR_BROWSE,
                 data, button = _BROWSE)
         if not cc:
