@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-01-05
+core/courses.py - last updated 2021-01-19
 
 Handle course data.
 
@@ -35,8 +35,10 @@ _COMPOSITE_IS_COMPONENT = "Fach-Kürzel „{sid}“ ist sowohl als „Sammelfach
 
 ### Fields
 _SCHOOLYEAR = 'Schuljahr'
+_TITLE2 = "Tabelle erstellt am {time}"
 
-import sys, os, shutil
+
+import sys, os, shutil, datetime
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
@@ -45,8 +47,9 @@ if __name__ == '__main__':
 from collections import namedtuple
 
 from core.base import Dates
+from core.pupils import Pupils
 from local.base_config import SubjectsBase, USE_XLSX
-from local.grade_config import (NULL_COMPOSITE, NOT_GRADED)
+from local.grade_config import NULL_COMPOSITE, NOT_GRADED, UNCHOSEN
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 
 
@@ -264,6 +267,74 @@ class Subjects(SubjectsBase):
         with open(tfpath, 'wb') as fh:
             fh.write(bstream)
         return tfpath
+#
+#TODO: Choice of courses
+# This should include the current (internal) table.
+# Also need to import to internal table.
+    def make_choice_table(self, klass):
+        """Build a basic pupil/subject table for course choices:
+        Non-taken courses will be marked with <UNCHOSEN>.
+        The field names will be localized.
+        """
+        ### Get template file
+        template_path = os.path.join(RESOURCES, 'templates',
+                    *self.CHOICE_TEMPLATE.split('/'))
+        table = KlassMatrix(template_path)
+
+        ### Set title line
+        #table.setTitle("???")
+        dt = datetime.datetime.now()
+        table.setTitle2(_TITLE2.format(time = dt.isoformat(
+                    sep=' ', timespec='minutes')))
+
+        ### Translate and enter general info
+        info = (
+            (_SCHOOLYEAR,    str(self.schoolyear)),
+            (_GROUP,         klass)
+        )
+        table.setInfo(info)
+        ### Go through the template columns and check if they are needed:
+        sidcol = []
+        col = 0
+        rowix = table.row0()    # index of header row
+        for sdata in self.class_subjects(klass):
+            if not sdata.tids:
+                continue    # Not a "real" subject
+            # Add subject
+            col = table.nextcol()
+            sidcol.append((sdata.sid, col))
+            table.write(rowix, col, sid)
+            table.write(rowix + 1, col, sdata.name)
+        # Enforce minimum number of columns
+        while col < 18:
+            col = table.nextcol()
+            table.write(rowix, col, None)
+        # Delete excess columns
+        table.delEndCols(col + 1)
+        ### Add pupils
+        pupils = Pupils(self.schoolyear)
+        for pdata in pupils.class_pupils(klass):
+            row = table.nextrow()
+            table.write(row, 0, pdata['PID'])
+            table.write(row, 1, pdata.name())
+            table.write(row, 2, pdata['STREAM'])
+
+#TODO: get internal data
+            for sid, col in sidcol:
+                g = gmap.get(sid)
+                if g:
+                    table.write(row, col, g)
+        # Delete excess rows
+        row = table.nextrow()
+        table.delEndRows(row)
+        ### Save file
+        table.protectSheet()
+        return table.save()
+
+
+
+
+
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

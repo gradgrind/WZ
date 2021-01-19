@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-01-15
+Last updated:  2021-01-19
 
 General configuration items.
 
@@ -120,6 +120,8 @@ class SubjectsBase:
     # The path to the class tables. This must end with '_{klass}' for
     # determining the class.
     TABLE_NAME = 'Fachlisten/KLASSE_{klass}'
+#
+    CHOICE_TEMPLATE = 'Fachwahl'
 #
     def read_class_path(self, klass = None):
         """Return the path to the table for the class.

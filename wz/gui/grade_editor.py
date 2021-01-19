@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2021-01-05
+Last updated:  2021-01-19
 
 Editor for grades.
 
@@ -47,11 +47,16 @@ _NEW_REPORT = "Neues Zeugnis"
 _TERM = "Anlass:"
 _GROUP = "Klasse/Gruppe:"
 _SAVE = "Änderungen speichern"
-_TABLE_XLSX = "Noteneingabe-Tabelle"
+_TABLE_XLSX = "Noteneingabe-Tabelle\nerstellen"
+_TT_TABLE_XLSX = "Tabelle der unterrichteten Fächer als xlsx-Datei erstellen"
 _TABLE_PDF = "Tabelle als PDF"
 _REPORT_PDF = "Zeugnis(se) erstellen"
-_TABLE_IN1 = "Notentabelle einlesen"
-_TABLE_IN_DIR = "Notentabellen einlesen"
+_TABLE_IN1 = "Notentabelle einlesen,\n interne ersetzen"
+_TT_TABLE_IN1 = "Ersetze die Notentabelle durch die gewählte Datei" \
+        " (xlsx, ods, tsv)"
+_TABLE_IN_DIR = "Notentabellen einlesen,\n interne aktualisieren"
+_TT_TABLE_IN_DIR = "Aktualisiere die Notentabelle von den Dateien" \
+        " (xlsx, ods, tsv) im gewählten Ordner"
 _FILESAVE = "Datei speichern"
 _FILEOPEN = "Datei öffnen"
 _DIROPEN = "Ordner öffnen"
@@ -120,13 +125,16 @@ class GradeEdit(TabPage):
         QObject.connect(self.gradeView.pbSave, SIGNAL('clicked()'), self.save)
         cbox.addStretch(1)
         pbTable = QPushButton(_TABLE_XLSX)
+        pbTable.setToolTip(_TT_TABLE_XLSX)
         cbox.addWidget(pbTable)
         pbTable.clicked.connect(self.make_table)
         cbox.addSpacing(10)
         pbTableIn1 = QPushButton(_TABLE_IN1)
+        pbTableIn1.setToolTip(_TT_TABLE_IN1)
         cbox.addWidget(pbTableIn1)
         pbTableIn1.clicked.connect(self.input_table)
         pbTableInDir = QPushButton(_TABLE_IN_DIR)
+        pbTableInDir.setToolTip(_TT_TABLE_IN_DIR)
         cbox.addWidget(pbTableInDir)
         pbTableInDir.clicked.connect(self.input_tables)
         cbox.addSpacing(30)
