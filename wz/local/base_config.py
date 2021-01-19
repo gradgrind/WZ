@@ -119,18 +119,21 @@ class SubjectsBase:
 #
     # The path to the class tables. This must end with '_{klass}' for
     # determining the class.
-    TABLE_NAME = 'Fachlisten/KLASSE_{klass}'
+    TABLE_NAME = 'Fachlisten/KLASSE_{klass}'    # subject table
+    CHOICE_NAME = 'Fachwahl/WAHL_{klass}'       # choice table
 #
     CHOICE_TEMPLATE = 'Fachwahl'
 #
-    def read_class_path(self, klass = None):
+    def read_class_path(self, klass = None, choice = False):
         """Return the path to the table for the class.
         If <klass> is not given, return the directory path.
+        If <choice> is true, return the path to the choice table.
         """
+        table = self.CHOICE_NAME if choice else self.TABLE_NAME
         if klass != None:
-            xpath = self.TABLE_NAME.format(klass = klass)
+            xpath = table.format(klass = klass)
         else:
-            xpath = os.path.dirname(self.TABLE_NAME)
+            xpath = os.path.dirname(table)
         return year_path(self.schoolyear, xpath)
 #
     def group_subjects(self, group):

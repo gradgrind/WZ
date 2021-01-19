@@ -51,6 +51,7 @@ from core.pupils import Pupils
 from local.base_config import SubjectsBase, USE_XLSX
 from local.grade_config import NULL_COMPOSITE, NOT_GRADED, UNCHOSEN
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
+from tables.matrix import KlassMatrix
 
 
 class CourseError(Exception):
@@ -268,8 +269,42 @@ class Subjects(SubjectsBase):
             fh.write(bstream)
         return tfpath
 #
-#TODO: Choice of courses
-# This should include the current (internal) table.
+    def read_choice_table(self, klass):
+        """Return a mapping {pid -> {set of blocked sids}}.
+        All non-empty source table cells are included in the mapping.
+        The source table need not exist. If it doesn't, <None> is returned.
+        """
+        fpath = self.read_class_path(klass, choice = True)
+        suffix = '.xlsx' if USE_XLSX else '.tsv'
+        tfpath = fpath + suffix
+        if not os.path.isfile(tfpath):
+            return None
+        dbtable = Spreadsheet(fpath).dbTable()
+        info = {r[0]:r[1] for r in dbtable.info}
+        if info.get('SCHOOLYEAR') != self.schoolyear:
+            raise TableError(_YEAR_MISMATCH.format(path = fpath))
+        if info.get('CLASS') != klass:
+            raise TableError(_CLASS_MISMATCH.format(path = fpath))
+        # Build a sid:column relationship
+        sid2col = []
+        col = 0
+        for f in dbtable.fieldnames():
+            if col > 2:
+                if f[0] != '$':
+                    # This should be a subject tag
+                    sid2col.append((f, col))
+            col += 1
+        table = {}
+        for row in dbtable:
+            pid = row[0]
+            if pid and pid != '$':
+                choicemap = {sid for sid, col in sid2col if row[col]}
+                # name = row[1]
+                # stream = row[2]
+            table[pid] = choicemap
+        return table
+#
+#TODO:
 # Also need to import to internal table.
     def make_choice_table(self, klass):
         """Build a basic pupil/subject table for course choices:
@@ -289,8 +324,8 @@ class Subjects(SubjectsBase):
 
         ### Translate and enter general info
         info = (
-            (_SCHOOLYEAR,    str(self.schoolyear)),
-            (_GROUP,         klass)
+            (self.SCHOOLYEAR,    str(self.schoolyear)),
+            (self.CLASS,         klass)
         )
         table.setInfo(info)
         ### Go through the template columns and check if they are needed:
@@ -298,13 +333,13 @@ class Subjects(SubjectsBase):
         col = 0
         rowix = table.row0()    # index of header row
         for sdata in self.class_subjects(klass):
-            if not sdata.tids:
+            if not sdata.TIDS:
                 continue    # Not a "real" subject
             # Add subject
             col = table.nextcol()
-            sidcol.append((sdata.sid, col))
-            table.write(rowix, col, sid)
-            table.write(rowix + 1, col, sdata.name)
+            sidcol.append((sdata.SID, col))
+            table.write(rowix, col, sdata.SID)
+            table.write(rowix + 1, col, sdata.SUBJECT)
         # Enforce minimum number of columns
         while col < 18:
             col = table.nextcol()
@@ -313,28 +348,27 @@ class Subjects(SubjectsBase):
         table.delEndCols(col + 1)
         ### Add pupils
         pupils = Pupils(self.schoolyear)
+        choice = self.read_choice_table(klass)
         for pdata in pupils.class_pupils(klass):
+            pid = pdata['PID']
             row = table.nextrow()
-            table.write(row, 0, pdata['PID'])
+            table.write(row, 0, pid)
             table.write(row, 1, pdata.name())
             table.write(row, 2, pdata['STREAM'])
-
-#TODO: get internal data
+            # Get saved choices
+            try:
+                pchoice = choice[pid]
+            except:
+                pchoice = set()
             for sid, col in sidcol:
-                g = gmap.get(sid)
-                if g:
-                    table.write(row, col, g)
+                if sid in pchoice:
+                    table.write(row, col, UNCHOSEN)
         # Delete excess rows
         row = table.nextrow()
         table.delEndRows(row)
         ### Save file
         table.protectSheet()
         return table.save()
-
-
-
-
-
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -345,6 +379,19 @@ if __name__ == '__main__':
     init()
 
     _subjects = Subjects(_year)
+    _class = '12'
+    print("\nCOURSE CHOICES (NOT TAKEN), class %s" % _class)
+    print(_subjects.read_choice_table(_class))
+    odir = os.path.join(DATA, 'testing', 'tmp')
+    os.makedirs(odir, exist_ok = True)
+    xlsx_bytes = _subjects.make_choice_table(_class)
+    tfile = os.path.join(odir, 'CHOICE_%s.xlsx' % _class)
+    with open(tfile, 'wb') as fh:
+        fh.write(xlsx_bytes)
+        print("OUT:", tfile)
+
+    quit(0)
+
     _filepath = os.path.join(DATA, 'testing', 'FACHLISTEN', 'Fachliste-09')
     _srctable = _subjects.read_source_table(_filepath)
     print("\n CLASS", _srctable.klass)
