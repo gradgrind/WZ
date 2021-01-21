@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-01-19
+Last updated:  2021-01-21
 
 General configuration items.
 
@@ -106,6 +106,7 @@ def class_year(klass):
 
 class SubjectsBase:
     TITLE = "Fachliste"
+    CHOICE_TITLE = "Fächerwahl"
     FIELDS = {
         'SID'       : 'Fach-Kürzel',
         'SUBJECT'   : 'Fach',

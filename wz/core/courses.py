@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-01-19
+core/courses.py - last updated 2021-01-21
 
 Handle course data.
 
@@ -24,8 +24,8 @@ Copyright 2021 Michael Towers
 ### Messages
 _YEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {path}"
 _CLASS_MISMATCH = "Falsche Klasse in Tabelle:\n  {path}"
-_INFO_MISSING = "Info-Feld „{field}“ fehlt in Fachliste:\n  {fpath}"
-_FIELD_MISSING = "Feld „{field}“ fehlt in Fachliste:\n  {fpath}"
+_INFO_MISSING = "Info-Feld „{field}“ fehlt in Fachtabelle:\n  {fpath}"
+_FIELD_MISSING = "Feld „{field}“ fehlt in Fachtabelle:\n  {fpath}"
 _MULTI_COMPOSITE = "Fach mit Kürzel „{sid}“ ist Unterfach für mehrere" \
         " Sammelfächer"
 _NO_COMPONENTS = "Sammelfach {sid} hat keine Unterfächer"
@@ -269,7 +269,7 @@ class Subjects(SubjectsBase):
             fh.write(bstream)
         return tfpath
 #
-    def read_choice_table(self, klass):
+    def get_choice_table(self, klass):
         """Return a mapping {pid -> {set of blocked sids}}.
         All non-empty source table cells are included in the mapping.
         The source table need not exist. If it doesn't, <None> is returned.
@@ -290,22 +290,82 @@ class Subjects(SubjectsBase):
         col = 0
         for f in dbtable.fieldnames():
             if col > 2:
-                if f[0] != '$':
-                    # This should be a subject tag
-                    sid2col.append((f, col))
+                # This should be a subject tag
+                sid2col.append((f, col))
             col += 1
         table = {}
         for row in dbtable:
             pid = row[0]
-            if pid and pid != '$':
+            if pid:
                 choicemap = {sid for sid, col in sid2col if row[col]}
                 # name = row[1]
                 # stream = row[2]
             table[pid] = choicemap
         return table
 #
-#TODO:
-# Also need to import to internal table.
+#TODO: May want to provide editor, which would require save method,
+# like grade tables.
+    def import_choice_table(self, filepath):
+        """Read in the file containing the course choices and save the
+        data to the internal representation.
+        The field names are "localized".
+        The file-path can be passed with or without type-extension.
+        If no type-extension is given, the folder will be searched for a
+        suitable file.
+        Alternatively, <filepath> may be an in-memory binary stream
+        (io.BytesIO) with attribute 'filename' (so that the
+        type-extension can be read).
+        """
+        dbtable = Spreadsheet(filepath).dbTable()
+        info = {r[0]:r[1] for r in dbtable.info}
+        try:
+            _year = info[self.SCHOOLYEAR]
+        except KeyError as e:
+            raise TableError(_INFO_MISSING.format(
+                    field = self.SCHOOLYEAR, fpath = filepath)) from e
+        if _year != self.schoolyear:
+            raise TableError(_YEAR_MISMATCH.format(path = filepath))
+        try:
+            klass = info[self.CLASS]
+        except KeyError as e:
+            raise TableError(_INFO_MISSING.format(
+                    field = self.CLASS, fpath = filepath)) from e
+        # Build a sid:column relationship
+        sid2col = []
+        col = 3
+        for f in dbtable.fieldnames()[3:]:
+            if f[0] != '$':
+                # This should be a subject tag
+                sid2col.append((f, col))
+            col += 1
+        table = []
+        for row in dbtable:
+            pid = row[0]
+            if pid and pid != '$':
+                choicemap = {sid: UNCHOSEN if row[col] else ''
+                        for sid, col in sid2col}
+                choicemap['PID'] = pid
+                choicemap['PUPIL'] = row[1]
+                choicemap['STREAM'] = row[2]
+                table.append(choicemap)
+        info = (
+            ('SCHOOLYEAR', self.schoolyear),
+            ('CLASS', klass),
+            ('changed', Dates.today())
+        )
+        # <make_db_table> requires the column names and a list of <dict>s
+        fields = ['PID', 'PUPIL', 'STREAM'] + [sid for sid, col in sid2col]
+        bstream = make_db_table(self.CHOICE_TITLE, fields,
+                table, info = info)
+        fpath = self.read_class_path(klass, choice = True)
+        suffix = '.xlsx' if USE_XLSX else '.tsv'
+        tfpath = fpath + suffix
+        if os.path.isfile(tfpath):
+            shutil.copyfile(tfpath, tfpath + '.bak')
+        with open(tfpath, 'wb') as fh:
+            fh.write(bstream)
+        return tfpath
+#
     def make_choice_table(self, klass):
         """Build a basic pupil/subject table for course choices:
         Non-taken courses will be marked with <UNCHOSEN>.
@@ -315,13 +375,11 @@ class Subjects(SubjectsBase):
         template_path = os.path.join(RESOURCES, 'templates',
                     *self.CHOICE_TEMPLATE.split('/'))
         table = KlassMatrix(template_path)
-
         ### Set title line
         #table.setTitle("???")
         dt = datetime.datetime.now()
         table.setTitle2(_TITLE2.format(time = dt.isoformat(
                     sep=' ', timespec='minutes')))
-
         ### Translate and enter general info
         info = (
             (self.SCHOOLYEAR,    str(self.schoolyear)),
@@ -348,7 +406,7 @@ class Subjects(SubjectsBase):
         table.delEndCols(col + 1)
         ### Add pupils
         pupils = Pupils(self.schoolyear)
-        choice = self.read_choice_table(klass)
+        choice = self.get_choice_table(klass)
         for pdata in pupils.class_pupils(klass):
             pid = pdata['PID']
             row = table.nextrow()
@@ -381,7 +439,12 @@ if __name__ == '__main__':
     _subjects = Subjects(_year)
     _class = '12'
     print("\nCOURSE CHOICES (NOT TAKEN), class %s" % _class)
-    print(_subjects.read_choice_table(_class))
+    print(_subjects.get_choice_table(_class))
+
+    idir = os.path.join(DATA, 'testing', 'FACHWAHL')
+    for f in os.listdir(idir):
+        print("IMPORTED:", _subjects.import_choice_table(os.path.join(idir, f)))
+
     odir = os.path.join(DATA, 'testing', 'tmp')
     os.makedirs(odir, exist_ok = True)
     xlsx_bytes = _subjects.make_choice_table(_class)
