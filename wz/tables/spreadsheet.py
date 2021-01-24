@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-01-05
+Last updated:  2021-01-21
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -520,6 +520,21 @@ class NewSpreadsheet:
 if __name__ == '__main__':
     from core.base import init
     init()
+
+    try:
+        f = sys.argv[1]
+    except:
+        pass
+    else:
+        ss = Spreadsheet(f)
+        dbt = ss.dbTable()
+        print("\nINFO:", dbt.info)
+        print("\nFIELDS:", dbt.fieldnames())
+        print("\nCONTENT:")
+        for row in dbt:
+            print(" :::", row)
+        print("\n*** 4th row:", dbt[3])
+        quit(0)
 
     filepath = os.path.join(DATA, 'testing', 'Test1.tsv')
     fname = os.path.basename(filepath)

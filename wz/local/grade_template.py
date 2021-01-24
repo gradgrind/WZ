@@ -3,7 +3,7 @@
 """
 local/grade_template.py
 
-Last updated:  2021-01-03
+Last updated:  2021-01-24
 
 Manage template-specific fields for grade reports.
 
@@ -67,7 +67,7 @@ def info_extend(grade_map):
         if grade_map['SekII']:
             grade_map['QP12'] = ''
             if term == '1':
-                grade_map['HJ'] = '1'
+                grade_map['HJ'] = '1.'
             elif term == '2':
                 grade_map['HJ'] = '1. und 2.'
                 grade_map['QP12'] = QP12_TEXT.format(

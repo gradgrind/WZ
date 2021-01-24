@@ -2,7 +2,7 @@
 """
 gui/grade_editor.py
 
-Last updated:  2021-01-19
+Last updated:  2021-01-21
 
 Editor for grades.
 
@@ -51,10 +51,10 @@ _TABLE_XLSX = "Noteneingabe-Tabelle\nerstellen"
 _TT_TABLE_XLSX = "Tabelle der unterrichteten Fächer als xlsx-Datei erstellen"
 _TABLE_PDF = "Tabelle als PDF"
 _REPORT_PDF = "Zeugnis(se) erstellen"
-_TABLE_IN1 = "Notentabelle einlesen,\n interne ersetzen"
+_TABLE_IN1 = "Notentabelle ersetzen,\n externe einlesen"
 _TT_TABLE_IN1 = "Ersetze die Notentabelle durch die gewählte Datei" \
         " (xlsx, ods, tsv)"
-_TABLE_IN_DIR = "Notentabellen einlesen,\n interne aktualisieren"
+_TABLE_IN_DIR = "Noten aktualisieren,\n von externem Ordner"
 _TT_TABLE_IN_DIR = "Aktualisiere die Notentabelle von den Dateien" \
         " (xlsx, ods, tsv) im gewählten Ordner"
 _FILESAVE = "Datei speichern"
