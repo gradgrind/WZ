@@ -2,6 +2,7 @@
 
 import sys
 import time
+sys.stdin.reconfigure(encoding='utf-8') # requires Python 3.7+
 
 
 def flush_then_wait():
@@ -35,3 +36,16 @@ sys.stdout.write("Script stdout 6\n")
 sys.stdout.write("Script stdout 7\n")
 sys.stdout.write("website=www.learnpyqt.com\n")
 flush_then_wait()
+
+for line in sys.stdin:
+    if line[0] == '!':
+        for i in range(10):
+            time.sleep(0.5)
+            print("STEP %d\n" % (i + 1), flush = True)
+        time.sleep(1.0)
+        print("XXX", flush = True)
+    elif line[0] == '$':
+        break
+    else:
+        time.sleep(1.0)
+        print(">>>", line, flush = True)

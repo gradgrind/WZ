@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from qtpy.QtWidgets import (QApplication, QMainWindow, QPushButton, QPlainTextEdit, QVBoxLayout, QWidget, QProgressBar)
-from qtpy.QtCore import QProcess
+from qtpy.QtWidgets import QApplication, QMainWindow, QPushButton, \
+        QPlainTextEdit, QVBoxLayout, QWidget, QProgressBar, QDialog
+from qtpy.QtCore import QProcess, QTimer
 import sys
 import re
 
@@ -23,11 +24,19 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.popup = False
+        self.dialog = QDialog()
+        vbox = QVBoxLayout(self.dialog)
+        self.dialog_text = QPlainTextEdit()
+        self.dialog_text.setReadOnly(True)
+        vbox.addWidget(self.dialog_text)
 
         self.p = None
 
-        self.btn = QPushButton("Execute")
+        self.btn = QPushButton("Start")
         self.btn.pressed.connect(self.start_process)
+        self.btn2 = QPushButton("Command")
+        self.btn2.pressed.connect(self.command)
         self.text = QPlainTextEdit()
         self.text.setReadOnly(True)
 
@@ -36,6 +45,7 @@ class MainWindow(QMainWindow):
 
         l = QVBoxLayout()
         l.addWidget(self.btn)
+        l.addWidget(self.btn2)
         l.addWidget(self.progress)
         l.addWidget(self.text)
 
@@ -45,17 +55,69 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(w)
 
     def message(self, s):
+        if self.popup:
+            if s.startswith('XXX'):
+                self.dialog.accept()
+                self.popup = False
+            else:
+                self.dialog_text.appendPlainText(s)
+                return
         self.text.appendPlainText(s)
 
     def start_process(self):
         if self.p is None:  # No process running.
             self.message("Executing process")
             self.p = QProcess()  # Keep a reference to the QProcess (e.g. on self) while it's running.
+#self.p.setProcessChannelMode(QProcess.MergedChannels)
+#self.p.readyRead.connect(self.handle_out)
+# ... self.p.readAll()
             self.p.readyReadStandardOutput.connect(self.handle_stdout)
             self.p.readyReadStandardError.connect(self.handle_stderr)
             self.p.stateChanged.connect(self.handle_state)
             self.p.finished.connect(self.process_finished)  # Clean up once complete.
             self.p.start("python3", ['dummy_script.py'])
+
+    def command(self):
+        print("command")
+#        self.p.write('COMMAND 1: öäüß€\n'.encode('utf-8'))
+        self.p.write('!\n'.encode('utf-8'))
+#This is a brilliant solution, but it doesn't do what it "should" – it
+# doesn't block input to the main window!
+# The hiding seems to cancel the modality, and the showing doesn't start it
+# again.
+#        QTimer.singleShot(10, self.popup_hide)
+#        QTimer.singleShot(2000, self.popup_show)
+
+        if self.p.waitForReadyRead(200):
+            # If it is an info (etc.) message, pop up and show it.
+            # Otherwise execute it ...
+        else:
+            # no response (or error)
+            # --> dialog
+
+
+
+
+
+            self.popup = True
+            self.dialog_text.clear()
+            self.dialog.exec_()
+# Would input polling up to the show time be possible?
+# Selectively handle events?
+# What about leaving the modal window up to the individual function?
+# But one would still need to block further actions until the response is
+# available ... As QProcess is rather signal-slot based, that might be
+# easier with python's subprocess?
+
+
+    def popup_hide(self):
+        if self.popup:
+            self.dialog.setVisible(False)
+
+    def popup_show(self):
+        print("SHOW")
+        if self.popup:
+            self.dialog.setVisible(True)
 
     def handle_stderr(self):
         data = self.p.readAllStandardError()

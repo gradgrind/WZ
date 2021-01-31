@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-01-06
+Last updated:  2021-01-30
 
 Basic configuration and structural stuff.
 
@@ -97,14 +97,11 @@ def init(datadir = None):
     builtins.SCHOOL_DATA = ConfigFile(os.path.join(DATA, 'SCHOOL_DATA'))
 
 
-def report(mtype, text = None):
+def report(mtype, text):
     """The default reporting function prints to stdout.
     It can be overridden later.
     """
-    if text:
-        print('%s: %s' % (mtype, text))
-    else:
-        print('???: %s' % mtype)
+    print('%s: %s' % (mtype, text), flush = True)
 builtins.REPORT = report
 
 #
