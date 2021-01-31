@@ -72,7 +72,7 @@ if __name__ == '__main__':
     app = QApplication([])
 
 from qtpy.QtWidgets import QWidget, QDialog, QFrame, \
-    QStackedWidget, QTreeWidget, QTreeWidgetItem, \
+    QStackedWidget, \
     QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, \
     QPushButton, QButtonGroup, \
     QFileDialog
@@ -385,9 +385,6 @@ class Admin(QWidget):
     @classmethod
     def set_loaddir(cls, path):
         cls._loaddir = path
-#
-    def year(self):
-        return self.year_select.selected()
 #
     def __init__(self):
         super().__init__()

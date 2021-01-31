@@ -28,7 +28,6 @@ Copyright 2021 Michael Towers
 #???
 ### Messages
 _WARN_NO_CHANGES = "Keine Änderungen sind vorgemerkt"
-_BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
 
 ### Labels, etc.
 _UPDATE_PUPILS = "Schülerdaten aktualisieren"
@@ -45,8 +44,10 @@ _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
 _DELTA_LEN_MAX = 80
 
 #####################################################
-import os
-from qtpy.QtWidgets import QLabel, QTreeWidget, QPushButton, QFileDialog
+import os, json
+from qtpy.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, \
+        QPushButton, QFileDialog
+from qtpy.QtCore import Qt
 from ui.ui_support import TabPage
 
 ##
@@ -90,7 +91,6 @@ class UpdatePupils(TabPage):
 #
     def update(self, review = False):
         self.enter()
-        self.pupils = Pupils(ADMIN.year())
         if not review:
             dir0 = ADMIN._loaddir or os.path.expanduser('~')
             fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
@@ -98,14 +98,14 @@ class UpdatePupils(TabPage):
             if not fpath:
                 return
             ADMIN.set_loaddir(os.path.dirname(fpath))
-            try:
-                self.ptables = self.pupils.read_source_table(fpath)
-            except:
-                INFO('ERROR', _BAD_PUPIL_TABLE.format(path = fpath))
-                return
-        _delta = self.pupils.compare_new_data(self.ptables)
-        changes = False
-        self.elements = []
+            # Ask for the changes
+            self.changes = False
+            self.elements = []
+            BACKEND('PUPIL_table_update', filepath = fpath)
+        return
+
+
+#TODO ...
         for k, dlist in _delta.items():
             items = []
             self.elements.append((k, items))
@@ -121,6 +121,7 @@ class UpdatePupils(TabPage):
                 items.append((child, d))
                 child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
                 op, pdata = d[0], d[1]
+#TODO: .name()!
                 name = pdata.name()
                 if op == 'NEW':
                     text = 'Neu: %s' % name
@@ -138,6 +139,49 @@ class UpdatePupils(TabPage):
         if changes:
             self.pbdoit.setEnabled(True)
 #
+    def DELTA(self, klass, delta):
+        #print("§§§", klass, json.loads(delta))
+        dlist = json.loads(delta)
+        items = []
+        self.elements.append((klass, items))
+        if not dlist:
+            return
+        self.changes = True
+        parent = QTreeWidgetItem(self.tree)
+        parent.setText(0, "Klasse {}".format(klass))
+        parent.setFlags(parent.flags() | Qt.ItemIsTristate
+                | Qt.ItemIsUserCheckable)
+        for d in dlist:
+            child = QTreeWidgetItem(parent)
+            items.append((child, d))
+            child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
+            op, pdata = d[0], d[1]
+            name = pdata.name()
+            if op == 'NEW':
+                text = 'Neu: %s' % name
+            elif op == 'DELTA':
+                text = 'Ändern %s: %s' % (name, str(d[2]))
+                if len(text) > _DELTA_LEN_MAX:
+                    child.setToolTip(0, '<p>' + text + '</p>')
+                    text = text[:_DELTA_LEN_MAX - 4] + ' ...'
+            elif op == 'REMOVE':
+                text = 'Entfernen: %s' % name
+            else:
+                raise Bug("Unexpected operator: %s" % op)
+            child.setText(0, text)
+            child.setCheckState(0, Qt.Checked)
+
+
+
+#
+    def DELTA_COMPLETE(self):
+        #print("§§§§§§§§§§§§§§§§§§§§§§")
+        if self.changes:
+            self.pbdoit.setEnabled(True)
+
+
+#
+#TODO
     def doit(self):
         changes = False
         # Filter the changes lists
@@ -159,3 +203,5 @@ class UpdatePupils(TabPage):
 
 tab_pupils_update = UpdatePupils()
 TABS.append(tab_pupils_update)
+FUNCTIONS['pupil_DELTA'] = tab_pupils_update.DELTA
+FUNCTIONS['pupil_DELTA_COMPLETE'] = tab_pupils_update.DELTA_COMPLETE

@@ -183,7 +183,7 @@ def set_year(year):
 
 FUNCTIONS['BASE_set_year'] = set_year
 
-###
+######################################################################
 
 from core.courses import Subjects
 
@@ -195,6 +195,50 @@ def update_subjects(filepath):
         return True
 
 FUNCTIONS['SUBJECT_table_update'] = update_subjects
+
+###
+
+_BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
+
+from core.pupils import Pupils
+import json
+
+class Pupils_Update:
+    _instance = None
+    @classmethod
+    def start(cls, filepath):
+        self = cls()
+        cls._instance = self
+        self.compare_file(filepath)
+        return bool(cls._instance)
+    @classmethod
+    def done(cls):
+        cls._instance = None
+#
+    def __init__(self):
+        self.pupils = Pupils(SCHOOLYEAR)
+#
+    def compare_file(self, filepath):
+        try:
+            self.ptables = self.pupils.read_source_table(filepath)
+        except:
+            REPORT('ERROR', _BAD_PUPIL_TABLE.format(path = filepath))
+            self.done()
+            return
+        self.delta = self.pupils.compare_new_data(self.ptables)
+#TODO: return it as json? Is that too much for one line?
+# Return it line-for-line? class-for-class?
+        for klass, kdata in self.delta.items():
+            klist = json.dumps(kdata)
+            CALLBACK('pupil_DELTA', klass = klass, delta = klist)
+        CALLBACK('pupil_DELTA_COMPLETE')
+
+
+
+
+
+
+FUNCTIONS['PUPIL_table_update'] = Pupils_Update.start
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
