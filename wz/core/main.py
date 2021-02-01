@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-01-31
+core/main.py - last updated 2021-02-01
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -232,13 +232,18 @@ class Pupils_Update:
             klist = json.dumps(kdata)
             CALLBACK('pupil_DELTA', klass = klass, delta = klist)
         CALLBACK('pupil_DELTA_COMPLETE')
+#
+    @classmethod
+    def update(cls, klass, delta_list):
+        REPORT('OUT', '& %s: %s' % (klass, delta_list))
+        return True
 
 
 
 
 
-
-FUNCTIONS['PUPIL_table_update'] = Pupils_Update.start
+FUNCTIONS['PUPIL_table_delta'] = Pupils_Update.start
+FUNCTIONS['PUPIL_table_update'] = Pupils_Update.update
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

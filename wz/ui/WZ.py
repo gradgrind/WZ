@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-01-31
+Last updated:  2021-02-01
 
 Administration interface.
 
@@ -234,14 +234,14 @@ class _Backend(QDialog):
                 key, val = p.split(':', 1)
                 params[key] = self.decode(val)
         except:
-            INFO('TRAP', 'Invalid callback:\n  %s' % line.rstrip())
+            self.report('TRAP', 'Invalid callback:\n  %s' % line.rstrip())
             return
         ### execute
         try:
             function(**params)
         except:
             log_msg = traceback.format_exc()
-            INFO('TRAP', log_msg)
+            self.report('TRAP', log_msg)
 #
 #TODO: logging!
 #

@@ -2,7 +2,7 @@
 """
 ui/tab_pupils_update.py
 
-Last updated:  2021-01-31
+Last updated:  2021-02-01
 
 Pupil table management.
 
@@ -91,6 +91,7 @@ class UpdatePupils(TabPage):
 #
     def update(self, review = False):
         self.enter()
+        self._cleartree()
         if not review:
             dir0 = ADMIN._loaddir or os.path.expanduser('~')
             fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
@@ -101,46 +102,12 @@ class UpdatePupils(TabPage):
             # Ask for the changes
             self.changes = False
             self.elements = []
-            BACKEND('PUPIL_table_update', filepath = fpath)
+            BACKEND('PUPIL_table_delta', filepath = fpath)
         return
+#TODO ... review = True ...
 
-
-#TODO ...
-        for k, dlist in _delta.items():
-            items = []
-            self.elements.append((k, items))
-            if not dlist:
-                continue
-            changes = True
-            parent = QTreeWidgetItem(self.tree)
-            parent.setText(0, "Klasse {}".format(k))
-            parent.setFlags(parent.flags() | Qt.ItemIsTristate
-                    | Qt.ItemIsUserCheckable)
-            for d in dlist:
-                child = QTreeWidgetItem(parent)
-                items.append((child, d))
-                child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
-                op, pdata = d[0], d[1]
-#TODO: .name()!
-                name = pdata.name()
-                if op == 'NEW':
-                    text = 'Neu: %s' % name
-                elif op == 'DELTA':
-                    text = 'Ändern %s: %s' % (name, str(d[2]))
-                    if len(text) > _DELTA_LEN_MAX:
-                        child.setToolTip(0, '<p>' + text + '</p>')
-                        text = text[:_DELTA_LEN_MAX - 4] + ' ...'
-                elif op == 'REMOVE':
-                    text = 'Entfernen: %s' % name
-                else:
-                    raise Bug("Unexpected operator: %s" % op)
-                child.setText(0, text)
-                child.setCheckState(0, Qt.Checked)
-        if changes:
-            self.pbdoit.setEnabled(True)
 #
     def DELTA(self, klass, delta):
-        #print("§§§", klass, json.loads(delta))
         dlist = json.loads(delta)
         items = []
         self.elements.append((klass, items))
@@ -156,7 +123,7 @@ class UpdatePupils(TabPage):
             items.append((child, d))
             child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
             op, pdata = d[0], d[1]
-            name = pdata.name()
+            name = pdata['FIRSTNAME'] + ' ' + pdata['LASTNAME']
             if op == 'NEW':
                 text = 'Neu: %s' % name
             elif op == 'DELTA':
@@ -167,15 +134,11 @@ class UpdatePupils(TabPage):
             elif op == 'REMOVE':
                 text = 'Entfernen: %s' % name
             else:
-                raise Bug("Unexpected operator: %s" % op)
+                raise Bug("Unexpected pupil-delta operator: %s" % op)
             child.setText(0, text)
             child.setCheckState(0, Qt.Checked)
-
-
-
 #
     def DELTA_COMPLETE(self):
-        #print("§§§§§§§§§§§§§§§§§§§§§§")
         if self.changes:
             self.pbdoit.setEnabled(True)
 
@@ -183,23 +146,27 @@ class UpdatePupils(TabPage):
 #
 #TODO
     def doit(self):
-        changes = False
-        # Filter the changes lists
-        delta = {}
         for k, items in self.elements:
-            dlist = []
-            delta[k] = dlist
-            for child, d in items:
-                if child.checkState(0) == Qt.Checked:
-                    dlist.append(d)
-                    changes = True
+            # Filter the changes lists
+            dlist = [d for child, d in items
+                    if child.checkState(0) == Qt.Checked]
+            if dlist:
+                BACKEND('PUPIL_table_update', klass = k,
+                        delta_list = json.dumps(dlist))
+        SHOW_INFO('Klassen aktualisiert')
+# INFO doesn't cause the dialog to pop up. It is only for use in callbacks.
+
+        return
+
+
+
         if changes:
             self.pupils.update_table(delta)
             ptables = self.ptables
             self._cleartree()
             self.update(True)
         else:
-            INFO('WARN', _WARN_NO_CHANGES)
+            SHOW_INFO('WARN', _WARN_NO_CHANGES)
 
 tab_pupils_update = UpdatePupils()
 TABS.append(tab_pupils_update)

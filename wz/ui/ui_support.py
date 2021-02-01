@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-01-31
+Last updated:  2021-02-01
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -29,7 +29,7 @@ import sys, os, builtins, traceback
 
 from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
-        QDialog, QTreeWidget, QTreeWidgetItem#, QMessageBox, QProgressBar
+        QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox#, QProgressBar
 from qtpy.QtGui import QMovie, QPixmap
 from qtpy.QtCore import Qt, QObject, QThread, Signal, Slot, QCoreApplication
 
@@ -39,6 +39,10 @@ _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
 # Dialog buttons, etc.
 _CANCEL = "Abbrechen"
 _OK = "OK"
+
+_INFO = "Mitteilung"
+_WARNING = "Warnung"
+_ERROR = "Fehler"
 
 ###
 
@@ -251,18 +255,16 @@ def TreeDialog(title, message, data, button = None):
     select.exec_()
     return select.result
 
+###
 
-#def PopupInfo(title, message):
-#    _InfoDialog(title, message, QMessageBox.Information)
+def _popupInfo(message):
+    QMessageBox.information(None, _INFO, message)
+builtins.SHOW_INFO = _popupInfo
 ##
-#def PopupWarning(title, message):
-#    _InfoDialog(title, message, QMessageBox.Warning)
+def _popupWarn(message):
+    QMessageBox.warning(None, _WARNING, message)
+builtins.SHOW_WARNING = _popupWarn
 ##
-#def PopupError(title, message):
-#    _InfoDialog(title, message, QMessageBox.Critical)
-##
-#def _InfoDialog(title, message, mtype):
-#    mbox = QMessageBox(mtype, title, message,
-#            QMessageBox.NoButton)
-#    mbox.addButton(_OK, QMessageBox.AcceptRole)
-#    mbox.exec_()
+def _popupError(message):
+     QMessageBox.critical(None, _ERROR, message)
+builtins.SHOW_ERROR = _popupError
