@@ -249,7 +249,7 @@ class Dates:
 # bit annoying because they are often ignored, e.g. "van Gogh" would be
 # sorted under "G".
 
-def name_filter(firstnames, lastname, firstname):
+def tussenvoegsel_filter(firstnames, lastname, firstname):
     """Given raw firstnames, lastname and short firstname.
     Ensure that any "tussenvoegsel" is at the beginning of the lastname
     (and not at the end of the first name) and that spaces are normalized.
@@ -259,10 +259,10 @@ def name_filter(firstnames, lastname, firstname):
     """
     firstnames1, tv, lastname1 = tvSplit(firstnames, lastname)
     firstname1 = tvSplit(firstname, 'X')[0]
-    sortname = sortingName(firstname1, tv, lastname1)
+#    sortname = sortingName(firstname1, tv, lastname1)
     if tv:
         lastname1 = tv + ' ' + lastname1
-    return (firstnames1, lastname1, firstname1, sortname)
+    return (firstnames1, lastname1, firstname1)#, sortname)
 
 ###
 

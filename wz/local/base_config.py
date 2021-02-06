@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-01-21
+Last updated:  2021-02-06
 
 General configuration items.
 
@@ -120,8 +120,8 @@ class SubjectsBase:
 #
     # The path to the class tables. This must end with '_{klass}' for
     # determining the class.
-    TABLE_NAME = 'Fachlisten/KLASSE_{klass}'    # subject table
-    CHOICE_NAME = 'Fachwahl/WAHL_{klass}'       # choice table
+    TABLE_NAME = 'Klassen/Fachlisten/KLASSE_{klass}'    # subject table
+    CHOICE_NAME = 'Klassen/Fachwahl/WAHL_{klass}'       # choice table
 #
     CHOICE_TEMPLATE = 'Fachwahl'
 #
@@ -146,12 +146,11 @@ class SubjectsBase:
 
 ###
 
-class PupilsBase:
+class PupilsBase(dict):
     TITLE = "Schülerliste"
     FIELDS = {
         'CLASS'     : 'Klasse',         # This must be the first field!
         'PID'       : 'ID',
-        'PSORT'     : 'Sortiername',    # ! generated on record entry
         'FIRSTNAME' : 'Rufname',
         'LASTNAME'  : 'Name',
         'STREAM'    : 'Maßstab',        # probably not in imported data
@@ -169,28 +168,8 @@ class PupilsBase:
 #
     SCHOOLYEAR = 'Schuljahr'
 #
-    # The path to the class tables. This must end with '_{klass}' for
-    # determining the class in method <classes>.
-    TABLE_NAME = 'Klassen/KLASSE_{year}_{klass}'
-#
-    def classes(self):
-        """Return a sorted list of class names.
-        """
-        files = glob.glob(year_path(self.schoolyear, self.TABLE_NAME.format(
-                year = self.schoolyear, klass = '*')))
-        return sorted([f.rsplit('_', 1)[-1].split('.', 1)[0]
-                for f in files])
-#
-    def read_class_path(self, klass = None):
-        """Return the path to the table for the class.
-        If <klass> is not given, return the directory path.
-        """
-        if klass != None:
-            xpath = self.TABLE_NAME.format(
-                    year = self.schoolyear, klass = klass)
-        else:
-            xpath = os.path.dirname(self.TABLE_NAME)
-        return year_path(self.schoolyear, xpath)
+    # The path to the class (pupil) tables.
+    CLASS_TABLE = 'Klassen/Schueler'
 #
     def group2pupils(self, group, date = None):
         """Return a list of pupil-data items for the pupils in the group.

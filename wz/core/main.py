@@ -208,34 +208,37 @@ class Pupils_Update:
     @classmethod
     def start(cls, filepath):
         self = cls()
-        cls._instance = self
-        self.compare_file(filepath)
-        return bool(cls._instance)
-    @classmethod
-    def done(cls):
-        cls._instance = None
-#
-    def __init__(self):
-        self.pupils = Pupils(SCHOOLYEAR)
-#
-    def compare_file(self, filepath):
         try:
             self.ptables = self.pupils.read_source_table(filepath)
         except:
             REPORT('ERROR', _BAD_PUPIL_TABLE.format(path = filepath))
-            self.done()
-            return
-        self.delta = self.pupils.compare_new_data(self.ptables)
+            cls._instance = None
+            return False
+        cls._instance = self
+        cls.compare()
+        return True
+#
+    def __init__(self):
+        self.pupils = Pupils(SCHOOLYEAR)
+#
+    @classmethod
+    def compare(cls):
+        self = cls._instance
+        _delta = self.pupils.compare_new_data(self.ptables)
 #TODO: return it as json? Is that too much for one line?
 # Return it line-for-line? class-for-class?
-        for klass, kdata in self.delta.items():
+        for klass, kdata in _delta.items():
             klist = json.dumps(kdata)
             CALLBACK('pupil_DELTA', klass = klass, delta = klist)
         CALLBACK('pupil_DELTA_COMPLETE')
 #
     @classmethod
     def update(cls, klass, delta_list):
-        REPORT('OUT', '& %s: %s' % (klass, delta_list))
+        REPORT('OUT', '& %s: %s' % (klass, json.dumps(delta_list, indent = 4)))
+        return False
+#TODO: This won't work because <update_table> needs a mapping with all classes
+        delta = json.loads(delta_list)
+        self.pupils.update_table(delta)
         return True
 
 
@@ -243,6 +246,7 @@ class Pupils_Update:
 
 
 FUNCTIONS['PUPIL_table_delta'] = Pupils_Update.start
+FUNCTIONS['PUPIL_table_delta2'] = Pupils_Update.compare
 FUNCTIONS['PUPIL_table_update'] = Pupils_Update.update
 
 

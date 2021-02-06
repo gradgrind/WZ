@@ -92,7 +92,11 @@ class UpdatePupils(TabPage):
     def update(self, review = False):
         self.enter()
         self._cleartree()
-        if not review:
+        self.changes = False
+        self.elements = []
+        if review:
+            BACKEND('PUPIL_table_delta2')
+        else:
             dir0 = ADMIN._loaddir or os.path.expanduser('~')
             fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
                     dir0, _TABLE_FILE)[0]
@@ -100,12 +104,7 @@ class UpdatePupils(TabPage):
                 return
             ADMIN.set_loaddir(os.path.dirname(fpath))
             # Ask for the changes
-            self.changes = False
-            self.elements = []
             BACKEND('PUPIL_table_delta', filepath = fpath)
-        return
-#TODO ... review = True ...
-
 #
     def DELTA(self, klass, delta):
         dlist = json.loads(delta)
@@ -114,6 +113,7 @@ class UpdatePupils(TabPage):
         if not dlist:
             return
         self.changes = True
+        self.error = False
         parent = QTreeWidgetItem(self.tree)
         parent.setText(0, "Klasse {}".format(klass))
         parent.setFlags(parent.flags() | Qt.ItemIsTristate
@@ -134,39 +134,48 @@ class UpdatePupils(TabPage):
             elif op == 'REMOVE':
                 text = 'Entfernen: %s' % name
             else:
-                raise Bug("Unexpected pupil-delta operator: %s" % op)
+                INFO('TRAP', "Unexpected pupil-delta operator: %s" % op)
+                self.error = True
+                return
             child.setText(0, text)
             child.setCheckState(0, Qt.Checked)
 #
     def DELTA_COMPLETE(self):
-        if self.changes:
+        if self.error:
+            self._cleartree()
+        elif self.changes:
             self.pbdoit.setEnabled(True)
 
 
 #
 #TODO
     def doit(self):
+        changes = False
         for k, items in self.elements:
             # Filter the changes lists
             dlist = [d for child, d in items
                     if child.checkState(0) == Qt.Checked]
             if dlist:
+                changes = True
                 BACKEND('PUPIL_table_update', klass = k,
                         delta_list = json.dumps(dlist))
-        SHOW_INFO('Klassen aktualisiert')
-# INFO doesn't cause the dialog to pop up. It is only for use in callbacks.
+        if changes:
+            self.update(True)
+        else:
+            SHOW_WARNING(_WARN_NO_CHANGES)
+
 
         return
 
 
 
-        if changes:
+        if not changes:
             self.pupils.update_table(delta)
             ptables = self.ptables
             self._cleartree()
             self.update(True)
         else:
-            SHOW_INFO('WARN', _WARN_NO_CHANGES)
+            SHOW_WARNING(_WARN_NO_CHANGES)
 
 tab_pupils_update = UpdatePupils()
 TABS.append(tab_pupils_update)

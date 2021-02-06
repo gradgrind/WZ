@@ -371,6 +371,9 @@ class _Backend(QDialog):
 backend_instance = _Backend()
 builtins.BACKEND = backend_instance.command
 builtins.INFO = backend_instance.report
+# INFO doesn't cause the dialog to pop up, it is only for use in callbacks.
+# For other message pop-ups, see <SHOW_INFO>, <SHOW_WARNING> and <SHOW_ERROR>
+# in module "ui_support".
 
 ####---------------------------------------
 
