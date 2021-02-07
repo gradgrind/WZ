@@ -250,12 +250,12 @@ class Dates:
 # sorted under "G".
 
 def tussenvoegsel_filter(firstnames, lastname, firstname):
-    """Given raw firstnames, lastname and short firstname.
-    Ensure that any "tussenvoegsel" is at the beginning of the lastname
+    """Given raw firstnames, lastname and short firstname,
+    ensure that any "tussenvoegsel" is at the beginning of the lastname
     (and not at the end of the first name) and that spaces are normalized.
-    Also generate a "sorting" name, a field which combines name components
-    to sort the entries alphabetically in a fairly consistent way,
-    considering "tussenvoegsel".
+    If there is a "tussenvoegsel", it is separated from the rest of the
+    lastname by '|' (without spaces). This makes it easier for a sorting
+    algorithm to remove the prefix to generate a sorting key.
     """
     # If there is a '|' in the lastname, replace it by ' '
     firstnames1, tv, lastname1 = tvSplit(firstnames,
@@ -263,7 +263,7 @@ def tussenvoegsel_filter(firstnames, lastname, firstname):
     firstname1 = tvSplit(firstname, 'X')[0]
 #    sortname = sortingName(firstname1, tv, lastname1)
     if tv:
-        lastname1 = tv + ' ' + lastname1
+        lastname1 = tv + '|' + lastname1
     return (firstnames1, lastname1, firstname1)#, sortname)
 
 ###
@@ -283,6 +283,8 @@ def sortingName(firstname, tv, lastname):
 def tvSplit(fnames, lname):
     """Split off a "tussenvoegsel" from the end of the first-names,
     <fnames>, or the start of the surname, <lname>.
+    These little name parts are identified by having a lower-case
+    first character.
     Also ensure normalized spacing between names.
     Return a tuple: (
             first names without tussenvoegsel,
@@ -290,6 +292,8 @@ def tvSplit(fnames, lname):
             lastname without tussenvoegsel
         ).
     """
+#TODO: Is the identification based on starting with a lower-case
+# character adequate?
     fn = []
     tv = fnames.split()
     while tv[0][0].isupper():

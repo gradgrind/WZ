@@ -2,9 +2,9 @@
 """
 ui/tab_pupils_update.py
 
-Last updated:  2021-02-01
+Last updated:  2021-02-07
 
-Pupil table management.
+Pupil table management: update from master table.
 
 
 =+LICENCE=============================
@@ -25,7 +25,6 @@ Copyright 2021 Michael Towers
 =-LICENCE========================================
 """
 
-#???
 ### Messages
 _WARN_NO_CHANGES = "Keine Änderungen sind vorgemerkt"
 
@@ -44,6 +43,7 @@ _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
 _DELTA_LEN_MAX = 80
 
 #####################################################
+
 import os, json
 from qtpy.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, \
         QPushButton, QFileDialog
@@ -145,11 +145,10 @@ class UpdatePupils(TabPage):
             self._cleartree()
         elif self.changes:
             self.pbdoit.setEnabled(True)
-
-
 #
-#TODO
     def doit(self):
+# Transmit the change info class-for-class, so that the data chunks
+# don't get too big.
         changes = False
         for k, items in self.elements:
             # Filter the changes lists
@@ -157,22 +156,11 @@ class UpdatePupils(TabPage):
                     if child.checkState(0) == Qt.Checked]
             if dlist:
                 changes = True
-                BACKEND('PUPIL_table_update', klass = k,
+                BACKEND('PUPIL_class_update', klass = k,
                         delta_list = json.dumps(dlist))
         if changes:
-            self.update(True)
-        else:
-            SHOW_WARNING(_WARN_NO_CHANGES)
-
-
-        return
-
-
-
-        if not changes:
-            self.pupils.update_table(delta)
-            ptables = self.ptables
-            self._cleartree()
+            # Now perform the actual update
+            BACKEND('PUPIL_table_update')
             self.update(True)
         else:
             SHOW_WARNING(_WARN_NO_CHANGES)

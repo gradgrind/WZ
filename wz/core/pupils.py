@@ -43,11 +43,6 @@ if __name__ == '__main__':
 ### Messages
 _SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filepath}"
 _NAME_MISSING = "Eingabezeile fehlerhaft, Name unvollständig:\n  {row}"
-
-_TABLE_MISMATCH = "Schuljahr oder Klasse ungültig in Tabelle:\n  {path}"
-_BAK_EXISTS = "WARNING: Backup-Archiv für heute existiert schon," \
-        " keine neue wird erstellt:\n  {fpath}"
-_UNKNOWN_PID = "Schüler „{pid}“ ist nicht bekannt"
 _PID_EXISTS = "Ungültiges Schülerkennzeichen, es gehört schon {name} in" \
         " Klasse {klass}"
 _PID_DUPLICATE = "Schülerkennzeichen {pid} mehrfach vorhanden:\n" \
@@ -337,7 +332,7 @@ class Pupils(PupilsBase):
                     del(self[pdata['PID']])
                 elif d[0] == 'DELTA':
                     # changes field values
-                    pdata.update(d[2])
+                    self[pdata['PID']].update(d[2])
                 else:
                     raise Bug("Bad delta key: %s" % d[0])
         # Regenerate class lists

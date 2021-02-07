@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-02-01
+core/main.py - last updated 2021-02-07
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -224,29 +224,29 @@ class Pupils_Update:
     @classmethod
     def compare(cls):
         self = cls._instance
-        _delta = self.pupils.compare_new_data(self.ptables)
-#TODO: return it as json? Is that too much for one line?
-# Return it line-for-line? class-for-class?
+        self._changes = {}
+        _delta = self.pupils.compare_update(self.ptables)
+        # Return the changes class-for-class as json
         for klass, kdata in _delta.items():
             klist = json.dumps(kdata)
             CALLBACK('pupil_DELTA', klass = klass, delta = klist)
         CALLBACK('pupil_DELTA_COMPLETE')
 #
     @classmethod
-    def update(cls, klass, delta_list):
-        REPORT('OUT', '& %s: %s' % (klass, json.dumps(delta_list, indent = 4)))
-        return False
-#TODO: This won't work because <update_table> needs a mapping with all classes
-        delta = json.loads(delta_list)
-        self.pupils.update_table(delta)
+    def class_delta(cls, klass, delta_list):
+        self = cls._instance
+        self._changes[klass] = json.loads(delta_list)
         return True
-
-
-
-
+#
+    @classmethod
+    def update(cls):
+        self = cls._instance
+        self.pupils.update_classes(self._changes)
+        return True
 
 FUNCTIONS['PUPIL_table_delta'] = Pupils_Update.start
 FUNCTIONS['PUPIL_table_delta2'] = Pupils_Update.compare
+FUNCTIONS['PUPIL_class_update'] = Pupils_Update.class_delta
 FUNCTIONS['PUPIL_table_update'] = Pupils_Update.update
 
 
