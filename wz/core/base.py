@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-01-30
+Last updated:  2021-02-07
 
 Basic configuration and structural stuff.
 
@@ -257,7 +257,9 @@ def tussenvoegsel_filter(firstnames, lastname, firstname):
     to sort the entries alphabetically in a fairly consistent way,
     considering "tussenvoegsel".
     """
-    firstnames1, tv, lastname1 = tvSplit(firstnames, lastname)
+    # If there is a '|' in the lastname, replace it by ' '
+    firstnames1, tv, lastname1 = tvSplit(firstnames,
+            lastname.replace('|', ' '))
     firstname1 = tvSplit(firstname, 'X')[0]
 #    sortname = sortingName(firstname1, tv, lastname1)
     if tv:
