@@ -186,6 +186,14 @@ FUNCTIONS['BASE_get_years'] = get_years
 
 ###
 
+def get_school_data():
+    CALLBACK('base_SET_SCHOOL_DATA', data = SCHOOL_DATA)
+    return True
+
+FUNCTIONS['BASE_get_school_data'] = get_school_data
+
+###
+
 def set_year(year):
     builtins.SCHOOLYEAR = year
     REPORT('INFO', _CHANGED_YEAR.format(year = year))

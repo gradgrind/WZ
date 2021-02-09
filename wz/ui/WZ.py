@@ -423,7 +423,13 @@ class Admin(QWidget):
             super().closeEvent(e)
 #
     def init(self):
+        BACKEND('BASE_get_school_data')
         BACKEND('BASE_get_years')
+#
+    def SET_SCHOOL_DATA(self, data):
+        self.school_data = data
+#TODO ---
+        print('SCHOOL_DATA', self.school_data, flush = True)
 #
     def SET_YEARS(self, years, current):
         ylist = [y.split(':', 1) for y in years.split('|')]
@@ -451,6 +457,7 @@ class Admin(QWidget):
 
 builtins.ADMIN = Admin()
 FUNCTIONS['base_SET_YEARS'] = ADMIN.SET_YEARS
+FUNCTIONS['base_SET_SCHOOL_DATA'] = ADMIN.SET_SCHOOL_DATA
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 

@@ -44,7 +44,7 @@ _DELTA_LEN_MAX = 80
 
 #####################################################
 
-import os, json
+import os
 from qtpy.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, \
         QPushButton, QFileDialog
 from qtpy.QtCore import Qt
@@ -107,10 +107,9 @@ class UpdatePupils(TabPage):
             BACKEND('PUPIL_table_delta', filepath = fpath)
 #
     def DELTA(self, klass, delta):
-        dlist = json.loads(delta)
         items = []
         self.elements.append((klass, items))
-        if not dlist:
+        if not delta:
             return
         self.changes = True
         self.error = False
@@ -118,7 +117,7 @@ class UpdatePupils(TabPage):
         parent.setText(0, "Klasse {}".format(klass))
         parent.setFlags(parent.flags() | Qt.ItemIsTristate
                 | Qt.ItemIsUserCheckable)
-        for d in dlist:
+        for d in delta:
             child = QTreeWidgetItem(parent)
             items.append((child, d))
             child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
@@ -157,7 +156,7 @@ class UpdatePupils(TabPage):
             if dlist:
                 changes = True
                 BACKEND('PUPIL_class_update', klass = k,
-                        delta_list = json.dumps(dlist))
+                        delta_list = dlist)
         if changes:
             # Now perform the actual update
             BACKEND('PUPIL_table_update')

@@ -2,7 +2,7 @@
 """
 ui/tab_pupil_editor.py
 
-Last updated:  2021-02-08
+Last updated:  2021-02-09
 
 Editor for pupil data.
 
@@ -39,7 +39,6 @@ _SAVE = "Änderungen speichern"
 
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
-#TODO
 from ui.grid import GridView
 from ui.pupil_grid import PupilGrid
 from ui.ui_support import VLine, KeySelect, TabPage, GuiError
@@ -89,7 +88,21 @@ class PupilEdit(TabPage):
         cbox.addWidget(pdel)
         pdel.clicked.connect(self.remove_pupil)
         topbox.addLayout(cbox)
+        self.FIELDS = None
 #
+    def SET_INFO(self, fields, sex, streams):
+        """<fields> is a list of field names:
+            [[field1_internal_name, field1_local_name], ... ]
+        """
+        self.INFO = {
+            'FIELDS': {field: name for field, name in fields},
+            'SEX': sex,
+            'STREAMS': streams
+        }
+        #print("INFO: ", self.INFO)
+#?
+        self.year_changed()
+
     def clear(self, force = False):
         """Check for changes in the current "scene", allowing these to
         be saved if desired (or if <force> is true), then clear the scene.
@@ -102,7 +115,10 @@ class PupilEdit(TabPage):
         return True
 #
     def enter(self):
-        self.year_changed()
+        if self.FIELDS:
+            self.year_changed()
+        else:
+            BACKEND('PUPIL_get_info')
 #
     def leave(self):
         self.clear()
@@ -111,7 +127,7 @@ class PupilEdit(TabPage):
     def year_changed(self):
         if not self.clear():
             return False
-        self.pupil_scene = PupilGrid(self.pupilView, ADMIN.schoolyear)
+        self.pupil_scene = PupilGrid(self.pupilView, self.INFO)
         self.pupilView.set_scene(self.pupil_scene)
         self.class_select.set_items([(c, c)
                 for c in self.pupil_scene.classes()])
@@ -166,3 +182,4 @@ tab_pupil_editor = PupilEdit()
 TABS.append(tab_pupil_editor)
 #FUNCTIONS['pupil_DELTA'] = tab_pupils_update.DELTA
 #FUNCTIONS['pupil_DELTA_COMPLETE'] = tab_pupils_update.DELTA_COMPLETE
+FUNCTIONS['pupil_SET_INFO'] = tab_pupil_editor.SET_INFO

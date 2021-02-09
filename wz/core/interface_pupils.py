@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-02-08
+core/interface_pupils.py - last updated 2021-02-09
 
 Controller/dispatcher for pupil management.
 
@@ -25,7 +25,7 @@ Copyright 2021 Michael Towers
 _BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
 
 from core.pupils import Pupils
-import json
+from local.grade_config import STREAMS
 
 class Pupils_Update:
     """Manage the updating of the pupil data from a "master" table.
@@ -55,16 +55,16 @@ class Pupils_Update:
         self = cls._instance
         self._changes = {}
         _delta = self.pupils.compare_update(self.ptables)
-        # Return the changes class-for-class as json
+        # Return the changes class-for-class
         for klass, kdata in _delta.items():
-            klist = json.dumps(kdata)
-            CALLBACK('pupil_DELTA', klass = klass, delta = klist)
+            CALLBACK('pupil_DELTA', klass = klass, delta = kdata)
         CALLBACK('pupil_DELTA_COMPLETE')
+        return True
 #
     @classmethod
     def class_delta(cls, klass, delta_list):
         self = cls._instance
-        self._changes[klass] = json.loads(delta_list)
+        self._changes[klass] = delta_list
         return True
 #
     @classmethod
@@ -113,7 +113,7 @@ class Pupil_Editor:
                 else self._class_list[0]
         self.klass = None
         CALLBACK('pupil_CLASSES',
-                classes = json.dumps(self._class_list),
+                classes = self._class_list,
                 klass = klass)
         # This needs to signal "class changed" ...
 #
@@ -134,7 +134,7 @@ class Pupil_Editor:
         pdata = self._pdata_list[pidix]
         pid = self._pdata['PID']
         CALLBACK('pupil_PUPILS',
-                pupils = json.dumps(pupil_list),
+                pupils = pupil_list,
                 pid = pid)
         # This needs to signal "pupil changed" ...
 #
@@ -148,3 +148,11 @@ class Pupil_Editor:
         else:
             raise Bug('Invalid pupil passed from front-end: %s' % ptag)
 #TODO: Display pupil data
+
+def get_info():
+    CALLBACK('pupil_SET_INFO',
+            fields = [(f, t) for f, t in Pupils.FIELDS.items()],
+            sex = Pupils.SEX,
+            streams = STREAMS)
+    return True
+FUNCTIONS['PUPIL_get_info'] = get_info

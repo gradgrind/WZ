@@ -2,7 +2,7 @@
 """
 ui/pupil_grid.py
 
-Last updated:  2021-02-08
+Last updated:  2021-02-09
 
 Manage the grid for the pupil-data editor.
 
@@ -55,25 +55,26 @@ class PupilGrid(Grid):
     """Present the data for a single pupil, allowing editing of the
     individual fields.
     """
-    def __init__(self, pupil_view, schoolyear):
+    def __init__(self, pupil_view, info):
+        self._info = info
 #TODO need current state: classes, pupils in current class ...
-        self.pupils = Pupils(schoolyear)
-        self.schoolyear = schoolyear
-        _ROWS = ROWS + (_HEIGHT_LINE,) * len(PupilsBase.FIELDS)
+#        self.pupils = Pupils(schoolyear)
+#        self.schoolyear = schoolyear
+        _ROWS = ROWS + (_HEIGHT_LINE,) * len(info['FIELDS'])
         super().__init__(pupil_view, _ROWS, COLUMNS)
         self.styles()
 
         ### Pop-up editor for SEX and STREAM fields
 #TODO: need SEX and STREAMS lists from the back-end
-        self.addSelect('SEX', PupilsBase.SEX)
-        self.addSelect('STREAM', STREAMS)
+        self.addSelect('SEX', info['SEX'])
+        self.addSelect('STREAM', info['STREAMS'])
         ### Non-editable fields
         noneditable = {'PSORT'}
         ### Title area
         self.tile(0, 0, text = '', cspan = 2, style = 'title', tag = 'title')
         ### field - value lines
         row = 1
-        for field, tfield in PupilsBase.FIELDS.items():
+        for field, tfield in info['FIELDS'].items():
             self.tile(row, 0, text = tfield, style = 'key')
             vstyle = 'value'
             if field in noneditable:
@@ -92,8 +93,9 @@ class PupilGrid(Grid):
     def styles(self):
         """Set up the styles used in the table view.
         """
-        self.new_style('base', font = SCHOOL_DATA.FONT, size = 11)
-        self.new_style('title', font = SCHOOL_DATA.FONT, size = 12,
+        font = ADMIN.school_data['FONT']
+        self.new_style('base', font = font, size = 11)
+        self.new_style('title', font = font, size = 12,
                 align = 'c', border = 0, highlight = 'b')
         self.new_style('key', base = 'base', align = 'l')
         self.new_style('fixed', base = 'key', highlight = ':808080')
@@ -118,7 +120,7 @@ class PupilGrid(Grid):
             self.pupil_data = NullPupilData(self.klass)
             self.pid = self.pupil_data['PID']
             self.set_text('title', 'Neu: ' + self.pupil_data.name())
-        for field in PupilsBase.FIELDS:
+        for field in self._info['FIELDS']:
             self.set_text_init(field, self.pupil_data[field])
 #
     def leaving(self, force):
