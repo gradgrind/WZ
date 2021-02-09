@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-02-07
+core/main.py - last updated 2021-02-09
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -22,10 +22,10 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
-_SUBJECTS_CLASS = " ... Tabelle für Klasse {klass} aktualisiert"
 _CHANGED_YEAR = "Aktuelles Schuljahr ist {year}"
+_FAILED = "{fname} FEHLGESCHLAGEN"
 
-import sys, os, builtins, traceback
+import sys, os, builtins, traceback, json
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
@@ -39,34 +39,52 @@ if __name__ == '__main__':
 
 sys.stdin.reconfigure(encoding='utf-8') # requires Python 3.7+
 
-PARAGRAPH = '¶'
-SPACE = '¬'
 class _Main:
-    """Commands have the form:
-            COMMAND parameter1:value1 parameter2:value ...
-        In values:
-            Spaces (' ') are represented by '¬', so '¬' should not be used
-            in values.
-            Newlines are represented by '¶', so the character '¶' should
-            not be used in values.
-    Feedback to the caller is via messages. These are transmitted by the
-    <_send> method. There are several types of message:
-        '+++': Function completed successfully.
-        '---': Function completed with errors.
-        '>>>type message': A report. 'type' can be 'INFO', 'WARN', 'ERROR'
-                or 'TRAP'. 'message' uses the same encoding as command
-                parameter values (see above).
-        '...text': Output from some subprogram (e.g. LibreOffice).
-        ':::CALLBACK parameter1:value1 parameter2:value ...': A callback
-                to the front-end, similar to the COMMAND to this handler.
-    The messages '+++' and '---' are always the last messages sent in
-    response to a COMMAND. No further COMMANDs can be received until one
-    of these messages has been sent.
-    To ease their use, there are helper methods (<send_...>) for each
-    type. <REPORT>, <OUTPUT> and <CALLBACK> are made available as
-    "builtins", so that they are easily accessible anywhere.
+    """Commands from the front-end are passed as json strings (mappings).
+    The function to be called is identified by the '__NAME__' entry.
+    All other entries are parameters. Those not starting with '_' are
+    passed to the function as named parameters.
 
-    All communication is via 'utf-8' streams.
+    Information and callbacks may also be passed back to the front-end.
+    These are also json strings (mappings) with the following keys:
+
+        '__CALLBACK__' supplies the name of the callback function to be
+        invoked. This is available to back-end functions via the
+        <CALLBACK> "builtin".
+
+        All keys not starting with '_' are named parameters to the
+        callback function.
+
+        Other keys are presently not used.
+
+    There are two special callbacks:
+
+        1) '*DONE*' is a "completion message", which is involed when the
+        back-end function is finished, freeing the interface for a
+        new action. It has one parameter: 'cc', which can have the value
+        'OK' (indicating successful completion) or else an automatically
+        generated localized version of '<call name> FAILED').
+        Back-end functions signal successful completion by returning a
+        true value.
+
+        2) '*REPORT*' sends messages back to the user. It supports various
+        categories of report: 'INFO', 'WARN', 'ERROR' and 'TRAP'
+        (the latter indicating that something went wrong enexpectedly).
+        There is a shortcut "builtin" for these calls: <REPORT>, taking
+        message-type and message as arguments.
+
+        In addition there is the message category 'OUT', which is rather
+        like 'INFO' in that it adds text to the front-end's reporting
+        mechanism. However, these messages will only be displayed if
+        some other report (one of the main categories) causes a message
+        to appear, or during a long-running process. The idea behind
+        this message is primarily to allow feedback during long-running
+        or faulty processes, when it might otherwise be unclear to the
+        user what is happening – or, indeed, whether anything is
+        happening. It is directly accessible via the 'OUTPUT' "builtin",
+        which takes a single argument, the message.
+
+    Communication is via stdio, using utf-8 encoding.
     """
     def __init__(self, dbg_handle):
         self._dbg_handle = dbg_handle
@@ -76,60 +94,52 @@ class _Main:
         self._dbg_handle.write(msg + '\n')
         self._dbg_handle.flush()
 #
-    def encode(self, text):
-        return PARAGRAPH.join(text.rstrip().replace(' ', SPACE).splitlines())
-#
-    def _send(self, message):
-        """Send a line back to the manager/master/...
-        It must end with a newline, so that it is recognizable as a
-        complete line.
-        """
-        self.debug('OUT: ' + message + '\n')
-        print(message, flush = True)
-#
     def send_done(self, ok):
-        self._send('+++' if ok else '---')
+        self.send_callback('*DONE*', cc = 'OK' if ok
+                else _FAILED.format(fname = self.function_name))
 #
     def send_report(self, mtype, msg):
-        self._send('>>>%s %s' % (mtype, self.encode(msg)))
+        self.send_callback('*REPORT*', mtype = mtype, msg = msg)
 #
     def send_callback(self, cmd, **parms):
-        plist = ['%s:%s' % (key, self.encode(val))
-                for key, val in parms.items()]
-        self._send(':::%s %s' % (cmd, ' '.join(plist)))
-
+        """Send a message back to the manager/master/...
+        It should end with a newline, to ensure that it is recognizable
+        as a complete line.
+        """
+        parms['__CALLBACK__'] = cmd
+        msg = json.dumps(parms, ensure_ascii = False)
+#TODO: ...
+#        self.debug('+++ OUT:\n' + json.dumps(parms,
+#                ensure_ascii = False, indent = 2))
+        self.debug('+++ OUT: ' + msg)
+        print(msg, flush = True)
+#
     def send_output(self, text):
-        self._send('...' + self.encode(text))
+        self.send_report('OUT', text)
 #
     def run(self):
         self.debug("))) Receiving ...")
         for line in sys.stdin:
             self.debug('IN: ' + line)
             ### decode
-            plist = line.split()
             try:
-                function_name = plist.pop(0)
-                function = FUNCTIONS[function_name]
+                cmd = json.loads(line)
+                self.function_name = cmd.pop('__NAME__')
+                function = FUNCTIONS[self.function_name]
                 # deal with the parameters
-                params = {}
-                for p in plist:
-                    key, val = p.split(':', 1)
-                    params[key] = val.replace(SPACE, ' ').replace(
-                            PARAGRAPH, '\n')
+                params = {k: v for k, v in cmd.items() if k[0] != '_'}
             except:
                 REPORT('TRAP', 'Invalid WZ-command:\n  %s' % line.rstrip())
                 self.send_done(False)
                 continue
             ### execute
             try:
-                if function(**params):
-                    self.send_done(True)
-                    continue
+                self.send_done(function(**params))
             except:
                 log_msg = traceback.format_exc()
                 self.debug(log_msg)
                 REPORT('TRAP', log_msg)
-            self.send_done(False)
+                self.send_done(False)
 
 ###
 
@@ -185,69 +195,8 @@ FUNCTIONS['BASE_set_year'] = set_year
 
 ######################################################################
 
-from core.courses import Subjects
-
-def update_subjects(filepath):
-        subjects = Subjects(SCHOOLYEAR)
-        srctable = subjects.read_source_table(filepath)
-        opath = subjects.save_table(srctable)
-        REPORT('INFO', _SUBJECTS_CLASS.format(klass = srctable.klass))
-        return True
-
-FUNCTIONS['SUBJECT_table_update'] = update_subjects
-
-###
-
-_BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
-
-from core.pupils import Pupils
-import json
-
-class Pupils_Update:
-    _instance = None
-    @classmethod
-    def start(cls, filepath):
-        self = cls()
-        try:
-            self.ptables = self.pupils.read_source_table(filepath)
-        except:
-            REPORT('ERROR', _BAD_PUPIL_TABLE.format(path = filepath))
-            cls._instance = None
-            return False
-        cls._instance = self
-        cls.compare()
-        return True
-#
-    def __init__(self):
-        self.pupils = Pupils(SCHOOLYEAR)
-#
-    @classmethod
-    def compare(cls):
-        self = cls._instance
-        self._changes = {}
-        _delta = self.pupils.compare_update(self.ptables)
-        # Return the changes class-for-class as json
-        for klass, kdata in _delta.items():
-            klist = json.dumps(kdata)
-            CALLBACK('pupil_DELTA', klass = klass, delta = klist)
-        CALLBACK('pupil_DELTA_COMPLETE')
-#
-    @classmethod
-    def class_delta(cls, klass, delta_list):
-        self = cls._instance
-        self._changes[klass] = json.loads(delta_list)
-        return True
-#
-    @classmethod
-    def update(cls):
-        self = cls._instance
-        self.pupils.update_classes(self._changes)
-        return True
-
-FUNCTIONS['PUPIL_table_delta'] = Pupils_Update.start
-FUNCTIONS['PUPIL_table_delta2'] = Pupils_Update.compare
-FUNCTIONS['PUPIL_class_update'] = Pupils_Update.class_delta
-FUNCTIONS['PUPIL_table_update'] = Pupils_Update.update
+import core.interface_pupils
+import core.interface_subjects
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

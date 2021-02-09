@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-02-06
+Last updated:  2021-02-08
 
 General configuration items.
 
@@ -47,7 +47,7 @@ CALENDAR_FILE = 'Kalender'
 
 USE_XLSX = False
 
-LINEBREAK = '¶'    # character used as paragraph separator in text cells
+LINEBREAK = '§'    # character used as paragraph separator in text cells
 
 CALENDER_HEADER = \
 """### Ferien und andere Jahresdaten

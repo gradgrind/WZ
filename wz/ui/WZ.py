@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-02-01
+Last updated:  2021-02-09
 
 Administration interface.
 
@@ -59,7 +59,7 @@ INFO_TYPES = {    # message-type -> (message level, displayed type)
 #####################################################
 
 
-import sys, os, builtins, traceback
+import sys, os, builtins, traceback, json
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
@@ -88,7 +88,7 @@ builtins.FUNCTIONS = {}
 TABS.append(TabPage("Page 1"))
 import ui.tab_subjects
 import ui.tab_pupils_update
-#        self._addPage(PupilEdit())
+import ui.tab_pupil_editor
 #        self._addPage(GradeEdit())
 #        self._addPage(TextReports())
 #        self._addPage(Calendar())
@@ -98,34 +98,15 @@ import ui.tab_pupils_update
 ####+++++++++++++++++++++++++++++++++++++++
 
 sys.stdin.reconfigure(encoding='utf-8') # requires Python 3.7+
-PARAGRAPH = '¶'
-SPACE = '¬'
 backend_instance = None
 class _Backend(QDialog):
     """Manage communication with the "back-end". Provide a pop-up (modal
     dialog) to provide visual feedback to the user concerning the progress
     and success of the commands.
     This is a "singleton" class, i.e. only one instance may exist.
-    Commands have the form:
-            COMMAND parameter1:value1 parameter2:value ...
-        In values:
-            Spaces (' ') are represented by '¬', so '¬' should not be used
-            in values.
-            Newlines are represented by '¶', so the character '¶' should
-            not be used in values.
-    Feedback from the back-end is via messages. There are several types
-    of message:
-        '+++': Function completed successfully.
-        '---': Function completed with errors.
-        '>>>type message': A report. 'type' can be 'INFO', 'WARN', 'ERROR'
-                or 'TRAP'. 'message' uses the same encoding as command
-                parameter values (see above).
-        '...text': Output from some subprogram (e.g. LibreOffice).
-        ':::CALLBACK parameter1:value1 parameter2:value ...': A callback
-                to the front-end, similar to the COMMAND to this handler.
-    The messages '+++' and '---' are always the last messages sent in
-    response to a COMMAND. No further COMMANDs are possible until one
-    of these messages has been received.
+
+    For details of the communication protocol, see the description of
+    class "_Main" in the "main" module of the back-end.
 
     All communication is via 'utf-8' streams.
     """
@@ -141,7 +122,7 @@ class _Backend(QDialog):
 #
     def __init__(self):
         if backend_instance:
-            print("BIG PROBLEM: <_Backend> instance exists already")
+            SHOW_ERROR("BIG PROBLEM: <_Backend> instance exists already")
             self.terminate()
             quit(1)
         super().__init__()
@@ -191,51 +172,38 @@ class _Backend(QDialog):
                 QColor('#005900'), QColor('#ff8000'),
                 QColor('#c90000'), QColor('#0019ff'), QColor('#8f00cc')]
 #
-    def encode(self, text):
-        return PARAGRAPH.join(text.rstrip().replace(' ', SPACE).splitlines())
-#
-    def decode(self, text):
-        return text.replace(SPACE, ' ').replace(PARAGRAPH, '\n')
-#
     def handle_in(self):
         while True:
             data = self.process.readLine()
             line = bytes(data).decode("utf8").rstrip()
-#TODO: The input lines should be logged?
-            self.cb_lines.append(line)
             if not line:
                 return
+#TODO ---
+            print('>>>IN:', line, flush = True)
+#TODO: The input lines should be logged?
+            self.cb_lines.append(line)
             # A line has been received from the back-end.
             # Decode it and act upon it.
-            key = line[:3]
-            line = line[3:].lstrip()
-            if key == '+++':        # successful completion
-                self.task_done(True)
-            elif key == '---':      # unsuccessful completion
-                self.task_done()
-            elif key == '...':      # output from external subprocesses
-                self.report('OUT', line)
-            elif key == '>>>':      # REPORT
-                self.report(*line.split(None, 1))
-            elif key == ':::':      # callback
-                self.do_callback(line)
-            else:                   # unexpected output
-                self.report('UNEXPECTED', line)
+            try:
+                self._callback = json.loads(line)
+                cbfun = self._callback['__CALLBACK__']
+            except:
+                self.report('TRAP', '*** Invalid callback ***\n' + line)
+                return
+            self.do_callback(cbfun)
 #
-    def do_callback(self, line):
-        ### decode
-        plist = line.split()
+    def do_callback(self, function_name):
         try:
-            function_name = plist.pop(0)
             function = FUNCTIONS[function_name]
-            # deal with the parameters
-            params = {}
-            for p in plist:
-                key, val = p.split(':', 1)
-                params[key] = self.decode(val)
-        except:
-            self.report('TRAP', 'Invalid callback:\n  %s' % line.rstrip())
+        except KeyError:
+            self.report('TRAP', 'Unknown callback: ' + function_name)
             return
+        # deal with the parameters
+        params = {}
+        for p, v in self._callback.items():
+            if p.startswith('_'):
+                continue
+            params[p] = v
         ### execute
         try:
             function(**params)
@@ -251,15 +219,14 @@ class _Backend(QDialog):
         if msglevel > self._level:
             self._level = msglevel
         self.text.setTextColor(self.colours[msglevel])
-        msg1 = self.decode(msg)
         if msglevel == 0:
-            self.text.append('%s %s' % (msgtype, msg1))
+            self.text.append('%s %s' % (msgtype, msg))
         else:
             self.text.append((
                     '+++++++++++++++++++++++++++++++++++++++++++\n'
                     '%s %s\n'
                     '-------------')
-                    % (msgtype, msg1))
+                    % (msgtype, msg))
 #
     def reject(self):
         if self._complete:
@@ -276,10 +243,10 @@ class _Backend(QDialog):
         command is still running.
         """
         self.cb_lines = []  # remember all lines from back-end
-        plist = ['%s:%s' % (key, self.encode(val))
-                for key, val in parms.items()]
-        msg = '%s %s\n' % (fn, ' '.join(plist))
-        #print('!!!SEND:', msg, flush = True)
+        parms['__NAME__'] = fn
+        msg = json.dumps(parms, ensure_ascii = False) + '\n'
+#TODO ---
+        print('!!!SEND:', msg, flush = True)
         if not self.process:
             # Start process
             self.process = QProcess()
@@ -293,7 +260,9 @@ class _Backend(QDialog):
             self.process.start(sys.executable, exec_params)
             self._complete = True
         if not self._complete:
-            print("BIG PROBLEM: Program error, back-end not ready.\n"
+#TODO ---
+            print('!!!1', flush = True)
+            SHOW_ERROR("BIG PROBLEM: Program error, back-end not ready.\n"
                     "COMMAND: %s" % msg)
             self.terminate()
             quit(1)
@@ -308,9 +277,10 @@ class _Backend(QDialog):
         self._active = False    # set to <True> when the pop-up is shown
         while True:
             if not self.process:
-                print("BIG PROBLEM: Process failed ...")
-                for l in self.cb_lines:
-                    print(l)
+#TODO ---
+                print('!!!2', flush = True)
+                SHOW_ERROR("BIG PROBLEM: Process failed ...\n"
+                        + '\n'.join(self.cb_lines))
                 quit(1)
             self.process.waitForReadyRead(100)
             # The available input is read via a signal handler (<handle_in>),
@@ -335,10 +305,11 @@ class _Backend(QDialog):
         self.exec_()
         self._active = False
 #
-    def task_done(self, ok = False):
-        """<ok> is true only when a '+++' is received from the back-end.
+    def task_done(self, cc):
+        """A back-end function has completed.
         """
-#TODO: Do something with <ok>?
+        if cc != 'OK':
+            self.report('ERROR', cc)
         if self._active:
             if self._level == 0:
                 # End dialog automatically
@@ -351,7 +322,7 @@ class _Backend(QDialog):
     def process_finished(self):
         if not self._complete:
             self.report('TRAP', _INTERRUPTED)
-            self.task_done()
+            self.task_done('OK')
         self.process = None
 #
     def set_level(self):
@@ -370,10 +341,10 @@ class _Backend(QDialog):
 
 backend_instance = _Backend()
 builtins.BACKEND = backend_instance.command
-builtins.INFO = backend_instance.report
-# INFO doesn't cause the dialog to pop up, it is only for use in callbacks.
-# For other message pop-ups, see <SHOW_INFO>, <SHOW_WARNING> and <SHOW_ERROR>
-# in module "ui_support".
+FUNCTIONS['*DONE*'] = backend_instance.task_done
+FUNCTIONS['*REPORT*'] = backend_instance.report
+# For other message pop-ups, see <SHOW_INFO>, <SHOW_WARNING> and
+# <SHOW_ERROR> in module "ui_support".
 
 ####---------------------------------------
 
@@ -509,7 +480,7 @@ if __name__ == '__main__':
 
     ADMIN.setWindowIcon(QIcon(os.path.join('icons', 'WZ1.png')))
     # Run this when the event loop has been entered:
-    QTimer.singleShot(0, ADMIN.init)
+    QTimer.singleShot(100, ADMIN.init)
     screen = app.primaryScreen()
     screensize = screen.availableSize()
     ADMIN.resize(screensize.width()*0.8, screensize.height()*0.8)

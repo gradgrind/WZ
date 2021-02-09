@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-ui/pupil_editor.py
+ui/tab_pupil_editor.py
 
-Last updated:  2021-02-07
+Last updated:  2021-02-08
 
 Editor for pupil data.
 
@@ -40,9 +40,9 @@ _SAVE = "Änderungen speichern"
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, QPushButton
 
 #TODO
-from gui.grid import GridView
-from gui.pupil_grid import PupilGrid
-from gui.gui_support import VLine, KeySelect, TabPage, GuiError
+from ui.grid import GridView
+from ui.pupil_grid import PupilGrid
+from ui.ui_support import VLine, KeySelect, TabPage, GuiError
 
 ###
 
@@ -161,3 +161,8 @@ class PupilEdit(TabPage):
         klass = self.pupil_scene.pupil_data['CLASS']
         pid = self.pupil_scene.pupil_data['PID']
         self.class_changed(klass, pid)
+
+tab_pupil_editor = PupilEdit()
+TABS.append(tab_pupil_editor)
+#FUNCTIONS['pupil_DELTA'] = tab_pupils_update.DELTA
+#FUNCTIONS['pupil_DELTA_COMPLETE'] = tab_pupils_update.DELTA_COMPLETE
