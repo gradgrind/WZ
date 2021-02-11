@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-02-08
+Last updated:  2021-02-10
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -42,6 +42,8 @@ _TILE_OUT_OF_BOUNDS = ("Kachel außerhalb Tabellenbereich:\n"
         " Zeile {row}, Höhe {rspan}, Spalte {col}, Breite {cspan}")
 _INVALIDLINEWIDTH = "Ungültige Strichbreite: {val}"
 _NOTSTRING          = "In <grid::Tile>: Zeichenkette erwartet: {val}"
+_TITLE_LOSE_CHANGES = "Ungespeicherte Änderungen"
+_LOSE_CHANGES = "Sind Sie damit einverstanden, dass die Änderungen verloren gehen?"
 
 ### Dialog labels
 _FILESAVE = "Datei speichern"
@@ -65,6 +67,7 @@ from qtpy.QtGui import (QFont, QPen, QColor, QBrush, QTransform,
         QPainter, QPdfWriter, QPageLayout)
 from qtpy.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
         QLocale
+from ui.ui_support import QuestionDialog
 
 from local.base_config import LINEBREAK
 
@@ -90,19 +93,24 @@ class GridView(QGraphicsView):
         self.MM2PT = self.ldpi / 25.4
 #
     def set_scene(self, scene):
+        s0 = self.scene()
+        if s0 and not s0.leave_ok():
+            return False
         self.setScene(scene)
-        # Set the view's scene area to a fixed size
-        # (pop-ups could otherwise extend it)
-        self.setSceneRect(scene._sceneRect)
+        if scene:
+            # Set the view's scene area to a fixed size
+            # (pop-ups could otherwise extend it)
+            self.setSceneRect(scene._sceneRect)
+        return True
 #
-    def clear(self, force = False):
-        """Call this before <set_scene> to ensure that <leaving> is called.
-        It should also be called when closing the application window.
-        """
-        s = self.scene()
-        if s:
-            s.leaving(force)
-            self.setScene(None)
+#    def clear(self, force = False):
+#        """Call this before <set_scene> to ensure that <leaving> is called.
+#        It should also be called when closing the application window.
+#        """
+#        s = self.scene()
+#        if s:
+#            s.leaving(force)
+#            self.setScene(None)
 #
     def mousePressEvent(self, event):
         point = event.pos()
@@ -194,10 +202,14 @@ class Grid(QGraphicsScene):
             self._gview.set_changed(True)
         self._changes.add(tag)
 #
-    def leaving(self, force):
-        """Override this to handle scene-changing.
+    def leave_ok(self):
+        """If there are unsaved changes, ask whether it is ok to lose
+        them. Return <True> if ok to lose them (or if there aren't any
+        changes), otherwise <False>.
         """
-        pass
+        if self.changes():
+            return QuestionDialog(_TITLE_LOSE_CHANGES, _LOSE_CHANGES)
+        return True
 #
 #    def style(self, name):
 #        return self._styles[name]

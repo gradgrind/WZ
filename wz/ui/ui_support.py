@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-02-01
+Last updated:  2021-02-11
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -84,6 +84,7 @@ class KeySelect(QComboBox):
         return a true value, the selection will be reset to the last value.
         """
         super().__init__()
+        self._selected = None
         self._cb = changed_callback
         self.set_items(value_mapping)
 # Qt note: If connecting after adding the items, there seems
@@ -99,7 +100,12 @@ class KeySelect(QComboBox):
     def _new(self, index):
         if self.value_mapping and self.changed_callback:
             key = self.value_mapping[index][0]
-            self.changed_callback(key)
+            if self.changed_callback(key):
+                self._selected = index
+            else:
+                self.changed_callback = None
+                self.setCurrentIndex(self._selected)
+                self.changed_callback = self._cb
 #
     def reset(self, key):
         self.changed_callback = None        # suppress callback
@@ -128,6 +134,7 @@ class KeySelect(QComboBox):
         if value_mapping:
             self.addItems([text for _, text in value_mapping])
             self.setCurrentIndex(index)
+            self._selected = index
         self.changed_callback = self._cb    # reenable callback
 
 ###
@@ -201,7 +208,7 @@ class TabPage(QWidget):
         return True
 #
     def year_changed(self):
-        pass
+        return True
 
 ###
 

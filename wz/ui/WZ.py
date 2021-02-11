@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-02-09
+Last updated:  2021-02-11
 
 Administration interface.
 
@@ -24,6 +24,12 @@ Copyright 2021 Michael Towers
 
 =-LICENCE========================================
 """
+
+#TODO: Back-end program bugs causing crashes will not be adequately
+# reported in the front end (or anywhere else!). This might be improved
+# by having a separate reader for stderr ... how to access this?
+
+#TODO: It looks like I need a BACKEND queue for chained communication.
 
 ### Labels, etc.
 _TITLE = "WZ – Zeugnisverwaltung"
@@ -76,7 +82,7 @@ from qtpy.QtWidgets import QWidget, QDialog, QFrame, \
     QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, \
     QPushButton, QButtonGroup, \
     QFileDialog
-from qtpy.QtCore import Qt, QDateTime, QProcess
+from qtpy.QtCore import Qt, QDateTime, QProcess, QTimer
 from qtpy.QtGui import QMovie, QPixmap, QColor
 
 from ui.ui_support import QuestionDialog, HLine, TabPage, KeySelect, \
@@ -125,6 +131,7 @@ class _Backend(QDialog):
             SHOW_ERROR("BIG PROBLEM: <_Backend> instance exists already")
             self.terminate()
             quit(1)
+        self.backend_queue = []
         super().__init__()
         self.process = None
         ### Set up the dialog window
@@ -172,9 +179,17 @@ class _Backend(QDialog):
                 QColor('#005900'), QColor('#ff8000'),
                 QColor('#c90000'), QColor('#0019ff'), QColor('#8f00cc')]
 #
+    def error_in(self):
+        data = self.process.readAllStandardError()
+        line = bytes(data).decode("utf8").rstrip()
+        self.report('TRAP', 'BACKEND FAILED:\n' + line)
+#
     def handle_in(self):
         while True:
-            data = self.process.readLine()
+            try:
+                data = self.process.readLine()
+            except:
+                return
             line = bytes(data).decode("utf8").rstrip()
             if not line:
                 return
@@ -250,8 +265,10 @@ class _Backend(QDialog):
         if not self.process:
             # Start process
             self.process = QProcess()
-            self.process.setProcessChannelMode(QProcess.MergedChannels)
-            self.process.readyRead.connect(self.handle_in)
+            #self.process.setProcessChannelMode(QProcess.MergedChannels)
+            #self.process.readyRead.connect(self.handle_in)
+            self.process.readyReadStandardOutput.connect(self.handle_in)
+            self.process.readyReadStandardError.connect(self.error_in)
             #self.process.stateChanged.connect(self.handle_state)
             self.process.finished.connect(self.process_finished)
             exec_params = [os.path.join(APPDIR, 'core', 'main.py')]
@@ -260,12 +277,8 @@ class _Backend(QDialog):
             self.process.start(sys.executable, exec_params)
             self._complete = True
         if not self._complete:
-#TODO ---
-            print('!!!1', flush = True)
-            SHOW_ERROR("BIG PROBLEM: Program error, back-end not ready.\n"
-                    "COMMAND: %s" % msg)
-            self.terminate()
-            quit(1)
+            self.backend_queue.append((fn, parms))
+            return
         self.text.clear()
         end_time = QDateTime.currentMSecsSinceEpoch() + 500
         self.process.write(msg.encode('utf-8'))
@@ -276,13 +289,11 @@ class _Backend(QDialog):
         self._cancel.show()
         self._active = False    # set to <True> when the pop-up is shown
         while True:
-            if not self.process:
-#TODO ---
-                print('!!!2', flush = True)
+            if self.process:
+                self.process.waitForReadyRead(100)
+            else:
                 SHOW_ERROR("BIG PROBLEM: Process failed ...\n"
                         + '\n'.join(self.cb_lines))
-                quit(1)
-            self.process.waitForReadyRead(100)
             # The available input is read via a signal handler (<handle_in>),
             # not here.
             if self._complete and self._level == 0:
@@ -309,6 +320,7 @@ class _Backend(QDialog):
         """A back-end function has completed.
         """
         if cc != 'OK':
+            self.backend_queue = []
             self.report('ERROR', cc)
         if self._active:
             if self._level == 0:
@@ -318,6 +330,13 @@ class _Backend(QDialog):
                 self._busy.stop()
                 self.set_level()
         self._complete = True
+        if self.backend_queue:
+            # Process remaining events before starting the new command
+            QTimer.singleShot(0, self._next_cmd)
+#
+    def _next_cmd(self):
+        cmd, parms = self.backend_queue.pop(0)
+        self.command(cmd, **parms)
 #
     def process_finished(self):
         if not self._complete:
@@ -432,28 +451,17 @@ class Admin(QWidget):
         print('SCHOOL_DATA', self.school_data, flush = True)
 #
     def SET_YEARS(self, years, current):
-        ylist = [y.split(':', 1) for y in years.split('|')]
-        self.year_select.set_items(ylist)
+        self.year_select.set_items(years)
         chosenyear = self.year_select.selected()
         if chosenyear != current:
-            try:
-                self.year_select.reset(current)
-                chosenyear = current
-            except GuiError:
-                pass
-        self.set_year(chosenyear)
+            self.year_select.reset(current)
 #
     def year_changed(self, schoolyear):
-        BACKEND('BASE_set_year', year = schoolyear)
-        self.set_year(schoolyear)
-#
-    def set_year(self, schoolyear):
         tabpage = self._stack.currentWidget()
-        if not tabpage.clear():
-            self.year_select.reset(self.schoolyear)
-            return
-        self.schoolyear = schoolyear
-        tabpage.year_changed()
+        if tabpage.year_changed():
+            BACKEND('BASE_set_year', year = schoolyear)
+            return True
+        return False
 
 builtins.ADMIN = Admin()
 FUNCTIONS['base_SET_YEARS'] = ADMIN.SET_YEARS
@@ -462,8 +470,7 @@ FUNCTIONS['base_SET_SCHOOL_DATA'] = ADMIN.SET_SCHOOL_DATA
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo, \
-            QTimer, QSettings
+    from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
     from qtpy.QtGui import QIcon
 
 #TODO: pass datadir to back-end, perhaps as command-line parameter!
@@ -487,7 +494,7 @@ if __name__ == '__main__':
 
     ADMIN.setWindowIcon(QIcon(os.path.join('icons', 'WZ1.png')))
     # Run this when the event loop has been entered:
-    QTimer.singleShot(100, ADMIN.init)
+    QTimer.singleShot(10, ADMIN.init)
     screen = app.primaryScreen()
     screensize = screen.availableSize()
     ADMIN.resize(screensize.width()*0.8, screensize.height()*0.8)

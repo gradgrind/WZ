@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-02-09
+core/interface_pupils.py - last updated 2021-02-11
 
 Controller/dispatcher for pupil management.
 
@@ -27,34 +27,54 @@ _BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
 from core.pupils import Pupils
 from local.grade_config import STREAMS
 
+class Pupil_Base:
+    """A cache for pupil information.
+    """
+    schoolyear = None
+    pupils = None
+    klass = None
+    pid = None
+#
+    @classmethod
+    def set_year(cls, year = None):
+        """Load pupil data for the given year. Clear data if no year.
+        """
+        if year == cls.schoolyear:
+            return
+        cls.schoolyear = year
+        cls.klass = None
+        cls.pid = None
+        cls.pupils = Pupils(year) if year else None
+#
+    @classmethod
+    def classes(cls):
+        if not cls.pupils:
+            cls.set_year(SCHOOLYEAR)
+        return cls.pupils.classes()
+
+###
+
 class Pupils_Update:
     """Manage the updating of the pupil data from a "master" table.
     Fields not supplied in the master data will leave the field values
     in the application table unchanged. This allows certain fields to
     be maintained independently of the "master" database.
     """
-    _instance = None
     @classmethod
     def start(cls, filepath):
-        self = cls()
         try:
-            self.ptables = self.pupils.read_source_table(filepath)
+            cls.ptables = Pupil_Base.pupils.read_source_table(filepath)
         except:
             REPORT('ERROR', _BAD_PUPIL_TABLE.format(path = filepath))
-            cls._instance = None
             return False
-        cls._instance = self
+        Pupil_Base.set_year(SCHOOLYEAR)
         cls.compare()
         return True
 #
-    def __init__(self):
-        self.pupils = Pupils(SCHOOLYEAR)
-#
     @classmethod
     def compare(cls):
-        self = cls._instance
-        self._changes = {}
-        _delta = self.pupils.compare_update(self.ptables)
+        cls._changes = {}
+        _delta = Pupil_Base.pupils.compare_update(cls.ptables)
         # Return the changes class-for-class
         for klass, kdata in _delta.items():
             CALLBACK('pupil_DELTA', klass = klass, delta = kdata)
@@ -63,14 +83,12 @@ class Pupils_Update:
 #
     @classmethod
     def class_delta(cls, klass, delta_list):
-        self = cls._instance
-        self._changes[klass] = delta_list
+        cls._changes[klass] = delta_list
         return True
 #
     @classmethod
     def update(cls):
-        self = cls._instance
-        self.pupils.update_classes(self._changes)
+        Pupil_Base.pupils.update_classes(cls._changes)
         return True
 
 FUNCTIONS['PUPIL_table_delta'] = Pupils_Update.start
@@ -80,74 +98,62 @@ FUNCTIONS['PUPIL_table_update'] = Pupils_Update.update
 
 ###
 
-#TODO
 class Pupil_Editor:
-    _instance = None
+    """Editor for the data of individual pupils.
+        1) entry: set classes -> ...
+        2) select a class: set pupils -> ...
+        3) select a pupil: show pupil data
+    """
     @classmethod
-
-    def __init__(self):
-        ### State variables
-#        self.schoolyear = SCHOOLYEAR
-        # These can persist after leaving the pupils tab
-        self.klass = None
-        self.pid = None
-        # These don't persist after leaving the pupils tab
-        self._class_list = None
-        self._pdata_list = None
-        self._pdata = None
-#
-
-# Maybe:
-# 1) set classes
-# 2) select a class ->
-# 3) set pupils
-# 4) select a pupil ->
-# 5) show pupil data
-    def enter(self):
+    def enter(cls):
 # No pupil should be selected (there should be no pupils yet)
-        self.schoolyear = SCHOOLYEAR
-        self.pupils = Pupils(SCHOOLYEAR)
-        self._class_list = self.pupils.classes()
-        self._class_list.reverse()   # start with the highest classes
-        klass = self.klass if self.klass in self._class_list \
-                else self._class_list[0]
-        self.klass = None
-        CALLBACK('pupil_CLASSES',
-                classes = self._class_list,
+        cls._class_list = Pupil_Base.classes()
+        cls._class_list.reverse()   # start with the highest classes
+        klass = Pupil_Base.klass if Pupil_Base.klass in cls._class_list \
+                else cls._class_list[0]
+        Pupil_Base.klass = None
+        CALLBACK('pupil_SET_CLASSES',
+                classes = cls._class_list,
                 klass = klass)
         # This needs to signal "class changed" ...
+        return True
 #
-    def set_class(self, klass):
-        if klass not in self._class_list:
+    @classmethod
+    def set_class(cls, klass):
+        if klass not in cls._class_list:
             raise Bug('Invalid class passed from front-end: %s' %  klass)
-        self.klass = klass
-        self._pdata_list = self.pupils.class_pupils(klass)
+        Pupil_Base.klass = klass
+        cls._pdata_list = Pupil_Base.pupils.class_pupils(klass)
         pupil_list = []
         pidix, ix = 0, -1
-        for pd in self._pdata_list:
+        for pd in cls._pdata_list:
             ix += 1
             _pid = pd['PID']
-            if _pid == self.pid:
+            if _pid == Pupil_Base.pid:
                 pidix = ix
-            _pname = Pupils.name(pd)
-            pupil_list.append(f'{_pid}|{_pname}')
-        pdata = self._pdata_list[pidix]
-        pid = self._pdata['PID']
-        CALLBACK('pupil_PUPILS',
+            pupil_list.append((_pid, Pupils.name(pd)))
+        pdata = cls._pdata_list[pidix]
+        pid = pdata['PID']
+        CALLBACK('pupil_SET_PUPILS',
                 pupils = pupil_list,
                 pid = pid)
         # This needs to signal "pupil changed" ...
+        return True
 #
-    def set_pupil(self, ptag):
-        pid, pname = ptag.split('|', 1)
-        for pd in self._pdata_list:
-            if pd['PID'] == pid:
-                self._pdata = pd
-                self.pid = pid
-                break
-        else:
-            raise Bug('Invalid pupil passed from front-end: %s' % ptag)
-#TODO: Display pupil data
+    @classmethod
+    def set_pupil(cls, pid):
+        try:
+            pdata = cls._pdata_list._pidmap[pid]
+        except KeyError:
+            raise Bug('Invalid pupil passed from front-end: %s' % pid)
+        Pupil_Base.pid = pid
+        # Display pupil data
+        CALLBACK('pupil_SET_PUPIL_DATA',
+                data = pdata,
+                name = Pupils.name(pdata))
+        return True
+
+###
 
 def get_info():
     CALLBACK('pupil_SET_INFO',
@@ -155,4 +161,8 @@ def get_info():
             sex = Pupils.SEX,
             streams = STREAMS)
     return True
+
 FUNCTIONS['PUPIL_get_info'] = get_info
+FUNCTIONS['PUPIL_enter'] = Pupil_Editor.enter
+FUNCTIONS['PUPIL_set_class'] = Pupil_Editor.set_class
+FUNCTIONS['PUPIL_set_pupil'] = Pupil_Editor.set_pupil

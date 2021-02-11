@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-02-09
+core/main.py - last updated 2021-02-11
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -147,6 +147,7 @@ def start():
     with open(os.path.join(ZEUGSDIR, 'logs', 'debug'), 'w',
             encoding = 'utf-8') as dbg_fh:
         main = _Main(dbg_fh)
+        builtins.DEBUG = main.debug
         builtins.REPORT = main.send_report
         builtins.OUTPUT = main.send_output
         builtins.CALLBACK = main.send_callback
@@ -161,16 +162,15 @@ from core.base import Dates
 from local.base_config import print_schoolyear
 
 def get_years():
-    """Return a list of available school-years and the currently selected
-    one. If no valid year is currently set, use the current school-year,
-    if there is data for it, otherwise the latest year for which there
-    is data.
+    """Return (via callback) a list of available school-years and the
+    currently selected one. If no valid year is currently set, use the
+    current school-year, if there is data for it, otherwise the latest
+    year for which there is data.
     The list also contains full display-names for the years (e.g.
-    '2016 – 2017') and is formatted thus:
-        year:full-name|year:full-name| ...
+    '2016 – 2017'):
+        [[year, full-name], ...]
     """
     allyears = Dates.get_years()
-    years = ['%s:%s' % (y, print_schoolyear(y)) for y in allyears]
     try:
         if SCHOOLYEAR not in allyears:
             raise ValueError
@@ -179,7 +179,8 @@ def get_years():
         if thisyear not in allyears:
             thisyear = allyears[0]
         set_year(thisyear)
-    CALLBACK('base_SET_YEARS', years = '|'.join(years), current = SCHOOLYEAR)
+    CALLBACK('base_SET_YEARS', years = [(y, print_schoolyear(y))
+            for y in allyears], current = SCHOOLYEAR)
     return True
 
 FUNCTIONS['BASE_get_years'] = get_years

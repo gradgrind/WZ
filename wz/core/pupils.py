@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-02-07
+core/pupils.py - last updated 2021-02-10
 
 Database access for reading pupil data.
 
@@ -152,11 +152,11 @@ class Pupils(PupilsBase):
         """
         return sorted(self._klasses)
 #
-    @staticmethod
-    def name(pdata):
+    @classmethod
+    def name(cls, pdata):
         """Return the pupil's "short" name.
         """
-        return pdata['FIRSTNAME'] + ' ' + pdata.lastname()
+        return pdata['FIRSTNAME'] + ' ' + cls.lastname(pdata)
 #
     @staticmethod
     def lastname(pdata):

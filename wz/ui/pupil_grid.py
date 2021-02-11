@@ -2,7 +2,7 @@
 """
 ui/pupil_grid.py
 
-Last updated:  2021-02-09
+Last updated:  2021-02-11
 
 Manage the grid for the pupil-data editor.
 
@@ -37,10 +37,6 @@ _REMOVE_PUPIL = "Wollen Sie wirklich {name} aus der Datenbank entfernen?"
 from ui.grid import Grid
 from ui.ui_support import QuestionDialog
 
-#from core.pupils import Pupils, NullPupilData
-#from local.base_config import PupilsBase
-#from local.grade_config import STREAMS
-
 ## Measurements are in mm ##
 _HEIGHT_LINE = 6
 COLUMNS = (40, 60)
@@ -57,19 +53,15 @@ class PupilGrid(Grid):
     """
     def __init__(self, pupil_view, info):
         self._info = info
-#TODO need current state: classes, pupils in current class ...
-#        self.pupils = Pupils(schoolyear)
-#        self.schoolyear = schoolyear
         _ROWS = ROWS + (_HEIGHT_LINE,) * len(info['FIELDS'])
         super().__init__(pupil_view, _ROWS, COLUMNS)
         self.styles()
 
         ### Pop-up editor for SEX and STREAM fields
-#TODO: need SEX and STREAMS lists from the back-end
         self.addSelect('SEX', info['SEX'])
         self.addSelect('STREAM', info['STREAMS'])
         ### Non-editable fields
-        noneditable = {'PSORT'}
+        noneditable = {'PID'}
         ### Title area
         self.tile(0, 0, text = '', cspan = 2, style = 'title', tag = 'title')
         ### field - value lines
@@ -102,27 +94,13 @@ class PupilGrid(Grid):
         self.new_style('value', base = 'key',
                 highlight = ':002562', mark = 'E00000')
 #
-    def classes(self):
-        return self.pupils.classes()
-#
-    def set_class(self, klass):
-        self.pupil_list = self.pupils.class_pupils(klass)
-        self.klass = klass
-        return self.pupil_list
-#
-    def set_pupil(self, pid):
-        if pid:
-            self.pupil_data = self.pupil_list.pid2pdata(pid)
-            self.pid = pid
-            self.set_text('title', self.pupil_data.name())
-        else:
-            # Present an "empty" table
-            self.pupil_data = NullPupilData(self.klass)
-            self.pid = self.pupil_data['PID']
-            self.set_text('title', 'Neu: ' + self.pupil_data.name())
+    def set_pupil(self, pdata, pname):
+        self.pupil_data = pdata
+        self.set_text('title', pname)
         for field in self._info['FIELDS']:
-            self.set_text_init(field, self.pupil_data[field])
+            self.set_text_init(field, pdata[field])
 #
+#TODO ...
     def leaving(self, force):
         """When setting a scene (or clearing one), or exiting the program
         (or dialog), this check for changed data should be made.
