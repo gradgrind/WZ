@@ -106,7 +106,6 @@ class Pupil_Editor:
     """
     @classmethod
     def enter(cls):
-# No pupil should be selected (there should be no pupils yet)
         cls._class_list = Pupil_Base.classes()
         cls._class_list.reverse()   # start with the highest classes
         klass = Pupil_Base.klass if Pupil_Base.klass in cls._class_list \
@@ -158,6 +157,17 @@ class Pupil_Editor:
         pdata = Pupils.nullPupilData(Pupil_Base)
         CALLBACK('pupil_NEW_PUPIL', data = pdata)
         return True
+#
+    @classmethod
+    def new_data(cls, data):
+        # Update pupil data in database
+        if Pupil_Base.pupils.modify_pupil(data):
+            if not data.get('*REMOVE*'):
+                Pupil_Base.pid = data['PID']
+                Pupil_Base.klass = data['CLASS']
+            CALLBACK('pupil_CLEAR_CHANGES')
+            return cls.enter()
+        return False
 
 ###
 
@@ -173,3 +183,4 @@ FUNCTIONS['PUPIL_enter'] = Pupil_Editor.enter
 FUNCTIONS['PUPIL_set_class'] = Pupil_Editor.set_class
 FUNCTIONS['PUPIL_set_pupil'] = Pupil_Editor.set_pupil
 FUNCTIONS['PUPIL_new_pupil'] = Pupil_Editor.new_pupil
+FUNCTIONS['PUPIL_new_data'] = Pupil_Editor.new_data

@@ -24,16 +24,6 @@ Copyright 2021 Michael Towers
 =-LICENCE========================================
 """
 
-### Messages
-_TITLE_TABLE_CHANGE = "Änderungen speichern"
-_TABLE_CHANGES = "Änderungen für {name} nicht gespeichert.\n" \
-        "Sollen sie jetzt gespeichert werden?\n" \
-        "Wenn nicht, dann gehen sie verloren."
-_TITLE_REMOVE_PUPIL = "Schülerdaten löschen"
-_REMOVE_PUPIL = "Wollen Sie wirklich {name} aus der Datenbank entfernen?"
-
-#####################################################
-
 from ui.grid import Grid
 from ui.ui_support import QuestionDialog
 
@@ -100,26 +90,8 @@ class PupilGrid(Grid):
         for field in self._info['FIELDS']:
             self.set_text_init(field, pdata.get(field) or '')
 #
-#TODO ...
-    def leaving(self, force):
-        """When setting a scene (or clearing one), or exiting the program
-        (or dialog), this check for changed data should be made.
+    def valueChanged(self, tag, text):
+        """Called when a cell value is changed by the editor.
         """
-        if self.changes() and (force or QuestionDialog(_TITLE_TABLE_CHANGE,
-                _TABLE_CHANGES.format(name = self.pupil_data.name()))):
-            self.save_changes()
-#
-    def save_changes(self):
-        changes = self.change_values()
-        self.pupils.modify_pupil(self.pupil_data, changes)
-#
-    def remove_pupil(self):
-        if QuestionDialog(_TITLE_REMOVE_PUPIL,
-                _REMOVE_PUPIL.format(name = self.pupil_data.name())):
-            self.pupils.modify_pupil(self.pupil_data, {'CLASS': None})
-#
-#    def valueChanged(self, tag, text):
-#        """Called when a cell value is changed by the editor.
-#        """
-#        super().valueChanged(tag, text)
-#        ...
+        super().valueChanged(tag, text)
+        self.pupil_data[tag] = text

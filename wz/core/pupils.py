@@ -43,10 +43,11 @@ if __name__ == '__main__':
 ### Messages
 _SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filepath}"
 _NAME_MISSING = "Eingabezeile fehlerhaft, Name unvollständig:\n  {row}"
-_PID_EXISTS = "Ungültiges Schülerkennzeichen, es gehört schon {name} in" \
-        " Klasse {klass}"
+#_PID_EXISTS = "Ungültiges Schülerkennzeichen, es gehört schon {name} in" \
+#        " Klasse {klass}"
 _PID_DUPLICATE = "Schülerkennzeichen {pid} mehrfach vorhanden:\n" \
         "  Klasse {c1} – {p1}\n  Klasse {c2} – {p2}"
+_MISSING_FIELDS = "Diese Felder dürfen nicht leer sein:\n  {fields}"
 
 import datetime, shutil, json, gzip
 
@@ -328,54 +329,41 @@ class Pupils(PupilsBase):
         # Make changes persistent
         self.save()
 #
-#TODO
-    def modify_pupil(self, pupil_data, changes):
+    def modify_pupil(self, pupil_data):
         """This is used by the pupil-data editor. All changes to a pupil's
         data should pass through here.
         It ensures that the internal structures are consistent and that
         the changes get saved to the persistent storage.
         """
-        oldpid = pupil_data['PID']
-        oldclass = pupil_data['CLASS']
-        try:
-            newpid = changes['PID']
-        except KeyError:
-            newpid = oldpid
+        pid = pupil_data['PID']
+        if pupil_data.get('*REMOVE*'):
+            remove = True
         else:
-            # Check that the PID doesn't exist already
-            try:
-                pdata = self[newpid]
-            except TableError:
-                pass
-            else:
-                raise TableError(_PID_EXISTS.format(
-                        klass = pdata['CLASS'], name = pdata.name()))
-        # Check PID validity
-        self.check_new_pid_valid(newpid)
-        newclass = changes.get('CLASS', oldclass)
-        # Modify all changed fields in <pupil_data>
-        if changes:
-            pupil_data.tweak([(k, v) for k, v in changes.items()])
-#TODO: To save method?
-            # Update __EXTRA__ field
-            extra = {k: v for k, v in pupil_data.items()
-                    if (k not in self.FIELDS) and v}
-            pupil_data['__EXTRA__'] = json.dumps(extra)
-        if newclass:
-            npdlist = self.class_pupils(newclass)
-            if oldclass != newclass or not oldpid:
-                # Add pupil to <newclass>
-                npdlist.append(pupil_data)
-                npdlist.sort(key = sortkey)
-            self.save_class(newclass, npdlist)
-        if oldclass and oldclass != newclass:
-            # Remove pupil from current class
-            opdlist = self.class_pupils(oldclass)
-            opdlist.remove(pupil_data)
-#TODO: backup true?
-            self.save_class(oldclass, opdlist, backup = False)
-        # Invalidate global pid-mapping
-        self.clear_pid_cache()
+            remove = False
+            # Check that essential fields are present
+            missing = []
+            for f in self.ESSENTIAL_FIELDS:
+                if not pupil_data.get(f):
+                    missing.append(self.FIELDS[f])
+            if missing:
+                REPORT('ERROR', _MISSING_FIELDS.format(
+                        fields = '\n  '.join(missing)))
+                return False
+        if remove:
+            del(self[pid])
+        else:
+            if pid not in self:
+#TODO: also a flag for a new pupil?
+                # A new pupil ...
+                # Check PID validity
+                self.check_new_pid_valid(pid)
+            # Rebuild pupil entry
+            self[pid] = {f: pupil_data.get(f) or '' for f in self.FIELDS}
+        # Regenerate class lists
+        self.fill_classes()
+        # Make changes persistent
+        self.save()
+        return True
 #
     def save(self):
         """Save the pupil data as a compressed json file.

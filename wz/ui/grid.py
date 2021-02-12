@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-02-10
+Last updated:  2021-02-12
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -102,15 +102,6 @@ class GridView(QGraphicsView):
             # (pop-ups could otherwise extend it)
             self.setSceneRect(scene._sceneRect)
         return True
-#
-#    def clear(self, force = False):
-#        """Call this before <set_scene> to ensure that <leaving> is called.
-#        It should also be called when closing the application window.
-#        """
-#        s = self.scene()
-#        if s:
-#            s.leaving(force)
-#            self.setScene(None)
 #
     def mousePressEvent(self, event):
         point = event.pos()

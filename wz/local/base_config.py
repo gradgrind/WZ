@@ -164,6 +164,9 @@ class PupilsBase(dict):
         'QUALI_D'   : 'Eintritt-SekII'  # not in imported data
     }
 #
+    ESSENTIAL_FIELDS = 'CLASS', 'FIRSTNAMES', 'LASTNAME', 'FIRSTNAME', \
+            'POB', 'DOB_D', 'SEX', 'ENTRY_D', 'HOME'
+#
     SEX = ('m', 'w')    # Permissible values for a field
 #
     SCHOOLYEAR = 'Schuljahr'

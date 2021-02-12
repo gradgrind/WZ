@@ -31,8 +31,12 @@ _NEW_PUPIL = "Neuer Schüler"
 _REMOVE_PUPIL = "Schüler löschen"
 _SAVE = "Änderungen speichern"
 
-_ENTER_PID_TITLE = "Neue Schülernummer"
-_ENTER_PID = "Wählen Sie eine neue,\neindeutige Schülernummer"
+_ENTER_PID_TITLE = "Neue Schülerkennung"
+_ENTER_PID = "Wählen Sie eine neue,\neindeutige Schülerkennung"
+_REMOVE_TITLE = "Schülerdaten löschen"
+_REMOVE = "Wollen Sie wirklich {name} aus der Datenbank entfernen?"
+
+#####################################################
 
 #####################################################
 
@@ -88,18 +92,10 @@ class PupilEdit(TabPage):
         cbox.addWidget(pdel)
         pdel.clicked.connect(self.remove_pupil)
         topbox.addLayout(cbox)
-        self.FIELDS = None
+        self.INFO = None
 #
-    def SET_INFO(self, fields, sex, streams):
-        """<fields> is a list of field names:
-            [[field1_internal_name, field1_local_name], ... ]
-        """
-        self.INFO = {
-            'FIELDS': {field: name for field, name in fields},
-            'SEX': sex,
-            'STREAMS': streams
-        }
-        #print("INFO: ", self.INFO)
+    def CLEAR_CHANGES(self):
+        self.pupil_scene.clear_changes()
 #
     def SET_CLASSES(self, classes, klass):
         """CALLBACK: Supplies the classes as a list: [class10, class9, ...]
@@ -107,9 +103,8 @@ class PupilEdit(TabPage):
         and trigger a "change of class" signal.
         """
 #TODO: Is this the right place for this?
-        self.pupil_scene = PupilGrid(self.pupilView, self.INFO)
+#        self.pupil_scene = PupilGrid(self.pupilView, self.INFO)
 #        self.pupilView.set_scene(self.pupil_scene)
-
         try:
             ix = classes.index(klass)
         except ValueError:
@@ -144,10 +139,24 @@ class PupilEdit(TabPage):
         """
         return self.pupilView.set_scene(None)
 #
+    def SET_INFO(self, fields, sex, streams):
+        """<fields> is a list of field names:
+            [[field1_internal_name, field1_local_name], ... ]
+        """
+        self.INFO = {
+            'FIELDS': {field: name for field, name in fields},
+            'SEX': sex,
+            'STREAMS': streams
+        }
+        #print("INFO: ", self.INFO)
+        self.enter()
+#
     def enter(self):
-        if not self.FIELDS:
+        if self.INFO:
+            self.pupil_scene = PupilGrid(self.pupilView, self.INFO)
+            BACKEND('PUPIL_enter')
+        else:
             BACKEND('PUPIL_get_info')
-        BACKEND('PUPIL_enter')
 #
     def leave(self):
         if self.clear():
@@ -196,18 +205,18 @@ class PupilEdit(TabPage):
 
 
 
-#TODO ...
 #
     def remove_pupil(self):
-        self.pupil_scene.remove_pupil()
-        # Pass dummy argument to suppress "changed" dialog.
-        self.class_changed(self.pupil_scene.klass, 'DUMMY')
+        if QuestionDialog(_REMOVE_TITLE, _REMOVE.format(name)):
+#TODO ...
+            data = self.pupil_scene.pupil_data.copy()
+            data['*REMOVE*'] = True
+            SHOW_INFO("Remove %s" % name)
+#        # Pass dummy argument to suppress "changed" dialog.
+#        self.class_changed(self.pupil_scene.klass, 'DUMMY')
 #
-    def save(self, force = True):
-        self.pupil_scene.save_changes()
-        klass = self.pupil_scene.pupil_data['CLASS']
-        pid = self.pupil_scene.pupil_data['PID']
-        self.class_changed(klass, pid)
+    def save(self):
+        BACKEND('PUPIL_new_data', data = self.pupil_scene.pupil_data)
 
 tab_pupil_editor = PupilEdit()
 TABS.append(tab_pupil_editor)
@@ -216,3 +225,4 @@ FUNCTIONS['pupil_SET_CLASSES'] = tab_pupil_editor.SET_CLASSES
 FUNCTIONS['pupil_SET_PUPILS'] = tab_pupil_editor.SET_PUPILS
 FUNCTIONS['pupil_SET_PUPIL_DATA'] = tab_pupil_editor.SET_PUPIL_DATA
 FUNCTIONS['pupil_NEW_PUPIL'] = tab_pupil_editor.NEW_PUPIL
+FUNCTIONS['pupil_CLEAR_CHANGES'] = tab_pupil_editor.CLEAR_CHANGES

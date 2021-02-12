@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-02-11
+Last updated:  2021-02-12
 
 Administration interface.
 
@@ -435,9 +435,10 @@ class Admin(QWidget):
         else:
             self._stack.widget(i).leave()
 #
+#TODO: This is not working properly. On closing with unsaved changes,
+# doing a cancel leads to an erroneous termination.
     def closeEvent(self, e):
         tabpage = self._stack.currentWidget()
-#TODO: Do I still use tabpage.clear() ?
         if tabpage.clear() and backend_instance.terminate():
             super().closeEvent(e)
 #
