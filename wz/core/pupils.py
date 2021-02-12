@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-02-10
+core/pupils.py - last updated 2021-02-12
 
 Database access for reading pupil data.
 
@@ -64,18 +64,6 @@ def sortkey(pdata):
     except ValueError:
         tv, lastname = None, _lastname
     return sortingName(pdata['FIRSTNAME'], tv, lastname)
-
-###
-
-def NullPupilData(klass):
-    """Return a "dummy" pupil-data instance, which can be used as a
-    starting point for adding a new pupil.
-    """
-    return {
-        'CLASS': klass, 'FIRSTNAME': 'Hansi',
-        'LASTNAME': 'von|Meierhausen', 'FIRSTNAMES': 'Hans Herbert',
-        'SEX': 'm', 'ENTRY_D': Dates.today()
-    }
 
 ###
 

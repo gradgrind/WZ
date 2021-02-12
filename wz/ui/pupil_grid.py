@@ -2,7 +2,7 @@
 """
 ui/pupil_grid.py
 
-Last updated:  2021-02-11
+Last updated:  2021-02-12
 
 Manage the grid for the pupil-data editor.
 
@@ -98,7 +98,7 @@ class PupilGrid(Grid):
         self.pupil_data = pdata
         self.set_text('title', pname)
         for field in self._info['FIELDS']:
-            self.set_text_init(field, pdata[field])
+            self.set_text_init(field, pdata.get(field) or '')
 #
 #TODO ...
     def leaving(self, force):

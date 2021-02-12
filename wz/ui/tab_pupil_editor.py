@@ -2,7 +2,7 @@
 """
 ui/tab_pupil_editor.py
 
-Last updated:  2021-02-11
+Last updated:  2021-02-12
 
 Editor for pupil data.
 
@@ -23,7 +23,6 @@ Copyright 2021 Michael Towers
 
 =-LICENCE========================================
 """
-#TODO
 
 ### Labels, etc.
 _EDIT_PUPIL = "Schüler verwalten"
@@ -32,9 +31,13 @@ _NEW_PUPIL = "Neuer Schüler"
 _REMOVE_PUPIL = "Schüler löschen"
 _SAVE = "Änderungen speichern"
 
+_ENTER_PID_TITLE = "Neue Schülernummer"
+_ENTER_PID = "Wählen Sie eine neue,\neindeutige Schülernummer"
+
 #####################################################
 
-from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, QPushButton
+from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
+        QPushButton, QInputDialog
 
 from ui.grid import GridView
 from ui.pupil_grid import PupilGrid
@@ -159,13 +162,7 @@ class PupilEdit(TabPage):
         if not self.clear():
             return False
 # I would need a second year to test this!
-
-
-        self.pupil_scene = PupilGrid(self.pupilView, self.INFO)
-        self.pupilView.set_scene(self.pupil_scene)
-        self.class_select.set_items([(c, c)
-                for c in self.pupil_scene.classes()])
-        self.class_select.trigger()
+        self.enter()
         return True
 #
     def class_changed(self, klass):
@@ -182,13 +179,24 @@ class PupilEdit(TabPage):
         BACKEND('PUPIL_set_pupil', pid = pid)
         return True
 #
-#TODO ...
     def new_pupil(self):
         if not self.clear():
             return
-        if self.pupil_scene:
-            self.pupilView.set_scene(self.pupil_scene)
-        self.pupil_scene.set_pupil(None)
+        # First enter pid (which is not editable).
+        BACKEND('PUPIL_new_pupil')
+#+
+    def NEW_PUPIL(self, data):
+        pid, ok = QInputDialog.getText(self, _ENTER_PID_TITLE,
+                _ENTER_PID, text = data['PID'])
+        if ok:
+            data['PID'] = pid
+            self.SET_PUPIL_DATA(data, _NEW_PUPIL)
+# The displayed pupil (in the selection widget) is of course wrong ...
+#TODO: Probably sensible to implement saving first!
+
+
+
+#TODO ...
 #
     def remove_pupil(self):
         self.pupil_scene.remove_pupil()
@@ -207,3 +215,4 @@ FUNCTIONS['pupil_SET_INFO'] = tab_pupil_editor.SET_INFO
 FUNCTIONS['pupil_SET_CLASSES'] = tab_pupil_editor.SET_CLASSES
 FUNCTIONS['pupil_SET_PUPILS'] = tab_pupil_editor.SET_PUPILS
 FUNCTIONS['pupil_SET_PUPIL_DATA'] = tab_pupil_editor.SET_PUPIL_DATA
+FUNCTIONS['pupil_NEW_PUPIL'] = tab_pupil_editor.NEW_PUPIL

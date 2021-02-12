@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-02-11
+core/interface_pupils.py - last updated 2021-02-12
 
 Controller/dispatcher for pupil management.
 
@@ -152,6 +152,12 @@ class Pupil_Editor:
                 data = pdata,
                 name = Pupils.name(pdata))
         return True
+#
+    @classmethod
+    def new_pupil(cls):
+        pdata = Pupils.nullPupilData(Pupil_Base)
+        CALLBACK('pupil_NEW_PUPIL', data = pdata)
+        return True
 
 ###
 
@@ -166,3 +172,4 @@ FUNCTIONS['PUPIL_get_info'] = get_info
 FUNCTIONS['PUPIL_enter'] = Pupil_Editor.enter
 FUNCTIONS['PUPIL_set_class'] = Pupil_Editor.set_class
 FUNCTIONS['PUPIL_set_pupil'] = Pupil_Editor.set_pupil
+FUNCTIONS['PUPIL_new_pupil'] = Pupil_Editor.new_pupil
