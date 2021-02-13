@@ -2,7 +2,7 @@
 """
 ui/tab_pupils_update.py
 
-Last updated:  2021-02-07
+Last updated:  2021-02-13
 
 Pupil table management: update from master table.
 
@@ -84,6 +84,7 @@ class UpdatePupils(TabPage):
         self.pupils = None
         self.ptables = None
         self._cleartree()
+        return True
 #
     def _cleartree(self):
         self.elements = None

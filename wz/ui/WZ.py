@@ -97,7 +97,7 @@ import ui.tab_pupils_update
 import ui.tab_pupil_editor
 #        self._addPage(GradeEdit())
 #        self._addPage(TextReports())
-#        self._addPage(Calendar())
+import ui.tab_calendar
 #        self._lbox.addStretch(1)
 #        self._addPage(FieldEdit())
 
@@ -367,6 +367,77 @@ FUNCTIONS['*REPORT*'] = backend_instance.report
 
 ####---------------------------------------
 
+class TabWidget(QWidget):
+    def __init__(self, title_label):
+        self.title_label = title_label
+        super().__init__()
+        tabbox = QHBoxLayout(self)
+        self._lbox = QVBoxLayout()
+        tabbox.addLayout(self._lbox)
+        self._stack = QStackedWidget()
+        self._stack.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        tabbox.addWidget(self._stack)
+        self.tab_buttons = []
+        self.index = -1
+#
+    def add_page(self, tab):
+        if tab:
+            b = TabButton(tab.name, self)
+            self.tab_buttons.append(b)
+            self._lbox.addWidget(b)
+            self._stack.addWidget(tab)
+        else:
+            self._lbox.addStretch(1)
+#
+    def select(self, index):
+        i0 = self._stack.currentIndex()
+        if i0 == index:
+            # No change
+            self.tab_buttons[i0].setChecked(True)
+            return
+        elif i0 >= 0:
+            # Check that the old tab can be left
+            tab0 = self._stack.widget(i0)
+            if tab0.leave():
+                # Deselect old button
+                self.tab_buttons[i0].setChecked(False)
+            else:
+                # Deselect new button
+                self.tab_buttons[index].setChecked(False)
+                return
+        # Select new button
+        self.tab_buttons[index].setChecked(True)
+        # Enter new tab
+        self._stack.setCurrentIndex(index)
+        tab = self._stack.widget(index)
+        tab.enter()
+        if self.title_label:
+            self.title_label.setText('<b>%s</b>' % tab.name)
+#
+    def clear(self):
+        w = self._stack.currentWidget()
+        if w:
+            return w.leave()
+        return True
+#
+class TabButton(QPushButton):
+    """A custom class to provide special buttons for the tab switches.
+    """
+    _stylesheet = "QPushButton:checked {background-color: #ffd36b;}"
+#
+    def __init__(self, label, tab_widget):
+        super().__init__(label)
+        self.tab_widget = tab_widget
+        self.index = len(tab_widget.tab_buttons)
+        self.setStyleSheet(self._stylesheet)
+        self.setCheckable(True)
+        self.clicked.connect(self._selected)
+#
+    def _selected(self):
+        self.tab_widget.select(self.index)
+
+###
+
 class Admin(QWidget):
     _savedir = None
     _loaddir = None
@@ -390,54 +461,22 @@ class Admin(QWidget):
         self.year_select.setMinimumWidth(150)
         titlebox.addWidget(self.year_select)
         titlebox.addStretch(1)
-        self.tab_title = QLabel()
-        titlebox.addWidget(self.tab_title)
+        tab_title = QLabel()
+        titlebox.addWidget(tab_title)
         titlebox.addStretch(1)
         topbox.addWidget(HLine())
         # ---------- Tab Box ---------- #
-        self._ntabs = 0
-        tabbox = QHBoxLayout()
-        topbox.addLayout(tabbox)
-        self._lbox = QVBoxLayout()
-        tabbox.addLayout(self._lbox)
-        self.selectPage = QButtonGroup()
-        self._stack = QStackedWidget()
-        self._stack.setFrameStyle(QFrame.Panel | QFrame.Sunken)
-        tabbox.addWidget(self._stack)
+        self.tab_widget = TabWidget(tab_title)
+        topbox.addWidget(self.tab_widget)
 
         for tab in TABS:
-            self._addPage(tab)
-        self._lbox.addStretch(1)
-#TODO: If all the tabs are in a list, this is not so easy to add after
-# the stretch. Perhaps a "special" tab type for space/stretch?
-#        self._addPage(FieldEdit())
+            self.tab_widget.add_page(tab)
+        self.tab_widget.add_page(None)
 
-        self.selectPage.idToggled.connect(self._switchPage)
-        self._switchPage(0, True)   # Enter default tab
-#
-    def _addPage(self, tab):
-        b = QPushButton(tab.name)
-        b.setStyleSheet("QPushButton:checked {background-color: #ffd36b;}")
-        b.setCheckable(True)
-        if self._ntabs == 0:
-            b.setChecked(True)
-        self._lbox.addWidget(b)
-        self.selectPage.addButton(b, self._ntabs)
-        self._ntabs += 1
-        self._stack.addWidget(tab)
-#
-    def _switchPage(self, i, checked):
-        if checked:
-            self._stack.setCurrentIndex(i)
-            tab = self._stack.widget(i)
-            tab.enter()
-            self.tab_title.setText('<b>%s</b>' % tab.name)
-        else:
-            self._stack.widget(i).leave()
+        self.tab_widget.select(0)   # Enter default tab
 #
     def closeEvent(self, e):
-        tabpage = self._stack.currentWidget()
-        if tabpage.clear():
+        if self.tab_widget.clear():
             backend_instance.terminate()
             e.accept()
         else:

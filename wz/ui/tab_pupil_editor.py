@@ -103,9 +103,6 @@ class PupilEdit(TabPage):
         and the selected class. Set the class selection widget
         and trigger a "change of class" signal.
         """
-#TODO: Is this the right place for this?
-#        self.pupil_scene = PupilGrid(self.pupilView, self.INFO)
-#        self.pupilView.set_scene(self.pupil_scene)
         try:
             ix = classes.index(klass)
         except ValueError:

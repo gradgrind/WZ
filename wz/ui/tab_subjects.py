@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-01-31
+Last updated:  2021-02-13
 
 Subject table management.
 
@@ -58,6 +58,7 @@ class Subjects(TabPage):
         """Called when the tab is deselected.
         """
         self.output.clear()
+        return True
 #
     def update(self):
         dir0 = ADMIN._loaddir or os.path.expanduser('~')

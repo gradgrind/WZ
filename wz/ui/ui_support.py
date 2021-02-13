@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-02-11
+Last updated:  2021-02-13
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -202,7 +202,7 @@ class TabPage(QWidget):
         pass
 #
     def leave(self):
-        pass
+        return True
 #
     def clear(self):
         return True
