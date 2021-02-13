@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-02-11
+core/main.py - last updated 2021-02-13
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -202,10 +202,12 @@ def set_year(year):
 
 FUNCTIONS['BASE_set_year'] = set_year
 
+
 ######################################################################
 
 import core.interface_pupils
 import core.interface_subjects
+import core.interface_calendar
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

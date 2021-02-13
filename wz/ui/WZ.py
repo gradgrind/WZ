@@ -77,11 +77,9 @@ if __name__ == '__main__':
 #    QApplication.setStyle('windows')
     app = QApplication([])
 
-from qtpy.QtWidgets import QWidget, QDialog, QFrame, \
-    QStackedWidget, \
+from qtpy.QtWidgets import QWidget, QDialog, QFrame, QStackedWidget, \
     QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, \
-    QPushButton, QButtonGroup, \
-    QFileDialog
+    QPushButton, QButtonGroup, QFileDialog
 from qtpy.QtCore import Qt, QDateTime, QProcess, QTimer
 from qtpy.QtGui import QMovie, QPixmap, QColor
 
