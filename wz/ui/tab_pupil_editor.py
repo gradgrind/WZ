@@ -2,7 +2,7 @@
 """
 ui/tab_pupil_editor.py
 
-Last updated:  2021-02-12
+Last updated:  2021-02-13
 
 Editor for pupil data.
 
@@ -45,7 +45,8 @@ from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
 
 from ui.grid import GridView
 from ui.pupil_grid import PupilGrid
-from ui.ui_support import VLine, KeySelect, TabPage, GuiError
+from ui.ui_support import VLine, KeySelect, TabPage, GuiError, \
+        QuestionDialog
 
 ###
 
@@ -84,13 +85,13 @@ class PupilEdit(TabPage):
         cbox.addWidget(self.pupilView.pbSave)
         self.pupilView.pbSave.clicked.connect(self.save)
         cbox.addStretch(1)
-        pnew = QPushButton(_NEW_PUPIL)
-        cbox.addWidget(pnew)
-        pnew.clicked.connect(self.new_pupil)
+        self.new_button = QPushButton(_NEW_PUPIL)
+        cbox.addWidget(self.new_button)
+        self.new_button.clicked.connect(self.new_pupil)
         cbox.addSpacing(10)
-        pdel = QPushButton(_REMOVE_PUPIL)
-        cbox.addWidget(pdel)
-        pdel.clicked.connect(self.remove_pupil)
+        self.remove_button = QPushButton(_REMOVE_PUPIL)
+        cbox.addWidget(self.remove_button)
+        self.remove_button.clicked.connect(self.remove_pupil)
         topbox.addLayout(cbox)
         self.INFO = None
 #
@@ -186,20 +187,37 @@ class PupilEdit(TabPage):
         if not self.clear():
             return False
         BACKEND('PUPIL_set_pupil', pid = pid)
+        self.remove_button.setEnabled(True)
+        self.new_button.setEnabled(True)
         return True
 #
     def new_pupil(self):
         if not self.clear():
             return
         # First enter pid (which is not editable).
+        # The back-end call is necessary to get a pid suggestion (as
+        # well as the rest of the "dummy" data).
         BACKEND('PUPIL_new_pupil')
+        self.remove_button.setEnabled(False)
+        self.new_button.setEnabled(False)
 #+
-    def NEW_PUPIL(self, data):
-        pid, ok = QInputDialog.getText(self, _ENTER_PID_TITLE,
-                _ENTER_PID, text = data['PID'])
-        if ok:
-            data['PID'] = pid
-            self.SET_PUPIL_DATA(data, _NEW_PUPIL)
+    def NEW_PUPIL(self, data, ask_pid = None):
+        if ask_pid:
+            etext = data.get('__ERROR__')
+            mtext = _ENTER_PID
+            if etext:
+                mtext = etext + '\n\n' + mtext
+            pid, ok = QInputDialog.getText(self, _ENTER_PID_TITLE,
+                    mtext, text = ask_pid)
+            if ok:
+                if pid != ask_pid:
+                    # Need to check validity of the pid
+                    BACKEND('PUPIL_new_pupil', pid = pid)
+                    return
+            else:
+                self.enter()
+                return
+        self.SET_PUPIL_DATA(data, _NEW_PUPIL)
 # The displayed pupil (in the selection widget) is of course wrong ...
 #TODO: Probably sensible to implement saving first!
 
@@ -207,13 +225,9 @@ class PupilEdit(TabPage):
 
 #
     def remove_pupil(self):
-        if QuestionDialog(_REMOVE_TITLE, _REMOVE.format(name)):
-#TODO ...
-            data = self.pupil_scene.pupil_data.copy()
-            data['*REMOVE*'] = True
-            SHOW_INFO("Remove %s" % name)
-#        # Pass dummy argument to suppress "changed" dialog.
-#        self.class_changed(self.pupil_scene.klass, 'DUMMY')
+        if QuestionDialog(_REMOVE_TITLE,
+                _REMOVE.format(name = self.pupil_scene.text('title'))):
+            BACKEND('PUPIL_remove', pid = self.pupil_scene.pupil_data['PID'])
 #
     def save(self):
         BACKEND('PUPIL_new_data', data = self.pupil_scene.pupil_data)

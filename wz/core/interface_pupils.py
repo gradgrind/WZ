@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-02-12
+core/interface_pupils.py - last updated 2021-02-13
 
 Controller/dispatcher for pupil management.
 
@@ -23,6 +23,7 @@ Copyright 2021 Michael Towers
 
 ### Messages
 _BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
+_PID_EXISTS = "Schülerkennung {pid} existiert schon"
 
 from core.pupils import Pupils
 from local.grade_config import STREAMS
@@ -153,18 +154,36 @@ class Pupil_Editor:
         return True
 #
     @classmethod
-    def new_pupil(cls):
+    def new_pupil(cls, pid = None):
         pdata = Pupils.nullPupilData(Pupil_Base)
-        CALLBACK('pupil_NEW_PUPIL', data = pdata)
+        if pid:
+            try:
+                Pupils.check_new_pid_valid(pid)
+            except ValueError as e:
+                pdata['__ERROR__'] = str(e)
+            else:
+                if pid in Pupil_Base.pupils:
+                    pdata['__ERROR__'] = _PID_EXISTS.format(pid = pid)
+                else:
+                    pdata['PID'] = pid
+                    CALLBACK('pupil_NEW_PUPIL', data = pdata)
+                    return True
+        CALLBACK('pupil_NEW_PUPIL', data = pdata, ask_pid = pdata['PID'])
         return True
 #
     @classmethod
     def new_data(cls, data):
         # Update pupil data in database
         if Pupil_Base.pupils.modify_pupil(data):
-            if not data.get('*REMOVE*'):
-                Pupil_Base.pid = data['PID']
-                Pupil_Base.klass = data['CLASS']
+            Pupil_Base.pid = data['PID']
+            Pupil_Base.klass = data['CLASS']
+            CALLBACK('pupil_CLEAR_CHANGES')
+            return cls.enter()
+        return False
+#
+    @classmethod
+    def remove(cls, pid):
+        if Pupil_Base.pupils.remove_pupil(pid):
             CALLBACK('pupil_CLEAR_CHANGES')
             return cls.enter()
         return False
@@ -184,3 +203,4 @@ FUNCTIONS['PUPIL_set_class'] = Pupil_Editor.set_class
 FUNCTIONS['PUPIL_set_pupil'] = Pupil_Editor.set_pupil
 FUNCTIONS['PUPIL_new_pupil'] = Pupil_Editor.new_pupil
 FUNCTIONS['PUPIL_new_data'] = Pupil_Editor.new_data
+FUNCTIONS['PUPIL_remove'] = Pupil_Editor.remove

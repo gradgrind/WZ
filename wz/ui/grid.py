@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-02-12
+Last updated:  2021-02-13
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -343,6 +343,11 @@ class Grid(QGraphicsScene):
         self.tagmap[tag] = t
         self.value0[tag] = text # initial value
         return t
+#
+    def text(self, tag):
+        """Read the contents of the cell with given tag.
+        """
+        return self.tagmap[tag].value() or ''
 #
     def set_text(self, tag, text):
         """Set the text in the given cell, not activating the
