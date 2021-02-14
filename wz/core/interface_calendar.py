@@ -21,8 +21,6 @@ Copyright 2021 Michael Towers
    limitations under the License.
 """
 
-#TODO
-
 ### Messages
 
 
@@ -31,38 +29,37 @@ from local.base_config import year_path, CALENDAR_FILE, CALENDER_HEADER
 from template_engine.attendance import AttendanceTable, AttendanceError
 from local.attendance_config import ATTENDANCE_FILE
 
-def get_calendar():
-    fpath = year_path(SCHOOLYEAR, CALENDAR_FILE)
-    with open(fpath, 'r', encoding = 'utf-8') as fh:
-        text = fh.read()
-    CALLBACK('calendar_SET_TEXT', text = text)
+def read_calendar():
+    CALLBACK('calendar_SET_TEXT',
+            text = CORE.Dates.read_calendar(SCHOOLYEAR))
     return True
 
-FUNCTIONS['CALENDAR_get_calendar'] = get_calendar
+FUNCTIONS['CALENDAR_get_calendar'] = read_calendar
 
 ###
 
 def save_calendar(text):
-    header = CALENDER_HEADER.format(date = CORE.Dates.today())
-    try:
-        text = text.split('#---', 1)[1]
-        text = text.lstrip('-')
-        text = text.lstrip()
-    except:
-        pass
-    text = header + text
-    fpath = year_path(SCHOOLYEAR, CALENDAR_FILE)
-    with open(fpath, 'w', encoding = 'utf-8') as fh:
-        fh.write(text)
+    text = CORE.Dates.save_calendar(SCHOOLYEAR, text)
     CALLBACK('calendar_SET_TEXT', text = text)
     return True
 
 FUNCTIONS['CALENDAR_save_calendar'] = save_calendar
 
+###
+
+def migrate_calendar():
+    CORE.Dates.migrate_calendar(SCHOOLYEAR)
+    return True
+
+FUNCTIONS['CALENDER_migrate_calendar'] = migrate_calendar
 
 ###
 
-class _MakeAttendanceTable(CORE.ThreadFunction):
+
+#TODO ...
+
+
+class _MakeAttendanceTable:#(CORE.ThreadFunction):
     def __init__(self, klass, filepath):
         super().__init__()
         self._klass = klass
@@ -85,7 +82,7 @@ class _MakeAttendanceTable(CORE.ThreadFunction):
 
 ###
 
-class _UpdateAttendanceTable(CORE.ThreadFunction):
+class _UpdateAttendanceTable:#(CORE.ThreadFunction):
     def __init__(self, klass, filepath):
         super().__init__()
         self._klass = klass

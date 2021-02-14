@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-02-07
+Last updated:  2021-02-14
 
 Basic configuration and structural stuff.
 
@@ -213,7 +213,29 @@ class Dates:
             except:
                 pass
         return sorted(years, reverse=True)
-
+#
+    @staticmethod
+    def read_calendar(schoolyear):
+        fpath = CONFIG.year_path(schoolyear, CONFIG.CALENDAR_FILE)
+        with open(fpath, 'r', encoding = 'utf-8') as fh:
+            return fh.read()
+#
+    @classmethod
+    def save_calendar(cls, schoolyear, text):
+        header = CONFIG.CALENDER_HEADER.format(date = cls.today())
+        try:
+            text = text.split('#---', 1)[1]
+            text = text.lstrip('-')
+            text = text.lstrip()
+        except:
+            pass
+        text = header + text
+        fpath = CONFIG.year_path(schoolyear, CONFIG.CALENDAR_FILE)
+        os.makedirs(os.path.dirname(fpath), exist_ok = True)
+        with open(fpath, 'w', encoding = 'utf-8') as fh:
+            fh.write(text)
+        return text
+#
     @classmethod
     def get_calendar(cls, schoolyear):
         """Read the calendar file for the given school year.
@@ -240,6 +262,28 @@ class Dates:
                     continue
             raise DataError(_BAD_DATE.format(line = l))
         return calendar
+#
+    @classmethod
+    def migrate_calendar(cls, schoolyear):
+        """Generate a "starter" calendar for the next schoolyear.
+        It simply takes that from the current year and adds 1 to the
+        year part of each date. Not much, but better than nothing?
+        It of course still needs extensive editing.
+        """
+        def fn_sub(m):
+            y, md = m.group(1), m.group(2)
+            if y == lastyear:
+                y = schoolyear
+            elif y == schoolyear:
+                y = nextyear
+            return y + md
+        text = cls.read_calendar(schoolyear)
+        lastyear = str(int(schoolyear) - 1)
+        nextyear = str(int(schoolyear) + 1)
+        rematch = r'([0-9]{4})(-[0-9]{2}-[0-9]{2})'
+        text = re.sub(rematch, fn_sub, text)
+        cls.save_calendar(nextyear, text)
+        return text
 
 ###
 
@@ -334,46 +378,6 @@ def asciify(string):
     lookup = CONFIG.ASCII_SUB
     return re.sub (_invalid_re, rsub, string)
 
-###
-
-class ThreadFunction:
-    """Functions which are to be run in a background thread (for GUI
-    interaction) must be based on this structure.
-    Override <run> with the actual function code.
-    <self._message> can be set to a function to display messages (with
-    a single <str> argument).
-    """
-    def __init__(self):
-        self._message = None
-#
-    def run(self):
-        self._cc = 0
-        import time
-        for i in range(10):
-            if self._cc:
-                REPORT('ERROR', 'Interrupted')
-                break
-            time.sleep(1) # artificial time delay
-            self.message("Hello %d" % i)
-            REPORT('INFO', 'call %d' % i)
-        else:
-            REPORT('INFO', 'Completed')
-        return self._cc
-#
-    def message(self, msg):
-        if self._message:
-            self._message(msg)
-        else:
-            print(msg)
-#
-    def terminate(self):
-        """This can be called before the thread is started to check
-        whether it is possible to terminate the thread prematurely.
-        Return <True> if a terminate is possible, otherwise <False>.
-        """
-        self._cc = 1
-        return True     # indicate that there is a terminate function
-
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
@@ -386,3 +390,5 @@ if __name__ == '__main__':
     except DataError as e:
         print(" ... trapped:", e)
     print("\nCalendar for 2016:\n", Dates.get_calendar('2016'))
+
+#    print("\n\nCalendar for 2017:\n", Dates.migrate_calendar('2016'))
