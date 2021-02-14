@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-02-13
+core/interface_pupils.py - last updated 2021-02-14
 
 Controller/dispatcher for pupil management.
 
@@ -190,6 +190,15 @@ class Pupil_Editor:
 
 ###
 
+def migrate(repeat_pids):
+    """Create a pupil-data structure for the following year.
+    """
+    Pupil_Base.set_year(SCHOOLYEAR)
+    Pupil_Base.pupils.migrate(repeat_pids)
+    return True
+
+###
+
 def get_info():
     CALLBACK('pupil_SET_INFO',
             fields = [(f, t) for f, t in Pupils.FIELDS.items()],
@@ -204,3 +213,4 @@ FUNCTIONS['PUPIL_set_pupil'] = Pupil_Editor.set_pupil
 FUNCTIONS['PUPIL_new_pupil'] = Pupil_Editor.new_pupil
 FUNCTIONS['PUPIL_new_data'] = Pupil_Editor.new_data
 FUNCTIONS['PUPIL_remove'] = Pupil_Editor.remove
+FUNCTIONS['PUPILS_migrate'] = migrate

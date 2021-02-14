@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-01-05
+Last updated:  2021-02-14
 
 Configuration for grade handling.
 
@@ -230,8 +230,8 @@ for line in REPORT_GROUPS.splitlines():
     else:
         vals = val.strip()
     info[tag.strip()] = vals
-###########################
 
+###########################
 
 def all_streams(klass):
     """Return a list of streams available in the given class.
@@ -252,8 +252,8 @@ def all_streams(klass):
         # Förderklasse?
         c = int(klass[:2])
         if c >= 5:
-            return ['HS', 'FS']
-        return ['GS']
+            return ['FS', 'HS']
+        return ['FS']
 
 
 ### Grade handling

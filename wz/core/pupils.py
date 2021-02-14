@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-02-13
+core/pupils.py - last updated 2021-02-14
 
 Database access for reading pupil data.
 
@@ -95,28 +95,37 @@ class _PupilList(list):
 ###
 
 class Pupils(PupilsBase):
-    def __init__(self, schoolyear):
+    """Load the pupil data for the given year.
+    Normally it comes from the pupil-data file, but by passing <pupil_map>
+    it can be provided from elsewhere.
+    The pupil data is held as a mapping: {pid -> {field: value, ...}}.
+    The data is also sorted (alphabetically) into classes.
+    """
+    def __init__(self, schoolyear, pupil_map = None):
         super().__init__()
         self.schoolyear = schoolyear
         self.filepath = year_path(self.schoolyear, self.CLASS_TABLE)
-        with gzip.open(self.filepath + '.json.gz', 'rt',
-                encoding='UTF-8') as zipfile:
-            data = json.load(zipfile)
-        if data['SCHOOLYEAR'] != self.schoolyear:
-            raise PupilError(_SCHOOLYEAR_MISMATCH.format(
-                    filepath = self.filepath))
-        self._modified = data.get('__MODIFIED__')
-        for pdata in data['__PUPILS__']:
-            pid = pdata['PID']
-            try:
-                pd0 = self[pid]
-            except KeyError:
-                pass
-            else:
-                raise PupilError(_PID_DUPLICATE.format(pid = pid,
-                        p1 = self.name(pd0), c1 = pd0['CLASS'],
-                        p2 = self.name(pdata), c2 = pdata['CLASS']))
-            self[pid] = {f: pdata.get(f) or '' for f in self.FIELDS}
+        if pupil_map:
+            self.update(pupil_map)
+        else:
+            with gzip.open(self.filepath + '.json.gz', 'rt',
+                    encoding='UTF-8') as zipfile:
+                data = json.load(zipfile)
+            if data['SCHOOLYEAR'] != self.schoolyear:
+                raise PupilError(_SCHOOLYEAR_MISMATCH.format(
+                        filepath = self.filepath))
+            self._modified = data.get('__MODIFIED__')
+            for pdata in data['__PUPILS__']:
+                pid = pdata['PID']
+                try:
+                    pd0 = self[pid]
+                except KeyError:
+                    pass
+                else:
+                    raise PupilError(_PID_DUPLICATE.format(pid = pid,
+                            p1 = self.name(pd0), c1 = pd0['CLASS'],
+                            p2 = self.name(pdata), c2 = pdata['CLASS']))
+                self[pid] = {f: pdata.get(f) or '' for f in self.FIELDS}
         self.fill_classes()
 #
     def fill_classes(self):
@@ -419,6 +428,27 @@ class Pupils(PupilsBase):
         suffix = '.xlsx' if USE_XLSX else '.tsv'
         with open(filepath + suffix, 'wb') as fh:
             fh.write(bstream)
+#
+    def migrate(self, repeat_pids):
+        """Create a pupil-data structure for the following year.
+        """
+        nextyear = str(int(self.schoolyear) + 1)
+        day1 = Dates.day1(nextyear) # for filtering out pupils who have left
+        newpupils = {}
+        for pid, pdata in self.items():
+            # Filter out pupils who have left
+            exit_date = pdata['EXIT_D']
+            if exit_date and exit_date < day1:
+                continue
+            if pid in repeat_pids:
+                newpupils[pid] = pdata.copy()
+            else:
+                pd = self.year_step(pdata)
+                if pd:
+                    newpupils[pid] = pd
+        # Sort into classes and save
+        pupils = Pupils(nextyear, newpupils)
+        pupils.save()
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -445,6 +475,10 @@ if __name__ == '__main__':
     _year = '2016'
     pupils = Pupils(_year)
     print("\nCLASSES:", pupils.classes())
+
+    ### Migrate to next year
+    pupils.migrate([])
+    quit(0)
 
     ### Make a back-up table
     pupils.backup(os.path.join(DATA, 'testing', 'tmp',

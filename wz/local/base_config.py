@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-02-12
+Last updated:  2021-02-14
 
 General configuration items.
 
@@ -61,7 +61,7 @@ CALENDER_HEADER = \
 
 import os, glob
 
-from local.grade_config import GradeBase
+from local.grade_config import GradeBase, all_streams
 
 ###
 
@@ -204,6 +204,24 @@ class PupilsBase(dict):
             'LASTNAME': 'von|Meierhausen', 'FIRSTNAMES': 'Hans Herbert',
             'SEX': 'm'
         }
+#
+    @staticmethod
+    def year_step(pdata):
+        klass = pdata['CLASS']
+        stream = pdata['STREAM']
+        if klass < '12' or (klass == '12' and stream == 'Gym'):
+            # Progress to next class ...
+            kyear = class_year(klass)
+            knew = int(kyear) + 1
+            ksuffix = klass[2:]
+            klass = f'{knew:02}{ksuffix}'
+            pd = pdata.copy()
+            pd['CLASS'] = klass
+            streams = all_streams(klass)
+            if stream not in streams:
+                pd['STREAM'] = streams[0]
+            return pd
+        return None
 
 ###
 

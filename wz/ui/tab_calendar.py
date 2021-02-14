@@ -2,9 +2,9 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-02-13
+Last updated:  2021-02-14
 
-Calendar editor.
+Calendar editor. Also handles school-year migration and attendance lists.
 
 
 =+LICENCE=============================
@@ -126,9 +126,26 @@ class Calendar(TabPage):
 #
     def save(self):
         BACKEND('CALENDAR_save_calendar', text = self.edit.toPlainText())
+
+#*** School-year migration (starting a new school-year) ***#
+
+    def migrate(self):
+# Check whether the next year exists already. If so, it could be archived
+# before regeneration.
+# Maybe an archiving function would be useful anyway?
+# Maybe the migration function is only available for the latest year?
+
+# Copy current calendar and open in editor. Check core dates?
+# Migrate pupils:
+#TODO: Some way of easily allowing class repetitions?
+# A tree for 13 and 12-non-Gym?
+#   - all classes + 1.
+#   - streams: default from class 5(G) is "Gym", others (currently) empty.
+#   - 12(G/Gym) -> 13.
+#   - other 12 removed.
+# Copy subject lists.
+        print("TODO")
 #
-
-
 
 
 #TODO .............
