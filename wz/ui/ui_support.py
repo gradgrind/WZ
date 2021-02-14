@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-02-13
+Last updated:  2021-02-14
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -29,9 +29,9 @@ import sys, os, builtins, traceback
 
 from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
-        QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox#, QProgressBar
+        QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox
 from qtpy.QtGui import QMovie, QPixmap
-from qtpy.QtCore import Qt, QObject, QThread, Signal, Slot, QCoreApplication
+from qtpy.QtCore import Qt
 
 ### Messages
 _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
@@ -261,6 +261,65 @@ def TreeDialog(title, message, data, button = None):
         bbox.addWidget(xb)
     select.exec_()
     return select.result
+
+###
+
+def TreeMultiSelect(title, message, data, checked = False):
+    """A simple two-level tree widget as selection dialog.
+    Top level items may not be selected, they serve only as categories.
+    Any number of entries (atoms/leaves) may be selected.
+    The data is supplied as a multilevel list:
+        [[category1, [[val, display-val], ...]], [category2, ... ], ... ]
+    """
+    select = QDialog()
+    select.setWindowTitle(title)
+    layout = QVBoxLayout(select)
+    layout.addWidget(QLabel(message))
+    ### The tree widget
+    elements = []
+    tree = QTreeWidget()
+    layout.addWidget(tree)
+#?    tree.setColumnCount(1)
+    tree.setHeaderHidden(True)
+    # Enter the data
+    for category, dataline in data:
+        items = []
+        elements.append((category, items))
+        parent = QTreeWidgetItem(tree)
+        parent.setText(0, category)
+        parent.setFlags(parent.flags() | Qt.ItemIsTristate
+                | Qt.ItemIsUserCheckable)
+        for d in dataline:
+            child = QTreeWidgetItem(parent)
+            items.append((child, d))
+            child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
+            child.setText(0, d[1])
+            child.setCheckState(0, Qt.Checked if checked else Qt.Unchecked)
+    tree.expandAll()
+    select.resize(500, 300)
+    select.result = None
+    ### Now the buttons
+    layout.addWidget(HLine())
+    bbox = QHBoxLayout()
+    layout.addLayout(bbox)
+    bbox.addStretch(1)
+    cancel = QPushButton(_CANCEL)
+    cancel.clicked.connect(select.reject)
+    bbox.addWidget(cancel)
+    ok = QPushButton(_OK)
+    ok.setDefault(True)
+    ok.clicked.connect(select.accept)
+    bbox.addWidget(ok)
+    if select.exec_() == QDialog.Accepted:
+        categories = []
+        for k, items in elements:
+            # Filter the changes lists
+            dlist = [d[0] for child, d in items
+                    if child.checkState(0) == Qt.Checked]
+            categories.append((k, dlist))
+        return categories
+    else:
+        return None
 
 ###
 

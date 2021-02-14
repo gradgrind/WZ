@@ -40,7 +40,7 @@ _UPDATE_TABLE_TT = "Neue Schüler in die Tabelle aufnehmen"
 import os
 from qtpy.QtWidgets import QLabel, QTextEdit, QPushButton, \
         QHBoxLayout, QVBoxLayout
-from ui.ui_support import TabPage, VLine, HLine, KeySelect
+from ui.ui_support import TabPage, VLine, HLine, KeySelect, TreeMultiSelect
 
 class Calendar(TabPage):
     """Editor for the calendar file.
@@ -69,6 +69,12 @@ class Calendar(TabPage):
         cbox.addSpacing(30)
         cbox.addStretch(1)
 
+        ### Migration to next school-year
+        migrate_button = QPushButton('MIGRATE')
+        cbox.addWidget(migrate_button)
+        migrate_button.clicked.connect(self.migrate)
+
+        cbox.addStretch(1)
         ### Attendance tables
         cbox.addWidget(HLine())
         cbox.addWidget(QLabel('<b>%s</b>' % _ATTENDANCE))
@@ -145,6 +151,20 @@ class Calendar(TabPage):
 #   - other 12 removed.
 # Copy subject lists.
         print("TODO")
+        data = (
+            ('12', (
+                ('100', 'Alan Able'),
+                ('102', 'Betty Bot')
+            )),
+            ('13', (
+                ('090', 'Carly Clone'),
+                ('091', 'Danny Drone')
+            ))
+        )
+        print (TreeMultiSelect('TITLE', 'Select this or that',
+                data))
+
+
 #
 
 
