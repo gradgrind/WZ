@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-02-14
+Last updated:  2021-02-16
 
 Calendar editor. Also handles school-year migration and attendance lists.
 
@@ -35,6 +35,10 @@ _ATTENDANCE = "Anwesenheit"
 _GET_ATTENDANCE = "Tabelle erstellen"
 _UPDATE_TABLE = "Tabelle aktualisieren"
 _UPDATE_TABLE_TT = "Neue Schüler in die Tabelle aufnehmen"
+_REPEATERS_TITLE = "Wiederholer"
+_REPEATERS_SELECT = "Unten sind die Schüler, die am Ende des aktuellen" \
+        " Schuljahres die Schule verlassen sollten.\n\n" \
+        "Diejenigen, die das Jahr wiederholen werden, sollten markiert sein."
 
 #####################################################
 import os
@@ -97,6 +101,10 @@ class Calendar(TabPage):
 
 
 #
+    def year_changed(self):
+        self.enter()
+        return True
+#
     def enter(self):
         """Called when the tab is selected.
         """
@@ -136,51 +144,39 @@ class Calendar(TabPage):
 #*** School-year migration (starting a new school-year) ***#
 
     def migrate(self):
-# Check whether the next year exists already. If so, it could be archived
+        """Create basic data for the next school-year.
+        Pupils are moved to the next class.
+        Subjects are retained.
+        All year in the calendar are incremented.
+        """
+#TODO: Check whether the next year exists already. If so, it could be archived
 # before regeneration.
 # Maybe an archiving function would be useful anyway?
 # Maybe the migration function is only available for the latest year?
+        BACKEND('PUPILS_get_leavers')
+#
+    def SELECT_REPEATERS(self, klass_pupil_list):
+        # Migrate pupils, allowing for repetition of the final classes
+        pidlist = []
+        for klass, pids in TreeMultiSelect(_REPEATERS_TITLE,
+                _REPEATERS_SELECT, klass_pupil_list):
+            pidlist += pids
+        BACKEND('PUPILS_migrate', repeat_pids = pidlist)
+#
+#???
+        return
 
-# Copy current calendar and open in editor. Check core dates?
-# Migrate pupils:
-#TODO: Some way of easily allowing class repetitions?
-# A tree for 13 and 12-non-Gym?
-#   - all classes + 1.
-#   - streams: default from class 5(G) is "Gym", others (currently) empty.
-#   - 12(G/Gym) -> 13.
-#   - other 12 removed.
-# Copy subject lists.
-        print("TODO")
-        data = (
-            ('12', (
-                ('100', 'Alan Able'),
-                ('102', 'Betty Bot')
-            )),
-            ('13', (
-                ('090', 'Carly Clone'),
-                ('091', 'Danny Drone')
-            ))
-        )
-        print (TreeMultiSelect('TITLE', 'Select this or that',
-                data))
-
-
+        BACKEND('BASE_get_years')
+#TODO: also need to select the new year!
+        nextyear = str(int(ADMIN.current_year()) + 1)
+        ADMIN.set_year(nextyear)
+#THIS IS NOT WORKING!!!
 #
 
 
 #TODO .............
 
-#
-    def year_changed(self):
-        self.calendar_file = year_path(ADMIN.schoolyear, CALENDAR_FILE)
-        with open(self.calendar_file, encoding = 'utf-8') as fh:
-            text = fh.read()
-        self.edit.setPlainText(text)
 
-        pupils = Pupils(ADMIN.schoolyear)
-        self.class_select.set_items([(c, c)
-                for c in pupils.classes()])
-        self.class_select.trigger()
 #
     def check_saved(self):
         if self.pbSave.isEnabled() and QuestionDialog(
@@ -225,3 +221,4 @@ class Calendar(TabPage):
 tab_calendar = Calendar()
 TABS.append(tab_calendar)
 FUNCTIONS['calendar_SET_TEXT'] = tab_calendar.SET_TEXT
+FUNCTIONS['calendar_SELECT_REPEATERS'] = tab_calendar.SELECT_REPEATERS

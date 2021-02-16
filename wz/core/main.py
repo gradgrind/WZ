@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-02-13
+core/main.py - last updated 2021-02-16
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -161,24 +161,31 @@ builtins.FUNCTIONS = {}
 from core.base import Dates
 from local.base_config import print_schoolyear
 
-def get_years():
+
+def get_years(year = None):
     """Return (via callback) a list of available school-years and the
-    currently selected one. If no valid year is currently set, use the
+    currently selected one.
+    If <year> is given, try to use this as the current year.
+    Otherwise, if no valid year is currently set, use the
     current school-year, if there is data for it, otherwise the latest
     year for which there is data.
     The list also contains full display-names for the years (e.g.
     '2016 – 2017'):
         [[year, full-name], ...]
     """
+#TODO: !!! This is really messed up ...
     allyears = Dates.get_years()
-    try:
-        if SCHOOLYEAR not in allyears:
-            raise ValueError
-    except:
-        thisyear = Dates.get_schoolyear()
-        if thisyear not in allyears:
-            thisyear = allyears[0]
-        set_year(thisyear)
+    if year and year in allyears:
+        set_year(year)
+    else:
+        try:
+            if SCHOOLYEAR not in allyears:
+                raise ValueError
+        except:
+            thisyear = Dates.get_schoolyear()
+            if thisyear not in allyears:
+                thisyear = allyears[0]
+            set_year(thisyear)
     CALLBACK('base_SET_YEARS', years = [(y, print_schoolyear(y))
             for y in allyears], current = SCHOOLYEAR)
     return True

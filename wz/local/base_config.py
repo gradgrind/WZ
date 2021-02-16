@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-02-14
+Last updated:  2021-02-15
 
 General configuration items.
 
@@ -205,22 +205,33 @@ class PupilsBase(dict):
             'SEX': 'm'
         }
 #
-    @staticmethod
-    def year_step(pdata):
+    @classmethod
+    def year_step(cls, pdata):
         klass = pdata['CLASS']
         stream = pdata['STREAM']
-        if klass < '12' or (klass == '12' and stream == 'Gym'):
-            # Progress to next class ...
-            kyear = class_year(klass)
-            knew = int(kyear) + 1
-            ksuffix = klass[2:]
-            klass = f'{knew:02}{ksuffix}'
-            pd = pdata.copy()
-            pd['CLASS'] = klass
-            streams = all_streams(klass)
-            if stream not in streams:
-                pd['STREAM'] = streams[0]
-            return pd
+        leavers = cls.leaving_groups(klass)
+        if leavers == '*':
+            return None
+        if leavers and stream in leavers:
+            return None
+        # Progress to next class ...
+        kyear = class_year(klass)
+        knew = int(kyear) + 1
+        ksuffix = klass[2:]
+        klass = f'{knew:02}{ksuffix}'
+        pd = pdata.copy()
+        pd['CLASS'] = klass
+        streams = all_streams(klass)
+        if stream not in streams:
+            pd['STREAM'] = streams[0]
+        return pd
+#
+    @staticmethod
+    def leaving_groups(klass):
+        if klass > '12':
+            return '*'
+        if klass == '12':
+            return ('RS', 'HS')
         return None
 
 ###

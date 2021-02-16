@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-02-14
+core/pupils.py - last updated 2021-02-15
 
 Database access for reading pupil data.
 
@@ -449,6 +449,22 @@ class Pupils(PupilsBase):
         # Sort into classes and save
         pupils = Pupils(nextyear, newpupils)
         pupils.save()
+#
+    def final_year_pupils(self, klass):
+        """Return list of pupils in their final year.
+        """
+        streams = self.leaving_groups(klass)
+        if streams:
+            plist = []
+            if streams == '*':
+                _plist = self.class_pupils(klass)
+            else:
+                _plist = self.class_pupils(klass, *streams)
+            for pdata in _plist:
+                plist.append((pdata['PID'], self.name(pdata)))
+            return plist
+        else:
+            return None
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

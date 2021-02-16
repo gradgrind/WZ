@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-02-14
+core/interface_pupils.py - last updated 2021-02-16
 
 Controller/dispatcher for pupil management.
 
@@ -25,6 +25,7 @@ Copyright 2021 Michael Towers
 _BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
 _PID_EXISTS = "Schülerkennung {pid} existiert schon"
 
+from core.base import Dates
 from core.pupils import Pupils
 from local.grade_config import STREAMS
 
@@ -107,6 +108,7 @@ class Pupil_Editor:
     """
     @classmethod
     def enter(cls):
+        Pupil_Base.set_year(SCHOOLYEAR)
         cls._class_list = Pupil_Base.classes()
         cls._class_list.reverse()   # start with the highest classes
         klass = Pupil_Base.klass if Pupil_Base.klass in cls._class_list \
@@ -190,12 +192,29 @@ class Pupil_Editor:
 
 ###
 
+def get_leavers():
+    """Get class lists of final classes – so that individuals can be
+    selected to repeat a year.
+    """
+    classes = []
+    for klass in Pupil_Base.classes():
+        leavers = Pupil_Base.pupils.final_year_pupils(klass)
+        if leavers:
+            classes.append((klass, leavers))
+    CALLBACK('calendar_SELECT_REPEATERS', klass_pupil_list = classes)
+    return True
+#
 def migrate(repeat_pids):
     """Create a pupil-data structure for the following year.
     """
+    # Create a pupil-data structure for the following year.
     Pupil_Base.set_year(SCHOOLYEAR)
     Pupil_Base.pupils.migrate(repeat_pids)
-    return True
+#TODO: Copy the subject-data, as a "starting point" for the new year.
+    # Create a rough calendar for the new year.
+    Dates.migrate_calendar(SCHOOLYEAR)
+    # Set years, select new one
+    return FUNCTIONS['BASE_get_years'](str(int(SCHOOLYEAR) + 1))
 
 ###
 
@@ -213,4 +232,5 @@ FUNCTIONS['PUPIL_set_pupil'] = Pupil_Editor.set_pupil
 FUNCTIONS['PUPIL_new_pupil'] = Pupil_Editor.new_pupil
 FUNCTIONS['PUPIL_new_data'] = Pupil_Editor.new_data
 FUNCTIONS['PUPIL_remove'] = Pupil_Editor.remove
+FUNCTIONS['PUPILS_get_leavers'] = get_leavers
 FUNCTIONS['PUPILS_migrate'] = migrate

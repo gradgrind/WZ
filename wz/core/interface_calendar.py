@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_calendar.py - last updated 2021-02-13
+core/interface_calendar.py - last updated 2021-02-16
 
 Controller/dispatcher for management of calendar-related data.
 
@@ -44,14 +44,6 @@ def save_calendar(text):
     return True
 
 FUNCTIONS['CALENDAR_save_calendar'] = save_calendar
-
-###
-
-def migrate_calendar():
-    CORE.Dates.migrate_calendar(SCHOOLYEAR)
-    return True
-
-FUNCTIONS['CALENDER_migrate_calendar'] = migrate_calendar
 
 ###
 

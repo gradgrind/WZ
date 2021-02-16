@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-02-13
+Last updated:  2021-02-16
 
 Administration interface.
 
@@ -254,12 +254,10 @@ class _Backend(QDialog):
         before the time-out, the dialog will not be popped up at all.
         A busy icon/title will indicate in the modal dialog that the
         command is still running.
+        New commands can arise via callbacks while one command is still
+        running. These are placed in a queue and executed one after the
+        other.
         """
-        self.cb_lines = []  # remember all lines from back-end
-        parms['__NAME__'] = fn
-        msg = json.dumps(parms, ensure_ascii = False) + '\n'
-#TODO ---
-        print('!!!SEND:', msg, flush = True)
         if not self.process:
             # Start process
             self.process = QProcess()
@@ -276,34 +274,53 @@ class _Backend(QDialog):
             self._complete = True
         if not self._complete:
             self.backend_queue.append((fn, parms))
+#TODO ---
+            print("$$$queue:",  self.backend_queue)
             return
-        self.text.clear()
-        end_time = QDateTime.currentMSecsSinceEpoch() + 500
-        self.process.write(msg.encode('utf-8'))
-        # Remember the highest-level message (none, info, warning, error, trap).
-        self._level = 0
-        self._complete = False  # set to <True> when the command finishes
-        self._ok.setEnabled(False)
-        self._cancel.show()
-        self._active = False    # set to <True> when the pop-up is shown
         while True:
-            if self.process:
-                self.process.waitForReadyRead(100)
+            self.cb_lines = []  # remember all lines from back-end
+            parms['__NAME__'] = fn
+            msg = json.dumps(parms, ensure_ascii = False) + '\n'
+#TODO ---
+            print('!!!SEND:', msg, flush = True)
+            self.text.clear()
+            end_time = QDateTime.currentMSecsSinceEpoch() + 500
+            self.process.write(msg.encode('utf-8'))
+            # Remember the highest-level message (none, info, warning,
+            # error, trap).
+            self._level = 0
+            self._complete = False  # set to <True> when the command finishes
+            self._ok.setEnabled(False)
+            self._cancel.show()
+            self._active = False    # set to <True> when the pop-up is shown
+            while True:
+                if self.process:
+                    self.process.waitForReadyRead(100)
+                else:
+                    SHOW_ERROR("BIG PROBLEM: Process failed ...\n"
+                            + '\n'.join(self.cb_lines))
+                    return
+                # The available input is read via a signal handler
+                # (<handle_in>), not here.
+                if self._level > 0 or \
+                        QDateTime.currentMSecsSinceEpoch() > end_time:
+                    # Show modal dialog
+                    self.become_active()
+                    while not self._complete:
+                        self.process.waitForReadyRead(100)
+                    break
+                if self._complete:
+                    break
+            # Handle queued command
+            if self.backend_queue:
+                fn, parms = self.backend_queue.pop(0)
             else:
-                SHOW_ERROR("BIG PROBLEM: Process failed ...\n"
-                        + '\n'.join(self.cb_lines))
-            # The available input is read via a signal handler (<handle_in>),
-            # not here.
-            if self._complete and self._level == 0:
-                # Completed with no significant messages to display
-                break
-            if QDateTime.currentMSecsSinceEpoch() > end_time:
-                # Show modal dialog
-                self.become_active()
                 break
 #
     def become_active(self):
         if self._complete:
+            if self._level == 0:
+                return
             self.set_level()
         else:
             self._pixmap.setMovie(self._busy)
@@ -328,13 +345,6 @@ class _Backend(QDialog):
                 self._busy.stop()
                 self.set_level()
         self._complete = True
-        if self.backend_queue:
-            # Process remaining events before starting the new command
-            QTimer.singleShot(0, self._next_cmd)
-#
-    def _next_cmd(self):
-        cmd, parms = self.backend_queue.pop(0)
-        self.command(cmd, **parms)
 #
     def process_finished(self):
         if not self._complete:
@@ -418,6 +428,9 @@ class TabWidget(QWidget):
             return w.leave()
         return True
 #
+    def current_page(self):
+        return self._stack.currentWidget()
+##
 class TabButton(QPushButton):
     """A custom class to provide special buttons for the tab switches.
     """
@@ -494,13 +507,24 @@ class Admin(QWidget):
         chosenyear = self.year_select.selected()
         if chosenyear != current:
             self.year_select.reset(current)
+        self.tab_year_change(current)
+#
+    def tab_year_change(self, year):
+        tabpage = self.tab_widget.current_page()
+        return tabpage.year_changed()
 #
     def year_changed(self, schoolyear):
-        tabpage = self._stack.currentWidget()
-        if tabpage.year_changed():
+        if self.tab_year_change(schoolyear):
             BACKEND('BASE_set_year', year = schoolyear)
             return True
         return False
+#
+    def current_year(self):
+        return self.year_select.selected()
+#
+#    def set_year(self, year):
+#        self.year_select.reset(year)
+#        self.year_select.trigger()
 
 builtins.ADMIN = Admin()
 FUNCTIONS['base_SET_YEARS'] = ADMIN.SET_YEARS

@@ -167,8 +167,10 @@ class PupilEdit(TabPage):
 #TODO
     def year_changed(self):
         if not self.clear():
+            print("§§§ PUPIL CLEAR FAILED")
             return False
 # I would need a second year to test this!
+        print("§§§ PUPIL CLEAR OK")
         self.enter()
         return True
 #
