@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-02-15
+core/pupils.py - last updated 2021-02-18
 
-Database access for reading pupil data.
+Manage pupil data.
 
 ==============================
 Copyright 2021 Michael Towers
@@ -390,13 +390,8 @@ class Pupils(PupilsBase):
             if not os.path.isfile(bpath):
                 shutil.copyfile(fpath, bpath)
         pdlist = []
-        for klass in self.classes():
-            for pd in self.class_pupils(klass):
-                # It's probably most convenient to save all fields,
-                # e.g. in case the json is edited externally.
-                # The space saving through filtering is minimal.
-                #pd = {k: v for k, v in pd.items() if v}
-                pdlist.append(pd)
+        for klass in sorted(self._klasses):
+            pdlist.append(self._klasses[klass])
         data = {
             'TITLE': 'Pupil Data',
             'SCHOOLYEAR': self.schoolyear,
