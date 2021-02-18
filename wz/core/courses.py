@@ -125,6 +125,11 @@ class Subjects(SubjectsBase):
             self._choices = data.get('__CHOICES__')
             self._klasses = data.get('__SUBJECTS__')
 #
+    def classes(self):
+        """Return a sorted list of class names.
+        """
+        return sorted(self._klasses)
+#
     def class_subjects(self, klass):
         """Read the course data for the given school-class.
         Return a <_SubjectList> instance, a list of <SubjectData> tuples,
@@ -188,6 +193,7 @@ class Subjects(SubjectsBase):
             table.append(fdata)
         self._klasses[klass] = table
         self.save()
+        return klass
 #
     def grade_subjects(self, group):
         """Return a list of <GradeSubject> named-tuples for the given group.

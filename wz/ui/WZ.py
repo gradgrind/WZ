@@ -271,13 +271,17 @@ class _Backend(QDialog):
             if DATADIR:
                 exec_params.append(DATADIR)
             self.process.start(sys.executable, exec_params)
-            self._complete = True
-        if not self._complete:
+            self._complete = True       # completion set by back-end
+            # Flag used to wait for end of previous command
+            self.cmd_running = False
+        if self.cmd_running:
             self.backend_queue.append((fn, parms))
 #TODO ---
             print("$$$queue:",  self.backend_queue)
             return
+        self.cmd_running = True
         while True:
+#TODO: What is the purpose of this loop?!
             self.cb_lines = []  # remember all lines from back-end
             parms['__NAME__'] = fn
             msg = json.dumps(parms, ensure_ascii = False) + '\n'
@@ -293,18 +297,22 @@ class _Backend(QDialog):
             self._ok.setEnabled(False)
             self._cancel.show()
             self._active = False    # set to <True> when the pop-up is shown
+#TODO: And what is the purpose of this loop?!
             while True:
+                self.cmd_running = True
                 if self.process:
                     self.process.waitForReadyRead(100)
                 else:
                     SHOW_ERROR("BIG PROBLEM: Process failed ...\n"
                             + '\n'.join(self.cb_lines))
                     return
+# ... to check whether/when to pop up the dialog
                 # The available input is read via a signal handler
                 # (<handle_in>), not here.
                 if self._level > 0 or \
                         QDateTime.currentMSecsSinceEpoch() > end_time:
                     # Show modal dialog
+#TODO: can be called once before DONE and then once afterwards!
                     self.become_active()
                     while not self._complete:
                         self.process.waitForReadyRead(100)
@@ -316,6 +324,7 @@ class _Backend(QDialog):
                 fn, parms = self.backend_queue.pop(0)
             else:
                 break
+        self.cmd_running = False    # present command finished
 #
     def become_active(self):
         if self._complete:

@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-02-13
+Last updated:  2021-02-18
 
 Subject table management.
 
@@ -29,38 +29,69 @@ Copyright 2021 Michael Towers
 _UPDATE_SUBJECTS = "Fachliste aktualisieren"
 _UPDATE_SUBJECTS_TEXT = "Die Fachliste für eine Klasse kann von einer" \
         " Tabelle (xlsx oder ods) aktualisiert werden.\nDiese Tabelle" \
-        " muss die entsprechende Struktur aufweisen."
-_UPDATE_SUBJECTS_TABLE = "Tabellendatei wählen"
+        " muss die entsprechende Struktur aufweisen." \
+        "\n\nDie Fächerwahl-Tabelle für eine Klasse kann als xlsx-Datei" \
+        " \"exportiert\" werden.\n" \
+        "Eine solche Tabelle kann auch \"importiert\" werden, um die" \
+        " Daten für diese Klasse zu aktualisieren."
+_UPDATE_SUBJECTS_TABLE = "Fachtabelle laden"
+_MAKE_CHOICE_TABLE = "Fach-Wahl-Tabelle erstellen"
+_UPDATE_CHOICE_TABLE = "Fach-Wahl-Tabelle laden"
+_SELECT_CLASS_TITLE = "Klasse wählen"
+_SELECT_CLASS = "Klicken Sie auf die Klasse, für die eine" \
+        " Fächerwahltabelle erstellt werden soll."
 
 _FILEOPEN = "Datei öffnen"
 _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
 
 #####################################################
 import os
-from qtpy.QtWidgets import QLabel, QTextEdit, QPushButton, QFileDialog
-from ui.ui_support import TabPage
+from qtpy.QtWidgets import QLabel, QTextEdit, QHBoxLayout, QVBoxLayout, \
+        QPushButton, QFileDialog
+from ui.ui_support import TabPage, VLine, ListSelect
 
 class Subjects(TabPage):
-    """Update the subjects list for a class from a table (ods or xlsx).
+    """Update (import) the subjects list for a class from a table (ods
+    or xlsx).
+    Export (xlsx) and import (ods or xlsx) the "choice" table for a class.
     """
     def __init__(self):
         super().__init__(_UPDATE_SUBJECTS)
-        l = QLabel(_UPDATE_SUBJECTS_TEXT)
-        l.setWordWrap(True)
-        self.vbox.addWidget(l)
-        p = QPushButton(_UPDATE_SUBJECTS_TABLE)
-        self.vbox.addWidget(p)
-        p.clicked.connect(self.update)
-        self.output = QTextEdit()
-        self.vbox.addWidget(self.output)
+        topbox = QHBoxLayout()
+        self.vbox.addLayout(topbox)
+
+        #*********** The "main" widget ***********
+        display = QTextEdit()
+        display.setAcceptRichText(False)
+        display.setReadOnly(True)
+        topbox.addWidget(display)
+        display.setPlainText(_UPDATE_SUBJECTS_TEXT)
+        topbox.addWidget(VLine())
+
+        cbox = QVBoxLayout()
+        topbox.addLayout(cbox)
+
+        pb_ust = QPushButton(_UPDATE_SUBJECTS_TABLE)
+        cbox.addWidget(pb_ust)
+        pb_ust.clicked.connect(self.update_subjects)
+        cbox.addSpacing(30)
+#TODO: need to select the class (one for which there are subjects ...)
+        pb_mct = QPushButton(_MAKE_CHOICE_TABLE)
+        cbox.addWidget(pb_mct)
+        pb_mct.clicked.connect(self.choice_table)
+        pb_uct = QPushButton(_UPDATE_CHOICE_TABLE)
+        cbox.addWidget(pb_uct)
+        pb_uct.clicked.connect(self.update_choices)
+
+        cbox.addStretch(1)
+
 #
     def leave(self):
         """Called when the tab is deselected.
         """
-        self.output.clear()
         return True
 #
-    def update(self):
+    def update_subjects(self):
         dir0 = ADMIN._loaddir or os.path.expanduser('~')
         fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
                 dir0, _TABLE_FILE)[0]
@@ -68,6 +99,20 @@ class Subjects(TabPage):
             return
         ADMIN.set_loaddir(os.path.dirname(fpath))
         cc = BACKEND('SUBJECT_table_update', filepath = fpath)
+#
+    def update_choices(self):
+        SHOW_ERROR("TODO: update_choices")
+#
+#TODO: Would it be better to have a selected class permanently visible?
+    def choice_table(self):
+        BACKEND('SUBJECT_select_choice_class')
+#
+    def select_choice_table(self, classes):
+        c = ListSelect(_SELECT_CLASS_TITLE, _SELECT_CLASS, classes)
+        if c:
+            BACKEND('SUBJECT_make_choice_table', klass = c)
+
 
 tab_subjects = Subjects()
 TABS.append(tab_subjects)
+FUNCTIONS['subjects_SELECT_CHOICE_TABLE'] = tab_subjects.select_choice_table

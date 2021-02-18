@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-02-14
+Last updated:  2021-02-18
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -29,7 +29,8 @@ import sys, os, builtins, traceback
 
 from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
-        QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox
+        QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox, \
+        QListWidget
 from qtpy.QtGui import QMovie, QPixmap
 from qtpy.QtCore import Qt
 
@@ -209,6 +210,53 @@ class TabPage(QWidget):
 #
     def year_changed(self):
         return True
+
+###
+
+def ListSelect(title, message, data, button = None):
+    """A simple list widget as selection dialog.
+    <data> is a list of (key, display-text) pairs.
+    Selection is by clicking or keyboard select and return.
+    Can take additional buttons ...?
+    """
+    select = QDialog()
+    select.setWindowTitle(title)
+#-
+    def select_item(qlwi):
+        if select.result == None:
+            i = l.row(qlwi)
+            select.result = data[i][0]
+            select.accept()
+#-
+    def xb_clicked():
+        select.result = (None, button)
+        select.accept()
+#-
+    select.result = None
+    layout = QVBoxLayout(select)
+    layout.addWidget(QLabel(message))
+    l = QListWidget()
+    l.itemActivated.connect(select_item)
+    l.itemClicked.connect(select_item)
+    layout.addWidget(l)
+    for k, d in data:
+        l.addItem(d)
+    select.resize(300, 400)
+    # Now the buttons
+    layout.addWidget(HLine())
+    bbox = QHBoxLayout()
+    layout.addLayout(bbox)
+    bbox.addStretch(1)
+    cancel = QPushButton(_CANCEL)
+    cancel.setDefault(True)
+    cancel.clicked.connect(select.reject)
+    bbox.addWidget(cancel)
+    if button:
+        xb = QPushButton(button)
+        xb.clicked.connect(xb_clicked)
+        bbox.addWidget(xb)
+    select.exec_()
+    return select.result
 
 ###
 

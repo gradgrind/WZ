@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_subjects.py - last updated 2021-02-08
+core/interface_subjects.py - last updated 2021-02-18
 
 Controller/dispatcher for subjects management.
 
@@ -25,12 +25,28 @@ Copyright 2021 Michael Towers
 _SUBJECTS_CLASS = " ... Tabelle für Klasse {klass} aktualisiert"
 
 from core.courses import Subjects
+from local.base_config import print_class
+
+#TODO: Would it be better with a cache, like for the pupils (Pupil_Base)?
 
 def update_subjects(filepath):
-        subjects = Subjects(SCHOOLYEAR)
-        srctable = subjects.read_source_table(filepath)
-        opath = subjects.save_table(srctable)
-        REPORT('INFO', _SUBJECTS_CLASS.format(klass = srctable.klass))
-        return True
+    subjects = Subjects(SCHOOLYEAR)
+    klass = subjects.import_source_table(filepath)
+    REPORT('INFO', _SUBJECTS_CLASS.format(klass = klass))
+    return True
+#
+def select_choice_class():
+    subjects = Subjects(SCHOOLYEAR)
+    clist = [(c, subjects.CLASS + ' ' + print_class(c))
+            for c in subjects.classes()]
+    CALLBACK('subjects_SELECT_CHOICE_TABLE', classes = clist)
+    return True
+#
+def make_choice_table(klass):
+    REPORT('INFO', "TODO: make_choice_table")
+    return True
+
 
 FUNCTIONS['SUBJECT_table_update'] = update_subjects
+FUNCTIONS['SUBJECT_select_choice_class'] = select_choice_class
+FUNCTIONS['SUBJECT_make_choice_table'] = make_choice_table
