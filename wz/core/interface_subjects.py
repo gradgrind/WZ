@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_subjects.py - last updated 2021-02-18
+core/interface_subjects.py - last updated 2021-02-19
 
 Controller/dispatcher for subjects management.
 
@@ -23,6 +23,8 @@ Copyright 2021 Michael Towers
 
 ### Messages
 _SUBJECTS_CLASS = " ... Tabelle für Klasse {klass} aktualisiert"
+_CHOICES_SAVED = "Fach-Wahl-Tabelle für Klasse {klass} gespeichert" \
+        " als:\n  {fpath}"
 
 from core.courses import Subjects
 from local.base_config import print_class
@@ -42,8 +44,12 @@ def select_choice_class():
     CALLBACK('subjects_SELECT_CHOICE_TABLE', classes = clist)
     return True
 #
-def make_choice_table(klass):
-    REPORT('INFO', "TODO: make_choice_table")
+def make_choice_table(klass, filepath):
+    subjects = Subjects(SCHOOLYEAR)
+    xlsx_bytes = subjects.make_choice_table(klass)
+    with open(filepath, 'wb') as fh:
+        fh.write(xlsx_bytes)
+    REPORT('INFO', _CHOICES_SAVED.format(klass = klass, fpath = filepath))
     return True
 
 

@@ -2,7 +2,7 @@
 """
 ui/tab_pupils_update.py
 
-Last updated:  2021-02-13
+Last updated:  2021-02-19
 
 Pupil table management: update from master table.
 
@@ -46,9 +46,9 @@ _DELTA_LEN_MAX = 80
 
 import os
 from qtpy.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, \
-        QPushButton, QFileDialog
+        QPushButton
 from qtpy.QtCore import Qt
-from ui.ui_support import TabPage
+from ui.ui_support import TabPage, openDialog
 
 ##
 
@@ -98,12 +98,9 @@ class UpdatePupils(TabPage):
         if review:
             BACKEND('PUPIL_table_delta2')
         else:
-            dir0 = ADMIN._loaddir or os.path.expanduser('~')
-            fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
-                    dir0, _TABLE_FILE)[0]
+            fpath = openDialog(_TABLE_FILE)
             if not fpath:
                 return
-            ADMIN.set_loaddir(os.path.dirname(fpath))
             # Ask for the changes
             BACKEND('PUPIL_table_delta', filepath = fpath)
 #

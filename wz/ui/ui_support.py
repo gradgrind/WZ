@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-02-18
+Last updated:  2021-02-19
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -30,7 +30,7 @@ import sys, os, builtins, traceback
 from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
         QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox, \
-        QListWidget
+        QListWidget, QFileDialog
 from qtpy.QtGui import QMovie, QPixmap
 from qtpy.QtCore import Qt
 
@@ -44,6 +44,9 @@ _OK = "OK"
 _INFO = "Mitteilung"
 _WARNING = "Warnung"
 _ERROR = "Fehler"
+
+_FILEOPEN = "Datei öffnen"
+_FILESAVE = "Datei speichern"
 
 ###
 
@@ -382,3 +385,21 @@ builtins.SHOW_WARNING = _popupWarn
 def _popupError(message):
      QMessageBox.critical(None, _ERROR, message)
 builtins.SHOW_ERROR = _popupError
+
+### File Dialogs
+
+def openDialog(filetype):
+    dir0 = ADMIN._loaddir or os.path.expanduser('~')
+    fpath = QFileDialog.getOpenFileName(ADMIN, _FILEOPEN,
+            dir0, filetype)[0]
+    if fpath:
+        ADMIN.set_loaddir(os.path.dirname(fpath))
+    return fpath
+
+def saveDialog(filetype, filename):
+    dir0 = ADMIN._savedir or os.path.expanduser('~')
+    fpath = QFileDialog.getSaveFileName(ADMIN, _FILESAVE,
+            os.path.join(dir0, filename), filetype)[0]
+    if fpath:
+        ADMIN.set_savedir(os.path.dirname(fpath))
+    return fpath

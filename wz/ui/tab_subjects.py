@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-02-18
+Last updated:  2021-02-19
 
 Subject table management.
 
@@ -41,14 +41,16 @@ _SELECT_CLASS_TITLE = "Klasse wählen"
 _SELECT_CLASS = "Klicken Sie auf die Klasse, für die eine" \
         " Fächerwahltabelle erstellt werden soll."
 
-_FILEOPEN = "Datei öffnen"
+_SUBJECT_CHOICE_FILE = 'Fachwahl_{klass}.xlsx'
 _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
+_EXCEL_FILE = "Excel-Tabelle (*.xlsx)"
 
 #####################################################
+
 import os
 from qtpy.QtWidgets import QLabel, QTextEdit, QHBoxLayout, QVBoxLayout, \
-        QPushButton, QFileDialog
-from ui.ui_support import TabPage, VLine, ListSelect
+        QPushButton
+from ui.ui_support import TabPage, VLine, ListSelect, openDialog, saveDialog
 
 class Subjects(TabPage):
     """Update (import) the subjects list for a class from a table (ods
@@ -75,7 +77,6 @@ class Subjects(TabPage):
         cbox.addWidget(pb_ust)
         pb_ust.clicked.connect(self.update_subjects)
         cbox.addSpacing(30)
-#TODO: need to select the class (one for which there are subjects ...)
         pb_mct = QPushButton(_MAKE_CHOICE_TABLE)
         cbox.addWidget(pb_mct)
         pb_mct.clicked.connect(self.choice_table)
@@ -92,12 +93,9 @@ class Subjects(TabPage):
         return True
 #
     def update_subjects(self):
-        dir0 = ADMIN._loaddir or os.path.expanduser('~')
-        fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
-                dir0, _TABLE_FILE)[0]
+        fpath = openDialog(_TABLE_FILE)
         if not fpath:
             return
-        ADMIN.set_loaddir(os.path.dirname(fpath))
         cc = BACKEND('SUBJECT_table_update', filepath = fpath)
 #
     def update_choices(self):
@@ -110,7 +108,11 @@ class Subjects(TabPage):
     def select_choice_table(self, classes):
         c = ListSelect(_SELECT_CLASS_TITLE, _SELECT_CLASS, classes)
         if c:
-            BACKEND('SUBJECT_make_choice_table', klass = c)
+            fpath = saveDialog(_EXCEL_FILE,
+                    _SUBJECT_CHOICE_FILE.format(klass = c))
+            if fpath:
+                BACKEND('SUBJECT_make_choice_table', klass = c,
+                        filepath = fpath)
 
 
 tab_subjects = Subjects()

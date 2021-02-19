@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-02-18
+core/courses.py - last updated 2021-02-19
 
 Manage course/subject data.
 
@@ -356,8 +356,9 @@ class Subjects(SubjectsBase):
         for row in dbtable:
             pid = row[0]
             if pid and pid != '$':
-                self._choices[pid] = [sid
-                        for sid, col in sid2col if row[col]]
+                clist = [sid for sid, col in sid2col if row[col]]
+                if clist:
+                    self._choices[pid] = clist
         self.save()
 #
     def make_choice_table(self, klass):
@@ -407,7 +408,7 @@ class Subjects(SubjectsBase):
             table.write(row, 1, Pupils.name(pdata))
             table.write(row, 2, pdata['STREAM'])
             # Get saved choices
-            pchoice = self._choices[pid]
+            pchoice = self.choices(pid)
             for sid, col in sidcol:
                 if sid in pchoice:
                     table.write(row, col, UNCHOSEN)

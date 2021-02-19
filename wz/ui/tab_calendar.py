@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-02-16
+Last updated:  2021-02-19
 
 Calendar editor. Also handles school-year migration and attendance lists.
 
@@ -40,11 +40,16 @@ _REPEATERS_SELECT = "Unten sind die Schüler, die am Ende des aktuellen" \
         " Schuljahres die Schule verlassen sollten.\n\n" \
         "Diejenigen, die das Jahr wiederholen werden, sollten markiert sein."
 
+#_TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
+#_EXCEL_FILE = "Excel-Tabelle (*.xlsx)"
+
 #####################################################
+
 import os
 from qtpy.QtWidgets import QLabel, QTextEdit, QPushButton, \
         QHBoxLayout, QVBoxLayout
-from ui.ui_support import TabPage, VLine, HLine, KeySelect, TreeMultiSelect
+from ui.ui_support import TabPage, VLine, HLine, KeySelect, \
+        TreeMultiSelect#, openDialog, saveDialog
 
 class Calendar(TabPage):
     """Editor for the calendar file.
@@ -192,11 +197,8 @@ class Calendar(TabPage):
         # Get the path to which the file should be saved
         filename = ATTENDANCE_FILE.format(klass = self.klass,
                 year = ADMIN.schoolyear)
-        dir0 = ADMIN._savedir or os.path.expanduser('~')
-        fpath = QFileDialog.getSaveFileName(self, _FILESAVE,
-                os.path.join(dir0, filename + '.xlsx'), _EXCEL_FILE)[0]
+        fpath = saveDialog(_EXCEL_FILE, filename + '.xlsx')
         if fpath:
-            ADMIN.set_savedir(os.path.dirname(fpath))
             fn = _MakeAttendanceTable(self.klass, fpath)
             REPORT('RUN', runme = fn)
 #
@@ -206,16 +208,10 @@ class Calendar(TabPage):
         with a '_bak' ending.
         """
         # Get the path to the old file
-        dir0 = ADMIN._loaddir or os.path.expanduser('~')
-        fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
-                dir0, _TABLE_FILE)[0]
+        fpath = openDialog(_TABLE_FILE)
         if fpath:
-            ADMIN.set_loaddir(os.path.dirname(fpath))
             fn = _UpdateAttendanceTable(self.klass, fpath)
             REPORT('RUN', runme = fn)
-
-
-
 
 
 tab_calendar = Calendar()

@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-02-16
+Last updated:  2021-02-19
 
 General configuration items.
 
@@ -121,10 +121,6 @@ class SubjectsBase:
     # The path to the course data for a school-year:
     COURSE_TABLE = 'Klassen/Kurse'
 #TODO: deprecated ...
-    # The path to the class tables. This must end with '_{klass}' for
-    # determining the class.
-    TABLE_NAME = 'Klassen/Fachlisten/KLASSE_{klass}'    # subject table
-    CHOICE_NAME = 'Klassen/Fachwahl/WAHL_{klass}'       # choice table
 #
     CHOICE_TEMPLATE = 'Fachwahl'
 #

@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-02-16
+Last updated:  2021-02-19
 
 Administration interface.
 
@@ -79,7 +79,7 @@ if __name__ == '__main__':
 
 from qtpy.QtWidgets import QWidget, QDialog, QFrame, QStackedWidget, \
     QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, \
-    QPushButton, QButtonGroup, QFileDialog
+    QPushButton, QButtonGroup
 from qtpy.QtCore import Qt, QDateTime, QProcess, QTimer
 from qtpy.QtGui import QMovie, QPixmap, QColor
 
@@ -261,18 +261,19 @@ class _Backend(QDialog):
         if not self.process:
             # Start process
             self.process = QProcess()
+            # It is probably better to have separate channels, so that
+            # back-end failures can be reported properly:
             #self.process.setProcessChannelMode(QProcess.MergedChannels)
             #self.process.readyRead.connect(self.handle_in)
             self.process.readyReadStandardOutput.connect(self.handle_in)
             self.process.readyReadStandardError.connect(self.error_in)
-            #self.process.stateChanged.connect(self.handle_state)
             self.process.finished.connect(self.process_finished)
             exec_params = [os.path.join(APPDIR, 'core', 'main.py')]
             if DATADIR:
                 exec_params.append(DATADIR)
             self.process.start(sys.executable, exec_params)
             self._complete = True       # completion set by back-end
-            # Flag used to wait for end of previous command
+            # Flag used to wait for end of previous command:
             self.cmd_running = False
         if self.cmd_running:
             self.backend_queue.append((fn, parms))
@@ -281,7 +282,7 @@ class _Backend(QDialog):
             return
         self.cmd_running = True
         while True:
-#TODO: What is the purpose of this loop?!
+            # Loop through queued commands
             self.cb_lines = []  # remember all lines from back-end
             parms['__NAME__'] = fn
             msg = json.dumps(parms, ensure_ascii = False) + '\n'
@@ -297,8 +298,10 @@ class _Backend(QDialog):
             self._ok.setEnabled(False)
             self._cancel.show()
             self._active = False    # set to <True> when the pop-up is shown
-#TODO: And what is the purpose of this loop?!
             while True:
+                # Loop to handle input from back-end until display-info
+                # pop-up is shown (when something "important" to report
+                # is available – or until the delay-timeout is reached).
                 self.cmd_running = True
                 if self.process:
                     self.process.waitForReadyRead(100)
@@ -306,18 +309,21 @@ class _Backend(QDialog):
                     SHOW_ERROR("BIG PROBLEM: Process failed ...\n"
                             + '\n'.join(self.cb_lines))
                     return
-# ... to check whether/when to pop up the dialog
                 # The available input is read via a signal handler
                 # (<handle_in>), not here.
+                # Check whether/when to pop up the dialog:
                 if self._level > 0 or \
                         QDateTime.currentMSecsSinceEpoch() > end_time:
                     # Show modal dialog
-#TODO: can be called once before DONE and then once afterwards!
                     self.become_active()
+                    # The pop-up can be cancelled before the back-end
+                    # is finished:
                     while not self._complete:
                         self.process.waitForReadyRead(100)
                     break
-                if self._complete:
+                elif self._complete:
+                    # The back-end can complete quickly without anything
+                    # to report.
                     break
             # Handle queued command
             if self.backend_queue:
