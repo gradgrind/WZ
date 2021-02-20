@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-02-19
+core/courses.py - last updated 2021-02-20
 
 Manage course/subject data.
 
@@ -360,6 +360,7 @@ class Subjects(SubjectsBase):
                 if clist:
                     self._choices[pid] = clist
         self.save()
+        return klass
 #
     def make_choice_table(self, klass):
         """Build a basic pupil/subject table for course choices:

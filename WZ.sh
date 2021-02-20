@@ -2,6 +2,7 @@
 
 thisfile=$( realpath "$0"  )
 thisdir=$( dirname "$thisfile" )
-cd "$thisdir/wz/gui"
-"$thisdir/venv/bin/python" "$thisdir/wz/gui/WZ.py" "$thisdir/DATA"
+cd "$thisdir/wz/ui"
+#"$thisdir/venv/bin/python" "$thisdir/wz/ui/WZ.py" "$thisdir/DATA"
+"$thisdir/venv/bin/python" "WZ.py" "$thisdir/DATA"
 

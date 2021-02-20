@@ -95,15 +95,13 @@ class Subjects(TabPage):
         fpath = openDialog(_TABLE_FILE)
         if not fpath:
             return
-        cc = BACKEND('SUBJECT_table_update', filepath = fpath)
+        BACKEND('SUBJECT_table_update', filepath = fpath)
 #
     def update_choices(self):
         fpath = openDialog(_TABLE_FILE)
         if not fpath:
             return
-#TODO: klass?
         BACKEND('SUBJECT_update_choice_table', filepath = fpath)
-        SHOW_ERROR("TODO: update_choices")
 #
 #TODO: Would it be better to have a selected class permanently visible?
     def choice_table(self):
