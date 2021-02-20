@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-02-19
+Last updated:  2021-02-20
 
 Administration interface.
 
@@ -522,14 +522,14 @@ class Admin(QWidget):
         chosenyear = self.year_select.selected()
         if chosenyear != current:
             self.year_select.reset(current)
-        self.tab_year_change(current)
 #
-    def tab_year_change(self, year):
+    def YEAR_CHANGED(self):
         tabpage = self.tab_widget.current_page()
-        return tabpage.year_changed()
+        tabpage.enter()
 #
     def year_changed(self, schoolyear):
-        if self.tab_year_change(schoolyear):
+        tabpage = self.tab_widget.current_page()
+        if tabpage.year_change_ok():
             BACKEND('BASE_set_year', year = schoolyear)
             return True
         return False
@@ -544,6 +544,7 @@ class Admin(QWidget):
 builtins.ADMIN = Admin()
 FUNCTIONS['base_SET_YEARS'] = ADMIN.SET_YEARS
 FUNCTIONS['base_SET_SCHOOL_DATA'] = ADMIN.SET_SCHOOL_DATA
+FUNCTIONS['base_YEAR_CHANGED'] = ADMIN.YEAR_CHANGED
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 

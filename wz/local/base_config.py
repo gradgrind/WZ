@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-02-19
+Last updated:  2021-02-20
 
 General configuration items.
 
@@ -192,14 +192,13 @@ class PupilsBase(dict):
             _PID_INVALID = "Ungültige Schülerkennung: '{pid}'"
             raise ValueError(_PID_INVALID.format(pid = pid or ''))
 #
-    @staticmethod
-    def nullPupilData(pupil_base):
+    def nullPupilData(self, klass):
         """Return a "dummy" pupil-data instance, which can be used as a
         starting point for adding a new pupil.
         """
         return {
-            'PID': str(int(sorted(pupil_base.pupils)[-1]) + 1),
-            'CLASS': pupil_base.klass, 'FIRSTNAME': 'Hansi',
+            'PID': str(int(sorted(self)[-1]) + 1),
+            'CLASS': klass, 'FIRSTNAME': 'Hansi',
             'LASTNAME': 'von|Meierhausen', 'FIRSTNAMES': 'Hans Herbert',
             'SEX': 'm'
         }

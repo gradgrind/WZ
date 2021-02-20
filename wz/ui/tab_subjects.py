@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-02-19
+Last updated:  2021-02-20
 
 Subject table management.
 
@@ -85,7 +85,6 @@ class Subjects(TabPage):
         pb_uct.clicked.connect(self.update_choices)
 
         cbox.addStretch(1)
-
 #
     def leave(self):
         """Called when the tab is deselected.
@@ -99,6 +98,11 @@ class Subjects(TabPage):
         cc = BACKEND('SUBJECT_table_update', filepath = fpath)
 #
     def update_choices(self):
+        fpath = openDialog(_TABLE_FILE)
+        if not fpath:
+            return
+#TODO: klass?
+        BACKEND('SUBJECT_update_choice_table', filepath = fpath)
         SHOW_ERROR("TODO: update_choices")
 #
 #TODO: Would it be better to have a selected class permanently visible?

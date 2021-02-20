@@ -2,7 +2,7 @@
 """
 ui/tab_pupil_editor.py
 
-Last updated:  2021-02-13
+Last updated:  2021-02-20
 
 Editor for pupil data.
 
@@ -164,15 +164,8 @@ class PupilEdit(TabPage):
         else:
             return False
 #
-#TODO
-    def year_changed(self):
-        if not self.clear():
-            print("§§§ PUPIL CLEAR FAILED")
-            return False
-# I would need a second year to test this!
-        print("§§§ PUPIL CLEAR OK")
-        self.enter()
-        return True
+    def year_change_ok(self):
+        return self.clear()
 #
     def class_changed(self, klass):
         if not self.clear():
@@ -199,7 +192,7 @@ class PupilEdit(TabPage):
         BACKEND('PUPIL_new_pupil')
         self.remove_button.setEnabled(False)
         self.new_button.setEnabled(False)
-#+
+#
     def NEW_PUPIL(self, data, ask_pid = None):
         if ask_pid:
             etext = data.get('__ERROR__')
@@ -217,11 +210,7 @@ class PupilEdit(TabPage):
                 self.enter()
                 return
         self.SET_PUPIL_DATA(data, _NEW_PUPIL)
-# The displayed pupil (in the selection widget) is of course wrong ...
-#TODO: Probably sensible to implement saving first!
-
-
-
+#TODO: The displayed pupil (in the selection widget) is of course wrong ...
 #
     def remove_pupil(self):
         if QuestionDialog(_REMOVE_TITLE,
@@ -230,6 +219,7 @@ class PupilEdit(TabPage):
 #
     def save(self):
         BACKEND('PUPIL_new_data', data = self.pupil_scene.pupil_data)
+
 
 tab_pupil_editor = PupilEdit()
 TABS.append(tab_pupil_editor)

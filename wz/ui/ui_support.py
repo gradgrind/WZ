@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-02-19
+Last updated:  2021-02-20
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -211,7 +211,7 @@ class TabPage(QWidget):
     def clear(self):
         return True
 #
-    def year_changed(self):
+    def year_change_ok(self):
         return True
 
 ###

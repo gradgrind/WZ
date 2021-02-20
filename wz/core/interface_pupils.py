@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-02-16
+core/interface_pupils.py - last updated 2021-02-20
 
 Controller/dispatcher for pupil management.
 
@@ -29,7 +29,7 @@ from core.base import Dates
 from core.pupils import Pupils
 from local.grade_config import STREAMS
 
-class Pupil_Base:
+class _Pupil_Base:
     """A cache for pupil information.
     """
     schoolyear = None
@@ -44,15 +44,15 @@ class Pupil_Base:
         if year == cls.schoolyear:
             return
         cls.schoolyear = year
+        cls.pupils = Pupils(year) if year else None
+        # Additional data used only in this module
         cls.klass = None
         cls.pid = None
-        cls.pupils = Pupils(year) if year else None
-#
-    @classmethod
-    def classes(cls):
-        if not cls.pupils:
-            cls.set_year(SCHOOLYEAR)
-        return cls.pupils.classes()
+##
+def PUPILS():
+    if _Pupil_Base.schoolyear != SCHOOLYEAR:
+        _Pupil_Base.set_year(SCHOOLYEAR)
+    return _Pupil_Base.pupils
 
 ###
 
@@ -64,19 +64,19 @@ class Pupils_Update:
     """
     @classmethod
     def start(cls, filepath):
+        pupils = PUPILS()
         try:
-            cls.ptables = Pupil_Base.pupils.read_source_table(filepath)
+            cls.ptables = pupils.read_source_table(filepath)
         except:
             REPORT('ERROR', _BAD_PUPIL_TABLE.format(path = filepath))
             return False
-        Pupil_Base.set_year(SCHOOLYEAR)
         cls.compare()
         return True
 #
     @classmethod
     def compare(cls):
         cls._changes = {}
-        _delta = Pupil_Base.pupils.compare_update(cls.ptables)
+        _delta = PUPILS().compare_update(cls.ptables)
         # Return the changes class-for-class
         for klass, kdata in _delta.items():
             CALLBACK('pupil_DELTA', klass = klass, delta = kdata)
@@ -90,7 +90,7 @@ class Pupils_Update:
 #
     @classmethod
     def update(cls):
-        Pupil_Base.pupils.update_classes(cls._changes)
+        PUPILS().update_classes(cls._changes)
         return True
 
 FUNCTIONS['PUPIL_table_delta'] = Pupils_Update.start
@@ -108,12 +108,12 @@ class Pupil_Editor:
     """
     @classmethod
     def enter(cls):
-        Pupil_Base.set_year(SCHOOLYEAR)
-        cls._class_list = Pupil_Base.classes()
+        pupils = PUPILS()
+        cls._class_list = pupils.classes()
         cls._class_list.reverse()   # start with the highest classes
-        klass = Pupil_Base.klass if Pupil_Base.klass in cls._class_list \
+        klass = _Pupil_Base.klass if _Pupil_Base.klass in cls._class_list \
                 else cls._class_list[0]
-        Pupil_Base.klass = None
+        _Pupil_Base.klass = None
         CALLBACK('pupil_SET_CLASSES',
                 classes = cls._class_list,
                 klass = klass)
@@ -122,16 +122,17 @@ class Pupil_Editor:
 #
     @classmethod
     def set_class(cls, klass):
+        pupils = PUPILS()
         if klass not in cls._class_list:
             raise Bug('Invalid class passed from front-end: %s' %  klass)
-        Pupil_Base.klass = klass
-        cls._pdata_list = Pupil_Base.pupils.class_pupils(klass)
+        _Pupil_Base.klass = klass
+        cls._pdata_list = pupils.class_pupils(klass)
         pupil_list = []
         pidix, ix = 0, -1
         for pd in cls._pdata_list:
             ix += 1
             _pid = pd['PID']
-            if _pid == Pupil_Base.pid:
+            if _pid == _Pupil_Base.pid:
                 pidix = ix
             pupil_list.append((_pid, Pupils.name(pd)))
         pdata = cls._pdata_list[pidix]
@@ -148,7 +149,7 @@ class Pupil_Editor:
             pdata = cls._pdata_list._pidmap[pid]
         except KeyError:
             raise Bug('Invalid pupil passed from front-end: %s' % pid)
-        Pupil_Base.pid = pid
+        _Pupil_Base.pid = pid
         # Display pupil data
         CALLBACK('pupil_SET_PUPIL_DATA',
                 data = pdata,
@@ -157,14 +158,15 @@ class Pupil_Editor:
 #
     @classmethod
     def new_pupil(cls, pid = None):
-        pdata = Pupils.nullPupilData(Pupil_Base)
+        pupils = PUPILS()
+        pdata = pupils.nullPupilData(_Pupil_Base.klass)
         if pid:
             try:
-                Pupils.check_new_pid_valid(pid)
+                pupils.check_new_pid_valid(pid)
             except ValueError as e:
                 pdata['__ERROR__'] = str(e)
             else:
-                if pid in Pupil_Base.pupils:
+                if pid in pupils:
                     pdata['__ERROR__'] = _PID_EXISTS.format(pid = pid)
                 else:
                     pdata['PID'] = pid
@@ -176,16 +178,16 @@ class Pupil_Editor:
     @classmethod
     def new_data(cls, data):
         # Update pupil data in database
-        if Pupil_Base.pupils.modify_pupil(data):
-            Pupil_Base.pid = data['PID']
-            Pupil_Base.klass = data['CLASS']
+        if PUPILS().modify_pupil(data):
+            _Pupil_Base.pid = data['PID']
+            _Pupil_Base.klass = data['CLASS']
             CALLBACK('pupil_CLEAR_CHANGES')
             return cls.enter()
         return False
 #
     @classmethod
     def remove(cls, pid):
-        if Pupil_Base.pupils.remove_pupil(pid):
+        if PUPILS().remove_pupil(pid):
             CALLBACK('pupil_CLEAR_CHANGES')
             return cls.enter()
         return False
@@ -197,8 +199,9 @@ def get_leavers():
     selected to repeat a year.
     """
     classes = []
-    for klass in Pupil_Base.classes():
-        leavers = Pupil_Base.pupils.final_year_pupils(klass)
+    pupils = PUPILS()
+    for klass in pupils.classes():
+        leavers = pupils.final_year_pupils(klass)
         if leavers:
             classes.append((klass, leavers))
     CALLBACK('calendar_SELECT_REPEATERS', klass_pupil_list = classes)
@@ -208,8 +211,7 @@ def migrate(repeat_pids):
     """Create a pupil-data structure for the following year.
     """
     # Create a pupil-data structure for the following year.
-    Pupil_Base.set_year(SCHOOLYEAR)
-    Pupil_Base.pupils.migrate(repeat_pids)
+    PUPILS().migrate(repeat_pids)
 #TODO: Copy the subject-data, as a "starting point" for the new year.
     # Create a rough calendar for the new year.
     Dates.migrate_calendar(SCHOOLYEAR)

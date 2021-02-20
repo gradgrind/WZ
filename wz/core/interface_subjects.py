@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_subjects.py - last updated 2021-02-19
+core/interface_subjects.py - last updated 2021-02-20
 
 Controller/dispatcher for subjects management.
 
@@ -51,8 +51,16 @@ def make_choice_table(klass, filepath):
         fh.write(xlsx_bytes)
     REPORT('INFO', _CHOICES_SAVED.format(klass = klass, fpath = filepath))
     return True
+#
+#TODO
+def update_choice_table(klass, filepath): # klass?
+#TODO: how to check class?
+    subjects = Subjects(SCHOOLYEAR)
+    subjects.import_choice_table(filepath)
+    REPORT('INFO', _CHOICES_CLASS.format(klass = klass))
 
 
 FUNCTIONS['SUBJECT_table_update'] = update_subjects
 FUNCTIONS['SUBJECT_select_choice_class'] = select_choice_class
 FUNCTIONS['SUBJECT_make_choice_table'] = make_choice_table
+FUNCTIONS['SUBJECT_update_choice_table'] = update_choice_table

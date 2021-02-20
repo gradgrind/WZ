@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-02-16
+core/main.py - last updated 2021-02-20
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -205,6 +205,7 @@ FUNCTIONS['BASE_get_school_data'] = get_school_data
 def set_year(year):
     builtins.SCHOOLYEAR = year
     REPORT('INFO', _CHANGED_YEAR.format(year = year))
+    CALLBACK('base_YEAR_CHANGED')
     return True
 
 FUNCTIONS['BASE_set_year'] = set_year

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-02-18
+core/pupils.py - last updated 2021-02-20
 
 Manage pupil data.
 
@@ -391,7 +391,7 @@ class Pupils(PupilsBase):
                 shutil.copyfile(fpath, bpath)
         pdlist = []
         for klass in sorted(self._klasses):
-            pdlist.append(self._klasses[klass])
+            pdlist += self._klasses[klass]
         data = {
             'TITLE': 'Pupil Data',
             'SCHOOLYEAR': self.schoolyear,

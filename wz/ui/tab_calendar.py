@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-02-19
+Last updated:  2021-02-20
 
 Calendar editor. Also handles school-year migration and attendance lists.
 
@@ -105,10 +105,6 @@ class Calendar(TabPage):
 
 
 
-#
-    def year_changed(self):
-        self.enter()
-        return True
 #
     def enter(self):
         """Called when the tab is selected.
