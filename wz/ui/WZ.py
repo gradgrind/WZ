@@ -93,11 +93,11 @@ TABS.append(TabPage("Page 1"))
 import ui.tab_subjects
 import ui.tab_pupils_update
 import ui.tab_pupil_editor
-#        self._addPage(GradeEdit())
+import ui.tab_grade_editor
 #        self._addPage(TextReports())
 import ui.tab_calendar
 #        self._lbox.addStretch(1)
-#        self._addPage(FieldEdit())
+#        self._addPage(FieldEdit()) # template_fields.py
 
 ####+++++++++++++++++++++++++++++++++++++++
 

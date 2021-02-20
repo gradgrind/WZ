@@ -109,7 +109,6 @@ class PupilEdit(TabPage):
             ix = 0
         self.class_select.set_items([(c, c) for c in classes], index = ix)
         self.class_select.trigger()
-        return True
 #
     def SET_PUPILS(self, pupils, pid):
         """CALLBACK: Supplies the pupils as a list: [[pid, pname], ...]
@@ -122,12 +121,10 @@ class PupilEdit(TabPage):
         except GuiError:
             pass
         self.pselect.trigger()
-        return True
 #
     def SET_PUPIL_DATA(self, data, name):
         self.pupil_scene.set_pupil(data, name)
         self.pupilView.set_scene(self.pupil_scene)
-        return True
 #
     def clear(self):
         """Check for changes in the current "scene", allowing these to

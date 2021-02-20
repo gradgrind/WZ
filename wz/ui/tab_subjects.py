@@ -26,7 +26,7 @@ Copyright 2021 Michael Towers
 """
 
 ### Labels, etc.
-_UPDATE_SUBJECTS = "Fachliste aktualisieren"
+_UPDATE_SUBJECTS = "Fächer verwalten"
 _UPDATE_SUBJECTS_TEXT = "Die Fachliste für eine Klasse kann von einer" \
         " Tabelle (xlsx oder ods) aktualisiert werden.\nDiese Tabelle" \
         " muss die entsprechende Struktur aufweisen." \
