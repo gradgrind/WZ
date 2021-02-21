@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-02-20
+Last updated:  2021-02-21
 
 Editor for grades.
 
@@ -44,8 +44,6 @@ _GRADE_TABLE_MISMATCH = "{error}:\n  Jahr: {year}, Gruppe: {group}," \
 
 ### Labels, etc.
 _EDIT_GRADES = "Noten verwalten"
-_ALL_PUPILS = "Gesamttabelle"
-_NEW_REPORT = "Neues Zeugnis"
 _TERM = "Anlass:"
 _GROUP = "Klasse/Gruppe:"
 _SAVE = "Änderungen speichern"
@@ -160,7 +158,7 @@ class GradeEdit(TabPage):
 
 #TODO
     def enter(self):
-        self.year_changed()
+        BACKEND('GRADES_init')
 #
     def leave(self):
         if self.clear():
@@ -195,7 +193,7 @@ class GradeEdit(TabPage):
         if not self.clear():
             return False
         BACKEND('GRADES_set_term', term = key)
-        self.term = key
+#?        self.term = key
         return True
 #
 #TODO: group to set?
@@ -205,55 +203,34 @@ class GradeEdit(TabPage):
         self.group_select.trigger()
 #
     def group_changed(self, group):
-        if group:   #?
-            if not self.clear():
-                return False
-            self.group = group
-            self.pid = ''
-#        self.pselect.setVisible(False)
-        term0 = self.term[0]
-        if term0 in ('S', 'T'):
-#TODO: should this rather be in the back-end?
-            termnull = term0 + '*'
-            self.term = self.pid if self.pid else termnull
-            # Get list of existing reports for the group
-            BACKEND('GRADES_get_date_list')
+        if not self.clear():
+            return False
+        BACKEND('GRADES_set_group', group = group)
+        return True
+#
+    def SET_PUPILS(self, termx, group, pid_name_list, pid):
+        self.pselect.set_items(pid_name_list)
+        self.pselect.reset(pid)
+#?        self.pselect.trigger()
+#TODO?
 
-# -> back-end
-            table_path = year_path(ADMIN.schoolyear,
-                    GradeBase.table_path(self.group, termnull))
-            date_list = sorted([f.rsplit('_', 1)[1].split('.', 1)[0]
-                    for f in glob.glob(table_path)], reverse = True)
-            if group and date_list:
-                # Show next date
-                today = Dates.today()
-                for date in date_list:
-                    if today > date:
-                        break
-                    # Select this date initially
-                    self.pid = term0 + date
-                    self.term = self.pid
 
+
+#TODO: separate callback with subject & grade data?
 
 # modify GradeGrid!
-            self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
-                    self.group, self.term)
-            plist = [('', _NEW_REPORT)] + [(term0 + d, d) for d in date_list]
-        else:
-            self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
-                    self.group, self.term)
-            plist = [('', _ALL_PUPILS)] + self.grade_scene.pupils()
-        self.pselect.set_items(plist)
-        if self.pid:
-            self.pselect.reset(self.pid)
+        self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
+                    group, termx)
         self.gradeView.set_scene(self.grade_scene)
+
+
+
 #
     def pupil_changed(self, pid):
         """A new pupil has been selected: reset the grid accordingly.
         """
         if not self.clear():
-            self.pselect.reset(self.pid)
-            return
+            return False
         self.pid = pid
         if pid:
             if self.term == 'A':
@@ -418,4 +395,6 @@ class _UpdateGrades:#(ThreadFunction):
 
 tab_grade_editor = GradeEdit()
 TABS.append(tab_grade_editor)
-#FUNCTIONS['subjects_SELECT_CHOICE_TABLE'] = tab_subjects.select_choice_table
+FUNCTIONS['grades_SET_TERMS'] = tab_grade_editor.SET_TERMS
+FUNCTIONS['grades_SET_GROUPS'] = tab_grade_editor.SET_GROUPS
+FUNCTIONS['grades_SET_PUPILS'] = tab_grade_editor.SET_PUPILS

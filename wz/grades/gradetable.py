@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-01-05
+grades/gradetable.py - last updated 2021-02-21
 
 Access grade data, read and build grade tables.
 
@@ -76,8 +76,8 @@ class Grades(GradeBase):
     """A <Grades> instance manages the set of grades in the database for
     a pupil and "term".
     """
-    def __init__(self, group, stream, grades):
-        super().__init__(group, stream)
+    def __init__(self, group, stream, grades, term):
+        super().__init__(group, stream, term)
         for sid, g in grades.items():
             self.set_grade(sid, g)
 #
@@ -88,8 +88,8 @@ class Grades(GradeBase):
         are set to -1.
         """
         if sid[0] == '*':
-            # An "extra" field
-            return g or ''
+            # An "extra" field – there may be default values ...
+            return self.extras_default(sid, g)
         # There can be normal, empty, non-numeric and badly-formed grades
         gi = -1     # integer value
         if g:
@@ -216,7 +216,7 @@ class _GradeTable(dict):
                 self.name[pid] = row[1]
                 # stream = row[2]
                 grades = Grades(self.group, row[2],
-                        self._include_grades(gmap))
+                        self._include_grades(gmap), self.term)
                 self[pid] = grades
                 for comp in self.composites:
                     grades.composite_calc(self.sid2subject_data[comp])
@@ -260,10 +260,10 @@ class _GradeTable(dict):
                     pidset.remove(pid)
                 except KeyError:
                     continue
-            self.name[pid] = pdata.name()
+            self.name[pid] = Pupils.name(pdata)
             # Set grades (all empty)
             grades = Grades(self.group, pdata['STREAM'],
-                    self._include_grades({}))
+                    self._include_grades({}), self.term)
             self[pid] = grades
             for comp in self.composites:
                 grades.composite_calc(self.sid2subject_data[comp])

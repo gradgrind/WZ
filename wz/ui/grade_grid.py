@@ -2,7 +2,7 @@
 """
 ui/grade_grid.py
 
-Last updated:  2021-02-20
+Last updated:  2021-02-21
 
 Manage the grid for the grade-editor.
 
@@ -140,28 +140,27 @@ class GradeGrid(Grid):
         self.tile(line, 0, text = _PUPIL, cspan = 2, style = 'small')
         self.tile(line, 2, text = _STREAM,  style = 'small')
         col = col_sids
-#? main_sids.items() ...
-        for sid, name in main_sids.items():
+        for sid, name in main_sids:
             self.tile(line, col, text = sid, style = 'small')
             self.tile(1, col, text = name, rspan = rspan, style = 'v')
             col += 1
         col = col_components
-        for sid, name in components.items():
+        for sid, name in components:
             self.tile(line, col, text = sid, style = 'small')
             self.tile(1, col, text = name, rspan = rspan, style = 'v')
             col += 1
         col = col_composites
-        for sid, name in composites.items():
+        for sid, name in composites:
             self.tile(line, col, text = sid, style = 'small')
             self.tile(1, col, text = name, rspan = rspan, style = 'v')
             col += 1
         col = col_calcs
-        for sid, name in calcs.items():
+        for sid, name in calcs:
             self.tile(line, col, text = sid, style = 'small')
             self.tile(1, col, text = name, rspan = rspan, style = 'v')
             col += 1
         col = col_extras
-        for sid, name in extras.items():
+        for sid, name in extras:
             self.tile(line, col, text = sid, style = 'small')
             self.tile(1, col, text = name, rspan = rspan, style = 'v')
             col += 1
@@ -172,33 +171,30 @@ class GradeGrid(Grid):
             self.tile(row, 0, text = pname, cspan = 2, style = 'name')
             self.tile(row, 2, text = stream, style = 'small')
             col = col_sids
-            for sid in main_sids:
+            for sid, _ in main_sids:
                 self.tile(row, col, text = grades.get(sid, self.UNCHOSEN),
                     style = 'entry',
                     validation = 'grade', tag = f'${pid}-{sid}')
                 col += 1
             col = col_components
-            for sid in components:
+            for sid, _ in components:
                 self.tile(row, col, text = grades.get(sid, self.UNCHOSEN),
                     style = 'entry',
                     validation = 'grade', tag = f'${pid}-{sid}')
                 col += 1
             col = col_composites
-            for sid in composites:
+            for sid, _ in composites:
                 self.tile(row, col, text = grades[sid], style = 'calc',
                         tag = f'${pid}-{sid}')
                 col += 1
             if calcs:
                 col = col_calcs
-                for sid in calcs:
+                for sid, _ in calcs:
                     self.tile(row, col, text = '?', style = 'calc',
                             tag = f'${pid}-{sid}')
                     col += 1
-#? Maybe back-end handles this before sending data?
-                self.calc_tags(pid)
-
             col = col_extras
-            for sid, name in extras.items():
+            for sid, name in extras:
                 _tag = f'${pid}-{sid}'
                 _val = grades[sid]
                 _label = None
@@ -211,10 +207,6 @@ class GradeGrid(Grid):
                     validation = sid
                 self.tile(row, col, text = _val, style = 'entry',
                         validation = validation, tag = _tag, label = _label)
-                # Default values if empty?
-                if (not _val) and sid == '*ZA':
-                    self.set_text(_tag, ZA_default)
-                    self.valueChanged(_tag, ZA_default)
                 col += 1
             row += 1
 #
@@ -244,12 +236,6 @@ class GradeGrid(Grid):
                 self.grade_table.group, self.grade_table.term))
         super().to_pdf(fname)
 #
-#?
-#    def pupils(self):
-#        """Return an ordered mapping of pupils: {pid -> name}.
-#        """
-#        return [(pid, name) for pid, name in self.grade_table.name.items()]
-#
     def valueChanged(self, tag, text):
         """Called when a cell value is changed by the editor.
         Specific action is taken here only for real grades, which can
@@ -262,28 +248,7 @@ class GradeGrid(Grid):
             # Averages should not be handled, but have no "validation"
             # so they won't land here at all.
             pid, sid = tag[1:].split('-')
-
-# -> back-end
-
-            grades = self.grade_table[pid]
-            # Update the grade, includes special handling for numbers
-            grades.set_grade(sid, text)
-            if sid in self.grade_table.extras:
-                return
-            # If it is a component, recalculate the composite
-            if sid in self.grade_table.components:
-                csid = self.grade_table.sid2subject_data[sid].composite
-                if csid == self.UNCHOSEN:
-                    return
-                grades.composite_calc(
-                        self.grade_table.sid2subject_data[csid])
-                ctag = f'${pid}-{csid}'
-                cgrade = grades[csid]
-                self.set_text(ctag, cgrade)
-                self.set_change_mark(ctag, cgrade)
-            # Recalculate the averages, etc.
-            self.calc_tags(pid)
-#TODO: Other changes: where to save the new values?
+            BACKEND('GRADES_value_changed', pid = pid, sid = sid, val = text)
 #
 # -> back-end
     def calc_tags(self, pid):

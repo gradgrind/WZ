@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-02-14
+Last updated:  2021-02-21
 
 Configuration for grade handling.
 
@@ -364,12 +364,27 @@ class GradeBase(dict):
         except KeyError:
             return klass
 #
-    def __init__(self, group, stream):
+    def __init__(self, group, stream, term):
         super().__init__()
         self.i_grade = {}
         self.stream = stream
         self.sekII = self.group_info(group, 'Stufe') == 'SekII'
         self.valid_grades = self.group_info(group, 'NotenWerte')
+        # Set default report type according to "term" and group
+        try:
+            self.ZA_default = self.group_info(group, f'*ZA/{term[0]}')[0]
+        except:
+            self.ZA_default = ''
+#
+    def extras_default(self, sid, g):
+        """Substitute default values for empty "extras".
+        """
+        if g:
+            return g
+        # Default values ...
+        if sid == '*ZA':
+            return self.ZA_default
+        return ''
 #
     def grade_format(self, g):
         """Format the grade corresponding to the given numeric string.
