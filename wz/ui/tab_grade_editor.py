@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-02-21
+Last updated:  2021-02-22
 
 Editor for grades.
 
@@ -212,19 +212,15 @@ class GradeEdit(TabPage):
         self.pselect.set_items(pid_name_list)
         self.pselect.reset(pid)
 #?        self.pselect.trigger()
-#TODO?
-
-
-
-#TODO: separate callback with subject & grade data?
-
-# modify GradeGrid!
-        self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
-                    group, termx)
+#
+    def SET_GRID(self, **parms):
+        self.grade_scene = GradeGrid(self.gradeView, **parms)
         self.gradeView.set_scene(self.grade_scene)
-
-
-
+#
+    def SET_GRADES(self, grades):
+        """<grades> is a list: [[pid, sid, val], ... ]
+        """
+        self.grade_scene.set_grades(grades)
 #
     def pupil_changed(self, pid):
         """A new pupil has been selected: reset the grid accordingly.
@@ -398,3 +394,5 @@ TABS.append(tab_grade_editor)
 FUNCTIONS['grades_SET_TERMS'] = tab_grade_editor.SET_TERMS
 FUNCTIONS['grades_SET_GROUPS'] = tab_grade_editor.SET_GROUPS
 FUNCTIONS['grades_SET_PUPILS'] = tab_grade_editor.SET_PUPILS
+FUNCTIONS['grades_SET_GRADES'] = tab_grade_editor.SET_GRADES
+FUNCTIONS['grades_SET_GRID'] = tab_grade_editor.SET_GRID

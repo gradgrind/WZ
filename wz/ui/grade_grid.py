@@ -2,7 +2,7 @@
 """
 ui/grade_grid.py
 
-Last updated:  2021-02-21
+Last updated:  2021-02-22
 
 Manage the grid for the grade-editor.
 
@@ -68,21 +68,19 @@ class GradeGrid(Grid):
     """Present the grades for a group and term, allowing editing of the
     individual fields.
     """
-    def __init__(self, grades_view, subject_data, grade_data):
-
-        ### Pop-up "selection" editors
-#? selects
-        for sel_type, sel_values in selects:
-            self.addSelect(sel_type, values)
-#? ...
-        main_sids = subject_data['main_sids']
-        components = subject_data['components']
-        composites = subject_data['composites']
-        calcs = subject_data['calcs']
-        extras = subject_data['extras']
-        pupil_data = grade_data['pupil_data']
-        self.UNCHOSEN = subject_data['UNCHOSEN']
-
+    def __init__(self, grades_view, info, main_sids, components,
+            composites, calcs, extras, selects, pupil_data):
+        """<grades_view> is the "View" on which this "Scene" is to be
+        presented.
+            <info>: general information, [[key, value, tag], ... ]
+            <main_sids>, <components>, <composites>, <calcs>, <extras>:
+                These are the subjects (and similar items) for the columns.
+                They have the structure [[key, name], ... ]
+            <selects>: Special "selection" entries for particular field
+                editors, [[selection type, [value, ... ]], ... ]
+            <pupil_data>: Alist of pupil lines,
+                [[pid, name, stream, {sid: value, ... }], ... ]
+        """
         # Get number of rows and columns
         row_pids = len(ROWS)
         _ROWS = ROWS + (_HEIGHT_LINE,) * len(pupil_data)
@@ -101,11 +99,15 @@ class GradeGrid(Grid):
         col_extras = len(_COLS) + 1
         if extras:
             _COLS += (_SEP_SIZE,)
-            for x in extras:
+            for x, _ in extras:
                 _COLS += (COL_WIDTH[x],)
 
         super().__init__(grades_view, _ROWS, _COLS)
         self.styles()
+
+        # Pop-up "selection" editors
+        for sel_type, sel_values in selects:
+            self.addSelect(sel_type, sel_values)
 
         # horizontal separator (after headers)
         self.tile(row_pids - 1, 0, cspan = len(_COLS), style = 'padding')
@@ -117,19 +119,22 @@ class GradeGrid(Grid):
                 continue
             self.tile(1, col - 1, rspan = len(_ROWS) - 1, style = 'padding')
 
-        ### Title area
+        # Title area
         self.tile(0, 0, text = "Notentabelle", cspan = 2, style = 'title')
         self.tile(0, 4, text = ADMIN.school_data['SCHOOL_NAME'],
                 cspan = 10, style = 'titleR')
-        ### General Info
+        # General Info
         line = 1
-#? info
-        for key, value in info:
+        for key, value, tag in info:
             self.tile(line, 0, text = key, style = 'info')
-            if key.endswith('_D'):
-                # An editable date
+            if tag:
+                # An editable field
+                if tag.endswith('_D'):
+                    vtype = 'DATE'
+                else:
+                    vtype = 'LINE'
                 self.tile(line, 1, text = value, style = 'info_edit',
-                cspan = 2, validation = 'DATE', tag = key)
+                        cspan = 2, validation = vtype, tag = tag)
             else:
                 # Non-editable
                 self.tile(line, 1, text = value, cspan = 2, style = 'info')
@@ -172,13 +177,13 @@ class GradeGrid(Grid):
             self.tile(row, 2, text = stream, style = 'small')
             col = col_sids
             for sid, _ in main_sids:
-                self.tile(row, col, text = grades.get(sid, self.UNCHOSEN),
+                self.tile(row, col, text = grades[sid],
                     style = 'entry',
                     validation = 'grade', tag = f'${pid}-{sid}')
                 col += 1
             col = col_components
             for sid, _ in components:
-                self.tile(row, col, text = grades.get(sid, self.UNCHOSEN),
+                self.tile(row, col, text = grades[sid],
                     style = 'entry',
                     validation = 'grade', tag = f'${pid}-{sid}')
                 col += 1
@@ -250,7 +255,9 @@ class GradeGrid(Grid):
             pid, sid = tag[1:].split('-')
             BACKEND('GRADES_value_changed', pid = pid, sid = sid, val = text)
 #
-# -> back-end
-    def calc_tags(self, pid):
-        for sid, val in self.grade_table.recalc(pid):
-            self.set_text(f'${pid}-{sid}', val)
+    def set_grades(self, vlist):
+        for pid, sid, cgrade in vlist:
+            ctag = f'${pid}-{csid}'
+            self.set_text(ctag, cgrade)
+            self.set_change_mark(ctag, cgrade)
+

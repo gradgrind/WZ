@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-02-20
+Last updated:  2021-02-22
 
 Administration interface.
 
@@ -571,7 +571,7 @@ if __name__ == '__main__':
             QLibraryInfo.location(QLibraryInfo.TranslationsPath))
     app.installTranslator(qtr)
 
-    ADMIN.setWindowIcon(QIcon(os.path.join('icons', 'WZ1.png')))
+    app.setWindowIcon(QIcon(os.path.join('icons', 'WZ1.png')))
     # Run this when the event loop has been entered:
     QTimer.singleShot(10, ADMIN.init)
     screen = app.primaryScreen()

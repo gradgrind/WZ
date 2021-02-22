@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-02-21
+core/interface_grades.py - last updated 2021-02-22
 
 Controller/dispatcher for grade management.
 
@@ -38,7 +38,6 @@ from grades.makereports import GradeReports
 
 
 class GradeManager:
-#?
     @staticmethod
     def init():
         CALLBACK('grades_SET_TERMS', terms = GradeBase.terms(), term = '')
@@ -59,29 +58,29 @@ class GradeManager:
         if group:   #?
             cls.group = group
             cls.pid = ''
-        cls.grade_table = GradeTable(SCHOOLYEAR, cls.group, cls.term,
-                ok_new = True)
+        gtable = GradeTable(SCHOOLYEAR, cls.group, cls.term, ok_new = True)
+        cls.grade_table = gtable
         # Separate out "component" subjects
         cls.main_sids = []
         cls.components = []
-        for sid, name in cls.grade_table.subjects.items():
-            if sid in cls.grade_table.components:
+        for sid, name in gtable.subjects.items():
+            if sid in gtable.components:
                 cls.components.append((sid, name))
             else:
                 cls.main_sids.append((sid, name))
         # Fetch "composite" subjects and "calculated" fields
-        composities = [(sid, name)
-                for sid, name in cls.grade_table.composites.items()]
-        calcs = [(sid, name)
-                for sid, name in cls.grade_table.calcs.items()]
+        cls.composites = [(sid, name)
+                for sid, name in gtable.composites.items()]
+        cls.calcs = [(sid, name)
+                for sid, name in gtable.calcs.items()]
         ## Get lists of acceptable values for "selection" fields
         selects = []
         # for grades:
         selects.append(('grade', Grades.group_info(group, 'NotenWerte')))
         # for "extra" fields:
-        extras = []
-        for sid, name in cls.grade_table.extras.items():
-            extras.append((sid, name))
+        cls.extras = []
+        for sid, name in gtable.extras.items():
+            cls.extras.append((sid, name))
             if sid == '*ZA':
                 _ZA_vals = Grades.group_info(group, f'*ZA/{cls.term[0]}')
                 selects.append((sid, _ZA_vals))
@@ -111,10 +110,26 @@ class GradeManager:
             plist = [('', _NEW_REPORT)] + [(term0 + d, d) for d in date_list]
         else:
             pid_names = [(pid, name)
-                    for pid, name in cls.grade_table.name.items()]
+                    for pid, name in gtable.name.items()]
             plist = [('', _ALL_PUPILS)] + pid_names
         CALLBACK('grades_SET_PUPILS', termx = cls.term, group = cls.group,
                 pid_name_list = plist, pid = cls.pid)
+        CALLBACK('grades_SET_GRID',
+                info = (
+                        (gtable.SCHOOLYEAR, gtable.schoolyear, ''),
+                        (gtable.GROUP, gtable.group, ''),
+                        (gtable.TERM, gtable.term, ''),
+                        (gtable.GRADES_D, gtable.grades_d, 'GRADES_D'),
+                        (gtable.ISSUE_D, gtable.issue_d, 'ISSUE_D')
+                    ),
+                main_sids = cls.main_sids,
+                components = cls.components,
+                composites = cls.composites,
+                calcs = cls.calcs,
+                extras = cls.extras,
+                selects = selects,
+                pupil_data = cls.group_grades()
+        )
         return True
 #
     @classmethod
@@ -125,28 +140,27 @@ class GradeManager:
         rows = []
         for pid, grades in cls.grade_table.items():
             pname = cls.grade_table.name[pid]
-            row = [pid, pname, grades.stream]
+            gmap = {}
+            row = [pid, pname, grades.stream, gmap]
             rows.append(row)
             for sid, _ in cls.main_sids:
-                row.append((sid, grades.get(sid, UNCHOSEN)))
+                gmap[sid] = grades.get(sid, UNCHOSEN)
             for sid, _ in cls.components:
-                row.append((sid, grades.get(sid, UNCHOSEN)))
-            for sid in cls.grade_table.composites:
-                row.append((sid, grades[sid]))
-            if cls.grade_table.calcs:
+                gmap[sid] = grades.get(sid, UNCHOSEN)
+            for sid, _ in cls.composites:
+                gmap[sid] = grades[sid]
+            if cls.calcs:
 #TODO: Is the recalc necessary?
                 cls.grade_table.recalc(pid)
-                for sid in cls.grade_table.calcs:
-                    row.append((sid, grades[sid]))
-            for sid in cls.grade_table.extras:
-                row.append((sid, grades[sid]))
+                for sid, _ in cls.calcs:
+                    gmap[sid] = grades[sid]
+            for sid, _ in cls.extras:
+                gmap[sid] = grades[sid]
         return rows
 #
-#TODO
     @classmethod
     def value_changed(cls, pid, sid, val):
         updates = []
-
         grades = cls.grade_table[pid]
         # Update the grade, includes special handling for numbers
         grades.set_grade(sid, text)
@@ -155,19 +169,18 @@ class GradeManager:
         # If it is a component, recalculate the composite
         if sid in cls.grade_table.components:
             csid = cls.grade_table.sid2subject_data[sid].composite
-            if csid == cls.UNCHOSEN:
+            if csid == UNCHOSEN:
+                # There is no "real" composite
                 return
             grades.composite_calc(
                     cls.grade_table.sid2subject_data[csid])
-# -> front-end:
-#            ctag = f'${pid}-{csid}'
-#            self.set_text(ctag, cgrade)
-#            self.set_change_mark(ctag, cgrade)
             updates.append((pid, csid, grades[csid]))
         # Recalculate the averages, etc.
         for sid, val in cls.grade_table.recalc(pid):
             updates.append((pid, sid, val))
-
+        if updates:
+            CALLBACK('grades_SET_GRADES', grades = updates)
+        return True
 
 
 FUNCTIONS['GRADES_init'] = GradeManager.init
