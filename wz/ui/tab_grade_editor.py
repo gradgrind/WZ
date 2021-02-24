@@ -182,6 +182,8 @@ class GradeEdit(TabPage):
             if term == t:
                 break
             ix += 1
+        else:
+            ix = 0
         self.term_select.set_items(terms, index = ix)
         self.term_select.trigger()
         return True
@@ -252,7 +254,7 @@ class GradeEdit(TabPage):
     def save(self, force = True):
         if self.clear(force):    # no question dialog
             if self.term[0] in ('S', 'T'):
-                self.pid = self.grade_scene.grade_table.term
+                pid = self.grade_scene.grade_table.term
             self.group_changed(None)
 #
     def make_table(self):

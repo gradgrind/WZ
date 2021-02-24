@@ -54,11 +54,12 @@ class GradeManager:
 #
     @classmethod
     def set_group(cls, group):
-        """<group> may be <None>. This is used to preserve <cls.pid>.
+        """<group> may be <None>. This is used to preserve <cls.group>.
         """
         if group:   #?
             cls.group = group
-            cls.pid = ''
+#?
+        cls.pid = ''
         gtable = GradeTable(SCHOOLYEAR, cls.group, cls.term, ok_new = True)
         cls.grade_table = gtable
         # Separate out "component" subjects
@@ -77,7 +78,7 @@ class GradeManager:
         ## Get lists of acceptable values for "selection" fields
         selects = []
         # for grades:
-        selects.append(('grade', Grades.group_info(group, 'NotenWerte')))
+        selects.append(('grade', Grades.group_info(cls.group, 'NotenWerte')))
         # for "extra" fields:
         cls.extras = []
         for sid, name in gtable.extras.items():
