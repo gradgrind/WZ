@@ -2,7 +2,7 @@
 """
 ui/grade_grid.py
 
-Last updated:  2021-02-22
+Last updated:  2021-02-23
 
 Manage the grid for the grade-editor.
 
@@ -195,7 +195,7 @@ class GradeGrid(Grid):
             if calcs:
                 col = col_calcs
                 for sid, _ in calcs:
-                    self.tile(row, col, text = '?', style = 'calc',
+                    self.tile(row, col, text = grades[sid], style = 'calc',
                             tag = f'${pid}-{sid}')
                     col += 1
             col = col_extras
@@ -257,7 +257,7 @@ class GradeGrid(Grid):
 #
     def set_grades(self, vlist):
         for pid, sid, cgrade in vlist:
-            ctag = f'${pid}-{csid}'
+            ctag = f'${pid}-{sid}'
             self.set_text(ctag, cgrade)
             self.set_change_mark(ctag, cgrade)
 

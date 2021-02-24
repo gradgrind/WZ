@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-02-22
+Last updated:  2021-02-23
 
 Administration interface.
 
@@ -24,12 +24,6 @@ Copyright 2021 Michael Towers
 
 =-LICENCE========================================
 """
-
-#TODO: Back-end program bugs causing crashes will not be adequately
-# reported in the front end (or anywhere else!). This might be improved
-# by having a separate reader for stderr ... how to access this?
-
-#TODO: It looks like I need a BACKEND queue for chained communication.
 
 ### Labels, etc.
 _TITLE = "WZ – Zeugnisverwaltung"

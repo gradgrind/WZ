@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-02-22
+core/interface_grades.py - last updated 2021-02-24
 
 Controller/dispatcher for grade management.
 
@@ -32,6 +32,7 @@ import glob
 from core.base import Dates
 from local.base_config import year_path
 from local.grade_config import GradeBase, UNCHOSEN
+from local.abitur_config import AbiCalc
 from grades.gradetable import FailedSave, GradeTableFile, \
         GradeTable, GradeTableError, Grades
 from grades.makereports import GradeReports
@@ -150,10 +151,8 @@ class GradeManager:
             for sid, _ in cls.composites:
                 gmap[sid] = grades[sid]
             if cls.calcs:
-#TODO: Is the recalc necessary?
-                cls.grade_table.recalc(pid)
-                for sid, _ in cls.calcs:
-                    gmap[sid] = grades[sid]
+                for sid, g in cls.grade_table.recalc(pid):
+                    gmap[sid] = g
             for sid, _ in cls.extras:
                 gmap[sid] = grades[sid]
         return rows
@@ -163,7 +162,7 @@ class GradeManager:
         updates = []
         grades = cls.grade_table[pid]
         # Update the grade, includes special handling for numbers
-        grades.set_grade(sid, text)
+        grades.set_grade(sid, val)
         if sid in cls.grade_table.extras:
             return
         # If it is a component, recalculate the composite
@@ -182,8 +181,72 @@ class GradeManager:
             CALLBACK('grades_SET_GRADES', grades = updates)
         return True
 
+#+++++++++++++++ Abitur +++++++++++++++#
+
+    @classmethod
+    def set_abi_pupil(cls, pid):
+        """A new pupil has been selected: reset the grid accordingly.
+        """
+        cls.pid = pid
+        # Set pupil's name (NAME) and completion date (FERTIG_D)
+        gtable = cls.grade_table
+        cells = []  # [(tag, value), ... ] -> use <set_text>
+        cells.append(('SCHOOLYEAR', gtable.schoolyear))
+        cells.append(('NAME', gtable.name[pid]))
+        CALLBACK('abitur_SET_CELLS', data = cells)
+        cls.abi_calc = AbiCalc(gtable, pid)
+        # Set date of completion: if no value for pupil, use group date
+        cls.abi_calc.set_editable_cell('FERTIG_D',
+                cls.abi_calc.grade_map['*F_D'] or gtable.grades_d)
+        # Set subject names and grades
+        allvals = cls.abi_calc.all_values()
+        cells = []  # [(tag, value), ... ] -> use <set_text_init>
+        for tag, val in allvals:
+            if tag[0] != '*':
+                cells.append((tag, val))
+        CALLBACK('abitur_INIT_CELLS', data = cells)
+        cls.update_abi_calc()
+        return True
+#
+    @classmethod
+    def update_abi_calc(cls):
+        """Update all the calculated parts of the grid from the current
+        grades.
+        """
+        cells = []
+        for tag, val in cls.abi_calc.calculate().items():
+            cells.append((tag, val))
+        CALLBACK('abitur_SET_CELLS', data = cells)
+#
+    @classmethod
+    def abi_set_value(cls, tag, val):
+        if tag.startswith('GRADE_'):
+            cls.abi_calc.set_editable_cell(tag, val)
+            cls.update_abi_calc()
+        elif tag == 'FERTIG_D':
+            cls.abi_calc.set_editable_cell(tag, val)
+        else:
+            raise Bug("Invalid cell change, %s: %s" % (tag, val))
+        return True
+#
+#TODO: How to call this?
+    @classmethod
+    def save_abi(cls):
+        """Collect the fields to be saved and pass them to the
+        <GradeTable> method.
+        """
+        pgtable = cls.grade_table[self.pid]
+        pgtable.set_grade('*F_D', cls.abi_.calc.value('FERTIG_D'))
+        for s, g in cls.abi_calc.get_all_grades():
+            pgtable.set_grade(s, g)
+#TODO: also '*ZA'?
+        cls.grade_table.save()
+
 
 FUNCTIONS['GRADES_init'] = GradeManager.init
 FUNCTIONS['GRADES_set_term'] = GradeManager.set_term
 FUNCTIONS['GRADES_set_group'] = GradeManager.set_group
 FUNCTIONS['GRADES_value_changed'] = GradeManager.value_changed
+FUNCTIONS['ABITUR_set_pupil'] = GradeManager.set_abi_pupil
+FUNCTIONS['ABITUR_set_value'] = GradeManager.abi_set_value
+FUNCTIONS['ABITUR_save_abi'] = GradeManager.save_abi

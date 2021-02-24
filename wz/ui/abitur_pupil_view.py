@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-gui/abitur_pupil_view.py
+ui/abitur_pupil_view.py
 
-Last updated:  2021-01-03
+Last updated:  2021-02-24
 
 Editor for Abitur results (single pupil).
 
@@ -46,39 +46,31 @@ VALID_GRADES = (
     '03', '02', '01',
     '00'
 )
+VALID_GRADES_X = VALID_GRADES + ('*',)  # "Nachprüfungen" are optional
 
 ### Messages
-_TITLE_TABLE_CHANGE = "Änderungen speichern"
-_TABLE_CHANGES = "Änderungen für {pupil} nicht gespeichert.\n" \
-        "Sollen sie jetzt gespeichert werden?\n" \
-        "Wenn nicht, dann gehen sie verloren."
+#_TITLE_TABLE_CHANGE = "Änderungen speichern"
+#_TABLE_CHANGES = "Änderungen für {pupil} nicht gespeichert.\n" \
+#        "Sollen sie jetzt gespeichert werden?\n" \
+#        "Wenn nicht, dann gehen sie verloren."
 
 
 #####################################################
 
-# To test this module, use it via grade_editor.py (select "Anlass: Abitur")
-
-from gui.grid import Grid
-from gui.gui_support import QuestionDialog
-
-from local.base_config import print_schoolyear
-from local.grade_config import NO_GRADE
-from local.abitur_config import AbiCalc
-from grades.gradetable import GradeTable
-
-VALID_GRADES_X = VALID_GRADES + (NO_GRADE,)
+from ui.grid import Grid
+from ui.ui_support import QuestionDialog
 
 
 class AbiPupilView(Grid):
     def styles(self):
         """Set up the styles used in the grid view.
         """
-        self.new_style('base', font = SCHOOL_DATA.FONT, size = 11)
+        self.new_style('base', font = ADMIN.school_data['FONT'], size = 11)
         self.new_style('info', base = 'base', border = 0)
         self.new_style('infoL', base = 'info', align = 'l')
         self.new_style('label', base = 'infoL', highlight = 'b')
 
-        self.new_style('title', font = SCHOOL_DATA.FONT, size = 12,
+        self.new_style('title', font = ADMIN.school_data['FONT'], size = 12,
                 align = 'l', border = 0, highlight = 'b')
         self.new_style('titleR', base = 'title', align = 'r')
         self.new_style('underline', base = 'base', border = 2)
@@ -92,8 +84,7 @@ class AbiPupilView(Grid):
         self.new_style('date', base = 'result', highlight = ':002562',
                 mark = 'E00000')
 #
-    def __init__(self, grades_view, schoolyear, group):
-        self.grade_table = GradeTable(schoolyear, group, 'A', ok_new = True)
+    def __init__(self, grades_view):
         super().__init__(grades_view, ROWS, COLUMNS)
         self.styles()
 
@@ -104,8 +95,8 @@ class AbiPupilView(Grid):
         ### Title area
         self.tile(0, 0, text = "Abitur-Berechnungsbogen", cspan = 4,
                 style = 'title')
-        self.tile(0, 4, text = SCHOOL_DATA.SCHOOL_NAME, cspan = 10,
-                style = 'titleR')
+        self.tile(0, 4, text = ADMIN.school_data['SCHOOL_NAME'],
+                cspan = 10, style = 'titleR')
         self.tile(2, 7, text = "Schuljahr:", cspan = 3, style = 'titleR')
         self.tile(2, 10, text = '', cspan = 4, style = 'title',
                 tag = 'SCHOOLYEAR')
@@ -214,63 +205,41 @@ class AbiPupilView(Grid):
         via <self.changes()> (a list of tile-tags).
         """
         super().valueChanged(tag, text)
-        if tag.startswith('GRADE_'):
-            self.calc.set_editable_cell(tag, text)
-            self.update_calc()
-        elif tag == 'FERTIG_D':
-            self.calc.set_editable_cell(tag, text)
-        else:
-            raise Bug("Invalid cell change, %s: %s" % (tag, text))
+        BACKEND('ABITUR_set_value', tag = tag, val = text)
+#TODO:???
+#        self.set_change_mark(tag, text)
+
 #
-    def leaving(self, force):
-        """When setting a scene (or clearing one), or exiting the program
-        (or dialog), this check for changed data should be made.
-        """
-        if self.changes() and (force or QuestionDialog(_TITLE_TABLE_CHANGE,
-                _TABLE_CHANGES.format(pupil = self.name))):
-            self.save_changes()
+#    def leaving(self, force):
+#        """When setting a scene (or clearing one), or exiting the program
+#        (or dialog), this check for changed data should be made.
+#        """
+#        if self.changes() and (force or QuestionDialog(_TITLE_TABLE_CHANGE,
+#                _TABLE_CHANGES.format(pupil = self.name))):
+#            self.save_changes()
 #
     def set_pupil(self, pid):
         """A new pupil has been selected: reset the grid accordingly.
         """
-        self.pid = pid
         self.clear_changes()
         self.changes_init()    # set of changed cells
-        # Set pupil's name (NAME) and completion date (FERTIG_D)
-        self.name = self.grade_table.name[pid]
-        self.set_text('SCHOOLYEAR',
-                print_schoolyear(self.grade_table.schoolyear))
-        self.set_text('NAME', self.name)
-        self.calc = AbiCalc(self.grade_table, pid)
-        # Set date of completion: if no value for pupil, use group date
-        self.calc.set_editable_cell('FERTIG_D',
-                self.calc.grade_map['*F_D'] or self.grade_table.grades_d)
-        # Set subject names and grades
-        allvals = self.calc.all_values()
-        for tag, val in allvals:
-            if tag[0] != '*':
-                self.set_text_init(tag, val)
-        self.update_calc()
+        BACKEND('ABITUR_set_pupil', pid = pid)
 #
-    def update_calc(self):
-        """Update all the calculated parts of the grid from the current
-        grades.
-        """
-        for tag, val in self.calc.calculate().items():
+    def set_cells(self, data):
+        for tag, val in data:
             try:
                 self.set_text(tag, val)
-            except:
+            except KeyError:
                 pass
-#                print("NO FIELD:", tag)
 #
+    def init_cells(self, data):
+        for tag, val in data:
+            self.set_text_init(tag, val)
+#
+#???
     def save_changes(self):
         """Collect the fields to be saved and pass them to the
         <GradeTable> method.
         """
         if self.changes():
-            pgtable = self.grade_table[self.pid]
-            pgtable.set_grade('*F_D', self.calc.value('FERTIG_D'))
-            for s, g in self.calc.get_all_grades():
-                pgtable.set_grade(s, g)
-#TODO: also '*ZA'?
-            self.grade_table.save()
+            print("TODO:save_changes")

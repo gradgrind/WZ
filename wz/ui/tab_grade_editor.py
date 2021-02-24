@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-02-22
+Last updated:  2021-02-24
 
 Editor for grades.
 
@@ -23,9 +23,6 @@ Copyright 2021 Michael Towers
 
 =-LICENCE========================================
 """
-
-#TODO ...
-
 
 ### Messages
 _MADE_REPORTS = "Notenzeugnisse erstellt"
@@ -193,7 +190,7 @@ class GradeEdit(TabPage):
         if not self.clear():
             return False
         BACKEND('GRADES_set_term', term = key)
-#?        self.term = key
+        self.term = key
         return True
 #
 #TODO: group to set?
@@ -230,17 +227,26 @@ class GradeEdit(TabPage):
         self.pid = pid
         if pid:
             if self.term == 'A':
-                self.grade_scene = AbiPupilView(self.gradeView,
-                        ADMIN.schoolyear, self.group)
+                self.grade_scene = AbiPupilView(self.gradeView)
                 self.gradeView.set_scene(self.grade_scene)
                 self.grade_scene.set_pupil(pid)
-                return
+                return True
             if self.term[0] not in ('S', 'T'):
 #TODO:
                 REPORT("TODO: Change pupil %s" % pid)
-                return
+                return True
         self.group_changed(None)
+        return True
 #
+    def abitur_INIT_CELLS(self, data):
+        self.grade_scene.init_cells(data)
+#
+    def abitur_SET_CELLS(self, data):
+        self.grade_scene.set_cells(data)
+#
+
+#TODO?
+
 # Must connect to this specifying signal with no argument:
 #  QObject.connect(button, SIGNAL('clicked()'), self.save)
     def save(self, force = True):
@@ -396,3 +402,5 @@ FUNCTIONS['grades_SET_GROUPS'] = tab_grade_editor.SET_GROUPS
 FUNCTIONS['grades_SET_PUPILS'] = tab_grade_editor.SET_PUPILS
 FUNCTIONS['grades_SET_GRADES'] = tab_grade_editor.SET_GRADES
 FUNCTIONS['grades_SET_GRID'] = tab_grade_editor.SET_GRID
+FUNCTIONS['abitur_INIT_CELLS'] = tab_grade_editor.abitur_INIT_CELLS
+FUNCTIONS['abitur_SET_CELLS'] = tab_grade_editor.abitur_SET_CELLS
