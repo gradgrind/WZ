@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-02-24
+core/interface_grades.py - last updated 2021-02-27
 
 Controller/dispatcher for grade management.
 
@@ -48,7 +48,7 @@ class GradeManager:
     def set_term(cls, term):
         cls.term = term
         groups = [grp for grp, rtype in
-                GradeBase.term2group_rtype_list(term[0])]
+                GradeBase.term2group_rtype_list(term)]
         CALLBACK('grades_SET_GROUPS', groups = groups)
         return True
 #
@@ -159,12 +159,13 @@ class GradeManager:
         return rows
 #
     @classmethod
-    def value_changed(cls, pid, sid, val):
+    def grade_changed(cls, pid, sid, val):
         updates = []
         grades = cls.grade_table[pid]
         # Update the grade, includes special handling for numbers
         grades.set_grade(sid, val)
         if sid in cls.grade_table.extras:
+# also save these? ... at least the persistent ones ...
             return
         # If it is a component, recalculate the composite
         if sid in cls.grade_table.components:
@@ -180,6 +181,25 @@ class GradeManager:
             updates.append((pid, sid, val))
         if updates:
             CALLBACK('grades_SET_GRADES', grades = updates)
+        return True
+#
+    @classmethod
+    def value_changed(cls, tag, val):
+        if tag = 'GRADES_D':
+            cls.grade_table.grades_d = val
+        elif tag = 'ISSUE_D':
+            cls.grade_table.issue_d = val
+        # Other tags are ignored.
+#TODO: other relevant tags (for tests or Abi or specials)?
+#
+    @classmethod
+    def save(cls):
+        cls.grade_table.save()
+#TODO: There could be a new tag or group?
+# So like init, but retaining "term", tag, group, pid (where relevant)
+# Like <set_term>?
+# ... maybe not a new group?
+        CALLBACK('grades_???')
         return True
 
 #+++++++++++++++ Abitur +++++++++++++++#
@@ -221,6 +241,7 @@ class GradeManager:
 #
     @classmethod
     def abi_set_value(cls, tag, val):
+# Save in grade_table?
         if tag.startswith('GRADE_'):
             cls.abi_calc.set_editable_cell(tag, val)
             cls.update_abi_calc()
@@ -230,24 +251,29 @@ class GradeManager:
             raise Bug("Invalid cell change, %s: %s" % (tag, val))
         return True
 #
-#TODO: How to call this?
     @classmethod
     def save_abi(cls):
         """Collect the fields to be saved and pass them to the
         <GradeTable> method.
         """
         pgtable = cls.grade_table[self.pid]
-        pgtable.set_grade('*F_D', cls.abi_.calc.value('FERTIG_D'))
+        pgtable.set_grade('*F_D', cls.abi_calc.value('FERTIG_D'))
         for s, g in cls.abi_calc.get_all_grades():
             pgtable.set_grade(s, g)
 #TODO: also '*ZA'?
         cls.grade_table.save()
+        CALLBACK('abitur_???')
+        return True
+
 
 
 FUNCTIONS['GRADES_init'] = GradeManager.init
 FUNCTIONS['GRADES_set_term'] = GradeManager.set_term
 FUNCTIONS['GRADES_set_group'] = GradeManager.set_group
-FUNCTIONS['GRADES_value_changed'] = GradeManager.value_changed
+FUNCTIONS['GRADES_subselect'] = GradeManager.subselect
+FUNCTIONS['GRADES_grade_changed'] = GradeManager.grade_changed
+FUNCTIONS['GRADES_save'] = GradeManager.save
+#?
 FUNCTIONS['ABITUR_set_pupil'] = GradeManager.set_abi_pupil
 FUNCTIONS['ABITUR_set_value'] = GradeManager.abi_set_value
-FUNCTIONS['ABITUR_save_abi'] = GradeManager.save_abi
+FUNCTIONS['ABITUR_save_current'] = GradeManager.save_abi

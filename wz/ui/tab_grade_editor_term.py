@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-ui/tab_grade_editor.py
+ui/tab_grade_editor_term.py
 
 Last updated:  2021-02-27
 
-Editor for grades.
+Editor for grades – manage grades for school terms.
 
 =+LICENCE=============================
 Copyright 2021 Michael Towers
@@ -24,11 +24,13 @@ Copyright 2021 Michael Towers
 =-LICENCE========================================
 """
 
+#TODO ...
+
 ### Messages
 _MADE_REPORTS = "Notenzeugnisse erstellt"
 _NO_REPORTS = "Keine Notenzeugnisse erstellt"
 _NOT_INTERRUPTABLE = "+++ Der Prozess kann nicht unterbrochen werden +++"
-_MUST_SAVE_CHANGES = "Die Änderungen müssen zuerst gespeichert werden."
+
 _TITLE_TABLE_REPLACE = "Neue Tabelle speichern"
 # Would need to be a bit different for individual pupils:
 _TABLE_REPLACE = "Die neue Tabelle wird die alte ersetzen.\n" \
@@ -73,11 +75,68 @@ from ui.grade_grid import GradeGrid
 from ui.abitur_pupil_view import AbiPupilView
 from ui.ui_support import VLine, KeySelect, TabPage, QuestionDialog
 
-###
 
-class GView(GridView):
+class ManageTerm(QWidget):
+    """The controls for managing term grades.
+    """
+    def __init__(self, gridview):
+        self.grid_view = gridview
+        super().__init__()
+        vbox = QVBoxLayout(self)
+
+        ### Select group (might be just one entry ... perhaps even none)
+        self.group_select = KeySelect(changed_callback = self.group_changed)
+        vbox.addWidget(QLabel(_GROUP))
+        vbox.addWidget(self.group_select)
+
+        vbox.addSpacing(30)
+
+        self.pb_save = QPushButton(_SAVE)
+        vbox.addWidget(self.pb_save)
+        self.pb_save.connect(self.save)
+
+        vbox.addStretch(1)
+
+
+
+        pbTable = QPushButton(_TABLE_XLSX)
+        pbTable.setToolTip(_TT_TABLE_XLSX)
+        cbox.addWidget(pbTable)
+        pbTable.clicked.connect(self.make_table)
+        cbox.addSpacing(10)
+        pbTableIn1 = QPushButton(_TABLE_IN1)
+        pbTableIn1.setToolTip(_TT_TABLE_IN1)
+        cbox.addWidget(pbTableIn1)
+        pbTableIn1.clicked.connect(self.input_table)
+        pbTableInDir = QPushButton(_TABLE_IN_DIR)
+        pbTableInDir.setToolTip(_TT_TABLE_IN_DIR)
+        cbox.addWidget(pbTableInDir)
+        pbTableInDir.clicked.connect(self.input_tables)
+        cbox.addSpacing(30)
+        pbPdf = QPushButton(_TABLE_PDF)
+        cbox.addWidget(pbPdf)
+        pbPdf.clicked.connect(self.print_table)
+        cbox.addSpacing(10)
+        pbReport = QPushButton(_REPORT_PDF)
+        cbox.addWidget(pbReport)
+        pbReport.clicked.connect(self.make_reports)
+        topbox.addLayout(cbox)
+
+        ### External notification (from data-view module)
+        gridview.changes_notification_handler(self.set_changed)
+
+#
     def set_changed(self, show):
-        self.pbSave.setEnabled(show)
+        """Handler for change of "modification status".
+        <show> is true when the viewed data is different from the saved
+        version, false when the data is identical.
+        """
+        self.pb_save.setEnabled(show)
+#
+    def save(self):
+#TODO: self.grade_scene?
+        BACKEND('GRADES_save', changes = self.grade_scene.change_values())
+# -> redisplay of term/group
 
 ###
 
@@ -104,28 +163,31 @@ class GradeEdit(TabPage):
         cbox.addWidget(QLabel(_GROUP))
         cbox.addWidget(self.group_select)
 
-        ### Subselection: e.g. tags/dates/pupils
-        self.subselect = KeySelect(changed_callback = self.sub_changed)
-        cbox.addWidget(self.subselect)
+#TODO: Would a reworking of "special" reports for only individual pupils
+# be sensible? (It would need a new input table ...)
+# Would it ever be useful to have "special" reports for a whole group?
+#TODO: Name tags for tests rather than dates?
+# A "New" button to start a new entry? Is renaming possible? (It should
+# be, surely?). A name field instead of the grade-date field?
+        ### List of dates ("special" reports and "tests")
+        self.date_select = KeySelect(changed_callback = self.date_changed)
+        cbox.addWidget(self.date_select)
+
+        ### List of pupils ("Abitur" only)
+        self.pselect = KeySelect(changed_callback = self.pupil_changed)
+        cbox.addWidget(self.pselect)
 
         cbox.addSpacing(30)
-
-        ### Save button (active when there are unsaved modifications)
         self.gradeView.pbSave = QPushButton(_SAVE)
         cbox.addWidget(self.gradeView.pbSave)
-        self.gradeView.pbSave.connect(self.save)
-
+        # Special connection, see <self.save>
+        QObject.connect(self.gradeView.pbSave, SIGNAL('clicked()'), self.save)
         cbox.addStretch(1)
-
-        ### Generate grade table (for inputting)
         pbTable = QPushButton(_TABLE_XLSX)
         pbTable.setToolTip(_TT_TABLE_XLSX)
         cbox.addWidget(pbTable)
         pbTable.clicked.connect(self.make_table)
-
         cbox.addSpacing(10)
-
-        ### Import grade table
         pbTableIn1 = QPushButton(_TABLE_IN1)
         pbTableIn1.setToolTip(_TT_TABLE_IN1)
         cbox.addWidget(pbTableIn1)
@@ -208,36 +270,10 @@ class GradeEdit(TabPage):
         BACKEND('GRADES_set_group', group = group)
         return True
 #
-    def sub_changed(self, itemtag):
-        # For real terms there is no subselect, so this method will not
-        # be called.
+    def date_changed(self, date):
         if not self.clear():
             return False
-        if self.term == 'A':
-            # Switch to/from individual pupil display.
-            # <itemtag> is the pid, empty to select the group.
-            if itemtag:
-                self.grade_scene = AbiPupilView(self.gradeView)
-                self.gradeView.set_scene(self.grade_scene)
-                BACKEND('ABITUR_set_pupil', pid = itemtag)
-            else:
-#?
-# Don't need to reload grade-table, just switch to grade grid and enter data.
-                BACKEND('GRADES_set_group', group = '')
-            return True
-        # Either 'T' or 'S'
-# If no itemtag, show the dummy data / template for creating a new entry.
-# In any case a new grade-table.
-# Get the grade table here, or when selecting the group?
-        # Need cls.group, cls.term
-        cls.subselect = itemtag     # initially empty?
-
-#?
-        self.group_changed(cls.group)
-        return True
-
-
-        BACKEND('GRADES_subselect', tag = itemtag)
+        BACKEND('GRADES_set_report_date', date = date)
         return True
 #
     def SET_PUPILS(self, termx, group, pid_name_list, pid):
@@ -266,7 +302,7 @@ class GradeEdit(TabPage):
                 self.gradeView.set_scene(self.grade_scene)
                 self.grade_scene.set_pupil(pid)
                 return True
-            if self.term not in ('S', 'T'):
+            if self.term[0] not in ('S', 'T'):
 #TODO:
                 REPORT("TODO: Change pupil %s" % pid)
                 return True
@@ -279,30 +315,32 @@ class GradeEdit(TabPage):
     def abitur_SET_CELLS(self, data):
         self.grade_scene.set_cells(data)
 #
-    def save(self):
-        self.grade_scene.save_data()
+
+#TODO ...
+
+# Must connect to this specifying signal with no argument:
+#  QObject.connect(button, SIGNAL('clicked()'), self.save)
+    def save(self, force = True):
+        if self.clear(force):    # no question dialog
+            if self.term[0] in ('S', 'T'):
+                pid = self.grade_scene.grade_table.term
+            self.group_changed(None)
 #
     def make_table(self):
-        """Generate input table (xlsx) for the grades.
+        """Generate input table for the grades.
         """
-        if self.grade_scene.changes():
-            SHOW_WARNING(_MUST_SAVE_CHANGES)
-            return
+        self.save(force = False)
         gtable = self.grade_scene.grade_table
         qbytes = gtable.make_grade_table()
         dir0 = ADMIN._savedir or os.path.expanduser('~')
-#TODO: new: subselect!
         filename = os.path.basename(GradeBase.table_path(
-                gtable.group, gtable.term, gtable.subselect)) + '.xlsx'
+                gtable.group, gtable.term)) + '.xlsx'
         fpath = QFileDialog.getSaveFileName(self.gradeView, _FILESAVE,
                 os.path.join(dir0, filename), _EXCEL_FILE)[0]
         if fpath:
             ADMIN.set_savedir(os.path.dirname(fpath))
             with open(fpath, 'wb') as fh:
                 fh.write(bytes(qbytes))
-#
-#TODO ...
-
 #
     def input_table(self):
         """Import a single grade table, replacing the internal table.

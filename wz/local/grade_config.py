@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-02-21
+Last updated:  2021-03-03
 
 Configuration for grade handling.
 
@@ -94,34 +94,42 @@ class GradeConfigError(Exception):
 # diesem Fall).
 REPORT_GROUPS = f"""
 # ************** Voreinstellungen ("defaults") **************
+######## Es gibt (im Moment) für "Stufe": "SekI" und "SekII".
     Stufe = SekI
-######## (grade table template):
+
+######## (engl. "grade table template"):
     NotentabelleVorlage = Noten/Noteneingabe
-######## (grade report template):
+
+######## (engl. "grade report template"):
     NotenzeugnisVorlage = Zeugnis/SekI; Abgang/SekI-Abgang; +
             Abschluss/SekI-Abschluss; Orientierung/Orientierung;
+
 ######## Notengruppen, deren Noten nicht im Zeugnis erscheinen:
     Nullgruppen = ;
-######## ("streams" contained in "group"):
-######## leer => keine Untergruppen in dieser Klasse/Gruppe:
+
+######## Welche Bewertungsmaßstäbe (engl. "streams") in dieser Gruppe
+######## zulässig sind:
+######## leer => keine Untergruppen in dieser Klasse/Gruppe
     Maßstäbe = ;
-######## ("term", etc. – scheduled reports: <term>/<default report type>)
-######## <Anlass>/<Zeugnis-Art-Voreinstellung>; ...
-    Anlässe = ;
+
 ######## (extra "grade" fields in internal table):
 ######## Zusätzliche "Notenfelder" in interner Notentabelle
     Notenfelder_X = *ZA/Zeugnis (Art); *B/Bemerkungen;
+
 ######## Berechnete Felder, z.B. Durchschnitte für Notenkonferenz:
     Calc = ;
-######## (additional report types):
+
 ######## Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
 ######## können
     *ZA/S = -; Abgang; Zeugnis;
+
 ######## Angeben, dass es Bemerkungen gibt:
     *B = X;
+
 ######## Normalerweise sollen erklärte Durchschnitte angezeigt werden:
     .D = AVERAGE
     .Dx = AVERAGE
+
 ######## gültige "Noten":
     NotenWerte = {_NORMAL_GRADES}
 
@@ -264,17 +272,17 @@ class GradeBase(dict):
     """
     _ANLASS = (
         # term/category-tag, text version
-        ('T*', 'Klausuren'),
+        ('T', 'Klausuren'),
         ('1', '1. Halbjahr'),
         ('2', '2. Halbjahr'),
         ('A', 'Abitur'),
-        ('S*', 'Sonderzeugnisse')
+        ('S', 'Sonderzeugnisse')
     )
     #
-    GRADE_PATH = 'NOTEN_{term[0]}/Noten_{group}'  # grade table: file-name
+    GRADE_PATH = 'NOTEN_{term}/Noten_{group}' # grade table: file-name
     #
-    REPORT_DIR = 'Notenzeugnisse_{term[0]}' # grade report: folder
-    REPORT_NAME = '{group}_{rtype}'         # grade report: file name
+    REPORT_DIR = 'Notenzeugnisse_{term}' # grade report: folder
+    REPORT_NAME = '{group}_{rtype}'      # grade report: file name
     #
     _PRINT_GRADE = {
         '1': "sehr gut",
@@ -303,12 +311,16 @@ class GradeBase(dict):
                     tag = tag)) from e
 #
     @classmethod
-    def table_path(cls, group, term):
+    def table_path(cls, group, term, subselect):
         """Get file path for the grade table.
+        <group> is the group being graded.
+        <term> is the "reason" for the grade table (end-of-term, etc.).
+        <subselect> can be a pupil-id, a tag or a date, depending on the
+        category.
         """
-        path = cls.GRADE_PATH.format(term = term[0], group = group)
-        if term[0] in ('S', 'T'):
-            return path + '_' + term[1:]
+        path = cls.GRADE_PATH.format(term = term, group = group)
+        if subselect:
+            return path + '_' + subselect
         return path
 #
     @classmethod
@@ -371,10 +383,12 @@ class GradeBase(dict):
         self.sekII = self.group_info(group, 'Stufe') == 'SekII'
         self.valid_grades = self.group_info(group, 'NotenWerte')
         # Set default report type according to "term" and group
+        self._extras_defaults = {}
         try:
-            self.ZA_default = self.group_info(group, f'*ZA/{term[0]}')[0]
+            self._extras_defaults['*ZA'] = self.group_info(group,
+                    f'*ZA/{term}')[0]
         except:
-            self.ZA_default = ''
+            pass
 #
     def extras_default(self, sid, g):
         """Substitute default values for empty "extras".
@@ -382,9 +396,7 @@ class GradeBase(dict):
         if g:
             return g
         # Default values ...
-        if sid == '*ZA':
-            return self.ZA_default
-        return ''
+        return self._extras_defaults.get(sid) or ''
 #
     def grade_format(self, g):
         """Format the grade corresponding to the given numeric string.
@@ -427,23 +439,18 @@ class GradeBase(dict):
     def term2text(cls, term):
         """For grade tables, produce readable "term" entries.
         """
-        term0 = term[0]
-        if term0 in ('S', 'T'):
-            term = term0 + '*'
         for t, text in cls.terms():
             if term == t:
                 return text
         raise Bug("INVALID term: %s" % term)
 #
     @classmethod
-    def text2term(cls, text, issue_d):
+    def text2term(cls, text):
         """For grade tables, convert the readable "term" entries to
         the corresponding tag.
         """
         for term, txt in cls.terms():
             if text == txt:
-                if term.endswith('*'):
-                    term = term[:-1] + issue_d
                 return term
         raise Bug("INVALID term text: %s" % text)
 #

@@ -2,7 +2,7 @@
 """
 ui/grade_grid.py
 
-Last updated:  2021-02-23
+Last updated:  2021-03-01
 
 Manage the grid for the grade-editor.
 
@@ -61,7 +61,6 @@ ROWS = (
 import os
 
 from ui.grid import Grid
-from ui.ui_support import QuestionDialog
 
 
 class GradeGrid(Grid):
@@ -72,14 +71,14 @@ class GradeGrid(Grid):
             composites, calcs, extras, selects, pupil_data):
         """<grades_view> is the "View" on which this "Scene" is to be
         presented.
-            <info>: general information, [[key, value, tag], ... ]
-            <main_sids>, <components>, <composites>, <calcs>, <extras>:
-                These are the subjects (and similar items) for the columns.
-                They have the structure [[key, name], ... ]
-            <selects>: Special "selection" entries for particular field
-                editors, [[selection type, [value, ... ]], ... ]
-            <pupil_data>: Alist of pupil lines,
-                [[pid, name, stream, {sid: value, ... }], ... ]
+        <info>: general information, [[key, value, tag], ... ]
+        <main_sids>, <components>, <composites>, <calcs>, <extras>:
+            These are the subjects (and similar items) for the columns.
+            They have the structure [[key, name], ... ]
+        <selects>: Special "selection" entries for particular field
+            editors, [[selection type, [value, ... ]], ... ]
+        <pupil_data>: A list of pupil lines,
+            [[pid, name, stream, {sid: value, ... }], ... ]
         """
         # Get number of rows and columns
         row_pids = len(ROWS)
@@ -243,21 +242,22 @@ class GradeGrid(Grid):
 #
     def valueChanged(self, tag, text):
         """Called when a cell value is changed by the editor.
-        Specific action is taken here only for real grades, which can
-        cause further changes in the table.
-        References to other value changes will nevertheless be available
-        via <self.changes()> (a list of tile-tags).
         """
         super().valueChanged(tag, text)
         if tag.startswith('$'):
             # Averages should not be handled, but have no "validation"
             # so they won't land here at all.
             pid, sid = tag[1:].split('-')
-            BACKEND('GRADES_value_changed', pid = pid, sid = sid, val = text)
+            BACKEND('GRADES_grade_changed', pid = pid, sid = sid, val = text)
+        else:
+            BACKEND('GRADES_value_changed', tag = tag, val = text)
 #
     def set_grades(self, vlist):
         for pid, sid, cgrade in vlist:
             ctag = f'${pid}-{sid}'
             self.set_text(ctag, cgrade)
             self.set_change_mark(ctag, cgrade)
-
+#
+    def save_data(self):
+        BACKEND('GRADES_save')
+        # -> redisplay of term/group/subselect

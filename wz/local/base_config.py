@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-02-20
+Last updated:  2021-03-02
 
 General configuration items.
 
@@ -42,6 +42,7 @@ DECIMAL_SEP = ','
 SCHOOLYEAR_MONTH_1 = 8
 # Format for printed dates (as used by <datetime.datetime.strftime>):
 DATEFORMAT = '%d.%m.%Y'
+NO_DATE = '*'   # an unspecified date
 
 CALENDAR_FILE = 'Kalender'
 

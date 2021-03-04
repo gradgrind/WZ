@@ -2,7 +2,7 @@
 """
 ui/abitur_pupil_view.py
 
-Last updated:  2021-02-24
+Last updated:  2021-02-27
 
 Editor for Abitur results (single pupil).
 
@@ -199,10 +199,6 @@ class AbiPupilView(Grid):
 #
     def valueChanged(self, tag, text):
         """Called when a cell value is changed by the editor.
-        Specific action is taken here only for grades, which can
-        cause further changes in the table.
-        References to other value changes will nevertheless be available
-        via <self.changes()> (a list of tile-tags).
         """
         super().valueChanged(tag, text)
         BACKEND('ABITUR_set_value', tag = tag, val = text)
@@ -218,12 +214,12 @@ class AbiPupilView(Grid):
 #                _TABLE_CHANGES.format(pupil = self.name))):
 #            self.save_changes()
 #
-    def set_pupil(self, pid):
-        """A new pupil has been selected: reset the grid accordingly.
-        """
-        self.clear_changes()
-        self.changes_init()    # set of changed cells
-        BACKEND('ABITUR_set_pupil', pid = pid)
+#    def set_pupil(self, pid):
+#        """A new pupil has been selected: reset the grid accordingly.
+#        """
+#        self.clear_changes()
+#        self._changes_init()    # set of changed cells
+#        BACKEND('ABITUR_set_pupil', pid = pid)
 #
     def set_cells(self, data):
         for tag, val in data:
@@ -236,10 +232,6 @@ class AbiPupilView(Grid):
         for tag, val in data:
             self.set_text_init(tag, val)
 #
-#???
-    def save_changes(self):
-        """Collect the fields to be saved and pass them to the
-        <GradeTable> method.
-        """
-        if self.changes():
-            print("TODO:save_changes")
+    def save_data(self):
+        BACKEND('ABITUR_save_current')
+        # -> redisplay of term/group/subselect

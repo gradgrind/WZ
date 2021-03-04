@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-02-13
+Last updated:  2021-02-27
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -152,7 +152,7 @@ class Grid(QGraphicsScene):
         }
         self.tagmap = {}        # {tag -> {Tile> instance}
         self.value0 = {}        # initial values (text) of cells
-        self.changes_init()     # set of changed cells (tags)
+        self._changes_init()    # set of changed cells (tags)
         self.xmarks = [0.0]
         x = 0.0
         for c in columnwidths:
@@ -179,7 +179,7 @@ class Grid(QGraphicsScene):
     def change_values(self):
         return {tag: self.tagmap[tag].value() for tag in self.changes()}
 #
-    def changes_init(self):
+    def _changes_init(self):
         self._changes = set()
         self._gview.set_changed(False)
 #
@@ -198,7 +198,7 @@ class Grid(QGraphicsScene):
         them. Return <True> if ok to lose them (or if there aren't any
         changes), otherwise <False>.
         """
-        if self.changes():
+        if self._changes:
             return QuestionDialog(_TITLE_LOSE_CHANGES, _LOSE_CHANGES)
         return True
 #
