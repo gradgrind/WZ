@@ -21,15 +21,6 @@ Copyright 2021 Michael Towers
    limitations under the License.
 """
 
-### Grade table "info" items
-GRADE_INFO_FIELDS = {
-    'SCHOOLYEAR': 'Schuljahr',
-    'GROUP': 'Klasse/Gruppe',
-    'TERM': 'Anlass',
-    'ISSUE_D': 'Ausgabedatum',      # or 'Ausstellungsdatum'?
-    'GRADES_D': 'Notendatum'
-}
-
 ### Messages
 _TABLE_YEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {filepath}"
 
@@ -42,6 +33,7 @@ if __name__ == '__main__':
 
 from tables.spreadsheet import Spreadsheet, TableError
 from local.base_config import NO_DATE
+from local.grade_config import GRADE_INFO_FIELDS
 
 ###
 

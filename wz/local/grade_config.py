@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-03-03
+Last updated:  2021-03-04
 
 Configuration for grade handling.
 
@@ -58,6 +58,15 @@ STREAMS = {
 }
 
 _TEMPLATE_PATH = 'Noten/{fname}'
+
+# Grade table "info" items
+GRADE_INFO_FIELDS = {
+    'SCHOOLYEAR': 'Schuljahr',
+    'GROUP': 'Klasse/Gruppe',
+    'TERM': 'Anlass',
+    'ISSUE_D': 'Ausgabedatum',      # or 'Ausstellungsdatum'?
+    'GRADES_D': 'Notendatum'
+}
 
 ###########################
 _NORMAL_GRADES = f"""1+ ; 1 ; 1- ;  +
@@ -442,7 +451,7 @@ class GradeBase(dict):
         for t, text in cls.terms():
             if term == t:
                 return text
-        raise Bug("INVALID term: %s" % term)
+        raise GradeConfigError("INVALID term: %s" % term)
 #
     @classmethod
     def text2term(cls, text):
@@ -452,7 +461,7 @@ class GradeBase(dict):
         for term, txt in cls.terms():
             if text == txt:
                 return term
-        raise Bug("INVALID term text: %s" % text)
+        raise GradeConfigError("INVALID term text: %s" % text)
 #
     @classmethod
     def term2group_rtype_list(cls, term):

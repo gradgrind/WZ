@@ -1,0 +1,177 @@
+# ************** Voreinstellungen ("defaults") **************
+__DEFAULT__: {
+    # Es gibt (im Moment) "SekI" und "SekII".
+    Stufe: SekI
+
+    # (engl. "grade table template"):
+    NotentabelleVorlage: Noten/Noteneingabe
+
+    # (engl. "grade report template"):
+    NotenzeugnisVorlage: [
+        [Zeugnis      SekI]
+        [Abgang       SekI-Abgang]
+        [Abschluss    SekI-Abschluss]
+        [Orientierung Orientierung]
+    ]
+
+    # Notengruppen, deren Noten nicht im Zeugnis erscheinen:
+    Nullgruppen: []
+
+    # Welche Bewertungsmaßstäbe (engl. "streams") in dieser Gruppe
+    # zulässig sind:
+    # leer => keine Untergruppen in dieser Klasse/Gruppe
+    Maßstäbe: []
+
+    # (extra "grade" fields in internal table):
+    # Zusätzliche "Notenfelder" in interner Notentabelle
+    Notenfelder_X: [
+        [*ZA  <<<Zeugnis (Art)>>>]
+        [*B   Bemerkungen]
+    ]
+
+    # Berechnete Felder, z.B. Durchschnitte für Notenkonferenz:
+    Calc: []
+
+#?
+    # Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
+    # können
+    *ZA/S: [- Abgang Zeugnis]
+
+    # Angeben, dass es Bemerkungen gibt:
+    *B: [X]
+
+    # Normalerweise sollen erklärte Durchschnitte angezeigt werden:
+    .D: AVERAGE
+    .Dx: AVERAGE
+
+    # gültige "Noten":
+    NotenWerte: [1+ 1 1- 2+ 2 2- 3+ 3 3- 4+ 4 4- 5+ 5 5- 6 * nt t nb /]
+}
+
+# Gruppe '13':
+13: {
+    Stufe: SekII
+    NotentabelleVorlage: Noten/Noteneingabe-Abitur
+    NotenzeugnisVorlage: [
+        [Zeugnis SekII-13_1]
+        [Abgang  SekII-13-Abgang]
+        [Abi     Abitur]
+        [FHS     Fachhochschulreife]
+        [NA      Abitur-nicht-bestanden]
+    ]
+    # (The report type is determined by calculations):
+    Notenfelder_X: [
+        [*ZA  <<<Zeugnis (Art)>>>]
+        [*F_D Fertigstellung]
+        [*B   Bemerkungen]
+    ]
+#?
+    # Zeugnis-Art/Abitur automatic?
+    *ZA/A: []
+#Abitur; Fachhochschulreife; Abitur-nicht-bestanden;
+    *ZA/T: []
+    *ZA/1: [Zeugnis Abgang]
+    *ZA/2: [- Abgang]
+    *ZA/S: [- Abgang]
+    *F_D/A: DATE
+    *F_D: <<<>>>
+    *B/A: <<<>>>
+
+    Calc: [
+        [.Q  Ergebnis]
+        [.D  <<<Φ Alle Fächer>>>]
+    ]
+#?
+    .Q/A: [Abi FHS NA -]
+    .Q: []
+    .D/T: AVERAGE
+    .D: <<<>>>
+    NotenWerte: _ABITUR_GRADES
+}
+
+12.G: {
+    Stufe: SekII
+    NotentabelleVorlage: Noten/Noteneingabe-SII
+    NotenzeugnisVorlage: [
+        [Zeugnis  SekII-12]
+        [Abgang   SekII-12-Abgang]
+    ]
+    Nullgruppen: [X]
+    Maßstäbe: [Gym]
+    Notenfelder_X: [
+        [*ZA  <<<Zeugnis (Art)>>>]
+        [*Q   Qualifikation]
+        [*B   Bemerkungen]
+    ]
+#?
+    *ZA/1: [Zeugnis Abgang]
+    *ZA/2: [Zeugnis Abgang]
+    *ZA/S: [- Abgang]
+    *Q: [Erw RS HS]
+    NotenWerte: _ABITUR_GRADES
+}
+
+12.R: {
+    Maßstäbe: [RS HS]
+    Notenfelder_X: [
+        [*ZA  <<<Zeugnis (Art)>>>]
+        [*Q   Qualifikation]
+        [*B   Bemerkungen]
+    ]
+#?
+    *ZA/1: [Zeugnis Abgang]
+    *ZA/2: [Abschluss Zeugnis Abgang]
+    *ZA/S: [- Abgang]
+    *Q: [Erw RS HS -]
+    Calc: [
+        [.D  <<<Φ Alle Fächer>>>]
+        [.Dx <<<Φ De-En-Ma>>>]
+    ]
+}
+
+11.G: {
+    Maßstäbe: [Gym]
+    Notenfelder_X: [
+        [*ZA  <<<Zeugnis (Art)>>>]
+        [*Q   Qualifikation]
+        [*B   Bemerkungen]
+    ]
+    *ZA/1: [Orientierung Abgang Zeugnis]
+    *ZA/2: [Zeugnis Abgang]
+    *Q: [12 HS -]
+    Calc: [
+        [.D  <<<Φ Alle Fächer>>>]
+    ]
+}
+
+11.R: {
+    Maßstäbe: [RS HS]
+    Notenfelder_X: [
+        [*ZA  <<<Zeugnis (Art)>>>]
+        [*Q   Qualifikation]
+        [*B   Bemerkungen]
+    ]
+#?
+    *ZA/1: [Orientierung Abgang Zeugnis]
+    *ZA/2: [Zeugnis Abgang Abschluss]
+    *ZA/S: [- Abgang]
+    *Q: [RS HS -]
+    Calc: [
+        [.D  <<<Φ Alle Fächer>>>]
+        [.Dx <<<Φ De-En-Ma>>>]
+    ]
+}
+
+10: {
+#?
+    *ZA/2: [Orientierung Zeugnis]
+}
+
+# Gruppen '09', '08', ... (benutzen die Voreinstellungen)
+09: {}
+08: {}
+07: {}
+06: {}
+05: {}
+
+xxx: { XXX: <<<Try escapes on this!\nA new line\n\\\t and with tab.>>>}
