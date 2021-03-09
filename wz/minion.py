@@ -118,7 +118,8 @@ class Minion:
 #
     def report(self, message, **params):
         msg = message.format(**params)
-        if self.filepath:
+        path = params.get('path')
+        if (not path) and self.filepath:
             msg += _FILEPATH.format(path = self.filepath)
         raise MinionError(msg)
 #

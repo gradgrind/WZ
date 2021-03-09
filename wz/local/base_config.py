@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-03-02
+Last updated:  2021-03-09
 
 General configuration items.
 
@@ -61,8 +61,6 @@ CALENDER_HEADER = \
 """
 
 import os, glob, builtins
-from minion import Minion
-builtins.MINION = Minion().parse_file
 
 from local.grade_config import GradeBase, all_streams
 

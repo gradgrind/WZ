@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-03-08
+Last updated:  2021-03-09
 
 Basic configuration and structural stuff.
 
@@ -31,6 +31,9 @@ _BAD_CONFIG_LINE = "In Konfigurationsdatei {cfile}:\n  ungültige Zeile: {line}"
 _DOUBLE_CONFIG_TAG = "In Konfigurationsdatei {cfile}:\n" \
         "  mehrfacher Eintrag: {tag} = ..."
 
+# Configuration file
+_SCHOOL_DATA = 'SCHOOL_DATA'
+
 import sys, os, re, builtins, datetime
 if __name__ == '__main__':
     # Enable package import if running as module
@@ -41,6 +44,9 @@ class Bug(Exception):
     pass
 builtins.Bug = Bug
 
+from minion import Minion
+builtins.MINION = Minion().parse_file
+
 from keyword import iskeyword
 import local.base_config as CONFIG
 
@@ -49,55 +55,14 @@ import local.base_config as CONFIG
 class DataError(Exception):
     pass
 
-#TODO: I hope to deprecate this. That would require at least new calendar
-# files.
-class ConfigFile(dict):
-    """Read a file containing very simply formatted configuration info.
-    Each line is: key = value. Only <str> values are supported.
-    A line starting with '#' is a comment.
-    Empty lines are ignored.
-    Encoding is utf-8.
-    The keys can be used for item-access as well as attribute-access
-    (e.g. cfile["A"] or cfile.A). However, only valid "identifiers" which
-    are not keywords can be used for attribute-access.
-    """
-    def __init__(self, filepath):
-        super().__init__()
-        with open(filepath, encoding = 'utf-8') as fi:
-            for l in fi:
-                line = l.strip()
-                if (not line) or line[0] == '#':
-                    continue
-                try:
-                    k, v = line.split('=')
-                except ValueError as e:
-                    raise DataError(_BAD_CONFIG_LINE.format(
-                            line = l)) from e
-                k = k.rstrip()
-                if not k:
-                    raise DataError(_BAD_CONFIG_LINE.format(line = l))
-                if k in self:
-                    raise DataError(_DOUBLE_CONFIG_TAG.format(tag = k))
-                v = v.lstrip()
-                self[k] = v
-                if not hasattr(self, k):
-                    if k.isidentifier() and not iskeyword(k):
-                        setattr(self, k, v)
-
-###
-
 def init(datadir = None):
     appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     builtins.ZEUGSDIR = os.path.join(os.path.dirname (appdir))
     if not datadir:
         datadir = os.path.join(ZEUGSDIR, 'TESTDATA')
-    if not os.path.isfile(os.path.join(datadir, 'SCHOOL_DATA.minion')):
-        print("ERROR: Invalid data directory: %s" % datadir)
-        quit(1)
     builtins.DATA = datadir
     builtins.RESOURCES = os.path.join(DATA, 'RESOURCES')
-#TODO: parse_file (with and without gz?)
-    builtins.SCHOOL_DATA = MINION(os.path.join(DATA, 'SCHOOL_DATA.minion'))
+    builtins.SCHOOL_DATA = MINION(os.path.join(DATA, _SCHOOL_DATA))
 
 
 def report(mtype, text):
@@ -244,11 +209,11 @@ class Dates:
         """Read the calendar file for the given school year.
         """
         fpath = CONFIG.year_path(schoolyear, CONFIG.CALENDAR_FILE)
-        rawdata = ConfigFile(fpath)
+        rawdata = MINION(fpath)
         calendar = {}
         for k, v in rawdata.items():
             try:
-                v1, v2 = v.split(':')
+                v1, v2 = v.split('/')
             except:
                 # single day
                 date = v.strip()
