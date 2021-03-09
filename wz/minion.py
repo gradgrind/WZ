@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-core/minion.py - last updated 2021-03-07
+minion.py - last updated 2021-03-09
 
-Handle configuration data formatted as "MINION".
+Read MINION-formatted configuration data.
 
 ==============================
 Copyright 2021 Michael Towers
@@ -27,11 +27,11 @@ MINION: MINImal Object Notation
 MINION is a simple configuration-file format taking ideas from JSON.
 
 It contains structured data based on "dicts" (associative arrays), lists
-and strings. Nothing else is supported.
+and strings. Nothing else is supported. Files should be encoded as utf-8.
 
-dict: { key:value key:value ... }
-    A "key" may contain any character except the MINION control characters:
-        ' ': A separator, except within a "string".
+simple-string: A character sequence containing none of the following
+    control characters:
+        ' ': A separator.
         '#': Start a comment (until the end of the line).
         ':': Separates key from value in a dict.
         '{': Start a dict.
@@ -40,21 +40,24 @@ dict: { key:value key:value ... }
         ']': End a list.
         '<<<': Start a complex-string.
         '>>>': End a complex-string.
+
+dict: { key:value key:value ... }
+    A "key" is a simple-string.
     A "value" may be a simple-string, a complex-string, a list or a dict.
 
 list: [ value value ... ]
-
-simple-string: A character sequence containing none of the above control
-    characters.
+    A "value" may be a simple-string, a complex-string, a list or a dict.
 
 complex-string: <<< any characters ... >>>
     A complex-string may be continued from one line to the next. In that
     case the next line must (also) be prefixed by '<<<'. Empty and
     comment lines will be ignored. Line breaks within a string are not
     directly supported – but provision is made for specifying escape
-    characters.
+    characters. By default, the escape sequences are '\\', '\n' and '\t'
+    (for backslash, newline and tab). Spaces at the end of a line are
+    ignored.
 
-Spaces are not needed around the other control characters, but they may
+Spaces are not needed around the control characters, but they may
 be used. Apart from within complex-strings and their use as separators,
 spaces will be ignored.
 
@@ -71,6 +74,10 @@ _BAD_STRINGX = "Ungültige Text-Zeile:\n  {line} – {text}"
 _NO_KEY = "Schlüssel erwartet:\n  {line} – {text}"
 _EARLY_END = "Vorzeitiges Ende der Eingabe in Zeile {line}:\n  {text}"
 _NESTING_ERROR = "Datenstruktur nicht ordentlich abgeschlossen"
+_NO_FILE = "MINION-Datei nicht gefunden:\n  {path}"
+_BAD_FILE = "Ungültiges Datei-Format:\n  {path}"
+_BAD_GZ_FILE = "Ungültiges Datei-Format (nicht 'gzip'):\n  {path}"
+_FILEPATH = "\n  [in {path}]"
 
 ### Special symbols, etc.
 _COMMENT = '#'
@@ -85,14 +92,14 @@ _lenSTRING0 = len(_STRING0)
 _STRING1 = '>>>'
 _REGEX = r'(\s+|:|#|\[|\]|\{|\}|<<<|>>>)' # all special items
 
-import re
+import re, gzip
 
 class MinionError(Exception):
     pass
 
 ###
 
-# This should implement python's string escaping:
+# This should implement python's string escaping, if desired:
 #    escaped = codecs.escape_decode(bytes(myString, "utf-8"))[0].decode("utf-8")
 
 class Minion:
@@ -102,20 +109,53 @@ class Minion:
         python_dict = minion.parse(text)
     """
     def __init__(self, escape_dict = None):
+        if escape_dict == None:
+            escape_dict = {r'\n': '\n', r'\\': '\\', r'\t': '\t'}
         self.escape_dict = escape_dict
         if escape_dict:
             elist = [re.escape(e) for e in escape_dict]
             self.rxsub = '|'.join(elist)
 #
-    def parse(self, text):
+    def report(self, message, **params):
+        msg = message.format(**params)
+        if self.filepath:
+            msg += _FILEPATH.format(path = self.filepath)
+        raise MinionError(msg)
+#
+    def parse(self, text, filepath = None):
+        self.filepath = filepath
         self.line_number = 0
         self.lines = text.splitlines()
         data, rest = self.DICT(None)
         if rest or self.line_number < len(self.lines):
-            raise MinionError(_EARLY_END.format(
-                    line = self.line_number,
-                    text = self.lines[self.line_number - 1]))
+            self.report(_EARLY_END, line = self.line_number,
+                    text = self.lines[self.line_number - 1])
         return data
+#
+    def parse_file(self, fpath, **replacements):
+        try:
+            with open(fpath, 'r', encoding = 'utf-8') as fh:
+                text = fh.read()
+        except FileNotFoundError:
+            self.report(_NO_FILE, path = fpath)
+        except ValueError:
+            self.report(_BAD_FILE, path = fpath)
+        return self.parse_replace(text, fpath, **replacements)
+#
+    def parse_replace(self, text, fpath, **params):
+        for rep, val in params.items():
+            text = text.replace(rep, val)
+        return self.parse(text, fpath)
+#
+    def parse_file_gz(self, fpath, **replacements):
+        try:
+            with gzip.open(fpath, 'rt', encoding='UTF-8') as zipfile:
+                text = zipfile.read()
+        except FileNotFoundError:
+            self.report(_NO_FILE, path = fpath)
+        except OSError:
+            self.report(_BAD_GZ_FILE, path = fpath)
+        return self.parse_replace(text, fpath, **replacements)
 #
     def read_line(self):
         if self.line_number >= len(self.lines):
@@ -123,7 +163,7 @@ class Minion:
                 # No more lines
                 self.line_number += 1
                 return _DICT1
-            raise MinionError(_NESTING_ERROR)
+            self.report(_NESTING_ERROR)
         line = self.lines[self.line_number]
         self.line_number += 1
         return line.strip()
@@ -157,18 +197,16 @@ class Minion:
             key, sep, rest = self.read_symbol(line)
             if sep == _DICTK:
                 if not key:
-                    raise MinionError(_NO_KEY.format(
-                        line = self.line_number, text = line))
+                    self.report(_NO_KEY, line = self.line_number, text = line)
                 if key in dmap:
-                    raise MinionError(_MULTI_KEY.format(
-                            line = self.line_number, key = key))
+                    self.report(_MULTI_KEY, line = self.line_number, key = key)
             elif sep == _DICT1 and not key:
                 # End of DICT
                 return dmap, rest
             else:
                 if key or sep or rest:
-                    raise MinionError(_BAD_DICT_LINE.format(
-                            line = self.line_number, text = line))
+                    self.report(_BAD_DICT_LINE, line = self.line_number,
+                            text = line)
                 line = self.read_line()
                 continue
             while not rest:
@@ -180,8 +218,8 @@ class Minion:
                 if sep == _DICT1:
                     return dmap, rest2
                 elif sep:
-                    raise MinionError(_BAD_DICT_LINE.format(
-                            line = self.line_number, text = line))
+                    self.report(_BAD_DICT_LINE, line = self.line_number,
+                            text = line)
             elif sep == _STRING0:
                 # A complex-string value
                 dmap[key], rest2 = self.STRING(rest2)
@@ -191,8 +229,8 @@ class Minion:
             elif sep == _LIST0:
                 dmap[key], rest2 = self.LIST(rest2)
             else:
-                raise MinionError(_BAD_DICT_VALUE.format(
-                            line = self.line_number, val = rest))
+                self.report(_BAD_DICT_VALUE, line = self.line_number,
+                        val = rest)
             line = rest2
 #
     def STRING(self, line):
@@ -225,8 +263,7 @@ class Minion:
                         break
                 except ValueError:
                     pass
-                raise MinionError(_BAD_STRINGX.format(
-                        line = self.line_number, text = line))
+                self.report(_BAD_STRINGX, line = self.line_number, text = line)
 #
     def LIST(self, line):
         lx = []
@@ -252,20 +289,25 @@ class Minion:
                 # A LIST sub-item
                 sym, rest = self.LIST(rest)
             else:
-                raise MinionError(_BAD_LIST_VALUE.format(
-                            line = self.line_number, val = rest))
+                self.report(_BAD_LIST_VALUE, line = self.line_number,
+                        val = rest)
             lx.append(sym)
             line = rest
 
 
+#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    minion = Minion({r'\n': '\n', r'\\': '\\', r'\t': '\t'})
-    with open('../local/grade_config.minion', 'r', encoding = 'utf-8') as fh:
-        test = fh.read()
-    test = test.replace('_ABITUR_GRADES', "[15 14 13 12 11 10 09 08 07"
+    minion = Minion()
+    data = minion.parse_file('_test/data/test1.minion',
+            _ABITUR_GRADES = "[15 14 13 12 11 10 09 08 07"
             " 06 05 04 03 02 01 00 * n t nb /]")
-    data = minion.parse(test)
+    for k, v in data.items():
+        print("\n *** SECTION %s ***" % k)
+        for k1, v1 in v.items():
+            print("  ... %s: %s" % (k1, v1))
+    print("\n ++ Test gzipped file ++")
+    data = minion.parse_file_gz('_test/data/test2.minion.gz')
     for k, v in data.items():
         print("\n *** SECTION %s ***" % k)
         for k1, v1 in v.items():

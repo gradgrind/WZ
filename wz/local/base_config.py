@@ -60,7 +60,9 @@ CALENDER_HEADER = \
 
 """
 
-import os, glob
+import os, glob, builtins
+from minion import Minion
+builtins.MINION = Minion().parse_file
 
 from local.grade_config import GradeBase, all_streams
 

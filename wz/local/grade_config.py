@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-03-04
+Last updated:  2021-03-08
 
 Configuration for grade handling.
 
@@ -67,6 +67,7 @@ GRADE_INFO_FIELDS = {
     'ISSUE_D': 'Ausgabedatum',      # or 'Ausstellungsdatum'?
     'GRADES_D': 'Notendatum'
 }
+
 
 ###########################
 _NORMAL_GRADES = f"""1+ ; 1 ; 1- ;  +
@@ -287,6 +288,9 @@ class GradeBase(dict):
         ('A', 'Abitur'),
         ('S', 'Sonderzeugnisse')
     )
+
+
+
     #
     GRADE_PATH = 'NOTEN_{term}/Noten_{group}' # grade table: file-name
     #

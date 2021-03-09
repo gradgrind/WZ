@@ -1,0 +1,21 @@
+# ************** Zeugnis-Anlässe (Zeitpunkt / Grund) **************
+
+1._Halbjahr: {
+    groups: [13 12.G 12.R 11.G 11.R]
+}
+
+2._Halbjahr: {
+    groups: [13 12.G 12.R 11.G 11.R 10]
+}
+
+Abitur: {
+    groups: [13]
+}
+
+Sonderzeugnis: {
+    groups: [13 12.G 12.R 11.G 11.R 10 09 08 07 06 05]
+}
+
+Klausur: {
+    groups: [13]
+}

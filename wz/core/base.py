@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-02-14
+Last updated:  2021-03-08
 
 Basic configuration and structural stuff.
 
@@ -49,6 +49,8 @@ import local.base_config as CONFIG
 class DataError(Exception):
     pass
 
+#TODO: I hope to deprecate this. That would require at least new calendar
+# files.
 class ConfigFile(dict):
     """Read a file containing very simply formatted configuration info.
     Each line is: key = value. Only <str> values are supported.
@@ -89,12 +91,13 @@ def init(datadir = None):
     builtins.ZEUGSDIR = os.path.join(os.path.dirname (appdir))
     if not datadir:
         datadir = os.path.join(ZEUGSDIR, 'TESTDATA')
-    if not os.path.isfile(os.path.join(datadir, 'SCHOOL_DATA')):
+    if not os.path.isfile(os.path.join(datadir, 'SCHOOL_DATA.minion')):
         print("ERROR: Invalid data directory: %s" % datadir)
         quit(1)
     builtins.DATA = datadir
     builtins.RESOURCES = os.path.join(DATA, 'RESOURCES')
-    builtins.SCHOOL_DATA = ConfigFile(os.path.join(DATA, 'SCHOOL_DATA'))
+#TODO: parse_file (with and without gz?)
+    builtins.SCHOOL_DATA = MINION(os.path.join(DATA, 'SCHOOL_DATA.minion'))
 
 
 def report(mtype, text):
