@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-minion.py - last updated 2021-03-09
+minion.py - last updated 2021-03-10
 
 Read MINION-formatted configuration data.
 
@@ -63,6 +63,15 @@ spaces will be ignored.
 
 The top level of a MINION text is a "dict" – without the surrounding
 braces ({ ... }).
+
+#TODO:
+There is also a very limited macro-like feature. Element declared at the
+top level which start with '&' may be referenced (which basically means
+included) at any later point in a data structure by means of the macro
+name, e.g.:
+    &MACRO1: [A list of words]
+    ...
+    DEF1: { X: &MACRO1 }
 """
 
 ### Messages
@@ -78,9 +87,11 @@ _NO_FILE = "MINION-Datei nicht gefunden:\n  {path}"
 _BAD_FILE = "Ungültiges Datei-Format:\n  {path}"
 _BAD_GZ_FILE = "Ungültiges Datei-Format (nicht 'gzip'):\n  {path}"
 _FILEPATH = "\n  [in {path}]"
+_BAD_MACRO = "Unbekanntes „Makro“: {line} – {val}"
 
 ### Special symbols, etc.
 _COMMENT = '#'
+_MACRO = '&'
 _KEYSEP  = ':'
 _LIST0 = '['
 _LIST1 = ']'
@@ -90,7 +101,7 @@ _DICTK = ':'
 _STRING0 = '<<<'
 _lenSTRING0 = len(_STRING0)
 _STRING1 = '>>>'
-_REGEX = r'(\s+|:|#|\[|\]|\{|\}|<<<|>>>)' # all special items
+_REGEX = r'(\s+|#|:|\[|\]|\{|\}|<<<|>>>)' # all special items
 
 import re, gzip
 
@@ -124,6 +135,7 @@ class Minion:
         raise MinionError(msg)
 #
     def parse(self, text, filepath = None):
+        self.toplevel = None    # Needed for macros
         self.filepath = filepath
         self.line_number = 0
         self.lines = text.splitlines()
@@ -194,6 +206,8 @@ class Minion:
 #
     def DICT(self, line):
         dmap = {}
+        if self.toplevel == None:
+            self.toplevel = dmap    # Needed for macros
         while True:
             key, sep, rest = self.read_symbol(line)
             if sep == _DICTK:
@@ -214,13 +228,20 @@ class Minion:
                 rest = self.read_line()
             val, sep, rest2 = self.read_symbol(rest)
             if val:
-                # A simple-string value
-                dmap[key] = val
-                if sep == _DICT1:
-                    return dmap, rest2
-                elif sep:
-                    self.report(_BAD_DICT_LINE, line = self.line_number,
-                            text = line)
+                # A simple-string value ... or a macro
+                if val[0] == _MACRO:
+                    try:
+                        dmap[key] = self.toplevel[val]
+                    except KeyError:
+                        self.report(_BAD_MACRO, line = self.line_number,
+                                val = val)
+                else:
+                    dmap[key] = val
+                    if sep == _DICT1:
+                        return dmap, rest2
+                    elif sep:
+                        self.report(_BAD_DICT_LINE, line = self.line_number,
+                                text = line)
             elif sep == _STRING0:
                 # A complex-string value
                 dmap[key], rest2 = self.STRING(rest2)
@@ -235,9 +256,6 @@ class Minion:
             line = rest2
 #
     def STRING(self, line):
-
-        #def resub(m):
-        #    return self.escape_dict[m.group(0)]
         lx = []
         while True:
             try:
@@ -273,7 +291,15 @@ class Minion:
                 line = self.read_line()
             sym, sep, rest = self.read_symbol(line)
             if sym:
-                lx.append(sym)
+                # A simple-string value ... or a macro
+                if sym[0] == _MACRO:
+                    try:
+                        lx.append(self.toplevel[sym])
+                    except KeyError:
+                        self.report(_BAD_MACRO, line = self.line_number,
+                                val = sym)
+                else:
+                    lx.append(sym)
             if not sep:
                 line = rest
                 continue
@@ -304,6 +330,8 @@ if __name__ == '__main__':
             _ABITUR_GRADES = "[15 14 13 12 11 10 09 08 07"
             " 06 05 04 03 02 01 00 * n t nb /]")
     for k, v in data.items():
+        if k[0] == _MACRO:
+            continue
         print("\n *** SECTION %s ***" % k)
         for k1, v1 in v.items():
             print("  ... %s: %s" % (k1, v1))

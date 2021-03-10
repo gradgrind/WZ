@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-02-23
+Last updated:  2021-03-10
 
 Administration interface.
 
@@ -78,7 +78,7 @@ from qtpy.QtCore import Qt, QDateTime, QProcess, QTimer
 from qtpy.QtGui import QMovie, QPixmap, QColor
 
 from ui.ui_support import QuestionDialog, HLine, TabPage, KeySelect, \
-        GuiError
+        GuiError, openDialog, saveDialog
 
 builtins.TABS = []
 builtins.FUNCTIONS = {}
@@ -372,7 +372,29 @@ class _Backend(QDialog):
         if self.process:
             self.process.kill()
             self.process.waitForFinished()
-
+#
+    def read_dialog(self, filetype, callback):
+        """Put up a file-open dialog and call a back-end function with
+        the selected filepath. If the action is cancelled, the back-end
+        function is not called.
+            <filetype>: E.g. "Tabellendatei (*.xlsx *.ods *.tsv)"
+            <callback>: Name of back-end function to call with filepath.
+        """
+        fpath = openDialog(filetype)
+        if fpath:
+            self.command(callback, filepath = fpath)
+#
+    def save_dialog(self, filetype, filename, callback):
+        """Put up a file-save dialog and call a back-end function with
+        the selected filepath. If the action is cancelled, the back-end
+        function is not called.
+            <filetype>: E.g. "Tabellendatei (*.xlsx *.ods *.tsv)"
+            <filename>: Initial name of file.
+            <callback>: Name of back-end function to call with filepath.
+        """
+        fpath = saveDialog(filetype, filename)
+        if fpath:
+            self.command(callback, filepath = fpath)
 ###
 
 backend_instance = _Backend()
@@ -381,6 +403,8 @@ FUNCTIONS['*DONE*'] = backend_instance.task_done
 FUNCTIONS['*REPORT*'] = backend_instance.report
 # For other message pop-ups, see <SHOW_INFO>, <SHOW_WARNING> and
 # <SHOW_ERROR> in module "ui_support".
+FUNCTIONS['*READ_FILE*'] = backend_instance.read_dialog
+FUNCTIONS['*SAVE_FILE*'] = backend_instance.save_dialog
 
 ####---------------------------------------
 

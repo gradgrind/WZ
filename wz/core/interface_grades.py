@@ -26,6 +26,9 @@ Copyright 2021 Michael Towers
 ### Labels, etc.
 _ALL_PUPILS = "Gesamttabelle"
 _NEW_REPORT = "Neues Zeugnis"
+_EXCEL_FILE = "Excel-Datei (*.xlsx)"
+_TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
+
 
 import glob
 
@@ -201,6 +204,30 @@ class GradeManager:
 # ... maybe not a new group?
         CALLBACK('grades_???')
         return True
+#
+    @classmethod
+    def make_table(cls, filepath = None):
+        """Produce an xlsx-table containing the group's grades.
+        This is especially useful for entering grades.
+        If no <filepath> is given, there will be a callback to the
+        front-end to supply one (and then call this function again).
+        """
+        gtable = cls.grade_table
+        if filepath:
+            qbytes = gtable.make_grade_table()
+            with open(filepath, 'wb') as fh:
+                fh.write(bytes(qbytes))
+        else:
+            filename = os.path.basename(GradeBase.table_path(
+                    gtable.group, gtable.term, gtable.subselect)) + '.xlsx'
+            CALLBACK('*SAVE_FILE*', filetype = _EXCEL_FILE,
+                    filename = filename, callback = 'GRADES_make_table')
+        return True
+
+
+
+
+
 
 #+++++++++++++++ Abitur +++++++++++++++#
 
@@ -273,6 +300,7 @@ FUNCTIONS['GRADES_set_group'] = GradeManager.set_group
 FUNCTIONS['GRADES_subselect'] = GradeManager.subselect
 FUNCTIONS['GRADES_grade_changed'] = GradeManager.grade_changed
 FUNCTIONS['GRADES_save'] = GradeManager.save
+FUNCTIONS['GRADES_make_table'] = GradeManager.make_table
 #?
 FUNCTIONS['ABITUR_set_pupil'] = GradeManager.set_abi_pupil
 FUNCTIONS['ABITUR_set_value'] = GradeManager.abi_set_value

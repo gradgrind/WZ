@@ -1,4 +1,27 @@
-# ************** Voreinstellungen ("defaults") **************
+#*** MINION 1.0 ***#
+# ************** Zeugnis-Gruppen **************
+# Eine Sammlung der Daten für die Zeugnisgruppen.
+# Nur für die hier eingetragenen Gruppen können Notenzeugnisse erstellt
+# werden.
+#TODO: Auch Zwischenzeugnisse hier durch 'Zeugnis' vertreten?
+
+###########################
+### Lists of valid grades
+# *: ("no grade" ->) "––––––"
+# nt: "nicht teilgenommen"
+# t: "teilgenommen"
+# nb: "kann nich beurteilt werden"
+## ne: "nicht erteilt"
+# <UNCHOSEN>: Subject not included in report
+&NO_GRADE: *
+&UNCHOSEN: /
+&NORMAL_GRADES: [1+ 1 1- 2+ 2 2- 3+ 3 3- 4+ 4 4- 5+ 5 5- 6
+        &NO_GRADE nt t nb &UNCHOSEN]
+&ABITUR_GRADES: [15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00
+        &NO_GRADE nt t nb &UNCHOSEN]
+###########################
+
+# Voreinstellungen ("defaults")
 __DEFAULT__: {
     # Es gibt (im Moment) "SekI" und "SekII".
     Stufe: SekI
@@ -45,7 +68,7 @@ __DEFAULT__: {
     .Dx: AVERAGE
 
     # gültige "Noten":
-    NotenWerte: [1+ 1 1- 2+ 2 2- 3+ 3 3- 4+ 4 4- 5+ 5 5- 6 * nt t nb /]
+    NotenWerte: &NORMAL_GRADES
 }
 
 # Gruppe '13':
@@ -86,7 +109,7 @@ __DEFAULT__: {
     .Q: []
     .D/T: AVERAGE
     .D: <<<>>>
-    NotenWerte: _ABITUR_GRADES
+    NotenWerte: &ABITUR_GRADES
 }
 
 12.G: {
@@ -108,7 +131,7 @@ __DEFAULT__: {
     *ZA/2: [Zeugnis Abgang]
     *ZA/S: [- Abgang]
     *Q: [Erw RS HS]
-    NotenWerte: _ABITUR_GRADES
+    NotenWerte: &ABITUR_GRADES
 }
 
 12.R: {

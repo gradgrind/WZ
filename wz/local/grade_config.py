@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-03-08
+Last updated:  2021-03-10
 
 Configuration for grade handling.
 
@@ -24,7 +24,8 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
-_BAD_GROUP_INFO = "Ungültige Zeile in grade_config.REPORT_GROUPS:\n  {line}"
+#? _BAD_GROUP_INFO = "Ungültige Zeile in grade_config.REPORT_GROUPS:\n  {line}"
+
 _BAD_INFOTAG = "Ungültige Noten-Konfiguration für Gruppe {group}: {tag}"
 _BAD_GROUP = "Ungültige Schülergruppe: {group}"
 _BAD_TERM_REPORT = "Ungültige Noten-Konfiguration für Gruppe {group}:" \
@@ -59,6 +60,9 @@ STREAMS = {
 
 _TEMPLATE_PATH = 'Noten/{fname}'
 
+_GRADE_GROUPS = 'GRADE_GROUPS'
+_GRADE_TERMS = 'GRADE_TERMS'
+
 # Grade table "info" items
 GRADE_INFO_FIELDS = {
     'SCHOOLYEAR': 'Schuljahr',
@@ -69,185 +73,8 @@ GRADE_INFO_FIELDS = {
 }
 
 
-###########################
-_NORMAL_GRADES = f"""1+ ; 1 ; 1- ;  +
-    2+ ; 2 ; 2- ; 3+ ; 3 ; 3- ; +
-    4+ ; 4 ; 4- ; 5+ ; 5 ; 5- ; 6 ; +
-    {NO_GRADE} ; nt ; t ; nb ; {UNCHOSEN}
-"""
-
-# *: ("no grade" ->) "––––––"
-# nt: "nicht teilgenommen"
-# t: "teilgenommen"
-# nb: "kann nich beurteilt werden"
-## ne: "nicht erteilt"
-# <UNCHOSEN>: Subject not included in report
-
-_ABITUR_GRADES = f"""15 ; 14 ; 13 ;  +
-    12 ; 11 ; 10 ; 09 ; 08 ; 07 ; +
-    06 ; 05 ; 04 ; 03 ; 02 ; 01 ; 00 ; +
-    {NO_GRADE} ; nt ; t ; nb ; {UNCHOSEN}
-"""
-
 class GradeConfigError(Exception):
     pass
-
-#class GradeError(Exception):
-#    pass
-
-# Eine Sammlung der Daten für die Zeugnisgruppen.
-# Nur für die hier eingetragenen Gruppen können Notenzeugnisse erstellt
-# werden.
-#TODO: Auch Zwischenzeugnisse hier durch 'Zeugnis' vertreten?
-# Für Listen ist das Trennzeichen ';'. Auch wenn eine Liste keine oder
-# nur einen Wert hat, muss das Trennzeichen vorhanden sein (am Ende in
-# diesem Fall).
-REPORT_GROUPS = f"""
-# ************** Voreinstellungen ("defaults") **************
-######## Es gibt (im Moment) für "Stufe": "SekI" und "SekII".
-    Stufe = SekI
-
-######## (engl. "grade table template"):
-    NotentabelleVorlage = Noten/Noteneingabe
-
-######## (engl. "grade report template"):
-    NotenzeugnisVorlage = Zeugnis/SekI; Abgang/SekI-Abgang; +
-            Abschluss/SekI-Abschluss; Orientierung/Orientierung;
-
-######## Notengruppen, deren Noten nicht im Zeugnis erscheinen:
-    Nullgruppen = ;
-
-######## Welche Bewertungsmaßstäbe (engl. "streams") in dieser Gruppe
-######## zulässig sind:
-######## leer => keine Untergruppen in dieser Klasse/Gruppe
-    Maßstäbe = ;
-
-######## (extra "grade" fields in internal table):
-######## Zusätzliche "Notenfelder" in interner Notentabelle
-    Notenfelder_X = *ZA/Zeugnis (Art); *B/Bemerkungen;
-
-######## Berechnete Felder, z.B. Durchschnitte für Notenkonferenz:
-    Calc = ;
-
-######## Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
-######## können
-    *ZA/S = -; Abgang; Zeugnis;
-
-######## Angeben, dass es Bemerkungen gibt:
-    *B = X;
-
-######## Normalerweise sollen erklärte Durchschnitte angezeigt werden:
-    .D = AVERAGE
-    .Dx = AVERAGE
-
-######## gültige "Noten":
-    NotenWerte = {_NORMAL_GRADES}
-
-# Gruppe '13':
-:13
-    Stufe = SekII
-    NotentabelleVorlage = Noten/Noteneingabe-Abitur
-    NotenzeugnisVorlage = Zeugnis/SekII-13_1; Abgang/SekII-13-Abgang; +
-            Abi/Abitur; FHS/Fachhochschulreife; NA/Abitur-nicht-bestanden;
-######## (The report type is determined by calculations):
-    Notenfelder_X = *ZA/Zeugnis (Art); *F_D/Fertigstellung; *B/Bemerkungen;
-######## Zeugnis-Art/Abitur automatic?
-    *ZA/A = ;
-#Abitur; Fachhochschulreife; Abitur-nicht-bestanden;
-    *ZA/T = ;
-    *ZA/1 = Zeugnis; Abgang;
-    *ZA/2 = -; Abgang;
-    *ZA/S = -; Abgang;
-    *F_D/A = DATE
-    *F_D =
-    *B/A =
-    Calc = .Q/Ergebnis; .D/Φ Alle Fächer;
-    .Q/A = Abi; FHS; NA; -;
-    .Q = ;
-    .D/T = AVERAGE
-    .D =
-    NotenWerte = {_ABITUR_GRADES}
-
-:12.G
-    Stufe = SekII
-    NotentabelleVorlage = Noten/Noteneingabe-SII
-    NotenzeugnisVorlage = Zeugnis/SekII-12; Abgang/SekII-12-Abgang;
-    Nullgruppen = X;
-    Maßstäbe = Gym;
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation; *B/Bemerkungen;
-    *ZA/1 = Zeugnis; Abgang;
-    *ZA/2 = Zeugnis; Abgang;
-    *ZA/S = -; Abgang;
-    *Q = Erw; RS; HS;
-    NotenWerte = {_ABITUR_GRADES}
-
-:12.R
-    Maßstäbe = RS; HS;
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation; *B/Bemerkungen;
-    *ZA/1 = Zeugnis; Abgang;
-    *ZA/2 = Abschluss; Abgang; Zeugnis;
-    *ZA/S = -; Abgang;
-    *Q = Erw; RS; HS; -;
-    Calc = .D/Φ Alle Fächer; .Dx/Φ De-En-Ma;
-
-:11.G
-    Maßstäbe = Gym;
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation; *B/Bemerkungen;
-    *ZA/1 = Orientierung; Abgang; Zeugnis;
-    *ZA/2 = Zeugnis; Abgang;
-    *Q = 12; HS; -;
-    Calc = .D/Φ Alle Fächer;
-
-:11.R
-    Maßstäbe = RS; HS;
-    Notenfelder_X = *ZA/Zeugnis (Art); *Q/Qualifikation; *B/Bemerkungen;
-    *ZA/1 = Orientierung; Abgang; Zeugnis;
-    *ZA/2 = Zeugnis; Abgang; Abschluss;
-    *Q = RS; HS; -;
-    Calc = .D/Φ Alle Fächer; .Dx/Φ De-En-Ma;
-
-:10
-    *ZA/2 = Orientierung; Zeugnis;
-
-# Gruppen '09', '08', ... (benutzen die Voreinstellungen)
-:09 08 07 06 05
-"""
-
-GROUP_INFO = {}
-default = {}
-info = default
-continuation = None
-for line in REPORT_GROUPS.splitlines():
-    line = line.strip()
-    if (not line) or line[0] == '#':
-        continue
-    if continuation:
-        line = continuation + line
-        continuation = None
-    if line[0] == ':':
-        # A new group, or new groups: start from the default values.
-        # A shallow copy is adequate here:
-        info = default.copy()
-        for g in line[1:].split():
-            GROUP_INFO[g] = info
-        continue
-    if line[-1] == '+':
-        continuation = line[:-1]
-        continue
-    try:
-        tag, val = line.split('=')
-    except ValueError as e:
-        raise GradeConfigError(_BAD_GROUP_INFO.format(line = line)) from e
-    _vals = val.split(';')
-    if len(_vals) > 1:
-        vals = []
-        for v in _vals:
-            v = v.strip()
-            if v:
-                vals.append(v)
-    else:
-        vals = val.strip()
-    info[tag.strip()] = vals
 
 ###########################
 
@@ -280,18 +107,17 @@ class GradeBase(dict):
     specific to the locality. A subclass handles the set of
     grades for a particular report for a pupil in a more general way.
     """
-    _ANLASS = (
-        # term/category-tag, text version
-        ('T', 'Klausuren'),
-        ('1', '1. Halbjahr'),
-        ('2', '2. Halbjahr'),
-        ('A', 'Abitur'),
-        ('S', 'Sonderzeugnisse')
-    )
-
-
-
+    _terms = None     # term/occasion (cached configuration structure)
+    # This is read/written only by cls.terms().
     #
+    @classmethod
+    def terms(cls):
+        """Return list of "terms" (grading "occasions").
+        """
+        if not cls._terms:
+            cls._terms = MINION(os.path.join(DATA, _GRADE_TERMS))
+        return list(cls._terms)
+#
     GRADE_PATH = 'NOTEN_{term}/Noten_{group}' # grade table: file-name
     #
     REPORT_DIR = 'Notenzeugnisse_{term}' # grade report: folder
@@ -313,8 +139,10 @@ class GradeBase(dict):
 #
     @staticmethod
     def group_info(group, tag):
+        if not cls._group_info:
+            cls._group_info = MINION(os.path.join(DATA, _GRADE_GROUPS))
         try:
-            ginfo = GROUP_INFO[group]
+            ginfo = cls._group_info[group]
         except KeyError as e:
             raise GradeConfigError(_BAD_GROUP.format(group = group)) from e
         try:
@@ -441,31 +269,6 @@ class GradeBase(dict):
         except:
             pass
         raise GradeConfigError(_INVALID_GRADE.format(grade = repr(grade)))
-#
-    @classmethod
-    def terms(cls):
-        """Return list of tuples: (term tag, term name).
-        """
-        return [(cat[0], cat[1]) for cat in cls._ANLASS]
-#
-    @classmethod
-    def term2text(cls, term):
-        """For grade tables, produce readable "term" entries.
-        """
-        for t, text in cls.terms():
-            if term == t:
-                return text
-        raise GradeConfigError("INVALID term: %s" % term)
-#
-    @classmethod
-    def text2term(cls, text):
-        """For grade tables, convert the readable "term" entries to
-        the corresponding tag.
-        """
-        for term, txt in cls.terms():
-            if text == txt:
-                return term
-        raise GradeConfigError("INVALID term text: %s" % text)
 #
     @classmethod
     def term2group_rtype_list(cls, term):

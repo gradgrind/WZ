@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-02-27
+Last updated:  2021-03-10
 
 Editor for grades.
 
@@ -57,8 +57,6 @@ _TT_TABLE_IN_DIR = "Aktualisiere die Notentabelle von den Dateien" \
 _FILESAVE = "Datei speichern"
 _FILEOPEN = "Datei öffnen"
 _DIROPEN = "Ordner öffnen"
-_EXCEL_FILE = "Excel-Datei (*.xlsx)"
-_TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
 
 #####################################################
 
@@ -95,6 +93,10 @@ class GradeEdit(TabPage):
 
         cbox = QVBoxLayout()
 
+        ### Select "term" (to which occasion the reports are to appear)
+        ### That might be a term or semester, it might be a special
+        ### unscheduled report, or a scheduled test (possibly no report)
+        ### or something specific to the school form.
         self.term_select = KeySelect(changed_callback = self.term_changed)
         cbox.addWidget(QLabel(_TERM))
         cbox.addWidget(self.term_select)
@@ -125,20 +127,28 @@ class GradeEdit(TabPage):
 
         cbox.addSpacing(10)
 
-        ### Import grade table
+        ### Import grade table (replace internal one)
         pbTableIn1 = QPushButton(_TABLE_IN1)
         pbTableIn1.setToolTip(_TT_TABLE_IN1)
         cbox.addWidget(pbTableIn1)
         pbTableIn1.clicked.connect(self.input_table)
+
+        ### Import grade tables (adding to internal one)
         pbTableInDir = QPushButton(_TABLE_IN_DIR)
         pbTableInDir.setToolTip(_TT_TABLE_IN_DIR)
         cbox.addWidget(pbTableInDir)
         pbTableInDir.clicked.connect(self.input_tables)
+
         cbox.addSpacing(30)
+
+        ### Produce a pdf of the grade table
         pbPdf = QPushButton(_TABLE_PDF)
         cbox.addWidget(pbPdf)
         pbPdf.clicked.connect(self.print_table)
+
         cbox.addSpacing(10)
+
+        ### Produce the reports
         pbReport = QPushButton(_REPORT_PDF)
         cbox.addWidget(pbReport)
         pbReport.clicked.connect(self.make_reports)
@@ -166,26 +176,18 @@ class GradeEdit(TabPage):
         else:
             return False
 #
-#    def year_changed(self):
-#        if not self.clear():
-#            self.year_select.reset(ADMIN.schoolyear)
-#            return
-#        self.term_select.trigger()
-#
     def SET_TERMS(self, terms, term):
-        """CALLBACK: Supplies the terms as a list of pairs:
-            [[key1, term1], [key2, term2], ...]
+        """CALLBACK: Supplies the terms as a list of "keys" (the display
+        form must substitute '_' by ' ').
         Also the selected term is passed. Set the term selection widget
         and trigger a "change of term" signal.
         """
-        ix = 0
-        for t, tdisp in terms:
-            if term == t:
-                break
-            ix += 1
-        else:
+        try:
+            ix = terms.index(term)
+        except ValueError:
             ix = 0
-        self.term_select.set_items(terms, index = ix)
+        self.term_select.set_items([(t, t.replace('_', ' ')) for t in terms],
+                index = ix)
         self.term_select.trigger()
         return True
 #
@@ -213,7 +215,8 @@ class GradeEdit(TabPage):
         # be called.
         if not self.clear():
             return False
-        if self.term == 'A':
+        if self.term == 'Abitur':
+            # This is a special case ...
             # Switch to/from individual pupil display.
             # <itemtag> is the pid, empty to select the group.
             if itemtag:
@@ -225,19 +228,10 @@ class GradeEdit(TabPage):
 # Don't need to reload grade-table, just switch to grade grid and enter data.
                 BACKEND('GRADES_set_group', group = '')
             return True
-        # Either 'T' or 'S'
 # If no itemtag, show the dummy data / template for creating a new entry.
 # In any case a new grade-table.
 # Get the grade table here, or when selecting the group?
-        # Need cls.group, cls.term
-        cls.subselect = itemtag     # initially empty?
-
-#?
-        self.group_changed(cls.group)
-        return True
-
-
-        BACKEND('GRADES_subselect', tag = itemtag)
+        BACKEND('GRADES_set_subselect', tag = itemtag)
         return True
 #
     def SET_PUPILS(self, termx, group, pid_name_list, pid):
@@ -254,25 +248,6 @@ class GradeEdit(TabPage):
         """
         self.grade_scene.set_grades(grades)
 #
-    def pupil_changed(self, pid):
-        """A new pupil has been selected: reset the grid accordingly.
-        """
-        if not self.clear():
-            return False
-        self.pid = pid
-        if pid:
-            if self.term == 'A':
-                self.grade_scene = AbiPupilView(self.gradeView)
-                self.gradeView.set_scene(self.grade_scene)
-                self.grade_scene.set_pupil(pid)
-                return True
-            if self.term not in ('S', 'T'):
-#TODO:
-                REPORT("TODO: Change pupil %s" % pid)
-                return True
-        self.group_changed(None)
-        return True
-#
     def abitur_INIT_CELLS(self, data):
         self.grade_scene.init_cells(data)
 #
@@ -288,18 +263,9 @@ class GradeEdit(TabPage):
         if self.grade_scene.changes():
             SHOW_WARNING(_MUST_SAVE_CHANGES)
             return
-        gtable = self.grade_scene.grade_table
-        qbytes = gtable.make_grade_table()
-        dir0 = ADMIN._savedir or os.path.expanduser('~')
-#TODO: new: subselect!
-        filename = os.path.basename(GradeBase.table_path(
-                gtable.group, gtable.term, gtable.subselect)) + '.xlsx'
-        fpath = QFileDialog.getSaveFileName(self.gradeView, _FILESAVE,
-                os.path.join(dir0, filename), _EXCEL_FILE)[0]
-        if fpath:
-            ADMIN.set_savedir(os.path.dirname(fpath))
-            with open(fpath, 'wb') as fh:
-                fh.write(bytes(qbytes))
+        BACKEND('GRADES_make_table')
+#
+
 #
 #TODO ...
 
