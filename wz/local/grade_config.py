@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-03-10
+Last updated:  2021-03-11
 
 Configuration for grade handling.
 
@@ -24,8 +24,6 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
-#? _BAD_GROUP_INFO = "Ungültige Zeile in grade_config.REPORT_GROUPS:\n  {line}"
-
 _BAD_INFOTAG = "Ungültige Noten-Konfiguration für Gruppe {group}: {tag}"
 _BAD_GROUP = "Ungültige Schülergruppe: {group}"
 _BAD_TERM_REPORT = "Ungültige Noten-Konfiguration für Gruppe {group}:" \
@@ -72,6 +70,7 @@ GRADE_INFO_FIELDS = {
     'GRADES_D': 'Notendatum'
 }
 
+import os
 
 class GradeConfigError(Exception):
     pass
@@ -109,6 +108,8 @@ class GradeBase(dict):
     """
     _terms = None     # term/occasion (cached configuration structure)
     # This is read/written only by cls.terms().
+    _group_info = None  # information about groups (cache)
+    # This is read/written only by cls._group_info().
     #
     @classmethod
     def terms(cls):
@@ -137,19 +138,26 @@ class GradeBase(dict):
         'nb': "kann nicht beurteilt werden",
     }
 #
-    @staticmethod
-    def group_info(group, tag):
+    @classmethod
+    def group_info(cls, group, tag = None):
         if not cls._group_info:
             cls._group_info = MINION(os.path.join(DATA, _GRADE_GROUPS))
-        try:
-            ginfo = cls._group_info[group]
-        except KeyError as e:
-            raise GradeConfigError(_BAD_GROUP.format(group = group)) from e
-        try:
-            return ginfo[tag]
-        except KeyError as e:
-            raise GradeConfigError(_BAD_INFOTAG.format(group = group,
-                    tag = tag)) from e
+        if group:
+            try:
+                ginfo = cls._group_info[group]
+            except KeyError as e:
+                raise GradeConfigError(_BAD_GROUP.format(group = group)) from e
+        else:
+            return list(cls._group_info)
+        if tag:
+            try:
+# ginfo is a string?!!!
+                return ginfo[tag]
+            except KeyError as e:
+                raise GradeConfigError(_BAD_INFOTAG.format(group = group,
+                        tag = tag)) from e
+        else:
+            return ginfo
 #
     @classmethod
     def table_path(cls, group, term, subselect):
@@ -276,7 +284,7 @@ class GradeBase(dict):
         groups in the given "term".
         """
         groups = []
-        for group in GROUP_INFO:
+        for group in cls.group_info(None):
             try:
                 groups.append((group, cls.group_info(group, f'*ZA/{term}')))
             except GradeConfigError:

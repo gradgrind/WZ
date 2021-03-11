@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-03-10
+Last updated:  2021-03-11
 
 Editor for grades.
 
@@ -115,7 +115,7 @@ class GradeEdit(TabPage):
         ### Save button (active when there are unsaved modifications)
         self.gradeView.pbSave = QPushButton(_SAVE)
         cbox.addWidget(self.gradeView.pbSave)
-        self.gradeView.pbSave.connect(self.save)
+        self.gradeView.pbSave.clicked.connect(self.save)
 
         cbox.addStretch(1)
 
@@ -273,7 +273,7 @@ class GradeEdit(TabPage):
     def input_table(self):
         """Import a single grade table, replacing the internal table.
         """
-        self.clear()
+        self.clear() #? if replacing it, checking for changes seems unnecessary ...
         dir0 = ADMIN._loaddir or os.path.expanduser('~')
         fpath = QFileDialog.getOpenFileName(self.gradeView, _FILEOPEN,
                 dir0, _TABLE_FILE)[0]

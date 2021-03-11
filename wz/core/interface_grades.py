@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-02-27
+core/interface_grades.py - last updated 2021-03-11
 
 Controller/dispatcher for grade management.
 
@@ -37,7 +37,7 @@ from local.base_config import year_path
 from local.grade_config import GradeBase, UNCHOSEN
 from local.abitur_config import AbiCalc
 from grades.gradetable import FailedSave, GradeTableFile, \
-        GradeTable, GradeTableError, Grades
+        GradeTable, GradeTableError
 from grades.makereports import GradeReports
 
 
@@ -81,16 +81,16 @@ class GradeManager:
         ## Get lists of acceptable values for "selection" fields
         selects = []
         # for grades:
-        selects.append(('grade', Grades.group_info(cls.group, 'NotenWerte')))
+        selects.append(('grade', GradeBase.group_info(cls.group, 'NotenWerte')))
         # for "extra" fields:
         cls.extras = []
         for sid, name in gtable.extras.items():
             cls.extras.append((sid, name))
             if sid == '*ZA':
-                _ZA_vals = Grades.group_info(group, f'*ZA/{cls.term[0]}')
+                _ZA_vals = GradeBase.group_info(group, f'*ZA/{cls.term[0]}')
                 selects.append((sid, _ZA_vals))
             elif sid == '*Q':
-                selects.append((sid, Grades.group_info(group, '*Q')))
+                selects.append((sid, GradeBase.group_info(group, '*Q')))
 
         term0 = cls.term[0]
         if term0 in ('S', 'T'): # special reports or test results
@@ -162,6 +162,10 @@ class GradeManager:
         return rows
 #
     @classmethod
+    def subselect(cls):
+        raise Bug('TODO')
+#
+    @classmethod
     def grade_changed(cls, pid, sid, val):
         updates = []
         grades = cls.grade_table[pid]
@@ -188,9 +192,9 @@ class GradeManager:
 #
     @classmethod
     def value_changed(cls, tag, val):
-        if tag = 'GRADES_D':
+        if tag == 'GRADES_D':
             cls.grade_table.grades_d = val
-        elif tag = 'ISSUE_D':
+        elif tag == 'ISSUE_D':
             cls.grade_table.issue_d = val
         # Other tags are ignored.
 #TODO: other relevant tags (for tests or Abi or specials)?
