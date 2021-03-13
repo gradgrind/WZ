@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-03-11
+core/interface_grades.py - last updated 2021-03-13
 
 Controller/dispatcher for grade management.
 
@@ -34,7 +34,8 @@ import glob
 
 from core.base import Dates
 from local.base_config import year_path
-from local.grade_config import GradeBase, UNCHOSEN
+from local.grade_config import GradeBase, UNCHOSEN, GRADE_INFO_FIELDS, \
+        GradeConfigError
 from local.abitur_config import AbiCalc
 from grades.gradetable import FailedSave, GradeTableFile, \
         GradeTable, GradeTableError
@@ -44,14 +45,14 @@ from grades.makereports import GradeReports
 class GradeManager:
     @staticmethod
     def init():
-        CALLBACK('grades_SET_TERMS', terms = GradeBase.terms(), term = '')
+        CALLBACK('grades_SET_TERMS', terms = GradeBase.term_info(None),
+                term = '')
         return True
 #
     @classmethod
     def set_term(cls, term):
         cls.term = term
-        groups = [grp for grp, rtype in
-                GradeBase.term2group_rtype_list(term)]
+        groups = GradeBase.term_info(term, 'groups')
         CALLBACK('grades_SET_GROUPS', groups = groups)
         return True
 #
@@ -84,14 +85,16 @@ class GradeManager:
         selects.append(('grade', GradeBase.group_info(cls.group, 'NotenWerte')))
         # for "extra" fields:
         cls.extras = []
-        for sid, name in gtable.extras.items():
+        for sid, sdata in gtable.extras.items():
+            # <sdata>: (field name, configuration value from group info)
+#TODO: Need to set up selects, but perhaps also decide on other field
+# (editor) types.
+            name, fieldinfo = sdata
             cls.extras.append((sid, name))
-            if sid == '*ZA':
-                _ZA_vals = GradeBase.group_info(group, f'*ZA/{cls.term[0]}')
-                selects.append((sid, _ZA_vals))
-            elif sid == '*Q':
-                selects.append((sid, GradeBase.group_info(group, '*Q')))
+            if isinstance(fieldinfo, list):
+                selects.append((sid, fieldinfo))
 
+#???
         term0 = cls.term[0]
         if term0 in ('S', 'T'): # special reports or test results
             termnull = term0 + '*'
@@ -121,11 +124,14 @@ class GradeManager:
                 pid_name_list = plist, pid = cls.pid)
         CALLBACK('grades_SET_GRID',
                 info = (
-                        (gtable.SCHOOLYEAR, gtable.schoolyear, ''),
-                        (gtable.GROUP, gtable.group, ''),
-                        (gtable.TERM, gtable.term, ''),
-                        (gtable.GRADES_D, gtable.grades_d, 'GRADES_D'),
-                        (gtable.ISSUE_D, gtable.issue_d, 'ISSUE_D')
+                        (GRADE_INFO_FIELDS['SCHOOLYEAR'],
+                                gtable.schoolyear, ''),
+                        (GRADE_INFO_FIELDS['GROUP'], gtable.group, ''),
+                        (GRADE_INFO_FIELDS['TERM'], gtable.term, ''),
+                        (GRADE_INFO_FIELDS['GRADES_D'], gtable.grades_d,
+                                'GRADES_D'),
+                        (GRADE_INFO_FIELDS['ISSUE_D'], gtable.issue_d,
+                                'ISSUE_D')
                     ),
                 main_sids = cls.main_sids,
                 components = cls.components,

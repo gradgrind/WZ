@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-03-04
+grades/gradetable.py - last updated 2021-03-13
 
 Access grade data, read and build grade tables.
 
@@ -256,7 +256,7 @@ class _GradeTable(dict):
                 gmap = grade_maps[pid]
             except:
                 gmap = {}
-            grades = _Grades(group, pdata['STREAM'], self.term)
+            grades = _Grades(self.group, pdata['STREAM'], self.term)
             grades.init_grades(self._include_grades(grades, gmap))
             self[pid] = grades
             for comp in self.composites:
@@ -290,9 +290,10 @@ class _GradeTable(dict):
             else:
                 # "composite" subject
                 self.composites[sid] = gs.name
-        # name-mapping for "extra" sid-fields:
+        # data for "extra" sid-fields:
         self.extras = _Grades.xgradefields(group, term)
-        # additional info fields, which are calculated from the other data
+        # data for additional info fields, whose values are calculated
+        # from the other fields:
         self.calcs = _Grades.calc_fields(group, term)
         if term == 'A':
             # Modify for Abitur

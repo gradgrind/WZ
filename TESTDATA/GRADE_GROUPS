@@ -4,6 +4,7 @@
 # Nur für die hier eingetragenen Gruppen können Notenzeugnisse erstellt
 # werden.
 #TODO: Auch Zwischenzeugnisse hier durch 'Zeugnis' vertreten?
+# Letzte Änderung: 2021-03-13
 
 ###########################
 ### Lists of valid grades
@@ -23,7 +24,7 @@
 
 # Voreinstellungen ("defaults")
 __DEFAULT__: {
-    # Es gibt (im Moment) "SekI" und "SekII".
+    # Es gibt "SekI" und "SekII".
     Stufe: SekI
 
     # (engl. "grade table template"):
@@ -48,25 +49,16 @@ __DEFAULT__: {
     # (extra "grade" fields in internal table):
     # Zusätzliche "Notenfelder" in interner Notentabelle
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
-        [*B   Bemerkungen]
+        # Zulässige Zeugnisarten (je nach Anlass)
+        [*ZA <<<Zeugnis (Art)>>>]
+        # Angeben, dass es Bemerkungen gibt:
+        [*B Bemerkungen]
     ]
+    *ZA/Sonderzeugnis: [- Abgang Zeugnis]
+    *B: [X]
 
     # Berechnete Felder, z.B. Durchschnitte für Notenkonferenz:
     Calc: []
-
-#?
-    # Zusätzliche Zeugnis-Arten, die für diese Gruppe gewählt werden
-    # können
-    *ZA/S: [- Abgang Zeugnis]
-
-    # Angeben, dass es Bemerkungen gibt:
-    *B: [X]
-
-    # Normalerweise sollen erklärte Durchschnitte angezeigt werden:
-    .D: AVERAGE
-    .Dx: AVERAGE
-
     # gültige "Noten":
     NotenWerte: &NORMAL_GRADES
 }
@@ -82,33 +74,27 @@ __DEFAULT__: {
         [FHS     Fachhochschulreife]
         [NA      Abitur-nicht-bestanden]
     ]
-    # (The report type is determined by calculations):
+
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
+        # Zulässige Zeugnisarten (je nach Anlass)
+        [*ZA <<<Zeugnis (Art)>>>]
+        # Datum des Zeugnisses (kann von den anderen Datumsfeldern abweichen!)
         [*F_D Fertigstellung]
-        [*B   Bemerkungen]
+        # Angeben, dass es Bemerkungen gibt:
+        [*B Bemerkungen]
     ]
-#?
-    # Zeugnis-Art/Abitur automatic?
-    *ZA/A: []
-#Abitur; Fachhochschulreife; Abitur-nicht-bestanden;
-    *ZA/T: []
-    *ZA/1: [Zeugnis Abgang]
-    *ZA/2: [- Abgang]
-    *ZA/S: [- Abgang]
-    *F_D/A: DATE
-    *F_D: <<<>>>
-    *B/A: <<<>>>
+    *ZA/1._Halbjahr: [Zeugnis Abgang]
+    *ZA/2._Halbjahr: [- Abgang]
+    *ZA/Abitur: [-]              # must be present, but set automatically
+    *ZA/Sonderzeugnis: [- Abgang]
+    *F_D/Abitur: DATE
+    *B/Abitur: <<<>>>
 
     Calc: [
         [.Q  Ergebnis]
-        [.D  <<<Φ Alle Fächer>>>]
     ]
-#?
-    .Q/A: [Abi FHS NA -]
-    .Q: []
-    .D/T: AVERAGE
-    .D: <<<>>>
+    .Q/Abitur: RESULT
+
     NotenWerte: &ABITUR_GRADES
 }
 
@@ -121,73 +107,106 @@ __DEFAULT__: {
     ]
     Nullgruppen: [X]
     Maßstäbe: [Gym]
+
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
-        [*Q   Qualifikation]
-        [*B   Bemerkungen]
+        # Zulässige Zeugnisarten (je nach Anlass):
+        [*ZA <<<Zeugnis (Art)>>>]
+        # Versetzung, usw.:
+        [*Q Qualifikation]
+        # Angeben, dass es Bemerkungen gibt:
+        [*B Bemerkungen]
     ]
-#?
-    *ZA/1: [Zeugnis Abgang]
-    *ZA/2: [Zeugnis Abgang]
-    *ZA/S: [- Abgang]
-    *Q: [Erw RS HS]
+    *ZA/1._Halbjahr: [Zeugnis Abgang]
+    *ZA/2._Halbjahr: [Zeugnis Abgang]
+    *ZA/Sonderzeugnis: [- Abgang]
+    *Q/2._Halbjahr: [Erw RS HS]
+    *Q: [HS]
+
     NotenWerte: &ABITUR_GRADES
 }
 
 12.R: {
     Maßstäbe: [RS HS]
+
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
-        [*Q   Qualifikation]
-        [*B   Bemerkungen]
+        # Zulässige Zeugnisarten (je nach Anlass):
+        [*ZA <<<Zeugnis (Art)>>>]
+        # Abschluss, usw.:
+        [*Q Qualifikation]
+        # Angeben, dass es Bemerkungen gibt:
+        [*B Bemerkungen]
     ]
-#?
-    *ZA/1: [Zeugnis Abgang]
-    *ZA/2: [Abschluss Zeugnis Abgang]
-    *ZA/S: [- Abgang]
-    *Q: [Erw RS HS -]
+    *ZA/1._Halbjahr: [Zeugnis Abgang]
+    *ZA/2._Halbjahr: [Abschluss Abgang Zeugnis]
+    *ZA/Sonderzeugnis: [- Abgang]
+    *Q/2._Halbjahr: [Erw RS HS -]
+    *Q: [HS -]
+
     Calc: [
-        [.D  <<<Φ Alle Fächer>>>]
+        [.D <<<Φ Alle Fächer>>>]
         [.Dx <<<Φ De-En-Ma>>>]
     ]
+    .D: AVERAGE
+    .Dx: AVERAGE
 }
 
 11.G: {
     Maßstäbe: [Gym]
+
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
-        [*Q   Qualifikation]
-        [*B   Bemerkungen]
+        # Zulässige Zeugnisarten (je nach Anlass):
+        [*ZA <<<Zeugnis (Art)>>>]
+        # Abschluss, usw.:
+        [*Q Qualifikation]
+        # Angeben, dass es Bemerkungen gibt:
+        [*B Bemerkungen]
     ]
-    *ZA/1: [Orientierung Abgang Zeugnis]
-    *ZA/2: [Zeugnis Abgang]
-    *Q: [12 HS -]
+    *ZA/1._Halbjahr: [Orientierung Abgang]
+    *ZA/2._Halbjahr: [Zeugnis Abgang Abschluss]
+    *Q/2._Halbjahr: [12 RS HS -]
+    *Q: [HS -]
+
     Calc: [
-        [.D  <<<Φ Alle Fächer>>>]
+        [.D <<<Φ Alle Fächer>>>]
     ]
+    .D: AVERAGE
 }
 
 11.R: {
     Maßstäbe: [RS HS]
+
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
-        [*Q   Qualifikation]
-        [*B   Bemerkungen]
+        # Zulässige Zeugnisarten (je nach Anlass):
+        [*ZA <<<Zeugnis (Art)>>>]
+        # Abschluss, usw.:
+        [*Q Qualifikation]
+        # Angeben, dass es Bemerkungen gibt:
+        [*B Bemerkungen]
     ]
-#?
-    *ZA/1: [Orientierung Abgang Zeugnis]
-    *ZA/2: [Zeugnis Abgang Abschluss]
-    *ZA/S: [- Abgang]
-    *Q: [RS HS -]
+    *ZA/1._Halbjahr: [Orientierung Abgang]
+    *ZA/2._Halbjahr: [Zeugnis Abgang Abschluss]
+    *Q/2._Halbjahr: [RS HS -]
+    *Q: [HS -]
+
     Calc: [
-        [.D  <<<Φ Alle Fächer>>>]
+        [.D <<<Φ Alle Fächer>>>]
         [.Dx <<<Φ De-En-Ma>>>]
     ]
+    .D: AVERAGE
+    .Dx: AVERAGE
 }
 
 10: {
-#?
-    *ZA/2: [Orientierung Zeugnis]
+    Notenfelder_X: [
+        # Zulässige Zeugnisarten (je nach Anlass):
+        [*ZA <<<Zeugnis (Art)>>>]
+        # Abschluss, usw.:
+        [*Q Qualifikation]
+        # Angeben, dass es Bemerkungen gibt:
+        [*B Bemerkungen]
+    ]
+    *ZA/2._Halbjahr: [Orientierung Zeugnis Abgang]
+    *Q/2._Halbjahr: [HS -]
 }
 
 # Gruppen '09', '08', ... (benutzen die Voreinstellungen)

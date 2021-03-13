@@ -235,9 +235,9 @@ class GradeEdit(TabPage):
         return True
 #
     def SET_PUPILS(self, termx, group, pid_name_list, pid):
-        self.pselect.set_items(pid_name_list)
-        self.pselect.reset(pid)
-#?        self.pselect.trigger()
+        self.subselect.set_items(pid_name_list)
+        self.subselect.reset(pid)
+#?        self.subselect.trigger()
 #
     def SET_GRID(self, **parms):
         self.grade_scene = GradeGrid(self.gradeView, **parms)

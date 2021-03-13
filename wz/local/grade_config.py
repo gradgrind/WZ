@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-03-11
+Last updated:  2021-03-13
 
 Configuration for grade handling.
 
@@ -24,12 +24,10 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
-_BAD_INFOTAG = "Ungültige Noten-Konfiguration für Gruppe {group}: {tag}"
+_BAD_INFOTAG = "Ungültige Konfiguration für Notegruppe {group}: {tag}"
 _BAD_GROUP = "Ungültige Schülergruppe: {group}"
-_BAD_TERM_REPORT = "Ungültige Noten-Konfiguration für Gruppe {group}:" \
-        "Anlässe = ... {item}"
-_BAD_ANLASS = "Ungültiger Anlass: {term}"
-_BAD_TERM = "Ungültiger \"Anlass\" (Halbjahr): {term}"
+_BAD_TERMTAG = "Ungültige Konfiguration für Notenanlass {term}: {tag}"
+_BAD_TERM = "Ungültige Notenanlass: {term}"
 _INVALID_GRADE = "Ungültige \"Note\": {grade}"
 _BAD_XGRADE = "Ungültiges Konfigurationsfeld ({tag}) für Gruppe {grp}: {item}"
 _BAD_RTEMPLATE = "Ungültige Zeugnisvorlage für Gruppe {grp}: {item}"
@@ -107,18 +105,10 @@ class GradeBase(dict):
     grades for a particular report for a pupil in a more general way.
     """
     _terms = None     # term/occasion (cached configuration structure)
-    # This is read/written only by cls.terms().
+    # This is read/written only by cls.term_info().
     _group_info = None  # information about groups (cache)
     # This is read/written only by cls._group_info().
     #
-    @classmethod
-    def terms(cls):
-        """Return list of "terms" (grading "occasions").
-        """
-        if not cls._terms:
-            cls._terms = MINION(os.path.join(DATA, _GRADE_TERMS))
-        return list(cls._terms)
-#
     GRADE_PATH = 'NOTEN_{term}/Noten_{group}' # grade table: file-name
     #
     REPORT_DIR = 'Notenzeugnisse_{term}' # grade report: folder
@@ -139,7 +129,40 @@ class GradeBase(dict):
     }
 #
     @classmethod
+    def term_info(cls, term, tag = None):
+        """Return an element from the "term" information configuration.
+        If <term> is empty, return the list of "terms".
+        Otherwise, fetch the information for the given "term". If <tag>
+        is empty, return all the information (a mapping), otherwise
+        return just the entry for the given tag (key).
+        """
+        if not cls._terms:
+            cls._terms = MINION(os.path.join(DATA, _GRADE_TERMS))
+        if term:
+            try:
+                tinfo = cls._terms[term]
+            except KeyError as e:
+                raise GradeConfigError(_BAD_TERM.format(term = term)) from e
+        else:
+            return list(cls._terms)
+        if tag:
+            try:
+                return tinfo[tag]
+            except KeyError as e:
+                raise GradeConfigError(_BAD_TERMTAG.format(term = term,
+                        tag = tag)) from e
+        else:
+            return tinfo
+#
+    @classmethod
     def group_info(cls, group, tag = None):
+        """Return an element from the group information configuration.
+        If <group> is empty, return the list of groups.
+        Otherwise, fetch the information for the given group. If <tag>
+        is empty, return all the information (a mapping), otherwise
+        return just the entry for the given tag (key).
+        There are default entries in the pseudogroup "__DEFAULT__".
+        """
         if not cls._group_info:
             cls._group_info = MINION(os.path.join(DATA, _GRADE_GROUPS))
         if group:
@@ -151,11 +174,13 @@ class GradeBase(dict):
             return list(cls._group_info)
         if tag:
             try:
-# ginfo is a string?!!!
                 return ginfo[tag]
             except KeyError as e:
-                raise GradeConfigError(_BAD_INFOTAG.format(group = group,
-                        tag = tag)) from e
+                try:
+                    return cls._group_info['__DEFAULT__'][tag]
+                except KeyError as e:
+                    raise GradeConfigError(_BAD_INFOTAG.format(
+                            group = group, tag = tag)) from e
         else:
             return ginfo
 #
@@ -278,6 +303,7 @@ class GradeBase(dict):
             pass
         raise GradeConfigError(_INVALID_GRADE.format(grade = repr(grade)))
 #
+#?
     @classmethod
     def term2group_rtype_list(cls, term):
         """Return list of (group, default-report-type) pairs for valid
@@ -318,21 +344,29 @@ class GradeBase(dict):
     def xfields(cls, tag, group, term):
         """Return a mapping of additional fields (qualification,
         report type, etc.) which are treated similarly to grades:
-            {sid(tag) -> name}
+            {sid(key) -> (name, value)}
+        The "value" is the entry for the group and term in the
+        group configuration.
         """
         xfmap = {}
         for nf in cls.group_info(group, tag):
             try:
-                k, v = nf.split('/')
+                key, display = nf
             except ValueError as e:
                 raise GradeConfigError(_BAD_XGRADE.format(
-                        tag = tag, grp = group, item = nf))
+                        tag = tag, grp = group, item = repr(nf)))
             try:
-                if cls.group_info(group,  k + '/' + term[0]):
-                    xfmap[k] = v
+                # First seek term-specific entry
+                g2item = cls.group_info(group, '%s/%s' % (key, term))
             except GradeConfigError:
-                if cls.group_info(group,  k):
-                    xfmap[k] = v
+                # otherwise seek a default entry
+                try:
+                    g2item = cls.group_info(group, key)
+                except GradeConfigError:
+                    # No entry:
+                    g2item = None
+            if g2item:
+                xfmap[key] = (display, g2item)
         return xfmap
 #
     @staticmethod
