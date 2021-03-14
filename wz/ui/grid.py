@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-02-27
+Last updated:  2021-03-14
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -250,7 +250,7 @@ class Grid(QGraphicsScene):
 #
     def addSelect(self, tag, valuelist):
         if tag in self.editors:
-            raise Bug(_EDITOR_TAG_REUSED.format(tag = tag))
+            raise GridError(_EDITOR_TAG_REUSED.format(tag = tag))
         self.editors[tag] = PopupTable(self, valuelist)
 #
     ### pdf output
@@ -587,7 +587,7 @@ class Tile(QGraphicsRectItem):
 #
     def setText(self, text):
         if type(text) != str:
-            raise Bug(_NOTSTRING.format(val = repr(text)))
+            raise GridError(_NOTSTRING.format(val = repr(text)))
         self._text = text
         self.textItem.setText(text)
         w = self.textItem.boundingRect().width()

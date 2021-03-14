@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-03-04
+grades/gradetable.py - last updated 2021-03-14
 
 Temporary / test module?
 Convert grade tables (and other) between "spreadsheet" and json formats.
@@ -33,11 +33,11 @@ if __name__ == '__main__':
 
 from tables.spreadsheet import Spreadsheet, TableError
 from local.base_config import NO_DATE
-from local.grade_config import GRADE_INFO_FIELDS
+#from local.grade_config import GRADE_INFO_FIELDS
 
 ###
 
-def matrix2mapping(schoolyear, filepath, info_names = None):
+def matrix2mapping(schoolyear, filepath, term, info_names = None):
     """Read the header info and pupils' lines from the given table file.
     Each data row starts with "pid", pupil-name and stream fields.
     This is followed by a field for each "sid" (generally a subject-tag).
@@ -81,6 +81,7 @@ def matrix2mapping(schoolyear, filepath, info_names = None):
     if year != schoolyear:
         raise TableError(_TABLE_YEAR_MISMATCH.format(
                     filepath = filepath))
+    info['TERM'] = term
     sid2col = []
     col = 0
     for f in dbt.fieldnames():
@@ -137,13 +138,13 @@ if __name__ == '__main__':
     from local.base_config import year_path
     from local.grade_config import GradeBase
 
-    for _term in ('1', '2', 'A', 'S', 'T'):
+    for _term in GradeBase.term_info(None):
         table_path = year_path(_schoolyear,
                     GradeBase.table_path('*', _term, None))
         d = os.path.dirname(table_path)
         for f in os.listdir(d):
             if f.endswith('.tsv'):
                 f1 = os.path.join(d, f)
-                gmap = matrix2mapping(_schoolyear, f1)
+                gmap = matrix2mapping(_schoolyear, f1, _term)
                 f2 = f1.rsplit('.', 1)[0]
                 print("\n$$$", save(f2, gmap))

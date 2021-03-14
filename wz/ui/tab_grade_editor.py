@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-03-11
+Last updated:  2021-03-14
 
 Editor for grades.
 
@@ -236,7 +236,8 @@ class GradeEdit(TabPage):
 #
     def SET_PUPILS(self, termx, group, pid_name_list, pid):
         self.subselect.set_items(pid_name_list)
-        self.subselect.reset(pid)
+        if pid_name_list:
+            self.subselect.reset(pid)
 #?        self.subselect.trigger()
 #
     def SET_GRID(self, **parms):

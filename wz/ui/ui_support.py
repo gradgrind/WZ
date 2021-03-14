@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-02-20
+Last updated:  2021-03-14
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -32,7 +32,7 @@ from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
         QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox, \
         QListWidget, QFileDialog
 from qtpy.QtGui import QMovie, QPixmap
-from qtpy.QtCore import Qt
+from qtpy.QtCore import Qt, QObject
 
 ### Messages
 _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"

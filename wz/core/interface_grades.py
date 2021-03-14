@@ -77,8 +77,8 @@ class GradeManager:
         # Fetch "composite" subjects and "calculated" fields
         cls.composites = [(sid, name)
                 for sid, name in gtable.composites.items()]
-        cls.calcs = [(sid, name)
-                for sid, name in gtable.calcs.items()]
+        cls.calcs = [(sid, sdata[0])
+                for sid, sdata in gtable.calcs.items()]
         ## Get lists of acceptable values for "selection" fields
         selects = []
         # for grades:
@@ -95,13 +95,16 @@ class GradeManager:
                 selects.append((sid, fieldinfo))
 
 #???
-        term0 = cls.term[0]
-        if term0 in ('S', 'T'): # special reports or test results
-            termnull = term0 + '*'
-            cls.term = cls.pid if cls.pid else termnull
+        # Handle "subselection" (selection within the group)
+        subsel = GradeBase.term_info(cls.term, 'subselect')
+        if subsel == 'STUDENT':
+            pid_names = [(pid, name)
+                    for pid, name in gtable.name.items()]
+            plist = [('', _ALL_PUPILS)] + pid_names
+        elif subsel == 'DATE':
             # Get list of existing reports for the group
             table_path = year_path(SCHOOLYEAR,
-                    GradeBase.table_path(cls.group, termnull))
+                    GradeBase.table_path(cls.group, cls.term, '*'))
             date_list = sorted([f.rsplit('_', 1)[1].split('.', 1)[0]
                     for f in glob.glob(table_path)], reverse = True)
             if group and date_list:
@@ -115,11 +118,10 @@ class GradeManager:
                     cls.term = cls.pid
             # Note that the "pupil" list is in this case not that at all,
             # but a list of report dates:
-            plist = [('', _NEW_REPORT)] + [(term0 + d, d) for d in date_list]
+            plist = [('', _NEW_REPORT)] + [(d, d) for d in date_list]
         else:
-            pid_names = [(pid, name)
-                    for pid, name in gtable.name.items()]
-            plist = [('', _ALL_PUPILS)] + pid_names
+            # No subselection
+            plist = []
         CALLBACK('grades_SET_PUPILS', termx = cls.term, group = cls.group,
                 pid_name_list = plist, pid = cls.pid)
         CALLBACK('grades_SET_GRID',
