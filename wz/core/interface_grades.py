@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-03-13
+core/interface_grades.py - last updated 2021-03-14
 
 Controller/dispatcher for grade management.
 
@@ -22,15 +22,15 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
+_GRADE_TABLE_MISMATCH = "{error}:\n  Gruppe: {group}, Anlass: {term}"
 
 ### Labels, etc.
 _ALL_PUPILS = "Gesamttabelle"
 _NEW_REPORT = "Neues Zeugnis"
 _EXCEL_FILE = "Excel-Datei (*.xlsx)"
-_TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
 
 
-import glob
+import os, glob
 
 from core.base import Dates
 from local.base_config import year_path
@@ -180,14 +180,13 @@ class GradeManager:
         # Update the grade, includes special handling for numbers
         grades.set_grade(sid, val)
         if sid in cls.grade_table.extras:
-# also save these? ... at least the persistent ones ...
-            return
+            return True
         # If it is a component, recalculate the composite
         if sid in cls.grade_table.components:
             csid = cls.grade_table.sid2subject_data[sid].composite
             if csid == UNCHOSEN:
                 # There is no "real" composite
-                return
+                return True
             grades.composite_calc(
                     cls.grade_table.sid2subject_data[csid])
             updates.append((pid, csid, grades[csid]))
@@ -235,7 +234,23 @@ class GradeManager:
             CALLBACK('*SAVE_FILE*', filetype = _EXCEL_FILE,
                     filename = filename, callback = 'GRADES_make_table')
         return True
-
+#
+    @classmethod
+    def load_table(cls, filepath):
+        """Read a table file containing the grades for current "term"
+        and group. Old grades are overwritten.
+        """
+        xtable = GradeTableFile(SCHOOLYEAR, filepath)
+        # Check that it matches the currently selected group/term
+        try:
+            cls.grade_table.check_group_term(xtable)
+            # ... only returns if ok
+        except GradeTableError as e:
+            REPORT('ERROR', _GRADE_TABLE_MISMATCH.format(error = e,
+                    group = xtable.group, term = xtable.term))
+        else:
+            xtable.save()       # save table
+            cls.set_group(None)
 
 
 
@@ -313,6 +328,8 @@ FUNCTIONS['GRADES_subselect'] = GradeManager.subselect
 FUNCTIONS['GRADES_grade_changed'] = GradeManager.grade_changed
 FUNCTIONS['GRADES_save'] = GradeManager.save
 FUNCTIONS['GRADES_make_table'] = GradeManager.make_table
+FUNCTIONS['GRADES_load_table'] = GradeManager.load_table
+
 #?
 FUNCTIONS['ABITUR_set_pupil'] = GradeManager.set_abi_pupil
 FUNCTIONS['ABITUR_set_value'] = GradeManager.abi_set_value

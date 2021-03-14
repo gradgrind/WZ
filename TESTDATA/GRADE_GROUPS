@@ -4,7 +4,7 @@
 # Nur für die hier eingetragenen Gruppen können Notenzeugnisse erstellt
 # werden.
 #TODO: Auch Zwischenzeugnisse hier durch 'Zeugnis' vertreten?
-# Letzte Änderung: 2021-03-13
+# Letzte Änderung: 2021-03-14
 
 ###########################
 ### Lists of valid grades
@@ -161,7 +161,7 @@ __DEFAULT__: {
         # Angeben, dass es Bemerkungen gibt:
         [*B Bemerkungen]
     ]
-    *ZA/1._Halbjahr: [Orientierung Abgang]
+    *ZA/1._Halbjahr: [Orientierung Zeugnis Abgang]
     *ZA/2._Halbjahr: [Zeugnis Abgang Abschluss]
     *Q/2._Halbjahr: [12 RS HS -]
     *Q: [HS -]
@@ -183,7 +183,7 @@ __DEFAULT__: {
         # Angeben, dass es Bemerkungen gibt:
         [*B Bemerkungen]
     ]
-    *ZA/1._Halbjahr: [Orientierung Abgang]
+    *ZA/1._Halbjahr: [Orientierung Zeugnis Abgang]
     *ZA/2._Halbjahr: [Zeugnis Abgang Abschluss]
     *Q/2._Halbjahr: [RS HS -]
     *Q: [HS -]

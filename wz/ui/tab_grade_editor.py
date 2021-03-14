@@ -36,6 +36,8 @@ _TABLE_REPLACE = "Die neue Tabelle wird die alte ersetzen.\n" \
 _NO_GRADE_FILES = "Keine Tabellen zur Aktualisierung"
 _BAD_GRADE_FILE = "Ungültige Tabellendatei:\n  {fpath}"
 _UPDATED_GRADES = "Notentabelle aktualisiert: {n} Quelldatei(en)"
+
+
 _GRADE_TABLE_MISMATCH = "{error}:\n  Jahr: {year}, Gruppe: {group}," \
         " Anlass: {term}"
 
@@ -54,8 +56,10 @@ _TT_TABLE_IN1 = "Ersetze die Notentabelle durch die gewählte Datei" \
 _TABLE_IN_DIR = "Noten aktualisieren,\n von externem Ordner"
 _TT_TABLE_IN_DIR = "Aktualisiere die Notentabelle von den Dateien" \
         " (xlsx, ods, tsv) im gewählten Ordner"
-_FILESAVE = "Datei speichern"
-_FILEOPEN = "Datei öffnen"
+
+_TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
+
+
 _DIROPEN = "Ordner öffnen"
 
 #####################################################
@@ -69,7 +73,8 @@ from qtpy.QtCore import SIGNAL, QObject
 from ui.grid import GridView
 from ui.grade_grid import GradeGrid
 from ui.abitur_pupil_view import AbiPupilView
-from ui.ui_support import VLine, KeySelect, TabPage, QuestionDialog
+from ui.ui_support import VLine, KeySelect, TabPage,openDialog, \
+        QuestionDialog
 
 ###
 
@@ -266,36 +271,19 @@ class GradeEdit(TabPage):
             return
         BACKEND('GRADES_make_table')
 #
+    def input_table(self):
+        """Import a single grade table, replacing the internal table.
+        """
+        fpath = openDialog(_TABLE_FILE)
+        if fpath:
+            if QuestionDialog(_TITLE_TABLE_REPLACE, _TABLE_REPLACE):
+                BACKEND('GRADES_load_table', filepath = fpath)
+                # On success, the table must be redisplayed
 
 #
 #TODO ...
 
-#
-    def input_table(self):
-        """Import a single grade table, replacing the internal table.
-        """
-        self.clear() #? if replacing it, checking for changes seems unnecessary ...
-        dir0 = ADMIN._loaddir or os.path.expanduser('~')
-        fpath = QFileDialog.getOpenFileName(self.gradeView, _FILEOPEN,
-                dir0, _TABLE_FILE)[0]
-        if fpath:
-            ADMIN.set_loaddir(os.path.dirname(fpath))
-            gtable = GradeTableFile(ADMIN.schoolyear, fpath)
-            # Check that it matches the currently selected group/term
-            try:
-                self.grade_scene.grade_table.check_group_term(gtable)
-                # ... only returns if ok
-            except GradeTableError as e:
-                REPORT('ERROR', _GRADE_TABLE_MISMATCH.format(error = e,
-                        year = gtable.schoolyear, group = gtable.group,
-                        term = gtable.term))
-            else:
-                if QuestionDialog(_TITLE_TABLE_REPLACE, _TABLE_REPLACE):
-                        gtable.save()       # save table
-        # Redisplay table
-        self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
-                self.group, self.term)
-        self.gradeView.set_scene(self.grade_scene)
+
 #
     def input_tables(self):
         """Import a folder of grade tables, collate the contents and

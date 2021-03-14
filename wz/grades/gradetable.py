@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-03-13
+grades/gradetable.py - last updated 2021-03-14
 
 Access grade data, read and build grade tables.
 
@@ -177,6 +177,8 @@ class _GradeTable(dict):
         <group>: school-class/group, as specified in
                 <GradeBase.REPORT_GROUPS>
         <term>: a string representing a valid "term" (school-term, etc.)
+        <subselect>: depending on <term>, may be empty, 'STUDENT' or
+                'DATE'.
         <schoolyear>: school-year
         <issue_d>: date of issue
         <grades_d>: date of grade finalization
@@ -193,6 +195,7 @@ class _GradeTable(dict):
         self.schoolyear = schoolyear
         self.group = None
         self.term = None
+        self.subselect = None
         self.issue_d = None
         self.grades_d = None
         self.sid2subject_data = None
@@ -261,18 +264,19 @@ class _GradeTable(dict):
             self[pid] = grades
             for comp in self.composites:
                 grades.composite_calc(self.sid2subject_data[comp])
-            if self.term == 'A':
+            if self.term == 'Abitur':
                 grades.abicalc = AbiCalc(self, pid)
         if pidset:
             raise GradeTableError(_PIDS_NOT_IN_GROUP.format(
                     group = self.group, pids = ', '.join(pidset)))
 #
-    def _set_group_term(self, group, term):
+    def _set_group_term(self, group, term, date):
         """Set the subjects and extra pupil-data fields for the given
-        group and term.
+        group and term (and date, in the case of DATE-subselects).
         """
         self.group = group
         self.term = term
+        self.subselect = date
         # Get subjects
         subjects = Subjects(self.schoolyear)
         self.sid2subject_data = {} # {sid -> subject_data}
@@ -295,7 +299,7 @@ class _GradeTable(dict):
         # data for additional info fields, whose values are calculated
         # from the other fields:
         self.calcs = _Grades.calc_fields(group, term)
-        if term == 'A':
+        if term == 'Abitur':
             # Modify for Abitur
             AbiCalc.subjects(self)
 #
@@ -337,7 +341,7 @@ class _GradeTable(dict):
         info = (
             (GRADE_INFO_FIELDS['SCHOOLYEAR'],    str(self.schoolyear)),
             (GRADE_INFO_FIELDS['GROUP'],         self.group),
-            (GRADE_INFO_FIELDS['TERM'],  GradeBase.term2text(self.term)),
+            (GRADE_INFO_FIELDS['TERM'],          self.term),
             (GRADE_INFO_FIELDS['GRADES_D'],      self.grades_d),
             (GRADE_INFO_FIELDS['ISSUE_D'],       self.issue_d)
         )
@@ -388,7 +392,7 @@ class _GradeTable(dict):
         dlist = []
         for pid, grades in self.items():
             gmap = {}
-            dmap = {'PID': pid, 'PUPIL': self.name[pid],
+            dmap = {'PID': pid, 'NAME': self.name[pid],
                     'STREAM': grades.stream, '__DATA__': gmap}
             for sid in fields:
                 v = grades.get(sid)
@@ -517,13 +521,9 @@ class GradeTableFile(_GradeTable):
         self.issue_d = info.get('ISSUE_D') or NO_DATE
         self.grades_d = info.get('GRADES_D') or NO_DATE
         term = info.get('TERM')
-        try:
-            term = GradeBase.text2term(term)
-        except GradeConfigError:
-            # Also accept unlocalized values
-            tt = GradeBase.term2text(term)
-            # ... raise <GradeConfigError> if the term is invalid
-        self._set_group_term(info.get('GROUP'), term)
+        subsel = GradeBase.term_info(term, 'subselect')
+        self._set_group_term(info.get('GROUP'), term,
+                self.grades_d if subsel == 'DATE' else None)
         year = info.get('SCHOOLYEAR')
         if year != str(self.schoolyear):
             raise GradeTableError(_TABLE_YEAR_MISMATCH.format(
@@ -564,7 +564,7 @@ class NewGradeTable(_GradeTable):
         these pupils will be included in the new table.
         """
         super().__init__(schoolyear)
-        self._set_group_term(group, term)
+        self._set_group_term(group, term, None)
         self._new_group_table(pids)
 
 ###
@@ -613,7 +613,7 @@ class GradeTable(_GradeTable):
     def __init__(self, schoolyear, group, term, date = None, ok_new = False):
         """If <ok_new> is true, a new table may be created, otherwise
         the table must already exist.
-        <date> is for 'S' and 'T' "term"-types only.
+        <date> is for "term"-types with "subselect=DATE" only.
         Note that the 'TERM' field is saved with the internal values,
         not the localized "readable" versions.
         If the field 'ISSUE_D' is after the "current" date or not yet
@@ -621,7 +621,7 @@ class GradeTable(_GradeTable):
         If there is an existing one, its grade data will be imported.
         """
         super().__init__(schoolyear)
-        self._set_group_term(group, term)
+        self._set_group_term(group, term, date)
         # Get file path
         table_path = year_path(schoolyear,
                 GradeBase.table_path(group, term, date))
@@ -651,16 +651,16 @@ class GradeTable(_GradeTable):
             self[pid] = grades
             for comp in self.composites:
                 grades.composite_calc(self.sid2subject_data[comp])
-            if self.term == 'A':
+            if self.term == 'Abitur':
                 grades.abicalc = AbiCalc(self, pid)
 #
     def check_group_term(self, gtable):
-        """Check that year, group and term in <gtable> match those of
+        """Check that group and term in <gtable> match those of
         the current instance.
         """
-        if gtable.schoolyear != self.schoolyear:
-            raise GradeTableError(_TABLE_YEAR_MISMATCH.format(
-                    fpath = gtable.filepath))
+#        if gtable.schoolyear != self.schoolyear:
+#            raise GradeTableError(_TABLE_YEAR_MISMATCH.format(
+#                    fpath = gtable.filepath))
         if gtable.group != self.group:
             raise GradeTableError(_TABLE_CLASS_MISMATCH.format(
                     fpath = gtable.filepath))
