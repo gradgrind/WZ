@@ -732,9 +732,9 @@ if __name__ == '__main__':
 
     if True:
 #    if False:
-        _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'NOTEN_A',
+        _filepath = os.path.join(DATA, 'testing', 'Noten', 'NOTEN_A',
                 'Noten_13_A')
-#        _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'NOTEN_1_11.G',
+#        _filepath = os.path.join(DATA, 'testing', 'Noten', 'NOTEN_1_11.G',
 #                'Noten_11.G_1-AB')
         _gtable = GradeTableFile(_schoolyear, _filepath)
         print("SUBJECTS:", _gtable.subjects)
@@ -794,7 +794,7 @@ if __name__ == '__main__':
         odir = os.path.join(DATA, 'testing', 'tmp')
         os.makedirs(odir, exist_ok = True)
         from glob import glob
-        _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'NOTEN_*', 'Noten_*')
+        _filepath = os.path.join(DATA, 'testing', 'Noten', 'NOTEN_*', 'Noten_*')
         for f in sorted(glob(_filepath)):
             _gtable = GradeTableFile(_schoolyear, f)
             print("READ", f)
