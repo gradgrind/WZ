@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-03-14
+core/interface_grades.py - last updated 2021-03-16
 
 Controller/dispatcher for grade management.
 
@@ -22,7 +22,9 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
-_GRADE_TABLE_MISMATCH = "{error}:\n  Gruppe: {group}, Anlass: {term}"
+_BAD_GRADE_FILE = "Ungültige Tabellendatei:\n  {fpath}"
+_UPDATED_GRADES = "Notentabelle aktualisiert: {n} Quelldatei(en)"
+_NO_GRADE_FILES = "Keine Tabellen zur Aktualisierung"
 
 ### Labels, etc.
 _ALL_PUPILS = "Gesamttabelle"
@@ -240,20 +242,52 @@ class GradeManager:
         """Read a table file containing the grades for current "term"
         and group. Old grades are overwritten.
         """
-        xtable = GradeTableFile(SCHOOLYEAR, filepath)
-        # Check that it matches the currently selected group/term
         try:
+            xtable = GradeTableFile(SCHOOLYEAR, filepath)
+            # Check that it matches the currently selected group/term
             cls.grade_table.check_group_term(xtable)
             # ... only returns if ok
         except GradeTableError as e:
-            REPORT('ERROR', _GRADE_TABLE_MISMATCH.format(error = e,
-                    group = xtable.group, term = xtable.term))
+            REPORT('ERROR', e)
+            return False
         else:
             xtable.save()       # save table
             cls.set_group(None)
-
-
-
+            return True
+#
+    @classmethod
+    def update_table(cls, dirpath):
+        """Read table files containing grades for current "term"
+        and group from the given folder. Only empty grades are overwritten,
+        empty entries in the new tables are ignored.
+        """
+        # Reload grade table, in case changes were not saved
+        grade_table = GradeTable(SCHOOLYEAR, cls.group,
+                cls.term, ok_new = True)
+        gtables = []
+        for f in os.listdir(dirpath):
+            REPORT('OUT', "Datei: %s" % f)
+            fpath = os.path.join(dirpath, f)
+            try:
+                gtable = GradeTableFile(SCHOOLYEAR, fpath)
+            except:
+                REPORT('WARN', _BAD_GRADE_FILE.format(fpath = fpath))
+            else:
+                # Check that it matches the currently selected group/term
+                try:
+                    grade_table.check_group_term(gtable)
+                    # ... only returns if ok
+                    gtables.append(gtable)
+                except GradeTableError as e:
+                    REPORT('ERROR', e)
+        if gtables:
+            grade_table.integrate_partial_data(*gtables)
+            grade_table.save()       # save table
+            REPORT('INFO', _UPDATED_GRADES.format(n = len(gtables)))
+        else:
+            REPORT('WARN', _NO_GRADE_FILES)
+        cls.set_group(None)
+        return bool(gtables)
 
 
 #+++++++++++++++ Abitur +++++++++++++++#
@@ -329,6 +363,7 @@ FUNCTIONS['GRADES_grade_changed'] = GradeManager.grade_changed
 FUNCTIONS['GRADES_save'] = GradeManager.save
 FUNCTIONS['GRADES_make_table'] = GradeManager.make_table
 FUNCTIONS['GRADES_load_table'] = GradeManager.load_table
+FUNCTIONS['GRADES_update_table'] = GradeManager.update_table
 
 #?
 FUNCTIONS['ABITUR_set_pupil'] = GradeManager.set_abi_pupil

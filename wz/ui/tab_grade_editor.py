@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-03-14
+Last updated:  2021-03-16
 
 Editor for grades.
 
@@ -33,9 +33,6 @@ _TITLE_TABLE_REPLACE = "Neue Tabelle speichern"
 # Would need to be a bit different for individual pupils:
 _TABLE_REPLACE = "Die neue Tabelle wird die alte ersetzen.\n" \
         "Soll sie jetzt gespeichert werden?"
-_NO_GRADE_FILES = "Keine Tabellen zur Aktualisierung"
-_BAD_GRADE_FILE = "Ungültige Tabellendatei:\n  {fpath}"
-_UPDATED_GRADES = "Notentabelle aktualisiert: {n} Quelldatei(en)"
 
 
 _GRADE_TABLE_MISMATCH = "{error}:\n  Jahr: {year}, Gruppe: {group}," \
@@ -59,9 +56,6 @@ _TT_TABLE_IN_DIR = "Aktualisiere die Notentabelle von den Dateien" \
 
 _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
 
-
-_DIROPEN = "Ordner öffnen"
-
 #####################################################
 
 import os, glob
@@ -74,7 +68,7 @@ from ui.grid import GridView
 from ui.grade_grid import GradeGrid
 from ui.abitur_pupil_view import AbiPupilView
 from ui.ui_support import VLine, KeySelect, TabPage,openDialog, \
-        QuestionDialog
+        QuestionDialog, dirDialog
 
 ###
 
@@ -279,11 +273,6 @@ class GradeEdit(TabPage):
             if QuestionDialog(_TITLE_TABLE_REPLACE, _TABLE_REPLACE):
                 BACKEND('GRADES_load_table', filepath = fpath)
                 # On success, the table must be redisplayed
-
-#
-#TODO ...
-
-
 #
     def input_tables(self):
         """Import a folder of grade tables, collate the contents and
@@ -293,23 +282,20 @@ class GradeEdit(TabPage):
         value for a given cell.
         The "information" fields are not affected.
         """
-        self.clear()
-        dir0 = ADMIN._loaddir or os.path.expanduser('~')
-        dpath = QFileDialog.getExistingDirectory(self.gradeView,
-                _DIROPEN, dir0,
-                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+#TODO: At present only empty cells may be updated, but it may be better
+# to allow grades to be updated (only by one of the input tables, though!).
+# See gradetable.py: integrate_partial_data
+        if not self.clear():
+            return False
+        dpath = dirDialog()
         if dpath:
-            ADMIN.set_loaddir(dpath)
-            # Reload grade table, in case changes were not saved
-            grade_table = GradeTable(ADMIN.schoolyear, self.group,
-                    self.term, ok_new = True)
-            fn = _UpdateGrades(grade_table, dpath)
-            cc = REPORT('RUN', runme = fn)
-        # Redisplay table
-        self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
-                self.group, self.term)
-        self.gradeView.set_scene(self.grade_scene)
+            BACKEND('GRADES_update_table', dirpath = dpath)
+            # On success, the table must be redisplayed
 #
+#
+#TODO ...
+
+
     def make_reports(self):
         """Generate the grade report(s).
         """
@@ -326,7 +312,7 @@ class GradeEdit(TabPage):
             self.grade_scene.to_pdf()
 
 ###
-
+#Deprecated (functional part -> back-end)
 class _MakeReports:#(ThreadFunction):
     def __init__(self, grade_reports):
         super().__init__()
@@ -342,45 +328,6 @@ class _MakeReports:#(ThreadFunction):
 #
     def terminate(self):
         return False
-
-###
-
-class _UpdateGrades:#(ThreadFunction):
-    def __init__(self, grade_table, dpath):
-        super().__init__()
-        self.grade_table = grade_table
-        self.dpath = dpath
-#
-    def run(self):
-        self._cc = 0
-        gtables = []
-        for f in os.listdir(self.dpath):
-            self.message("FILE: %s" % f)
-            if self._cc:
-                return -1
-            fpath = os.path.join(self.dpath, f)
-            try:
-                gtable = GradeTableFile(ADMIN.schoolyear, fpath,
-                        full_table = False)
-            except:
-                REPORT('WARN', _BAD_GRADE_FILE.format(fpath = fpath))
-            else:
-                # Check that it matches the currently selected group/term
-                try:
-                    self.grade_table.check_group_term(gtable)
-                    # ... only returns if ok
-                except GradeTableError as e:
-                    REPORT('ERROR', _GRADE_TABLE_MISMATCH.format(error = e,
-                            year = gtable.schoolyear, group = gtable.group,
-                            term = gtable.term))
-                gtables.append(gtable)
-        if gtables:
-            self.grade_table.integrate_partial_data(*gtables)
-            REPORT('INFO', _UPDATED_GRADES.format(n = len(gtables)))
-            return len(gtables)
-        else:
-            REPORT('WARN', _NO_GRADE_FILES)
-            return 0
 
 
 tab_grade_editor = GradeEdit()

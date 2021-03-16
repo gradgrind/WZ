@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-03-14
+grades/gradetable.py - last updated 2021-03-16
 
 Access grade data, read and build grade tables.
 
@@ -30,8 +30,11 @@ _WARN_EXTRA_PUPIL = "Unerwarteter Schüler ({name}) in" \
         " Notentabelle:\n  {tfile}"
 _WARN_EXTRA_SUBJECT = "Unerwartetes Fach ({sid}) in" \
         " Notentabelle:\n  {tfile}"
-_ERROR_OVERWRITE = "Neue Note für {name} im Fach {sid} mehrmals" \
+_ERROR_OVERWRITE2 = "Neue Note für {name} im Fach {sid} mehrmals" \
         " vorhanden:\n  {tfile1}\n  {tfile2}"
+_ERROR_OVERWRITE = "Geänderte Note für {name} im Fach {sid}:\n  {tfile}"
+#?:
+_NEW_GRADE_EMPTY = "Bug: leeres Notenfeld für {name} im Fach {sid}:\n  {tfile}"
 _BAD_GRADE = "Ungültige Note im Fach {sid}: {g}"
 _NO_DATE = "Kein Ausgabedatum angegeben"
 _DATE_EXISTS = "Ausgabedatum existiert schon"
@@ -520,7 +523,7 @@ class GradeTableFile(_GradeTable):
                 info[key] = val
         self.issue_d = info.get('ISSUE_D') or NO_DATE
         self.grades_d = info.get('GRADES_D') or NO_DATE
-        term = info.get('TERM')
+        term = info.get('TERM').replace(' ', '_')
         subsel = GradeBase.term_info(term, 'subselect')
         self._set_group_term(info.get('GROUP'), term,
                 self.grades_d if subsel == 'DATE' else None)
@@ -551,7 +554,8 @@ class GradeTableFile(_GradeTable):
                         gmap[sid] = val
                 self.name[pid] = row[1]
                 grades = _Grades(self.group, row[2], self.term)
-                grades.init_grades(self._include_grades(grades, gmap))
+                #grades.init_grades(self._include_grades(grades, gmap))
+                grades.init_grades(gmap)
                 self[pid] = grades
 
 ###
@@ -671,13 +675,10 @@ class GradeTable(_GradeTable):
     def integrate_partial_data(self, *gtables):
         """Include the data from the given (partial) tables.
          - Only non-empty source table fields will be used for updating.
-         - Check validity of pupils and subjects (warn if mismatch).
          - Only update empty fields (warn if there are attempts to overwrite).
         """
         tfiles = {}     # {pid:sid -> table file} (keep track of sources)
         for gtable in gtables:
-            # Check year, group, term
-            self.check_group_term(gtable)
             for pid, grades in gtable.items():
                 try:
                     pgrades = self[pid]
@@ -687,18 +688,31 @@ class GradeTable(_GradeTable):
                             tfile = gtable.filepath))
                     continue
                 for sid, g in grades.items():
+                    if not g:
+                        # This should not occur!
+                        REPORT('ERROR', _NEW_GRADE_EMPTY.format(
+                                sid = sid,
+                                name = gtable.name[pid],
+                                tfile = gtable.filepath))
+                        continue    # don't update
                     g0 = pgrades[sid]
                     key = '%s:%s' % (pid, sid)
                     tfile1 = tfiles.get(key)
                     tfile2 = gtable.filepath
                     tfiles[key] = tfile2
                     if g != g0:
-                        if (not g0) and tfile1:
-                            REPORT('ERROR', _ERROR_OVERWRITE.format(
+                        if tfile1:
+                            REPORT('ERROR', _ERROR_OVERWRITE2.format(
                                     sid = sid,
                                     name = gtable.name[pid],
                                     tfile1 = tfile1,
                                     tfile2 = tfile2))
+                            continue    # don't update
+                        if g0:
+                            REPORT('ERROR', _ERROR_OVERWRITE.format(
+                                    sid = sid,
+                                    name = gtable.name[pid],
+                                    tfile = tfile2))
                             continue    # don't update
                         pgrades[sid] = g
         # A "recalc" should not be necessary if the grade file is
@@ -720,6 +734,8 @@ if __name__ == '__main__':
 #    if False:
         _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'NOTEN_A',
                 'Noten_13_A')
+#        _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'NOTEN_1_11.G',
+#                'Noten_11.G_1-AB')
         _gtable = GradeTableFile(_schoolyear, _filepath)
         print("SUBJECTS:", _gtable.subjects)
         print("GROUP:", _gtable.group)
@@ -734,6 +750,8 @@ if __name__ == '__main__':
         print("CALCS:", _gtable.calcs)
         for _pid, _gdata in _gtable.items():
             print("???", _pid, _gdata.stream, _gdata)
+
+    quit(0)
 
     if True:
 #    if False:

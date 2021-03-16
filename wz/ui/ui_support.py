@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-03-14
+Last updated:  2021-03-16
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -46,6 +46,7 @@ _WARNING = "Warnung"
 _ERROR = "Fehler"
 
 _FILEOPEN = "Datei öffnen"
+_DIROPEN = "Ordner öffnen"
 _FILESAVE = "Datei speichern"
 
 ###
@@ -386,7 +387,7 @@ def _popupError(message):
      QMessageBox.critical(None, _ERROR, message)
 builtins.SHOW_ERROR = _popupError
 
-### File Dialogs
+### File/Folder Dialogs
 
 def openDialog(filetype):
     dir0 = ADMIN._loaddir or os.path.expanduser('~')
@@ -395,7 +396,15 @@ def openDialog(filetype):
     if fpath:
         ADMIN.set_loaddir(os.path.dirname(fpath))
     return fpath
-
+##
+def dirDialog():
+    dir0 = ADMIN._loaddir or os.path.expanduser('~')
+    dpath = QFileDialog.getExistingDirectory(ADMIN, _DIROPEN, dir0,
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+    if dpath:
+        ADMIN.set_loaddir(dpath)
+    return dpath
+##
 def saveDialog(filetype, filename):
     dir0 = ADMIN._savedir or os.path.expanduser('~')
     fpath = QFileDialog.getSaveFileName(ADMIN, _FILESAVE,
@@ -403,3 +412,25 @@ def saveDialog(filetype, filename):
     if fpath:
         ADMIN.set_savedir(os.path.dirname(fpath))
     return fpath
+
+
+############### Handle uncaught exceptions ###############
+class UncaughtHook(QObject):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # This registers the <exception_hook> method as hook with
+        # the Python interpreter
+        sys.excepthook = self.exception_hook
+#
+    def exception_hook(self, exc_type, exc_value, exc_traceback):
+        """Function handling uncaught exceptions.
+        It is triggered each time an uncaught exception occurs.
+        """
+        log_msg = '{val}\n\n$${emsg}'.format(
+                val = exc_value, emsg = ''.join(traceback.format_exception(
+                        exc_type, exc_value, exc_traceback)))
+        # Show message
+        SHOW_ERROR('*** TRAP ***\n' + log_msg)
+
+# Create a global instance of <UncaughtHook> to register the hook
+qt_exception_hook = UncaughtHook()
