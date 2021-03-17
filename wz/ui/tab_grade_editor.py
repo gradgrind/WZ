@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-03-16
+Last updated:  2021-03-17
 
 Editor for grades.
 
@@ -33,8 +33,9 @@ _TITLE_TABLE_REPLACE = "Neue Tabelle speichern"
 # Would need to be a bit different for individual pupils:
 _TABLE_REPLACE = "Die neue Tabelle wird die alte ersetzen.\n" \
         "Soll sie jetzt gespeichert werden?"
+_TABLE_OVERWRITE = "{n} Noten werden geändert. Übernehmen?"
 
-
+#?
 _GRADE_TABLE_MISMATCH = "{error}:\n  Jahr: {year}, Gruppe: {group}," \
         " Anlass: {term}"
 
@@ -290,8 +291,14 @@ class GradeEdit(TabPage):
         dpath = dirDialog()
         if dpath:
             BACKEND('GRADES_update_table', dirpath = dpath)
+            BACKEND('GRADES_save_new')
             # On success, the table must be redisplayed
 #
+    def QUESTION_UPDATE(self, n):
+        if QuestionDialog(_TITLE_TABLE_REPLACE, _TABLE_OVERWRITE.format(
+                n = n)):
+            BACKEND('GRADES_save_new')
+            # The table must be redisplayed
 #
 #TODO ...
 
@@ -337,5 +344,6 @@ FUNCTIONS['grades_SET_GROUPS'] = tab_grade_editor.SET_GROUPS
 FUNCTIONS['grades_SET_PUPILS'] = tab_grade_editor.SET_PUPILS
 FUNCTIONS['grades_SET_GRADES'] = tab_grade_editor.SET_GRADES
 FUNCTIONS['grades_SET_GRID'] = tab_grade_editor.SET_GRID
+FUNCTIONS['grades_QUESTION_UPDATE'] = tab_grade_editor.QUESTION_UPDATE
 FUNCTIONS['abitur_INIT_CELLS'] = tab_grade_editor.abitur_INIT_CELLS
 FUNCTIONS['abitur_SET_CELLS'] = tab_grade_editor.abitur_SET_CELLS

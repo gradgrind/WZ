@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-03-16
+grades/gradetable.py - last updated 2021-03-17
 
 Access grade data, read and build grade tables.
 
@@ -32,8 +32,7 @@ _WARN_EXTRA_SUBJECT = "Unerwartetes Fach ({sid}) in" \
         " Notentabelle:\n  {tfile}"
 _ERROR_OVERWRITE2 = "Neue Note für {name} im Fach {sid} mehrmals" \
         " vorhanden:\n  {tfile1}\n  {tfile2}"
-_ERROR_OVERWRITE = "Geänderte Note für {name} im Fach {sid}:\n  {tfile}"
-#?:
+_WARN_OVERWRITE = "Geänderte Note für {name} im Fach {sid}:\n  {tfile}"
 _NEW_GRADE_EMPTY = "Bug: leeres Notenfeld für {name} im Fach {sid}:\n  {tfile}"
 _BAD_GRADE = "Ungültige Note im Fach {sid}: {g}"
 _NO_DATE = "Kein Ausgabedatum angegeben"
@@ -675,9 +674,14 @@ class GradeTable(_GradeTable):
     def integrate_partial_data(self, *gtables):
         """Include the data from the given (partial) tables.
          - Only non-empty source table fields will be used for updating.
-         - Only update empty fields (warn if there are attempts to overwrite).
+         - Only allow an entry to be supplied in one source table.
+         - Updates to non-empty fields will issue a warning.
+        The current grade table is updated but not saved.
+        Return the number of overwritten non-empty entries. This can be
+        used to decide whether the changes should be saved.
         """
         tfiles = {}     # {pid:sid -> table file} (keep track of sources)
+        overwrite = 0
         for gtable in gtables:
             for pid, grades in gtable.items():
                 try:
@@ -709,18 +713,18 @@ class GradeTable(_GradeTable):
                                     tfile2 = tfile2))
                             continue    # don't update
                         if g0:
-                            REPORT('ERROR', _ERROR_OVERWRITE.format(
+                            overwrite += 1
+                            REPORT('WARN', _WARN_OVERWRITE.format(
                                     sid = sid,
                                     name = gtable.name[pid],
                                     tfile = tfile2))
-                            continue    # don't update
                         pgrades[sid] = g
         # A "recalc" should not be necessary if the grade file is
         # reloaded after saving – which is the expected usage.
         # Otherwise the calculations should probably be redone:
         #for pid in self:
         #    self.recalc(pid)
-        self.save()
+        return overwrite
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

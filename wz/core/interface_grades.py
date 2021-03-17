@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-03-16
+core/interface_grades.py - last updated 2021-03-17
 
 Controller/dispatcher for grade management.
 
@@ -23,8 +23,9 @@ Copyright 2021 Michael Towers
 
 ### Messages
 _BAD_GRADE_FILE = "Ungültige Tabellendatei:\n  {fpath}"
-_UPDATED_GRADES = "Notentabelle aktualisiert: {n} Quelldatei(en)"
 _NO_GRADE_FILES = "Keine Tabellen zur Aktualisierung"
+_INCLUDED_TABLES = "Notentabelle aktualisiert: {ntables} Quelldatei(en)"
+_UPDATED_GRADES = "Noten aktualisiert: Gruppe {group}, Anlass {term}"
 
 ### Labels, etc.
 _ALL_PUPILS = "Gesamttabelle"
@@ -261,6 +262,7 @@ class GradeManager:
         and group from the given folder. Only empty grades are overwritten,
         empty entries in the new tables are ignored.
         """
+        cls.new_grade_table = None
         # Reload grade table, in case changes were not saved
         grade_table = GradeTable(SCHOOLYEAR, cls.group,
                 cls.term, ok_new = True)
@@ -281,13 +283,31 @@ class GradeManager:
                 except GradeTableError as e:
                     REPORT('ERROR', e)
         if gtables:
-            grade_table.integrate_partial_data(*gtables)
-            grade_table.save()       # save table
-            REPORT('INFO', _UPDATED_GRADES.format(n = len(gtables)))
+            overwritten = grade_table.integrate_partial_data(*gtables)
+            REPORT('INFO', _INCLUDED_TABLES.format(ntables = len(gtables)))
+            cls.new_grade_table = grade_table
+            cls.new_grade_table._overwritten = overwritten
+            if not overwritten:
+                return cls.save_new()
         else:
             REPORT('WARN', _NO_GRADE_FILES)
         cls.set_group(None)
         return bool(gtables)
+#
+    @classmethod
+    def save_new(cls):
+        if cls.new_grade_table:
+            if cls.new_grade_table._overwritten:
+                CALLBACK('grades_QUESTION_UPDATE',
+                        n = cls.new_grade_table._overwritten)
+                cls.new_grade_table._overwritten = 0
+                return True
+            cls.new_grade_table.save()       # save table
+            cls.new_grade_table = None
+            REPORT('INFO', _UPDATED_GRADES.format(
+                    group = cls.group, term = cls.term))
+            cls.set_group(None)
+        return True
 
 
 #+++++++++++++++ Abitur +++++++++++++++#
@@ -364,6 +384,7 @@ FUNCTIONS['GRADES_save'] = GradeManager.save
 FUNCTIONS['GRADES_make_table'] = GradeManager.make_table
 FUNCTIONS['GRADES_load_table'] = GradeManager.load_table
 FUNCTIONS['GRADES_update_table'] = GradeManager.update_table
+FUNCTIONS['GRADES_save_new'] = GradeManager.save_new
 
 #?
 FUNCTIONS['ABITUR_set_pupil'] = GradeManager.set_abi_pupil
