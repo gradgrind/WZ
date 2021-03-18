@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-03-13
+Last updated:  2021-03-18
 
 Configuration for grade handling.
 
@@ -323,10 +323,10 @@ class GradeBase(dict):
         """
         for item in cls.group_info(group, 'NotenzeugnisVorlage'):
             try:
-                k, v = item.split('/')
+                k, v = item
             except ValueError as e:
                 raise GradeConfigError(_BAD_RTEMPLATE.format(
-                        grp = group, item = item))
+                        grp = group, item = repr(item)))
             if rtype == k:
                 return _TEMPLATE_PATH.format(fname = v)
         raise GradeConfigError(_NO_RTEMPLATE.format(grp = group,

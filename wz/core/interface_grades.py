@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-03-17
+core/interface_grades.py - last updated 2021-03-18
 
 Controller/dispatcher for grade management.
 
@@ -26,6 +26,8 @@ _BAD_GRADE_FILE = "Ungültige Tabellendatei:\n  {fpath}"
 _NO_GRADE_FILES = "Keine Tabellen zur Aktualisierung"
 _INCLUDED_TABLES = "Notentabelle aktualisiert: {ntables} Quelldatei(en)"
 _UPDATED_GRADES = "Noten aktualisiert: Gruppe {group}, Anlass {term}"
+_MADE_REPORTS = "Notenzeugnisse erstellt"
+_NO_REPORTS = "Keine Notenzeugnisse erstellt"
 
 ### Labels, etc.
 _ALL_PUPILS = "Gesamttabelle"
@@ -308,7 +310,27 @@ class GradeManager:
                     group = cls.group, term = cls.term))
             cls.set_group(None)
         return True
-
+#
+    @classmethod
+    def make_reports(cls):
+        greports = GradeReports(SCHOOLYEAR, cls.group, cls.term)
+        files = greports.makeReports()
+        if files:
+            REPORT('INFO', "%s:\n  --> %s" % (_MADE_REPORTS,
+                '\n  --> '.join(files)))
+            return True
+        else:
+            REPORT('ERROR', _NO_REPORTS)
+            return False
+#
+    @classmethod
+    def print_table(cls):
+        """Get the default file-name of a pdf grade-table.
+        """
+        fname = os.path.basename(GradeBase.table_path(cls.group,
+                cls.term, cls.grade_table.subselect))
+        CALLBACK('grades_PDF_NAME', filename = fname)
+        return True
 
 #+++++++++++++++ Abitur +++++++++++++++#
 
@@ -385,7 +407,8 @@ FUNCTIONS['GRADES_make_table'] = GradeManager.make_table
 FUNCTIONS['GRADES_load_table'] = GradeManager.load_table
 FUNCTIONS['GRADES_update_table'] = GradeManager.update_table
 FUNCTIONS['GRADES_save_new'] = GradeManager.save_new
-
+FUNCTIONS['GRADES_make_reports'] = GradeManager.make_reports
+FUNCTIONS['GRADES_print_table'] = GradeManager.print_table
 #?
 FUNCTIONS['ABITUR_set_pupil'] = GradeManager.set_abi_pupil
 FUNCTIONS['ABITUR_set_value'] = GradeManager.abi_set_value

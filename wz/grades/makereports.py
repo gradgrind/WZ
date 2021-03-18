@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2021-03-11
+Last updated:  2021-03-18
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -60,7 +60,7 @@ _BAD_REPORT_TYPE = "Ungültiger Zeugnistyp: '{rtype}'"
 
 
 from core.base import Dates
-from core.pupils import Pupils
+from core.pupils import Pupils, sortkey
 from local.base_config import year_path, class_year, \
         print_schoolyear, LINEBREAK
 from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
@@ -90,8 +90,8 @@ class GradeReports:
                     trap = False),
             'GRADES_D': Dates.print_date(self.grade_table.grades_d,
                     trap = False),
-            'SCHOOL': SCHOOL_DATA.SCHOOL_NAME,
-            'SCHOOLBIG': SCHOOL_DATA.SCHOOL_NAME.upper(),
+            'SCHOOL': SCHOOL_DATA['SCHOOL_NAME'],
+            'SCHOOLBIG': SCHOOL_DATA['SCHOOL_NAME'].upper(),
             'schoolyear': schoolyear,
             'SCHOOLYEAR': print_schoolyear(schoolyear)
         }
@@ -196,6 +196,8 @@ class GradeReports:
             if comment:
                 comment = comment.replace(LINEBREAK, '\n')
             gmap['COMMENT'] = comment
+            # Alphabetical name-tag
+            gmap['PSORT'] = sortkey(pdata)
 
             ## Process the grades themselves ...
             if self.grade_table.term == 'A':
@@ -205,7 +207,8 @@ class GradeReports:
                 gmap.update(grades.abicalc.calculate())
             else:
                 # Sort into grade groups
-                grade_map = self.sort_grade_keys(pdata.name(), grades, gTemplate)
+                grade_map = self.sort_grade_keys(Pupils.name(pdata),
+                        grades, gTemplate)
                 gmap.update(grade_map)
                 gmap['REPORT_TYPE'] = rtype
 

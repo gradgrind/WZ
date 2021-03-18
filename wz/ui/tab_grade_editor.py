@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-03-17
+Last updated:  2021-03-18
 
 Editor for grades.
 
@@ -25,8 +25,6 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
-_MADE_REPORTS = "Notenzeugnisse erstellt"
-_NO_REPORTS = "Keine Notenzeugnisse erstellt"
 _NOT_INTERRUPTABLE = "+++ Der Prozess kann nicht unterbrochen werden +++"
 _MUST_SAVE_CHANGES = "Die Änderungen müssen zuerst gespeichert werden."
 _TITLE_TABLE_REPLACE = "Neue Tabelle speichern"
@@ -300,42 +298,26 @@ class GradeEdit(TabPage):
             BACKEND('GRADES_save_new')
             # The table must be redisplayed
 #
-#TODO ...
-
-
     def make_reports(self):
         """Generate the grade report(s).
         """
-        self.save(force = False)
-        greports = GradeReports(ADMIN.schoolyear, self.group, self.term)
-        fn = _MakeReports(greports)
-        files = REPORT('RUN', runme = fn)
+        if self.grade_scene.changes():
+            SHOW_WARNING(_MUST_SAVE_CHANGES)
+            return
+        BACKEND('GRADES_make_reports')
 #
     def print_table(self):
         """Output the table as pdf.
         """
-        self.save(force = False)
-        if self.grade_scene:
-            self.grade_scene.to_pdf()
+        if self.grade_scene.changes():
+            SHOW_WARNING(_MUST_SAVE_CHANGES)
+            return
+        BACKEND('GRADES_print_table')
+#
+    def PDF_NAME(self, filename):
+        self.grade_scene.to_pdf(filename)
 
 ###
-#Deprecated (functional part -> back-end)
-class _MakeReports:#(ThreadFunction):
-    def __init__(self, grade_reports):
-        super().__init__()
-        self._grade_reports = grade_reports
-#
-    def run(self):
-        files = self._grade_reports.makeReports()
-        if files:
-            REPORT('INFO', "%s:\n  --> %s" % (_MADE_REPORTS,
-                '\n  --> '.join(files)))
-        else:
-            REPORT('ERROR', _NO_REPORTS)
-#
-    def terminate(self):
-        return False
-
 
 tab_grade_editor = GradeEdit()
 TABS.append(tab_grade_editor)
@@ -345,5 +327,6 @@ FUNCTIONS['grades_SET_PUPILS'] = tab_grade_editor.SET_PUPILS
 FUNCTIONS['grades_SET_GRADES'] = tab_grade_editor.SET_GRADES
 FUNCTIONS['grades_SET_GRID'] = tab_grade_editor.SET_GRID
 FUNCTIONS['grades_QUESTION_UPDATE'] = tab_grade_editor.QUESTION_UPDATE
+FUNCTIONS['grades_PDF_NAME'] = tab_grade_editor.PDF_NAME
 FUNCTIONS['abitur_INIT_CELLS'] = tab_grade_editor.abitur_INIT_CELLS
 FUNCTIONS['abitur_SET_CELLS'] = tab_grade_editor.abitur_SET_CELLS

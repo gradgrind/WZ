@@ -2,7 +2,7 @@
 """
 ui/grade_grid.py
 
-Last updated:  2021-03-01
+Last updated:  2021-03-18
 
 Manage the grid for the grade-editor.
 
@@ -233,12 +233,6 @@ class GradeGrid(Grid):
         self.new_style('info_edit', base = 'info', align = 'l',
                 highlight = ':002562', mark = 'E00000')
         self.new_style('padding', bg = '666666')
-#
-    def to_pdf(self):
-#TODO
-        fname = os.path.basename(Grades.table_path(
-                self.grade_table.group, self.grade_table.term))
-        super().to_pdf(fname)
 #
     def valueChanged(self, tag, text):
         """Called when a cell value is changed by the editor.
