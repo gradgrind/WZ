@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_calendar.py - last updated 2021-02-16
+core/interface_calendar.py - last updated 2021-03-19
 
 Controller/dispatcher for management of calendar-related data.
 
@@ -22,16 +22,21 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
+# ---
 
+import os
 
 import core.base as CORE
+from core.pupils import Pupils
 from local.base_config import year_path, CALENDAR_FILE, CALENDER_HEADER
 from template_engine.attendance import AttendanceTable, AttendanceError
-from local.attendance_config import ATTENDANCE_FILE
 
 def read_calendar():
     CALLBACK('calendar_SET_TEXT',
             text = CORE.Dates.read_calendar(SCHOOLYEAR))
+    pupils = Pupils(SCHOOLYEAR)
+    classes = pupils.classes()
+    CALLBACK('attendance_SET_CLASSES', classes = classes)
     return True
 
 FUNCTIONS['CALENDAR_get_calendar'] = read_calendar
@@ -47,56 +52,36 @@ FUNCTIONS['CALENDAR_save_calendar'] = save_calendar
 
 ###
 
+def make_attendance_table(klass, filepath):
+    try:
+        xlsxBytes = AttendanceTable.makeAttendanceTable(SCHOOLYEAR, klass)
+    except AttendanceError as e:
+        REPORT('ERROR', e)
+    else:
+        if xlsxBytes:
+            with open(filepath, 'wb') as fh:
+                fh.write(xlsxBytes)
+            REPORT('INFO', '--> ' + filepath)
+            return True
+    return False
 
-#TODO ...
-
-
-class _MakeAttendanceTable:#(CORE.ThreadFunction):
-    def __init__(self, klass, filepath):
-        super().__init__()
-        self._klass = klass
-        self._filepath = filepath
-#
-    def run(self):
-        try:
-            xlsxBytes = AttendanceTable.makeAttendanceTable(
-                    ADMIN.schoolyear, self._klass)
-        except AttendanceError as e:
-            REPORT('ERROR', e)
-        else:
-            if xlsxBytes:
-                with open(self._filepath, 'wb') as fh:
-                    fh.write(xlsxBytes)
-                REPORT('INFO', _SAVED_AS.format(path = self._filepath))
-#
-    def terminate(self):
-        return False
+FUNCTIONS['ATTENDANCE_make_table'] = make_attendance_table
 
 ###
 
-class _UpdateAttendanceTable:#(CORE.ThreadFunction):
-    def __init__(self, klass, filepath):
-        super().__init__()
-        self._klass = klass
-        self._filepath = filepath
-#
-    def run(self):
-        try:
-            xlsxBytes = AttendanceTable.makeAttendanceTable(
-                    ADMIN.schoolyear, self._klass, self._filepath)
-        except AttendanceError as e:
-            REPORT('ERROR', e)
-        else:
-            if xlsxBytes:
-                os.replace(self._filepath, self._filepath + '_bak')
-                with open(self._filepath, 'wb') as fh:
-                    fh.write(xlsxBytes)
-                REPORT('INFO', _UPDATED.format(path = self._filepath))
-#
-    def terminate(self):
-        return False
+def update_attendance_table(klass, filepath):
+    try:
+        xlsxBytes = AttendanceTable.makeAttendanceTable(
+                SCHOOLYEAR, klass, filepath)
+    except AttendanceError as e:
+        REPORT('ERROR', e)
+    else:
+        if xlsxBytes:
+            os.replace(filepath, filepath + '_bak')
+            with open(filepath, 'wb') as fh:
+                fh.write(xlsxBytes)
+            REPORT('INFO', '--> ' +  filepath)
+            return True
+    return False
 
-
-
-
-
+FUNCTIONS['ATTENDANCE_update_table'] = update_attendance_table

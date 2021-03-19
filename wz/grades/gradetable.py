@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-03-17
+grades/gradetable.py - last updated 2021-03-19
 
 Access grade data, read and build grade tables.
 
@@ -56,6 +56,7 @@ from core.pupils import Pupils
 from core.courses import Subjects
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from tables.matrix import KlassMatrix
+from tables.datapack import get_pack, save_pack
 from local.base_config import DECIMAL_SEP, USE_XLSX, year_path, NO_DATE
 from local.grade_config import GradeBase, UNCHOSEN, NO_GRADE, \
         GRADE_INFO_FIELDS, GradeConfigError
@@ -165,7 +166,6 @@ class Frac(Fraction):
 
 ###
 
-#TODO: "subselect" (date/tag) for T-tables and S-reports
 class _GradeTable(dict):
     """Manage the grade data for a term (etc.) and group.
     <term> need not actually be a "school term", though it may well be.
@@ -335,9 +335,7 @@ class _GradeTable(dict):
 
         ### Set title line
 #        table.setTitle("???")
-        dt = datetime.datetime.now()
-        table.setTitle2(_TITLE2.format(time = dt.isoformat(
-                    sep=' ', timespec='minutes')))
+        table.setTitle2(Dates.timestamp())
 
         ### Translate and enter general info
         info = (
@@ -569,46 +567,6 @@ class NewGradeTable(_GradeTable):
         super().__init__(schoolyear)
         self._set_group_term(group, term, None)
         self._new_group_table(pids)
-
-###
-
-#TODO: -> base?
-import json, gzip
-_KEY_MISMATCH = "Feld {key} hat Wert {val} statt {exp} in:\n  {path}"
-class PackError(Exception):
-    pass
-#
-def get_pack(filepath, **checks):
-    """Get a gzipped json file from the given path (specified without
-    the '.json.gz' ending).
-    Raises <FileNotFoundError> if the file doesn't exist.
-    Raises <PackError> if one of the control fields doesn't match the
-    provided values.
-    Returns the mapping.
-    """
-    fpath = filepath + '.json.gz'
-    with gzip.open(fpath, 'rt', encoding='UTF-8') as zipfile:
-        data = json.load(zipfile)
-    for key, val in checks.items():
-        if data[key] != val:
-            raise PackError(_KEY_MISMATCH.format(key = key,
-                    val = data[key], exp = val, path = fpath))
-    return data
-#
-def save_pack(filepath, **data):
-    """Save the data mapping as a gzipped json file to the given path
-    (specified without the '.json.gz' ending).
-    Add the '__MODIFIED__' field with a timestamp.
-    Return the filename.
-    Any existing file will be overwritten.
-    """
-    fpath = filepath + '.json.gz'
-    timestamp = datetime.datetime.now().isoformat(sep = '_',
-            timespec = 'minutes')
-    data['__MODIFIED__'] = timestamp
-    with gzip.open(fpath, 'wt', encoding = 'utf-8') as zipfile:
-        json.dump(data, zipfile, ensure_ascii = False)
-    return fpath
 
 ###
 

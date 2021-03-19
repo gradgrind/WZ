@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-template_engine/attendance.py - last updated 2021-01-06
+template_engine/attendance.py - last updated 2021-03-19
 
 Create attendance table for a class.
 
@@ -227,7 +227,7 @@ class AttendanceTable:
             at.addsheet(hols)
         at.removeMonthTemplate()
         if oldsheet:
-            REPORT(_COPY_DATA)
+            REPORT('INFO', _COPY_DATA)
             if at.copy_old_sheet(oldsheet):
                 newsheet = at.save()
                 REPORT('INFO', _UPDATED.format(klass = klass))
@@ -338,7 +338,7 @@ class AttendanceTable:
             self._pupilRows[pid] = row
             self._table.setRowHeight(row, self._rwH)
             self._table.setRowHeight(row, self._rwH, self._wsMonth)
-            n1, n2 = pdata['FIRSTNAME'], pdata['LASTNAME']
+            n1, n2 = pdata['FIRSTNAME'], pdata['LASTNAME'].replace('|', ' ')
 #NOTE: The column of these cells is not a configuration item
             self._table.setCell("A%d" % row, pid, self._st_id)
             self._table.setCell("B%d" % row, n1, self._st_name)
@@ -475,7 +475,7 @@ class AttendanceTable:
                         REPORT('WARN', _WARN_CHANGED_DAY_TAG.format(
                                 day = i + 1, month = month,
                                 tag2 = '<leer>', tag1 = val))
-                self._table.setCell(A1, newval, sheet = month)
+                self._table.setCell(A1, val, sheet = month)
 
         # Copy pupil attendance data
         while row <= nrows:
@@ -551,6 +551,11 @@ if __name__ == '__main__':
     init()
 
     _year = '2016'
+#    _klass = '09'
+#    table = AttendanceTable.makeAttendanceTable(_year, klass = _klass,
+#            oldsheet = '/home/mt/Klassenbuch_09_2016.xlsx')
+#    quit(0)
+
     print ("HOLIDAYS", _year)
     for d in sorted(readHols(_year)):
         print (" ---", d.isoformat())

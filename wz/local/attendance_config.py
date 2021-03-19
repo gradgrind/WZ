@@ -3,7 +3,7 @@
 """
 local/attendance_config.py
 
-Last updated:  2021-01-06
+Last updated:  2021-03-19
 
 Configuration items for attendance tables.
 ===========================================
@@ -11,9 +11,6 @@ Configuration items for attendance tables.
 
 # In RESOURCES/templates:
 TEMPLATE = 'Vorlage_Klassenbuch'    # .xlsx
-
-# Filename for attendance table:
-ATTENDANCE_FILE = 'Klassenbuch_{klass}_{year}'  # .xlsx
 
 # Tabellentitle der Seite für Notizen (Klassenfahrten, Auslandsaufenthalte, usw.)
 attendance_sheet_notes = 'Notizen'

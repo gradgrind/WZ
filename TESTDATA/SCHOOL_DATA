@@ -1,2 +1,7 @@
 SCHOOL_NAME: <<<Freie Michaelschule>>>
 FONT: <<<Droid Sans>>>
+
+######################################
+# This is just for test purposes!
+# Run the program pretending "today" is some other date.
+TODAY: 2016-05-04

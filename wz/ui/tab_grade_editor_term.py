@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor_term.py
 
-Last updated:  2021-02-27
+Last updated:  2021-03-19
 
 Editor for grades – manage grades for school terms.
 
@@ -230,7 +230,7 @@ class GradeEdit(TabPage):
 #
 #    def year_changed(self):
 #        if not self.clear():
-#            self.year_select.reset(ADMIN.schoolyear)
+#            self.year_select.reset(ADMIN.current_year())
 #            return
 #        self.term_select.trigger()
 #
@@ -351,7 +351,7 @@ class GradeEdit(TabPage):
                 dir0, _TABLE_FILE)[0]
         if fpath:
             ADMIN.set_loaddir(os.path.dirname(fpath))
-            gtable = GradeTableFile(ADMIN.schoolyear, fpath)
+            gtable = GradeTableFile(ADMIN.current_year(), fpath)
             # Check that it matches the currently selected group/term
             try:
                 self.grade_scene.grade_table.check_group_term(gtable)
@@ -364,7 +364,7 @@ class GradeEdit(TabPage):
                 if QuestionDialog(_TITLE_TABLE_REPLACE, _TABLE_REPLACE):
                         gtable.save()       # save table
         # Redisplay table
-        self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
+        self.grade_scene = GradeGrid(self.gradeView, ADMIN.current_year(),
                 self.group, self.term)
         self.gradeView.set_scene(self.grade_scene)
 #
@@ -384,12 +384,12 @@ class GradeEdit(TabPage):
         if dpath:
             ADMIN.set_loaddir(dpath)
             # Reload grade table, in case changes were not saved
-            grade_table = GradeTable(ADMIN.schoolyear, self.group,
+            grade_table = GradeTable(ADMIN.current_year(), self.group,
                     self.term, ok_new = True)
             fn = _UpdateGrades(grade_table, dpath)
             cc = REPORT('RUN', runme = fn)
         # Redisplay table
-        self.grade_scene = GradeGrid(self.gradeView, ADMIN.schoolyear,
+        self.grade_scene = GradeGrid(self.gradeView, ADMIN.current_year(),
                 self.group, self.term)
         self.gradeView.set_scene(self.grade_scene)
 #
@@ -397,7 +397,7 @@ class GradeEdit(TabPage):
         """Generate the grade report(s).
         """
         self.save(force = False)
-        greports = GradeReports(ADMIN.schoolyear, self.group, self.term)
+        greports = GradeReports(ADMIN.current_year(), self.group, self.term)
         fn = _MakeReports(greports)
         files = REPORT('RUN', runme = fn)
 #
@@ -443,7 +443,7 @@ class _UpdateGrades:#(ThreadFunction):
                 return -1
             fpath = os.path.join(self.dpath, f)
             try:
-                gtable = GradeTableFile(ADMIN.schoolyear, fpath,
+                gtable = GradeTableFile(ADMIN.current_year(), fpath,
                         full_table = False)
             except:
                 REPORT('WARN', _BAD_GRADE_FILE.format(fpath = fpath))

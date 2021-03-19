@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-02-20
+core/pupils.py - last updated 2021-03-18
 
 Manage pupil data.
 
@@ -379,8 +379,7 @@ class Pupils(PupilsBase):
         The first save of a day causes the current data to be backed up.
         """
         # Back up old table, if it exists
-        timestamp = datetime.datetime.now().isoformat(sep = '_',
-                timespec = 'minutes')
+        timestamp = Dates.timestamp()
         if not os.path.isdir(self.filepath):
             os.makedirs(self.filepath)
         fpath = self.filepath + '.json.gz'

@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-02-20
+Last updated:  2021-03-19
 
 Calendar editor. Also handles school-year migration and attendance lists.
 
@@ -40,8 +40,11 @@ _REPEATERS_SELECT = "Unten sind die Schüler, die am Ende des aktuellen" \
         " Schuljahres die Schule verlassen sollten.\n\n" \
         "Diejenigen, die das Jahr wiederholen werden, sollten markiert sein."
 
-#_TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
-#_EXCEL_FILE = "Excel-Tabelle (*.xlsx)"
+# Filename for attendance table:
+_ATTENDANCE_FILE = 'Klassenbuch_{klass}_{year}'  # .xlsx
+
+_TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
+_EXCEL_FILE = "Excel-Tabelle (*.xlsx)"
 
 #####################################################
 
@@ -49,7 +52,7 @@ import os
 from qtpy.QtWidgets import QLabel, QTextEdit, QPushButton, \
         QHBoxLayout, QVBoxLayout
 from ui.ui_support import TabPage, VLine, HLine, KeySelect, \
-        TreeMultiSelect#, openDialog, saveDialog
+        TreeMultiSelect, QuestionDialog, openDialog, saveDialog
 
 class Calendar(TabPage):
     """Editor for the calendar file.
@@ -88,7 +91,7 @@ class Calendar(TabPage):
         cbox.addWidget(HLine())
         cbox.addWidget(QLabel('<b>%s</b>' % _ATTENDANCE))
         # Select class
-        self.class_select = KeySelect(changed_callback = self.class_changed)
+        self.class_select = KeySelect()
         cbox.addWidget(QLabel(_CLASS))
         cbox.addWidget(self.class_select)
         # Get table
@@ -104,7 +107,7 @@ class Calendar(TabPage):
         pbAttUpdate.clicked.connect(self.update_attendance)
 
 
-
+#TODO: year_changed?
 #
     def enter(self):
         """Called when the tab is selected.
@@ -117,6 +120,9 @@ class Calendar(TabPage):
         self.modified = False
         self.save_button.setEnabled(False)
         self.edit.setPlainText(text)
+#
+    def SET_CLASSES(self, classes):
+        self.class_select.set_items([(c, c) for c in classes])
 #
     def leave(self):
         """Called when the tab is deselected.
@@ -148,7 +154,7 @@ class Calendar(TabPage):
         """Create basic data for the next school-year.
         Pupils are moved to the next class.
         Subjects are retained.
-        All year in the calendar are incremented.
+        All years in the calendar are incremented.
         """
 #TODO: Check whether the next year exists already. If so, it could be archived
 # before regeneration.
@@ -174,43 +180,46 @@ class Calendar(TabPage):
 #THIS IS NOT WORKING!!!
 #
 
-
-#TODO .............
-
-
-#
-    def check_saved(self):
-        if self.pbSave.isEnabled() and QuestionDialog(
-                _TITLE_CALENDAR_SAVE, _CALENDAR_SAVE):
-            self.save()
-#
-    def class_changed(self, klass):
-        self.klass = klass
+##### Attendance tables #####
 #
     def get_attendance(self):
         """Make a new attendance table for the current class.
         """
         # Get the path to which the file should be saved
-        filename = ATTENDANCE_FILE.format(klass = self.klass,
-                year = ADMIN.schoolyear)
+        klass = self.class_select.selected()
+        filename = _ATTENDANCE_FILE.format(klass = klass,
+                year = ADMIN.current_year())
         fpath = saveDialog(_EXCEL_FILE, filename + '.xlsx')
         if fpath:
-            fn = _MakeAttendanceTable(self.klass, fpath)
-            REPORT('RUN', runme = fn)
+            BACKEND('ATTENDANCE_make_table', klass = klass, filepath = fpath)
 #
     def update_attendance(self):
         """Rebuild an attendance table, adapting to pupil and calendar
         changes. The file is overwritten, the old version being kept
         with a '_bak' ending.
         """
+        klass = self.class_select.selected()
         # Get the path to the old file
         fpath = openDialog(_TABLE_FILE)
         if fpath:
-            fn = _UpdateAttendanceTable(self.klass, fpath)
-            REPORT('RUN', runme = fn)
+            BACKEND('ATTENDANCE_update_table', klass = klass, filepath = fpath)
 
+#TODO .............
+
+
+#???
+    def check_saved(self):
+        if self.pbSave.isEnabled() and QuestionDialog(
+                _TITLE_CALENDAR_SAVE, _CALENDAR_SAVE):
+            self.save()
+#???
+    def class_changed(self, klass):
+        self.klass = klass
+
+###
 
 tab_calendar = Calendar()
 TABS.append(tab_calendar)
 FUNCTIONS['calendar_SET_TEXT'] = tab_calendar.SET_TEXT
+FUNCTIONS['attendance_SET_CLASSES'] = tab_calendar.SET_CLASSES
 FUNCTIONS['calendar_SELECT_REPEATERS'] = tab_calendar.SELECT_REPEATERS

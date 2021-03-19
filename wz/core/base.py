@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-03-09
+Last updated:  2021-03-18
 
 Basic configuration and structural stuff.
 
@@ -126,8 +126,20 @@ class Dates:
 
     @classmethod
     def today(cls, iso = True):
-        today = datetime.date.today().isoformat()
+        try:
+            # Allow "faking" the current date (at least in some respects ...).
+            today = SCHOOL_DATA['TODAY']
+        except KeyError:
+            today = datetime.date.today().isoformat()
         return today if iso else cls.dateConv(today)
+
+    @staticmethod
+    def timestamp():
+        """Return a "timestamp", accurate to the minute.
+        It can be used for dating files, etc.
+        """
+        return datetime.datetime.now().isoformat(sep = '_',
+                timespec = 'minutes')
 
     @staticmethod
     def day1(schoolyear):

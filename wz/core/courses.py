@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-02-20
+core/courses.py - last updated 2021-03-18
 
 Manage course/subject data.
 
@@ -291,8 +291,7 @@ class Subjects(SubjectsBase):
         The first save of a day causes the current data to be backed up.
         """
         # Back up old table, if it exists
-        timestamp = datetime.datetime.now().isoformat(sep = '_',
-                timespec = 'minutes')
+        timestamp = Dates.timestamp()
         if not os.path.isdir(self.filepath):
             os.makedirs(self.filepath)
         fpath = self.filepath + '.json.gz'
@@ -373,9 +372,7 @@ class Subjects(SubjectsBase):
         table = KlassMatrix(template_path)
         ### Set title line
         #table.setTitle("???")
-        dt = datetime.datetime.now()
-        table.setTitle2(_TITLE2.format(time = dt.isoformat(
-                    sep=' ', timespec='minutes')))
+        table.setTitle2(Dates.timestamp())
         ### Translate and enter general info
         info = (
             (self.SCHOOLYEAR,    str(self.schoolyear)),
