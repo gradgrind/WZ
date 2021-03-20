@@ -155,31 +155,20 @@ class Calendar(TabPage):
         Pupils are moved to the next class.
         Subjects are retained.
         All years in the calendar are incremented.
+        This function will fail if there is already data for the next year.
         """
-#TODO: Check whether the next year exists already. If so, it could be archived
-# before regeneration.
-# Maybe an archiving function would be useful anyway?
-# Maybe the migration function is only available for the latest year?
         BACKEND('PUPILS_get_leavers')
 #
     def SELECT_REPEATERS(self, klass_pupil_list):
         # Migrate pupils, allowing for repetition of the final classes
-        pidlist = []
-        for klass, pids in TreeMultiSelect(_REPEATERS_TITLE,
-                _REPEATERS_SELECT, klass_pupil_list):
-            pidlist += pids
-        BACKEND('PUPILS_migrate', repeat_pids = pidlist)
+        kp = TreeMultiSelect(_REPEATERS_TITLE,
+                _REPEATERS_SELECT, klass_pupil_list)
+        if kp:
+            pidlist = []
+            for klass, pids in kp:
+                pidlist += pids
+            BACKEND('PUPILS_migrate', repeat_pids = pidlist)
 #
-#???
-        return
-
-        BACKEND('BASE_get_years')
-#TODO: also need to select the new year!
-        nextyear = str(int(ADMIN.current_year()) + 1)
-        ADMIN.set_year(nextyear)
-#THIS IS NOT WORKING!!!
-#
-
 #*** Attendance tables ***#
 #
     def get_attendance(self):

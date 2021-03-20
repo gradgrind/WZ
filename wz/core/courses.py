@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-03-18
+core/courses.py - last updated 2021-03-20
 
 Manage course/subject data.
 
@@ -45,11 +45,7 @@ Copyright 2021 Michael Towers
 
 ### Messages
 _SCHOOLYEAR_MISMATCH = "Fachdaten: falsches Jahr in:\n  {filepath}"
-#TODO: check defs ...
-
-
 _YEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {path}"
-_CLASS_MISMATCH = "Falsche Klasse in Tabelle:\n  {path}"
 _INFO_MISSING = "Info-Feld „{field}“ fehlt in Fachtabelle:\n  {fpath}"
 _FIELD_MISSING = "Feld „{field}“ fehlt in Fachtabelle:\n  {fpath}"
 _MULTI_COMPOSITE = "Fach mit Kürzel „{sid}“ ist Unterfach für mehrere" \
@@ -61,8 +57,6 @@ _COMPOSITE_IS_COMPONENT = "Fach-Kürzel „{sid}“ ist sowohl als „Sammelfach
 
 ### Fields
 _SCHOOLYEAR = 'Schuljahr'
-_TITLE2 = "Tabelle erstellt am {time}"
-
 
 import sys, os, shutil, datetime, gzip, json
 if __name__ == '__main__':
@@ -310,6 +304,11 @@ class Subjects(SubjectsBase):
         with gzip.open(fpath, 'wt', encoding = 'utf-8') as zipfile:
             json.dump(data, zipfile, ensure_ascii = False)
         self._modified = timestamp
+#
+    def migrate(self):
+        self.schoolyear = str(int(self.schoolyear) + 1)
+        self.filepath = year_path(self.schoolyear, self.COURSE_TABLE)
+        self.save()
 #
     def choices(self, pid):
         try:

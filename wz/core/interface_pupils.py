@@ -24,9 +24,12 @@ Copyright 2021 Michael Towers
 ### Messages
 _BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
 _PID_EXISTS = "Schülerkennung {pid} existiert schon"
+_YEAR_ALREADY_EXISTS = "Neues Schuljahr: Daten für {year} existieren schon"
 
 from core.base import Dates
 from core.pupils import PUPILS, Pupils
+from core.courses import Subjects
+from local.base_config import year_path, SubjectsBase
 from local.grade_config import STREAMS
 
 
@@ -179,9 +182,15 @@ class Pupil_Editor:
 ###
 
 def get_leavers():
-    """Get class lists of final classes – so that individuals can be
+    """The first stage of a migration to the next year. It is only
+    available when there is currently no data for the next year.
+    Get class lists of final classes – so that individuals can be
     selected to repeat a year.
     """
+    nextyear = str(int(SCHOOLYEAR) + 1)
+    if nextyear in Dates.get_years():
+        REPORT('ERROR', _YEAR_ALREADY_EXISTS.format(year = nextyear))
+        return False
     classes = []
     pupils = PUPILS(SCHOOLYEAR)
     for klass in pupils.classes():
@@ -196,7 +205,9 @@ def migrate(repeat_pids):
     """
     # Create a pupil-data structure for the following year.
     PUPILS(SCHOOLYEAR).migrate(repeat_pids)
-#TODO: Copy the subject-data, as a "starting point" for the new year.
+    # Copy the subject-data, as a "starting point" for the new year.
+    subjects = Subjects(SCHOOLYEAR)
+    subjects.migrate()
     # Create a rough calendar for the new year.
     Dates.migrate_calendar(SCHOOLYEAR)
     # Set years, select new one
