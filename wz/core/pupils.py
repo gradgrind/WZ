@@ -426,6 +426,9 @@ class Pupils(PupilsBase):
     def migrate(self, repeat_pids):
         """Create a pupil-data structure for the following year.
         """
+        # Pass the calendar (for the current year) to the function
+        # handling the step (<year_step>) in case dates are needed.
+        calendar = Dates.get_calendar(self.schoolyear)
         nextyear = str(int(self.schoolyear) + 1)
         day1 = Dates.day1(nextyear) # for filtering out pupils who have left
         newpupils = {}
@@ -437,7 +440,7 @@ class Pupils(PupilsBase):
             if pid in repeat_pids:
                 newpupils[pid] = pdata.copy()
             else:
-                pd = self.year_step(pdata)
+                pd = self.year_step(pdata, calendar)
                 if pd:
                     newpupils[pid] = pd
         # Sort into classes and save

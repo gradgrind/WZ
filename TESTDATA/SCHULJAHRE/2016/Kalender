@@ -1,5 +1,5 @@
 ### Ferien und andere Jahresdaten
-### Version: 2021-03-09
+### Version: 2016-05-04
 ############################################################
 # Diese Kopfzeilen sollten nicht geändert werden, das Datum
 # wird beim Speichern automatisch aktualisiert.
@@ -39,3 +39,8 @@ _TdDE: 2015-10-03
 _TagdArb: 2016-05-01
 _Himmelfahrt: 2016-05-05/2016-05-06
 _Pfingsten: 2016-05-16/2016-05-17
+
+# Für den Eintritt in die Qualifikationsphase im nachsten Jahr.
+# Dieses Datum liegt außerhalb des aktuellen Schuljahres, aber aufgrund
+# des '~'-Zeichens wird es nicht kontrolliert:
+~NEXT_FIRST_DAY: 2016-08-04

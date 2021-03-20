@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-03-09
+Last updated:  2021-03-20
 
 General configuration items.
 
@@ -205,7 +205,7 @@ class PupilsBase(dict):
         }
 #
     @classmethod
-    def year_step(cls, pdata):
+    def year_step(cls, pdata, calendar):
         klass = pdata['CLASS']
         stream = pdata['STREAM']
         leavers = cls.leaving_groups(klass)
@@ -223,6 +223,12 @@ class PupilsBase(dict):
         streams = all_streams(klass)
         if stream not in streams:
             pd['STREAM'] = streams[0]
+        # Handle entry into "Qualifikationsphase"
+        if knew == 12 and stream == 'Gym':
+            try:
+                pd['QUALI_D'] = calendar['~NEXT_FIRST_DAY']
+            except KeyError:
+                pass
         return pd
 #
     @staticmethod

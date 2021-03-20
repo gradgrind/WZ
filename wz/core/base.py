@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-03-18
+Last updated:  2021-03-20
 
 Basic configuration and structural stuff.
 
@@ -230,17 +230,17 @@ class Dates:
                 # single day
                 date = v.strip()
                 # check validity
-                if cls.check_schoolyear(schoolyear, date):
+                if k[0] == '~' or cls.check_schoolyear(schoolyear, date):
                     calendar[k] = date
                     continue
             else:
                 # range of days
                 date1, date2 = v1.rstrip(), v2.lstrip()
-                if (cls.check_schoolyear(schoolyear, date1)
+                if k[0] == '~' or (cls.check_schoolyear(schoolyear, date1)
                         and cls.check_schoolyear(schoolyear, date2)):
                     calendar[k] = (date1, date2)
                     continue
-            raise DataError(_BAD_DATE.format(line = l))
+            raise DataError(_BAD_DATE.format(line = '%s: %s' % (k, v)))
         return calendar
 #
     @classmethod
