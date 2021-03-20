@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-03-19
+Last updated:  2021-03-20
 
 Calendar editor. Also handles school-year migration and attendance lists.
 
@@ -180,7 +180,7 @@ class Calendar(TabPage):
 #THIS IS NOT WORKING!!!
 #
 
-##### Attendance tables #####
+#*** Attendance tables ***#
 #
     def get_attendance(self):
         """Make a new attendance table for the current class.

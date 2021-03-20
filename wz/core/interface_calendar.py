@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_calendar.py - last updated 2021-03-19
+core/interface_calendar.py - last updated 2021-03-20
 
 Controller/dispatcher for management of calendar-related data.
 
@@ -27,14 +27,14 @@ Copyright 2021 Michael Towers
 import os
 
 import core.base as CORE
-from core.pupils import Pupils
+from core.interface_pupils import PUPILS
 from local.base_config import year_path, CALENDAR_FILE, CALENDER_HEADER
 from template_engine.attendance import AttendanceTable, AttendanceError
 
 def read_calendar():
     CALLBACK('calendar_SET_TEXT',
             text = CORE.Dates.read_calendar(SCHOOLYEAR))
-    pupils = Pupils(SCHOOLYEAR)
+    pupils = PUPILS(SCHOOLYEAR)
     classes = pupils.classes()
     CALLBACK('attendance_SET_CLASSES', classes = classes)
     return True

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-03-18
+core/pupils.py - last updated 2021-03-20
 
 Manage pupil data.
 
@@ -459,6 +459,28 @@ class Pupils(PupilsBase):
             return plist
         else:
             return None
+
+###
+
+class Pupil_Cache:
+    """A cache for pupil information.
+    """
+    schoolyear = None
+    pupils = None
+#
+    @classmethod
+    def set_year(cls, year = None):
+        """Load pupil data for the given year. Clear data if no year.
+        """
+        if year == cls.schoolyear:
+            return
+        cls.schoolyear = year
+        cls.pupils = Pupils(year) if year else None
+##
+def PUPILS(year):
+    if Pupil_Cache.schoolyear != year:
+        Pupil_Cache.set_year(year)
+    return Pupil_Cache.pupils
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

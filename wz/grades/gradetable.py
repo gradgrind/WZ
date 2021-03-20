@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-03-19
+grades/gradetable.py - last updated 2021-03-20
 
 Access grade data, read and build grade tables.
 
@@ -52,7 +52,7 @@ from fractions import Fraction
 from collections import namedtuple
 
 from core.base import Dates
-from core.pupils import Pupils
+from core.pupils import PUPILS
 from core.courses import Subjects
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from tables.matrix import KlassMatrix
@@ -246,7 +246,7 @@ class _GradeTable(dict):
 
         ## Pupil information
         # Pupil data, select pupils
-        pupils = Pupils(self.schoolyear)
+        pupils = PUPILS(self.schoolyear)
         pidset = set(pids) if pids else None
         for pdata in pupils.group2pupils(self.group, date = date):
             pid = pdata['PID']
@@ -255,7 +255,7 @@ class _GradeTable(dict):
                     pidset.remove(pid)
                 except KeyError:
                     continue
-            self.name[pid] = Pupils.name(pdata)
+            self.name[pid] = pupils.name(pdata)
             # Set grades
             try:
                 gmap = grade_maps[pid]

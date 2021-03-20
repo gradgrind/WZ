@@ -26,35 +26,9 @@ _BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
 _PID_EXISTS = "Schülerkennung {pid} existiert schon"
 
 from core.base import Dates
-from core.pupils import Pupils
+from core.pupils import PUPILS, Pupils
 from local.grade_config import STREAMS
 
-class _Pupil_Base:
-    """A cache for pupil information.
-    """
-    schoolyear = None
-    pupils = None
-    klass = None
-    pid = None
-#
-    @classmethod
-    def set_year(cls, year = None):
-        """Load pupil data for the given year. Clear data if no year.
-        """
-        if year == cls.schoolyear:
-            return
-        cls.schoolyear = year
-        cls.pupils = Pupils(year) if year else None
-        # Additional data used only in this module
-        cls.klass = None
-        cls.pid = None
-##
-def PUPILS():
-    if _Pupil_Base.schoolyear != SCHOOLYEAR:
-        _Pupil_Base.set_year(SCHOOLYEAR)
-    return _Pupil_Base.pupils
-
-###
 
 class Pupils_Update:
     """Manage the updating of the pupil data from a "master" table.
@@ -64,7 +38,7 @@ class Pupils_Update:
     """
     @classmethod
     def start(cls, filepath):
-        pupils = PUPILS()
+        pupils = PUPILS(SCHOOLYEAR)
         try:
             cls.ptables = pupils.read_source_table(filepath)
         except:
@@ -76,7 +50,7 @@ class Pupils_Update:
     @classmethod
     def compare(cls):
         cls._changes = {}
-        _delta = PUPILS().compare_update(cls.ptables)
+        _delta = PUPILS(SCHOOLYEAR).compare_update(cls.ptables)
         # Return the changes class-for-class
         for klass, kdata in _delta.items():
             CALLBACK('pupil_DELTA', klass = klass, delta = kdata)
@@ -90,7 +64,7 @@ class Pupils_Update:
 #
     @classmethod
     def update(cls):
-        PUPILS().update_classes(cls._changes)
+        PUPILS(SCHOOLYEAR).update_classes(cls._changes)
         return True
 
 FUNCTIONS['PUPIL_table_delta'] = Pupils_Update.start
@@ -106,14 +80,24 @@ class Pupil_Editor:
         2) select a class: set pupils -> ...
         3) select a pupil: show pupil data
     """
+    # Remember class and pupil-id
+    klass = None
+    pid = None
+
     @classmethod
-    def enter(cls):
-        pupils = PUPILS()
+    def enter(cls, reset = True):
+        if reset:
+            cls.klass = None
+            cls.pid = None
+        pupils = PUPILS(SCHOOLYEAR)
         cls._class_list = pupils.classes()
         cls._class_list.reverse()   # start with the highest classes
-        klass = _Pupil_Base.klass if _Pupil_Base.klass in cls._class_list \
+        if cls.klass:
+            klass = cls.klass if cls.klass in cls._class_list \
                 else cls._class_list[0]
-        _Pupil_Base.klass = None
+            cls.klass = None
+        else:
+            klass = cls._class_list[0]
         CALLBACK('pupil_SET_CLASSES',
                 classes = cls._class_list,
                 klass = klass)
@@ -122,17 +106,17 @@ class Pupil_Editor:
 #
     @classmethod
     def set_class(cls, klass):
-        pupils = PUPILS()
+        pupils = PUPILS(SCHOOLYEAR)
         if klass not in cls._class_list:
             raise Bug('Invalid class passed from front-end: %s' %  klass)
-        _Pupil_Base.klass = klass
+        cls.klass = klass
         cls._pdata_list = pupils.class_pupils(klass)
         pupil_list = []
         pidix, ix = 0, -1
         for pd in cls._pdata_list:
             ix += 1
             _pid = pd['PID']
-            if _pid == _Pupil_Base.pid:
+            if _pid == cls.pid:
                 pidix = ix
             pupil_list.append((_pid, Pupils.name(pd)))
         pdata = cls._pdata_list[pidix]
@@ -149,7 +133,7 @@ class Pupil_Editor:
             pdata = cls._pdata_list._pidmap[pid]
         except KeyError:
             raise Bug('Invalid pupil passed from front-end: %s' % pid)
-        _Pupil_Base.pid = pid
+        cls.pid = pid
         # Display pupil data
         CALLBACK('pupil_SET_PUPIL_DATA',
                 data = pdata,
@@ -158,8 +142,8 @@ class Pupil_Editor:
 #
     @classmethod
     def new_pupil(cls, pid = None):
-        pupils = PUPILS()
-        pdata = pupils.nullPupilData(_Pupil_Base.klass)
+        pupils = PUPILS(SCHOOLYEAR)
+        pdata = pupils.nullPupilData(cls.klass)
         if pid:
             try:
                 pupils.check_new_pid_valid(pid)
@@ -178,18 +162,18 @@ class Pupil_Editor:
     @classmethod
     def new_data(cls, data):
         # Update pupil data in database
-        if PUPILS().modify_pupil(data):
-            _Pupil_Base.pid = data['PID']
-            _Pupil_Base.klass = data['CLASS']
+        if PUPILS(SCHOOLYEAR).modify_pupil(data):
+            cls.pid = data['PID']
+            cls.klass = data['CLASS']
             CALLBACK('pupil_CLEAR_CHANGES')
-            return cls.enter()
+            return cls.enter(reset = False)
         return False
 #
     @classmethod
     def remove(cls, pid):
-        if PUPILS().remove_pupil(pid):
+        if PUPILS(SCHOOLYEAR).remove_pupil(pid):
             CALLBACK('pupil_CLEAR_CHANGES')
-            return cls.enter()
+            return cls.enter(reset = False)
         return False
 
 ###
@@ -199,7 +183,7 @@ def get_leavers():
     selected to repeat a year.
     """
     classes = []
-    pupils = PUPILS()
+    pupils = PUPILS(SCHOOLYEAR)
     for klass in pupils.classes():
         leavers = pupils.final_year_pupils(klass)
         if leavers:
@@ -211,7 +195,7 @@ def migrate(repeat_pids):
     """Create a pupil-data structure for the following year.
     """
     # Create a pupil-data structure for the following year.
-    PUPILS().migrate(repeat_pids)
+    PUPILS(SCHOOLYEAR).migrate(repeat_pids)
 #TODO: Copy the subject-data, as a "starting point" for the new year.
     # Create a rough calendar for the new year.
     Dates.migrate_calendar(SCHOOLYEAR)

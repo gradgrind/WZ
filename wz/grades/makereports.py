@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2021-03-18
+Last updated:  2021-03-20
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -60,7 +60,7 @@ _BAD_REPORT_TYPE = "Ungültiger Zeugnistyp: '{rtype}'"
 
 
 from core.base import Dates
-from core.pupils import Pupils, sortkey
+from core.pupils import PUPILS, sortkey
 from local.base_config import year_path, class_year, \
         print_schoolyear, LINEBREAK
 from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
@@ -159,7 +159,7 @@ class GradeReports:
         Return a tuple: (template object, list of slot-mappings).
         """
         ### Pupil data
-        pupils = Pupils(self.grade_table.schoolyear)
+        pupils = PUPILS(self.grade_table.schoolyear)
         # The individual pupil data can be fetched using pupils[pid].
         # Fetching the whole class may not be good enough, as it is vaguely
         # possible that a pupil has changed class.
@@ -207,7 +207,7 @@ class GradeReports:
                 gmap.update(grades.abicalc.calculate())
             else:
                 # Sort into grade groups
-                grade_map = self.sort_grade_keys(Pupils.name(pdata),
+                grade_map = self.sort_grade_keys(pupils.name(pdata),
                         grades, gTemplate)
                 gmap.update(grade_map)
                 gmap['REPORT_TYPE'] = rtype
