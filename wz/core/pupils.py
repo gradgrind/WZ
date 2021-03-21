@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-03-20
+core/pupils.py - last updated 2021-03-21
 
 Manage pupil data.
 
@@ -410,7 +410,7 @@ class Pupils(PupilsBase):
         info = (
             (self.SCHOOLYEAR, self.schoolyear),
             ('__MODIFIED__', self._modified),
-            ('__KEEP_NAMES__', '*')
+            ('__KEEP_NAMES__', '*') # The names don't need "renormalizing"
         )
         pdlist = []
         for klass in self.classes():

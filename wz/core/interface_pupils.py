@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-02-20
+core/interface_pupils.py - last updated 2021-03-21
 
 Controller/dispatcher for pupil management.
 
@@ -32,6 +32,22 @@ from core.courses import Subjects
 from local.base_config import year_path, SubjectsBase
 from local.grade_config import STREAMS
 
+###
+
+def get_classes():
+    CALLBACK('pupils_SET_CLASSES', classes = PUPILS(SCHOOLYEAR).classes())
+    return True
+#
+def get_class_data(klass):
+    pupils = PUPILS(SCHOOLYEAR)
+    CALLBACK('pupils_SET_CLASS', fields = pupils.FIELDS,
+            pupil_list = pupils.class_pupils(klass))
+    return True
+
+FUNCTIONS['PUPILS_get_classes'] = get_classes
+FUNCTIONS['PUPILS_get_data'] = get_class_data
+
+###
 
 class Pupils_Update:
     """Manage the updating of the pupil data from a "master" table.

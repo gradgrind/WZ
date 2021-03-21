@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-03-16
+Last updated:  2021-03-21
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -118,6 +118,7 @@ class KeySelect(QComboBox):
         for k, _ in self.value_mapping:
             if k == key:
                 self.setCurrentIndex(i)
+                self._selected = i
                 break
             i += 1
         else:

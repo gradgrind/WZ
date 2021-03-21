@@ -594,10 +594,12 @@ class TableWidget(QTableWidget):
     :param bool cut: Enable cut action
     :param bool paste: Enable paste action
     :param bool allCells: Enable copy(/cut) all cells
+    :param fn on_changed: Callback(row, col, text) for changed cells
     """
     def __init__(self, parent = None, cut = False, paste = False,
-            allCells = False, row_add_del = False):
+            allCells = False, row_add_del = False, on_changed = None):
         super().__init__(parent)
+        self.on_changed = on_changed
         self._text_last_cell_clicked = None
 #
         if row_add_del:
@@ -645,10 +647,17 @@ class TableWidget(QTableWidget):
         self.cellClicked.connect(self.activated)
         self.cellActivated.connect(self.activated)
 
+    def get_text(self, row, col):
+        data_model = self.model()
+        return data_model.data(data_model.index(row, col))
+
+    def set_text(self, row, col, text):
+        data_model = self.model()
+        data_model.setData(data_model.index(row, col), text)
+
     def cell_changed(self, row, col):
-        pass
-#        item = self.item(row, col)
-#        print("CHANGED:", row, col, item.text())
+        if self.on_changed:
+            self.on_changed(row, col, self.item(row, col).text())
 
     def activated(self, row, col):
         pass
@@ -721,9 +730,13 @@ if __name__ == "__main__":
     tablewidget.setVerticalHeaderLabels(rows)
 
     r, c = 2, 3
-    data_model = tablewidget.model()
-    index = data_model.index(r, c)
-    data_model.setData(index, 'R%02d:C%02d' % (r, c))
+    tablewidget.set_text(r, c, 'R%02d:C%02d' % (r, c))
+    print("???", tablewidget.get_text(r, c))
+    r, c = 1, 4
+    tablewidget.set_text(r, c, 'R%02d:C%02d' % (r, c))
+    print("???", tablewidget.get_text(r, c))
+    print("???", tablewidget.get_text(0, 0))
+
     tablewidget.resize(600, 400)
     tablewidget.show()
     app.exec_()
