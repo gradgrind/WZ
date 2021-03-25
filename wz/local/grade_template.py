@@ -3,7 +3,7 @@
 """
 local/grade_template.py
 
-Last updated:  2021-01-24
+Last updated:  2021-03-25
 
 Manage template-specific fields for grade reports.
 
@@ -31,7 +31,7 @@ _INVALID_RTYPE = "Ungültiger Zeugnistyp: '{rtype}'"
 _INVALID_QUALI = "Ungültiges Qualifikationsfeld für Schüler {pid}: '{quali}'"
 
 from core.base import Dates
-from local.grade_config import GradeConfigError, STREAMS
+from local.grade_config import GradeConfigError, STREAMS, GradeBase
 
 VERSETZUNG_11_12 = "Durch Konferenzbeschluss vom {grades_d} in die" \
                         " Qualifikationsphase versetzt."
@@ -60,16 +60,31 @@ _NOCOMMENT = '––––––––––'
 
 
 def info_extend(grade_map):
+    def set_field(field):
+        """If there is a configuration value for the given field, set it.
+        Return the "tag", if there is a "tag/" prefix, otherwise the value.
+        """
+        try:
+            val = GradeBase.term_info(term, field)
+        except GradeConfigError:
+            return None
+        try:
+            tag, val = val.split('/', 1)
+        except ValueError:
+            tag = val
+        grade_map[field] = val
+        return tag
+
+    #-
     term = grade_map['TERM']
+    HJ = set_field('HJ')
+    stream = grade_map['STREAM']
+    grade_map['LEVEL'] = STREAMS[stream] # Only relevant for SekI
     rtype = grade_map['REPORT_TYPE']
     if rtype == 'Zeugnis':
-        stream = grade_map['STREAM']
         if grade_map['SekII']:
             grade_map['QP12'] = ''
-            if term == '1':
-                grade_map['HJ'] = '1.'
-            elif term == '2':
-                grade_map['HJ'] = '1. und 2.'
+            if HJ == '2':
                 grade_map['QP12'] = QP12_TEXT.format(
                         vom = grade_map['QUALI_D'],
                         bis = grade_map['ISSUE_D'])
@@ -82,27 +97,20 @@ def info_extend(grade_map):
                         newcomment += '\n' + comment
                     grade_map['COMMENT'] = newcomment
         else:
-            if term[0] == 'S':
-                grade_map['Zeugnis'] = 'Zwischenzeugnis'
-                grade_map['ZEUGNIS'] = 'ZWISCHENZEUGNIS'
-            else:
-                grade_map['Zeugnis'] = 'Zeugnis'
-                grade_map['ZEUGNIS'] = 'ZEUGNIS'
-                grade_map['LEVEL'] = STREAMS[stream] # SekI only
-                # Versetzung 11.Gym -> 12.Gym
-                if (stream == 'Gym' and term == '2'
-                        and grade_map['CLASS'] == '11'
-                        and grade_map['*Q'] == '12'):
-                    comment = grade_map['COMMENT']
-                    newcomment = VERSETZUNG_11_12.format(
-                            grades_d = grade_map['GRADES_D'])
-                    if comment:
-                        newcomment += '\n' + comment
-                    grade_map['COMMENT'] = newcomment
+            Z = set_field('Zeugnis')
+            if Z:
+                grade_map['ZEUGNIS'] = Z.upper()
+            # Versetzung 11.Gym -> 12.Gym
+            if (stream == 'Gym' and HJ == '2'
+                    and grade_map['CLASS'] == '11'
+                    and grade_map['*Q'] == '12'):
+                comment = grade_map['COMMENT']
+                newcomment = VERSETZUNG_11_12.format(
+                        grades_d = grade_map['GRADES_D'])
+                if comment:
+                    newcomment += '\n' + comment
+                grade_map['COMMENT'] = newcomment
         grade_map['NOCOMMENT'] = '' if grade_map['COMMENT'] else _NOCOMMENT
-
-    elif rtype == 'Orientierung':
-        grade_map['LEVEL'] = STREAMS[grade_map['STREAM']] # SekI only
 
     elif rtype == 'Abschluss':
         q = grade_map['*Q']
@@ -116,14 +124,13 @@ def info_extend(grade_map):
         grade_map['NOCOMMENT'] = '' if grade_map['COMMENT'] else _NOCOMMENT
 
     elif rtype == 'Abgang':
-        stream = grade_map['STREAM']
         if grade_map['SekII']:
             if grade_map['CYEAR'] == '12':
                 grade_map['QP12'] = QP12_TEXT.format(
                         vom = grade_map['QUALI_D'],
                         bis = grade_map['ISSUE_D'])
                 grade_map['GS'] = GS_TEXT['HS']
-                if term == '2':
+                if HJ == '2':
                     try:
                         grade_map['GS'] = GS_TEXT[grade_map['*Q']]
                     except KeyError:
@@ -131,18 +138,16 @@ def info_extend(grade_map):
         else:
             grade_map['GSVERMERK'] = ''
             grade_map['GS'] = ''
-            stream = grade_map['STREAM']
-            grade_map['LEVEL'] = STREAMS[stream]
             # Gleichstellungsvermerk
             klass = grade_map['CYEAR']
             q = grade_map['*Q']
-            if (klass == '10' and term == '2') or klass in ('11', '12'):
+            if (klass == '10' and HJ == '2') or klass in ('11', '12'):
                 if q in ('Erw', '12', 'RS', 'HS'):
                     grade_map['GS'] = GS_TEXT['HS']     # only HS-Abschluss
                     grade_map['GSVERMERK'] = "Gleichstellungsvermerk"
     elif rtype in ('Abi', 'NA', 'FHS'):
         grade_map['FrHr'] = 'Herr' if grade_map['SEX'] == 'm' else 'Frau'
         grade_map['FERTIG_D'] = Dates.print_date(grade_map['*F_D'])
-    else:
+    elif rtype != 'Orientierung':
         raise GradeConfigError(_INVALID_RTYPE.format(rtype = rtype))
     grade_map['NOCOMMENT'] = '' if grade_map['COMMENT'] else _NOCOMMENT

@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-01-30
+Last updated:  2021-03-25
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -356,11 +356,12 @@ if __name__ == '__main__':
     }
 
 #    t = Template('Noten/SekI')
-    t = Template('Noten/Fachhochschulreife')
+#    t = Template('Noten/Fachhochschulreife')
+    t = Template('Noten/SekII-13-Abgang')
     t.FILES_PATH = 'GRADE_REPORTS'
     print("\nKeys:", sorted(t.all_keys()))
 
-    t.make1pdf(sdict0, show_only = True)
+#    t.make1pdf(sdict0, show_only = True)
 
     quit(0)
 

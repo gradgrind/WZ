@@ -1,15 +1,19 @@
 #*** MINION 1.0 ***#
 # ************** Zeugnis-Anlässe (Zeitpunkt / Grund) **************
-# Letzte Änderung: 2021-03-24
+# Letzte Änderung: 2021-03-25
 
 1._Halbjahr: {
     groups: [13 12.G 12.R 11.G 11.R]
     subselect: <<<>>>
+    HJ: 1/1.  # Bezeichnung/Wert
+    Zeugnis: Zeugnis
 }
 
 2._Halbjahr: {
     groups: [13 12.G 12.R 11.G 11.R 10]
     subselect: <<<>>>
+    HJ: <<<2/1. und 2.>>>  # Bezeichnung/Wert
+    Zeugnis: Zeugnis
 }
 
 Abitur: {
@@ -20,6 +24,7 @@ Abitur: {
 Sonderzeugnis: {
     groups: [13 12.G 12.R 11.G 11.R 10 09 08 07 06 05]
     subselect: TAG
+    Zeugnis: Zwischenzeugnis
 }
 
 Klausur: {
