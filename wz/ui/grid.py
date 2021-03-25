@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-03-14
+Last updated:  2021-03-25
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -94,7 +94,8 @@ class GridView(QGraphicsView):
 #
     def set_scene(self, scene):
         s0 = self.scene()
-        if s0 and not s0.leave_ok():
+#TODO: Is this ok??? only checking when <scene> is empty ...
+        if s0 and not scene and not s0.leave_ok():
             return False
         self.setScene(scene)
         if scene:

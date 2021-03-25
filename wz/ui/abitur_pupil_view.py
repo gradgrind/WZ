@@ -2,7 +2,7 @@
 """
 ui/abitur_pupil_view.py
 
-Last updated:  2021-02-27
+Last updated:  2021-03-23
 
 Editor for Abitur results (single pupil).
 
@@ -24,6 +24,9 @@ Copyright 2021 Michael Towers
 
 =-LICENCE========================================
 """
+
+#TODO: Do I want/need to display the FHS-criteria and points?
+# Perhaps as pop-up?
 
 ##### Configuration
 ## Measurements are in mm ##

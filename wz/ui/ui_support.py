@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-03-21
+Last updated:  2021-03-25
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -30,7 +30,7 @@ import sys, os, builtins, traceback
 from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
         QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox, \
-        QListWidget, QFileDialog
+        QListWidget, QFileDialog, QLineEdit
 from qtpy.QtGui import QMovie, QPixmap
 from qtpy.QtCore import Qt, QObject
 
@@ -40,6 +40,7 @@ _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
 # Dialog buttons, etc.
 _CANCEL = "Abbrechen"
 _OK = "OK"
+_INPUT = "Eingabe"
 
 _INFO = "Mitteilung"
 _WARNING = "Warnung"
@@ -164,6 +165,30 @@ def QuestionDialog(title, message):
     return qd.exec_() == QDialog.Accepted
 
 ###
+
+def LineDialog(message, text = ''):
+    td = QDialog()
+    td.setWindowTitle(_INPUT)
+    vbox = QVBoxLayout(td)
+    lineedit = QLineEdit(text)
+    vbox.addWidget(lineedit)
+    vbox.addWidget(HLine())
+    bbox = QHBoxLayout()
+    vbox.addLayout(bbox)
+    bbox.addStretch(1)
+    cancel = QPushButton(_CANCEL)
+    cancel.clicked.connect(td.reject)
+    bbox.addWidget(cancel)
+    ok = QPushButton(_OK)
+    ok.clicked.connect(td.accept)
+    bbox.addWidget(ok)
+    cancel.setDefault(True)
+    if td.exec_() == QDialog.Accepted:
+        return lineedit.text()
+    return None
+
+###
+
 
 def TextDialog(title, text):
     td = QDialog()

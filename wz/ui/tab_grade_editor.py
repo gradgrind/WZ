@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-03-18
+Last updated:  2021-03-25
 
 Editor for grades.
 
@@ -32,10 +32,7 @@ _TITLE_TABLE_REPLACE = "Neue Tabelle speichern"
 _TABLE_REPLACE = "Die neue Tabelle wird die alte ersetzen.\n" \
         "Soll sie jetzt gespeichert werden?"
 _TABLE_OVERWRITE = "{n} Noten werden geändert. Übernehmen?"
-
-#?
-_GRADE_TABLE_MISMATCH = "{error}:\n  Jahr: {year}, Gruppe: {group}," \
-        " Anlass: {term}"
+_NOT_SAVED = "Änderungen nicht gespeichert"
 
 ### Labels, etc.
 _EDIT_GRADES = "Noten verwalten"
@@ -52,7 +49,9 @@ _TT_TABLE_IN1 = "Ersetze die Notentabelle durch die gewählte Datei" \
 _TABLE_IN_DIR = "Noten aktualisieren,\n von externem Ordner"
 _TT_TABLE_IN_DIR = "Aktualisiere die Notentabelle von den Dateien" \
         " (xlsx, ods, tsv) im gewählten Ordner"
-
+_TAG_ENTER = "Geben Sie eine Bezeichnung für diesen Datensatz an.\n" \
+        "Buchstaben, Ziffern, '~' und '-' sind zulässig, andere Zeichen" \
+        " werden ersetzt."
 _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
 
 #####################################################
@@ -67,7 +66,7 @@ from ui.grid import GridView
 from ui.grade_grid import GradeGrid
 from ui.abitur_pupil_view import AbiPupilView
 from ui.ui_support import VLine, KeySelect, TabPage,openDialog, \
-        QuestionDialog, dirDialog
+        QuestionDialog, dirDialog, LineDialog
 
 ###
 
@@ -221,21 +220,14 @@ class GradeEdit(TabPage):
                 self.grade_scene = AbiPupilView(self.gradeView)
                 self.gradeView.set_scene(self.grade_scene)
                 BACKEND('ABITUR_set_pupil', pid = itemtag)
-            else:
-#?
-# Don't need to reload grade-table, just switch to grade grid and enter data.
-                BACKEND('GRADES_set_group', group = '')
-            return True
-# If no itemtag, show the dummy data / template for creating a new entry.
-# In any case a new grade-table.
-# Get the grade table here, or when selecting the group?
-        BACKEND('GRADES_set_subselect', tag = itemtag)
+                return True
+        BACKEND('GRADES_subselect', tag = itemtag)
         return True
 #
-    def SET_PUPILS(self, termx, group, pid_name_list, pid):
-        self.subselect.set_items(pid_name_list)
-        if pid_name_list:
-            self.subselect.reset(pid)
+    def SET_PUPILS_OR_TAGS(self, termx, group, select_list, pid_or_tag):
+        self.subselect.set_items(select_list)
+        if select_list:
+            self.subselect.reset(pid_or_tag)
 #?        self.subselect.trigger()
 #
     def SET_GRID(self, **parms):
@@ -316,6 +308,13 @@ class GradeEdit(TabPage):
 #
     def PDF_NAME(self, filename):
         self.grade_scene.to_pdf(filename)
+#
+    def GET_TAG(self):
+        tag = LineDialog(_TAG_ENTER)
+        if tag:
+            BACKEND('GRADES_save', tag = tag)
+        else:
+            SHOW_WARNING(_NOT_SAVED)
 
 ###
 
@@ -323,10 +322,11 @@ tab_grade_editor = GradeEdit()
 TABS.append(tab_grade_editor)
 FUNCTIONS['grades_SET_TERMS'] = tab_grade_editor.SET_TERMS
 FUNCTIONS['grades_SET_GROUPS'] = tab_grade_editor.SET_GROUPS
-FUNCTIONS['grades_SET_PUPILS'] = tab_grade_editor.SET_PUPILS
+FUNCTIONS['grades_SET_PUPILS_OR_TAGS'] = tab_grade_editor.SET_PUPILS_OR_TAGS
 FUNCTIONS['grades_SET_GRADES'] = tab_grade_editor.SET_GRADES
 FUNCTIONS['grades_SET_GRID'] = tab_grade_editor.SET_GRID
 FUNCTIONS['grades_QUESTION_UPDATE'] = tab_grade_editor.QUESTION_UPDATE
 FUNCTIONS['grades_PDF_NAME'] = tab_grade_editor.PDF_NAME
+FUNCTIONS['grades_GET_TAG'] = tab_grade_editor.GET_TAG
 FUNCTIONS['abitur_INIT_CELLS'] = tab_grade_editor.abitur_INIT_CELLS
 FUNCTIONS['abitur_SET_CELLS'] = tab_grade_editor.abitur_SET_CELLS

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-03-18
+core/interface_grades.py - last updated 2021-03-25
 
 Controller/dispatcher for grade management.
 
@@ -28,6 +28,10 @@ _INCLUDED_TABLES = "Notentabelle aktualisiert: {ntables} Quelldatei(en)"
 _UPDATED_GRADES = "Noten aktualisiert: Gruppe {group}, Anlass {term}"
 _MADE_REPORTS = "Notenzeugnisse erstellt"
 _NO_REPORTS = "Keine Notenzeugnisse erstellt"
+_NO_GRADE_TABLE = "Keine Notentabelle für Anlass {term}, Gruppe {group}," \
+        " Bezeichnung {tag}"
+_TAG_IN_USE = "Zeugnis-Bezeichnung existiert schon: {tag}"
+_TAG_NAME = "Bezeichnung des neuen Datensatzes: {tag}"
 
 ### Labels, etc.
 _ALL_PUPILS = "Gesamttabelle"
@@ -35,9 +39,9 @@ _NEW_REPORT = "Neues Zeugnis"
 _EXCEL_FILE = "Excel-Datei (*.xlsx)"
 
 
-import os, glob
+import os, glob, datetime
 
-from core.base import Dates
+from core.base import Dates, asciify
 from local.base_config import year_path
 from local.grade_config import GradeBase, UNCHOSEN, GRADE_INFO_FIELDS, \
         GradeConfigError
@@ -48,6 +52,10 @@ from grades.makereports import GradeReports
 
 
 class GradeManager:
+    term = None
+    group = None
+    pid_or_tag = None
+#
     @staticmethod
     def init():
         CALLBACK('grades_SET_TERMS', terms = GradeBase.term_info(None),
@@ -63,14 +71,64 @@ class GradeManager:
 #
     @classmethod
     def set_group(cls, group):
-        """<group> may be <None>. This is used to preserve <cls.group>.
+        """<group> may be <None>. This is used to preserve <cls.group>
+        and <cls.pid_or_tag>.
         """
-        if group:   #?
+        if group:
             cls.group = group
-#?
-        cls.pid = ''
-        gtable = GradeTable(SCHOOLYEAR, cls.group, cls.term, ok_new = True)
+            cls.pid_or_tag = ''
+        gtable = None
+        plist = []  # "pupil" list for selection
+        # Handle "subselection" (selection within the group)
+        subsel = GradeBase.term_info(cls.term, 'subselect')
+        if subsel == 'TAG':
+            # Get list of existing reports for the group
+            table_path = year_path(SCHOOLYEAR,
+                    GradeBase.table_path(cls.group, cls.term, '*'))
+            tag_list = []
+            # To get the date-of-issue, the file must be read ...
+            for f in glob.glob(table_path):
+                # The tag may not contain '.' or '_'
+                _tag = f.rsplit('_', 1)[1].split('.', 1)[0]
+                _gt = GradeTable(SCHOOLYEAR, cls.group, cls.term, _tag)
+                if _tag == cls.pid_or_tag:
+                    gtable = _gt
+                try:
+                    date = datetime.date.fromisoformat(
+                            _gt.issue_d).isoformat()
+                except ValueError:
+                    date = 'X'  # > a real date
+                tag_list.append((date, _tag, _gt))
+            tag_list.sort(reverse = True)
+            if cls.pid_or_tag:
+                if not gtable:
+                    raise GradeTableError(_NO_GRADE_TABLE.format(
+                            term = cls.term, group = cls.group,
+                            tag = cls.pid_or_tag))
+            elif group and tag_list:
+                # Show next date
+                today = Dates.today()
+                for _date, _tag, _gt in tag_list:
+                    if today > _date:
+                        # Select this tag initially
+                        cls.pid_or_tag = _tag
+                        gtable = _gt
+                        break
+            # Note that the "pupil" list is in this case not that at all,
+            # but a list of report tags:
+            plist = [('', _NEW_REPORT)] + [(t, t) for d, t, g in tag_list]
+            tag_list = None
+        if not gtable:
+            gtable = GradeTable(SCHOOLYEAR, cls.group, cls.term,
+                    cls.pid_or_tag, ok_new = True)
         cls.grade_table = gtable
+        if subsel == 'STUDENT':
+            pid_names = [(pid, name)
+                    for pid, name in gtable.name.items()]
+            plist = [('', _ALL_PUPILS)] + pid_names
+        CALLBACK('grades_SET_PUPILS_OR_TAGS',
+                termx = cls.term, group = cls.group,
+                select_list = plist, pid_or_tag = cls.pid_or_tag)
         # Separate out "component" subjects
         cls.main_sids = []
         cls.components = []
@@ -98,43 +156,12 @@ class GradeManager:
             cls.extras.append((sid, name))
             if isinstance(fieldinfo, list):
                 selects.append((sid, fieldinfo))
-
-#???
-        # Handle "subselection" (selection within the group)
-        subsel = GradeBase.term_info(cls.term, 'subselect')
-        if subsel == 'STUDENT':
-            pid_names = [(pid, name)
-                    for pid, name in gtable.name.items()]
-            plist = [('', _ALL_PUPILS)] + pid_names
-        elif subsel == 'DATE':
-            # Get list of existing reports for the group
-            table_path = year_path(SCHOOLYEAR,
-                    GradeBase.table_path(cls.group, cls.term, '*'))
-            date_list = sorted([f.rsplit('_', 1)[1].split('.', 1)[0]
-                    for f in glob.glob(table_path)], reverse = True)
-            if group and date_list:
-                # Show next date
-                today = Dates.today()
-                for date in date_list:
-                    if today > date:
-                        break
-                    # Select this date initially
-                    cls.pid = term0 + date
-                    cls.term = cls.pid
-            # Note that the "pupil" list is in this case not that at all,
-            # but a list of report dates:
-            plist = [('', _NEW_REPORT)] + [(d, d) for d in date_list]
-        else:
-            # No subselection
-            plist = []
-        CALLBACK('grades_SET_PUPILS', termx = cls.term, group = cls.group,
-                pid_name_list = plist, pid = cls.pid)
         CALLBACK('grades_SET_GRID',
                 info = (
                         (GRADE_INFO_FIELDS['SCHOOLYEAR'],
                                 gtable.schoolyear, ''),
-                        (GRADE_INFO_FIELDS['GROUP'], gtable.group, ''),
-                        (GRADE_INFO_FIELDS['TERM'], gtable.term, ''),
+                        (GRADE_INFO_FIELDS['GROUP'], cls.group, ''),
+                        (GRADE_INFO_FIELDS['TERM'], cls.term, ''),
                         (GRADE_INFO_FIELDS['GRADES_D'], gtable.grades_d,
                                 'GRADES_D'),
                         (GRADE_INFO_FIELDS['ISSUE_D'], gtable.issue_d,
@@ -175,8 +202,9 @@ class GradeManager:
         return rows
 #
     @classmethod
-    def subselect(cls):
-        raise Bug('TODO')
+    def subselect(cls, tag):
+        cls.pid_or_tag = tag
+        return cls.set_group(None)
 #
     @classmethod
     def grade_changed(cls, pid, sid, val):
@@ -210,16 +238,38 @@ class GradeManager:
             cls.grade_table.issue_d = val
         # Other tags are ignored.
 #TODO: other relevant tags (for tests or Abi or specials)?
+        return True
 #
     @classmethod
-    def save(cls):
-        cls.grade_table.save()
-#TODO: There could be a new tag or group?
-# So like init, but retaining "term", tag, group, pid (where relevant)
-# Like <set_term>?
-# ... maybe not a new group?
-        CALLBACK('grades_???')
-        return True
+    def save(cls, tag = None):
+        subsel = GradeBase.term_info(cls.term, 'subselect')
+        if subsel == 'TAG':
+            if cls.pid_or_tag:
+                # <tag> should only be set when <cls.pid_or_tag> is empty ...
+                if tag:
+                    raise ValueError(
+                            "Bug in interface_grades: tag already set")
+            elif tag:
+                tag = asciify(tag, r'[^A-Za-z0-9~-]')
+                # Check not already existent ...
+                table_path = year_path(SCHOOLYEAR, GradeBase.table_path(
+                        cls.group, cls.term, tag))
+                try:
+                    getpack(tablepath)
+                except:
+                    pass
+                else:
+                    REPORT('ERROR', _TAG_IN_USE.format(tag = tag))
+                    return False
+                cls.pid_or_tag = tag
+                REPORT('INFO', _TAG_NAME.format(tag = tag))
+            else:
+                CALLBACK('grades_GET_TAG')
+                return True
+            cls.grade_table.save(cls.pid_or_tag)
+        else:
+            cls.grade_table.save()
+        return cls.set_group(None)
 #
     @classmethod
     def make_table(cls, filepath = None):
@@ -338,7 +388,7 @@ class GradeManager:
     def set_abi_pupil(cls, pid):
         """A new pupil has been selected: reset the grid accordingly.
         """
-        cls.pid = pid
+        cls.pid_or_tag = pid
         # Set pupil's name (NAME) and completion date (FERTIG_D)
         gtable = cls.grade_table
         cells = []  # [(tag, value), ... ] -> use <set_text>
@@ -386,14 +436,13 @@ class GradeManager:
         """Collect the fields to be saved and pass them to the
         <GradeTable> method.
         """
-        pgtable = cls.grade_table[self.pid]
+        pgtable = cls.grade_table[cls.pid_or_tag]
         pgtable.set_grade('*F_D', cls.abi_calc.value('FERTIG_D'))
         for s, g in cls.abi_calc.get_all_grades():
             pgtable.set_grade(s, g)
-#TODO: also '*ZA'?
+#TODO: also '*ZA'? Is it really needed at all?
         cls.grade_table.save()
-        CALLBACK('abitur_???')
-        return True
+        return cls.set_abi_pupil(cls.pid_or_tag)
 
 
 
@@ -409,6 +458,7 @@ FUNCTIONS['GRADES_update_table'] = GradeManager.update_table
 FUNCTIONS['GRADES_save_new'] = GradeManager.save_new
 FUNCTIONS['GRADES_make_reports'] = GradeManager.make_reports
 FUNCTIONS['GRADES_print_table'] = GradeManager.print_table
+FUNCTIONS['GRADES_value_changed'] = GradeManager.value_changed
 #?
 FUNCTIONS['ABITUR_set_pupil'] = GradeManager.set_abi_pupil
 FUNCTIONS['ABITUR_set_value'] = GradeManager.abi_set_value

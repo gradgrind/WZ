@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-03-18
+Last updated:  2021-03-24
 
 Configuration for grade handling.
 
@@ -193,17 +193,17 @@ class GradeBase(dict):
         category.
         """
         path = cls.GRADE_PATH.format(term = term, group = group)
-        if subselect:
+        if cls.term_info(term, 'subselect') == 'TAG':
             return path + '_' + subselect
         return path
 #
     @classmethod
-    def report_name(cls, group, term, rtype):
+    def report_name(cls, group, term, subselect, rtype):
         """Get file name for the grade report.
         """
         name = cls.REPORT_NAME.format(group = group, rtype = rtype)
-        if term[0] in ('S', 'T'):
-            return name + '_' + term[1:]
+        if cls.term_info(term, 'subselect') == 'TAG':
+            return name + '_' + subselect
         return name
 #
     @classmethod

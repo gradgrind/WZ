@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-03-20
+Last updated:  2021-03-25
 
 Basic configuration and structural stuff.
 
@@ -335,17 +335,20 @@ def tvSplit(fnames, lname):
 
 ###
 
-def asciify(string):
+def asciify(string, invalid_re = None):
     """This converts a utf-8 string to ASCII, e.g. to ensure portable
     filenames are used when creating files.
     Also spaces are replaced by underlines.
     Of course that means that the result might look quite different from
     the input string!
-    A few explicit character conversions are given in the config file
-    'ASCII_SUB'.
+    A few explicit character conversions are given in the config module
+    under 'ASCII_SUB'.
+    By supplying <invalid_re>, an alternative set of exclusion characters
+    can be used.
     """
     # regex for characters which should be substituted:
-    _invalid_re = r'[^A-Za-z0-9_.~-]'
+    if not invalid_re:
+        invalid_re = r'[^A-Za-z0-9_.~-]'
     def rsub (m):
         c = m.group (0)
         if c == ' ':
@@ -356,13 +359,14 @@ def asciify(string):
             return '^'
 
     lookup = CONFIG.ASCII_SUB
-    return re.sub (_invalid_re, rsub, string)
+    return re.sub (invalid_re, rsub, string)
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
     init()
+    print(asciify("§Aö.#"))
     print("Current school year:", Dates.get_schoolyear())
     print("DATE:", Dates.print_date('2016-04-25'))
     try:

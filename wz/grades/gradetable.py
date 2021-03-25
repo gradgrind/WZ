@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-03-20
+grades/gradetable.py - last updated 2021-03-24
 
 Access grade data, read and build grade tables.
 
@@ -35,8 +35,8 @@ _ERROR_OVERWRITE2 = "Neue Note für {name} im Fach {sid} mehrmals" \
 _WARN_OVERWRITE = "Geänderte Note für {name} im Fach {sid}:\n  {tfile}"
 _NEW_GRADE_EMPTY = "Bug: leeres Notenfeld für {name} im Fach {sid}:\n  {tfile}"
 _BAD_GRADE = "Ungültige Note im Fach {sid}: {g}"
-_NO_DATE = "Kein Ausgabedatum angegeben"
-_DATE_EXISTS = "Ausgabedatum existiert schon"
+_NO_DATE = "Kein Notendatum angegeben"
+#_DATE_EXISTS = "Ausgabedatum existiert schon"
 
 _TITLE2 = "Tabelle erstellt am {time}"
 
@@ -180,7 +180,7 @@ class _GradeTable(dict):
                 <GradeBase.REPORT_GROUPS>
         <term>: a string representing a valid "term" (school-term, etc.)
         <subselect>: depending on <term>, may be empty, 'STUDENT' or
-                'DATE'.
+                'TAG'.
         <schoolyear>: school-year
         <issue_d>: date of issue
         <grades_d>: date of grade finalization
@@ -215,7 +215,8 @@ class _GradeTable(dict):
         data in a current, non-finished table.
         """
         if grade_data:
-            self.issue_d = grade_data.get('ISSUE_D') or NO_DATE
+            date = grade_data.get('ISSUE_D') or NO_DATE
+            self.issue_d = date
             self.grades_d = grade_data.get('GRADES_D') or NO_DATE
             grade_maps = {}
             for pdata in grade_data['__PUPILS__']:
@@ -379,7 +380,7 @@ class _GradeTable(dict):
         table.protectSheet()
         return table.save()
 #
-    def save(self):
+    def save(self, tag = None):
         """Save the data to the "database".
         """
         fields = []
@@ -399,28 +400,17 @@ class _GradeTable(dict):
                 if v:
                     gmap[sid] = v
             dlist.append(dmap)
-        if self.term in ('S', 'T'):
-#TODO: check validity of date?
-            if self.issue_d == '*':
-                raise FailedSave(_NO_DATE)
-            # It is possible that the date-of-issue has been changed.
-            # If the new date is already in use this would cause the
-            # old data to be overwritten. So changes to this field
-            # should be made very carefully, preferably with an
-            # automated check!
-            date = self.issue_d
-        else:
-            date = None
         # Get file path and write file
         table_path = year_path(self.schoolyear,
-                GradeBase.table_path(self.group, self.term, date))
+                GradeBase.table_path(self.group, self.term, tag))
         data = {
             'SCHOOLYEAR': self.schoolyear,
             'GROUP':      self.group,
             'TERM':       self.term,
             'GRADES_D':   self.grades_d,
             'ISSUE_D':    self.issue_d,
-            '__PUPILS__': dlist
+            '__PUPILS__': dlist,
+            '__MODIFIED__': Dates.timestamp()
         }
 #TODO: Title?
         return save_pack(table_path, **data)
@@ -523,7 +513,7 @@ class GradeTableFile(_GradeTable):
         term = info.get('TERM').replace(' ', '_')
         subsel = GradeBase.term_info(term, 'subselect')
         self._set_group_term(info.get('GROUP'), term,
-                self.grades_d if subsel == 'DATE' else None)
+                self.grades_d if subsel == 'TAG' else None)
         year = info.get('SCHOOLYEAR')
         if year != str(self.schoolyear):
             raise GradeTableError(_TABLE_YEAR_MISMATCH.format(
@@ -571,23 +561,21 @@ class NewGradeTable(_GradeTable):
 ###
 
 class GradeTable(_GradeTable):
-    def __init__(self, schoolyear, group, term, date = None, ok_new = False):
+    def __init__(self, schoolyear, group, term, tag = None, ok_new = False):
         """If <ok_new> is true, a new table may be created, otherwise
         the table must already exist.
-        <date> is for "term"-types with "subselect=DATE" only.
-        Note that the 'TERM' field is saved with the internal values,
-        not the localized "readable" versions.
-        If the field 'ISSUE_D' is after the "current" date or not yet
-        set, the table should be created as a new one.
-        If there is an existing one, its grade data will be imported.
+        <tag> is for "term"-types with "subselect=TAG" only.
+        If the field 'ISSUE_D' is after the "current" date, or not yet
+        set, the table should be created as a new one – if there is an
+        existing table, its grade data will be imported.
         """
         super().__init__(schoolyear)
-        self._set_group_term(group, term, date)
+        self._set_group_term(group, term, tag)
         # Get file path
         table_path = year_path(schoolyear,
-                GradeBase.table_path(group, term, date))
+                GradeBase.table_path(group, term, tag))
         try:
-            # Read the "internal" table for this group/term
+            # Read the "internal" table for this group/term(/tag)
             gdata = get_pack(table_path, SCHOOLYEAR = schoolyear,
                     GROUP = group, TERM = term)
         except FileNotFoundError:
@@ -714,6 +702,7 @@ if __name__ == '__main__':
             print("???", _pid, _gdata.stream, _gdata)
 
     quit(0)
+#TODO...
 
     if True:
 #    if False:

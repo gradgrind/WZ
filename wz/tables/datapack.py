@@ -1,7 +1,7 @@
 ### python >= 3.7
 # -*- coding: utf-8 -*-
 """
-tables/datapack.py - last updated 2021-03-19
+tables/datapack.py - last updated 2021-03-22
 
 Load and save structured data in a compact way (gzipped json)
 
@@ -24,7 +24,7 @@ Copyright 2021 Michael Towers
 ### Messages:
 _KEY_MISMATCH = "Feld {key} hat Wert {val} statt {exp} in:\n  {path}"
 
-import json, gzip
+import os, json, gzip
 
 class PackError(Exception):
     pass
@@ -53,12 +53,11 @@ def get_pack(filepath, **checks):
 def save_pack(filepath, **data):
     """Save the data mapping as a gzipped json file to the given path
     (specified without the '.json.gz' ending).
-    Add the '__MODIFIED__' field with a timestamp.
     Return the filename.
     Any existing file will be overwritten.
     """
     fpath = filepath + '.json.gz'
-    data['__MODIFIED__'] = Dates.timestamp()
+    os.makedirs(os.path.dirname(fpath), exist_ok = True)
     with gzip.open(fpath, 'wt', encoding = 'utf-8') as zipfile:
         json.dump(data, zipfile, ensure_ascii = False)
     return fpath

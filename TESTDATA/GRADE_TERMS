@@ -1,6 +1,6 @@
 #*** MINION 1.0 ***#
 # ************** Zeugnis-Anlässe (Zeitpunkt / Grund) **************
-# Letzte Änderung: 2021-03-14
+# Letzte Änderung: 2021-03-24
 
 1._Halbjahr: {
     groups: [13 12.G 12.R 11.G 11.R]
@@ -19,12 +19,12 @@ Abitur: {
 
 Sonderzeugnis: {
     groups: [13 12.G 12.R 11.G 11.R 10 09 08 07 06 05]
-    subselect: DATE
+    subselect: TAG
 }
 
 Klausur: {
 # Für Klausuren werden keine Zeugnisse erstellt. Diese Kategorie
 # existiert nur, damit die Noten aufbewahrt werden.
     groups: [13]
-    subselect: DATE
+    subselect: TAG
 }
