@@ -4,7 +4,7 @@
 # Nur für die hier eingetragenen Gruppen können Notenzeugnisse erstellt
 # werden.
 #TODO: Auch Zwischenzeugnisse hier durch 'Zeugnis' vertreten?
-# Letzte Änderung: 2021-03-14
+# Letzte Änderung: 2021-03-25
 
 ###########################
 ### Lists of valid grades
@@ -85,7 +85,7 @@ __DEFAULT__: {
     ]
     *ZA/1._Halbjahr: [Zeugnis Abgang]
     *ZA/2._Halbjahr: [- Abgang]
-    *ZA/Abitur: [-]              # must be present, but set automatically
+    *ZA/Abitur: []              # determined by Calc / .Q
     *ZA/Sonderzeugnis: [- Abgang]
     *F_D/Abitur: DATE
     *B/Abitur: <<<>>>

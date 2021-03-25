@@ -170,6 +170,7 @@ def LineDialog(message, text = ''):
     td = QDialog()
     td.setWindowTitle(_INPUT)
     vbox = QVBoxLayout(td)
+    vbox.addWidget(QLabel(message))
     lineedit = QLineEdit(text)
     vbox.addWidget(lineedit)
     vbox.addWidget(HLine())

@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2021-03-20
+Last updated:  2021-03-25
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -75,12 +75,12 @@ class GradeReports:
     The group must be a valid grade-report group (which can be a class
     name or a class name with a group tag, e.g. '12.G') – the valid
     groups are specified (possibly dependant on the term) in the
-    'grade_config' module.
+    'GRADE_TERMS' configuration file.
     The grade information is extracted from the database for the given
     school-year and "term".
     """
-    def __init__(self, schoolyear, group, term):
-        self.grade_table = GradeTable(schoolyear, group, term)
+    def __init__(self, schoolyear, group, term, tag):
+        self.grade_table = GradeTable(schoolyear, group, term, tag)
         self.gmap0 = {  ## data shared by all pupils in the group
             'GROUP': group,
             'TERM': term,
@@ -111,7 +111,7 @@ class GradeReports:
             # Check pupil filter, <pids>:
             if pids and (pid not in pids):
                 continue
-            if self.grade_table.term == 'A':
+            if self.grade_table.term == 'Abitur':
                 rtype = grades.abicalc.calculate()['REPORT_TYPE']
                 if not rtype:
                     REPORT("ERROR", _NOT_COMPLETE.format(
@@ -143,6 +143,7 @@ class GradeReports:
                         grades.report_name(
                                 group = self.grade_table.group,
                                 term = self.grade_table.term,
+                                subselect = self.grade_table.subselect,
                                 rtype = rtype
                         ),
                         year_path(self.grade_table.schoolyear,
@@ -198,9 +199,11 @@ class GradeReports:
             gmap['COMMENT'] = comment
             # Alphabetical name-tag
             gmap['PSORT'] = sortkey(pdata)
+            # "tussenvoegsel" separator in last names ...
+            gmap['LASTNAME'] = gmap['LASTNAME'].replace('|', ' ')
 
             ## Process the grades themselves ...
-            if self.grade_table.term == 'A':
+            if self.grade_table.term == 'Abitur':
                 showgrades = {k: UNGRADED if v == NO_GRADE else v
                         for k, v in grades.abicalc.tags.items()}
                 gmap.update(showgrades)
@@ -225,7 +228,8 @@ class GradeReports:
         <grades> is the <Grades> instance,
         <template> is a <Template> (or subclass) instance.
         """
-        _grp2indexes = group_grades(template.all_keys())
+        _keys = template.all_keys()
+        _grp2indexes = group_grades(_keys)
         for rg in grades.group_info(self.grade_table.group, 'Nullgruppen'):
             _grp2indexes[rg] = None
         sbj_grades = _grp2indexes[None] # "direct" grade slots
@@ -336,8 +340,8 @@ if __name__ == '__main__':
     _year = '2016'
 
     # Build reports for a group
-#    greports = GradeReports(_year, '13', 'A')
-#    greports = GradeReports(_year, '11.G', '2')
-    greports = GradeReports(_year, '13', '1')
+    greports = GradeReports(_year, '13', 'Abitur', None)
+#    greports = GradeReports(_year, '11.G', '2._Halbjahr', None)
+#    greports = GradeReports(_year, '13', '1._Halbjahr', None)
     for f in greports.makeReports():
         print("\n$$$: %s\n" % f)

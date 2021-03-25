@@ -273,13 +273,13 @@ class _GradeTable(dict):
             raise GradeTableError(_PIDS_NOT_IN_GROUP.format(
                     group = self.group, pids = ', '.join(pidset)))
 #
-    def _set_group_term(self, group, term, date):
+    def _set_group_term(self, group, term, tag):
         """Set the subjects and extra pupil-data fields for the given
-        group and term (and date, in the case of DATE-subselects).
+        group and term (and tag, in the case of TAG-subselects).
         """
         self.group = group
         self.term = term
-        self.subselect = date
+        self.subselect = tag
         # Get subjects
         subjects = Subjects(self.schoolyear)
         self.sid2subject_data = {} # {sid -> subject_data}

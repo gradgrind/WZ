@@ -363,7 +363,8 @@ class GradeManager:
 #
     @classmethod
     def make_reports(cls):
-        greports = GradeReports(SCHOOLYEAR, cls.group, cls.term)
+        greports = GradeReports(SCHOOLYEAR, cls.group, cls.term,
+                cls.pid_or_tag)
         files = greports.makeReports()
         if files:
             REPORT('INFO', "%s:\n  --> %s" % (_MADE_REPORTS,
