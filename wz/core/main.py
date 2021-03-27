@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-02-21
+core/main.py - last updated 2021-03-25
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -210,6 +210,22 @@ def set_year(year):
 
 FUNCTIONS['BASE_set_year'] = set_year
 
+###
+
+from local.grade_config import STREAMS
+from core.pupils import PUPILS
+
+def get_classes():
+    pupils = PUPILS(SCHOOLYEAR)
+    selects = {
+            'SEX': pupils.SEX,
+            'STREAMS': streams
+        }
+    classes = pupils.classes()
+    CALLBACK('template_SET_CLASSES', selects = selects, classes = classes)
+    return True
+
+FUNCTIONS['TEMPLATE_get_classes'] = get_classes
 
 ######################################################################
 

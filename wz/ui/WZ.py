@@ -91,7 +91,8 @@ import ui.tab_grade_editor
 #        self._addPage(TextReports())
 import ui.tab_calendar
 #        self._lbox.addStretch(1)
-#        self._addPage(FieldEdit()) # template_fields.py
+#import ui.tab_template_fields
+#        self._addPage(FieldEdit())
 
 ####+++++++++++++++++++++++++++++++++++++++
 

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-ui/grid.py
+ui/grid2.py
 
-Last updated:  2021-03-26
+Last updated:  2021-03-27
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -27,14 +27,17 @@ Copyright 2021 Michael Towers
 ##### Configuration #####################
 FONT_DEFAULT = 'Arial'
 FONT_SIZE_DEFAULT = 11
+FONT_COLOUR = '662222'
 
-# Line width (indexed table: 0 - 3) for borders
-LINE_WIDTH = (0, 1.0, 2.0, 3.0)
+# Line width for borders
+UNDERLINE_WIDTH = 3.0
+BORDER_WIDTH = 1.0
+
+NO_ITEM = '555555'  # colour for unused table cells
 
 _DATE_POPUP = "Datum wählen"
 _TEXT_POPUP = "Text eingeben"
 
-LINEBREAK = '§'    # character used as paragraph separator in text cells
 #####################
 
 ### Messages
@@ -52,24 +55,18 @@ _PDF_FILE = "PDF-Datei (*.pdf)"
 #####################################################
 
 import sys, os, copy
-if __name__ == '__main__':
-    # Enable package import if running as module
-    this = sys.path[0]
-    sys.path[0] = os.path.dirname(this)
 
-from qtpy.QtWidgets import (QLineEdit, QTextEdit,
-    QGraphicsView, QGraphicsScene,
-    QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsLineItem,
-    QGraphicsProxyWidget,
-    QCalendarWidget, QVBoxLayout, QLabel,
-    QFileDialog, QDialog, QDialogButtonBox)
+from qtpy.QtWidgets import QLineEdit, QTextEdit, \
+    QGraphicsView, QGraphicsScene, \
+    QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsLineItem, \
+    QGraphicsProxyWidget, \
+    QCalendarWidget, QVBoxLayout, QLabel, \
+    QFileDialog, QDialog, QDialogButtonBox, \
+    QTableWidget, QTableWidgetItem
 from qtpy.QtGui import (QFont, QPen, QColor, QBrush, QTransform,
         QPainter, QPdfWriter, QPageLayout)
 from qtpy.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
         QLocale
-from ui.ui_support import QuestionDialog
-
-from local.base_config import LINEBREAK
 
 class GridError(Exception):
     pass
@@ -115,9 +112,15 @@ class GridView(QGraphicsView):
         point = event.pos()
 #        print("POS:", point, self.mapToGlobal(point), self.itemAt(point))
 # The Tile may not be the top item.
-        if self.items(point):
-            return super().mousePressEvent(event)
-        self.scene().popdown(True)
+        items = self.items(point)
+        if items:
+            for item in items:
+                try:
+                    propagate = item.click(event)
+                except AttributeError:
+                    continue
+                if not propagate:
+                    return
 #
     def set_changed(self, show):
         """Called when there is a switch from "no changes" to "changes"
@@ -141,7 +144,7 @@ class GridView(QGraphicsView):
     ### ---------------
 ###
 
-class Grid(QGraphicsScene):
+class Gridbase(QGraphicsScene):
     _savedir = None
     @classmethod
     def set_savedir(cls, path):
@@ -246,15 +249,9 @@ class Grid(QGraphicsScene):
 #
     ### Methods dealing with cell editing
     def editCell(self, tile, x, y):
-        self.popdown(True)
         editor = self.editors[tile.validation]
-        self._popup = editor
         if editor:
             editor.activate(tile, x, y)
-#
-    def popdown(self, force = False):
-        if self._popup != None and self._popup.hideMe(force):
-            self._popup = None
 #
     def addSelect(self, tag, valuelist):
         if tag in self.editors:
@@ -325,6 +322,21 @@ class Grid(QGraphicsScene):
             self.set_savedir(os.path.dirname(fpath))
             with open(fpath, 'wb') as fh:
                 fh.write(bytes(qbytes))
+
+    def to_pdf2(self, filepath):
+        # just a sketch ... needs stuff from above, too ...
+        printer = QPdfWriter(filepath)
+        logicalDPIX = printer.logicalDpiX() # int
+        PointsPerInch = 72
+        painter = QPainter()
+        painter.begin(printer)
+        t = QTransform()
+        scaling = logicalDPIX / PointsPerInch # float, 16.6
+        t.scale(scaling, scaling)
+        # do drawing with painter
+        painter.end()
+        painter.setTransform(t)
+
 
 ### ---------------
 #
@@ -436,22 +448,23 @@ class CellStyle:
     def getPen(cls, width):
         """Manage a cache for pens of different width.
         """
-        width = width or 0
-        try:
-            return cls._pens[width]
-        except:
-            pass
-        try:
-            widthF = LINE_WIDTH[width]
-        except IndexError as e:
-            raise GridError(_INVALIDLINEWIDTH.format(val = width)) from e
-        pen = QPen()
-        if width == 0:
-            pen.setStyle(Qt.NoPen)
+        if width:
+            try:
+                return cls._pens[width]
+            except AttributeError:
+                cls._pens = {}
+            except KeyError:
+                pen = QPen()
+                pen.setWidthF(width)
+                cls._pens[width] = pen
+                return pen
         else:
-            pen.setWidthF(widthF)
-        cls._pens[width] = pen
-        return pen
+            try:
+                return cls._noPen
+            except AttributeError:
+                cls._noPen = QPen()
+                cls._noPen.setStyle(Qt.NoPen)
+                return cls._noPen
 #
     @classmethod
     def getBrush(cls, colour):
@@ -459,10 +472,10 @@ class CellStyle:
         <colour> is a colour in the form 'RRGGBB'.
         """
         try:
-            return cls._brushes[colour]
+            return cls._brushes[colour or FONT_COLOUR]
         except:
             pass
-        brush = QBrush(QColor('#FF' + colour))
+        brush = QBrush(QColor('#FF' + (colour or FONT_COLOUR)))
         cls._brushes[colour] = brush
         return brush
 #
@@ -501,7 +514,7 @@ class CellStyle:
             emph, clr = highlight.split(':')
         except:
             emph, clr = highlight or '', None
-        self.fontColour = self.getBrush(clr) if clr else None
+        self.fontColour = self.getBrush(clr)
         self.font = self.getFont(font, size, 'b' in emph, 'i' in emph)
 #
     def setAlign(self, align):
@@ -547,7 +560,6 @@ class Tile(QGraphicsRectItem):
         self.label = label
         super().__init__(0, 0, w, h)
         self.setFlag(self.ItemClipsChildrenToShape, True)
-        self.setAcceptedMouseButtons(Qt.LeftButton)
         self.setPos(x, y)
 
         # Background colour
@@ -557,28 +569,27 @@ class Tile(QGraphicsRectItem):
         # Border
         if style.border == 1:
             # Set the pen for the rectangle boundary
-            pen0 = CellStyle.getPen(1)
+            pen0 = CellStyle.getPen(BORDER_WIDTH)
         else:
             # No border for the rectangle
             pen0 = CellStyle.getPen(None)
             if style.border != 0:
                 # Thick underline
                 line = QGraphicsLineItem(self)
-                line.setPen(CellStyle.getPen(2))
+                line.setPen(CellStyle.getPen(UNDERLINE_WIDTH))
                 line.setLine(0, h, w, h)
         self.setPen(pen0)
 
         # Alignment and rotation
         self.halign, self.valign, self.rotation = style.alignment
         # Text
-        if text == None:
+        if text == None and not validation:
             self.textItem = None
         else:
             self.textItem = QGraphicsSimpleTextItem(self)
             self.textItem.setFont(style.font)
-            if style.fontColour != None:
-                self.textItem.setBrush(style.fontColour)
-            self.setText(text)
+            self.textItem.setBrush(style.fontColour)
+            self.setText(text or '')
 #
     def mark(self):
         if self._style.colour_marked:
@@ -599,14 +610,29 @@ class Tile(QGraphicsRectItem):
         self._text = text
         self.textItem.setText(text)
         w = self.textItem.boundingRect().width()
+        self.textItem.setScale(1)
         if text and self.validation == 'TEXT':
-            if w > self.width0:
-                # Display '###' instead of the text
+            # This cannot be rotated ...
+            w = self.textItem.boundingRect().width()
+            h = self.textItem.boundingRect().height()
+            wscale = self.width0 / w
+            hscale = self.height0 / h
+            scale = hscale if hscale < wscale else wscale
+            if scale < 0.6:
                 self.textItem.setText('###')
-        if self.rotation:
+                scale = self.width0 / self.textItem.boundingRect().width()
+            if scale < 1.0:
+                self.textItem.setScale(scale)
+            bdrect = self.textItem.mapRectToParent(
+                    self.textItem.boundingRect())
+            yshift = 0.0
+        elif self.rotation:
             maxh = self.height0 - self.margin() * 2
             if w > maxh:
-                self.textItem.setScale(maxh / w)
+                scale = maxh / w
+                if scale < 0.6:
+                    scale = 0.6
+                self.textItem.setScale(scale)
             trf = QTransform().rotate(-90)
             self.textItem.setTransform(trf)
             bdrect = self.textItem.mapRectToParent(
@@ -615,7 +641,10 @@ class Tile(QGraphicsRectItem):
         else:
             maxw = self.width0 - self.margin() * 2
             if w > maxw:
-                self.textItem.setScale(maxw / w)
+                scale = maxw / w
+                if scale < 0.6:
+                    scale = 0.6
+                self.textItem.setScale(scale)
             bdrect = self.textItem.mapRectToParent(
                     self.textItem.boundingRect())
             yshift = 0.0
@@ -636,15 +665,13 @@ class Tile(QGraphicsRectItem):
             yshift += (self.height0 - h) / 2
         self.textItem.setPos(xshift, yshift)
 #
-    def mousePressEvent(self, event):
-        if self.validation:
+    def click(self, event):
+        if self.validation and event.button() == Qt.LeftButton:
 #            point = event.scenePos ()
             point = self.pos()
             # Select type of popup and activate it
             self._grid.editCell(self, point.x(), point.y())
-        else:
-            # This should cause any existing pop-up to be cancelled
-            self._grid.popdown(True)
+        return False
 #
     def newValue(self, text):
         """Called with the new value. The tile should be updated and the
@@ -655,135 +682,72 @@ class Tile(QGraphicsRectItem):
 
 ###
 
-class MiniTile(QGraphicsRectItem):
-    """A small tile for the grid view – specifically for the table popup.
-    """
-    def __init__(self, parent, x, y, w, h, textitem):
-        super().__init__(0, 0, w, h, parent)
-        self.width = w
-        self.height = h
-        self.setAcceptedMouseButtons(Qt.LeftButton)
-        self.setAcceptHoverEvents(True)
-        self.textItem = textitem
-        textitem.setParentItem(self)
-        self.adjust()
-        self.setBrush(parent.normalBrush)
-        self.setPos(x, y)
-#
-    def setText(self, text):
-        self.textItem.setText(text)
-        self.adjust()
-#
-    def adjust(self):
-        bdrect = self.textItem.boundingRect()
-        wt = bdrect.width()
-        xshift = (self.width - wt) / 2
-        ht = bdrect.height()
-        yshift = (self.height - ht) / 2
-        self.textItem.setPos(xshift, yshift)
-#
-    def hoverEnterEvent(self, event):
-        self.setBrush(self.parentItem().highlightBrush)
-#
-    def hoverLeaveEvent(self, event):
-        self.setBrush(self.parentItem().normalBrush)
-#
-    def mousePressEvent(self, event):
-        self.hoverLeaveEvent(None)
-        self.parentItem().selected(self.textItem.text())
-
-###
-
-def PopupTable(grid, items):
+def PopupTable(grid, items, ncols = 3):
     if items:
-        return _PopupTable(grid, items)
+        return _PopupTable(grid, items, ncols)
     return None
-#
-class _PopupTable(QGraphicsRectItem):
-    """A selection-table popup for the grid view.
-    """
-    def __init__(self, grid, items):
+##
+class _PopupTable(QDialog):
+#TODO: Note the change: '' is no longer included automatically!!!
+    def __init__(self, grid, items, ncols):
         self._grid = grid
-        texts = []
-        w0, h0 = 0, 0
-        for item in items:
-            t = QGraphicsSimpleTextItem(item)
-            texts.append(t)
-            br = t.boundingRect()
-            w = br.width()
-            if w > w0:
-                w0 = w
-            h = br.height()
-            if h > h0:
-                h0 = h
-        texts.append(QGraphicsSimpleTextItem(''))
-        w0 += 5
-        h0 += 5
-
-        rows = (len (texts) + 2) // 3
-        self.boxwidth = w0*3 + 2
-        self.boxheight = h0*rows + 2
-        super().__init__(0, 0, self.boxwidth, self.boxheight)
-        self.setZValue(10)
-        self.setVisible(False)
-        grid.addItem(self)
-        pen = QPen(QColor('#ff0040'))
-        pen.setWidth(2)
-        self.setPen(pen)
-
-        self.normalBrush = QBrush(QColor('#ffffff'))
-        self.highlightBrush = QBrush(QColor('#ffe080'))
-        self.setBrush(self.normalBrush)
-        x = 1
-        y = 1
-        ncols = 3
-        n = 0
-        i = len(texts)
-        for t in texts:
-            i -= 1
-            if i == 0:
-                # Last tile (null)
-                w0 *= (3 - n)
-            MiniTile(self, x, y, w0, h0, t)
-            n += 1
-            if n >= ncols:
-                n = 0
-                x = 1
-                y += h0
-            else:
-                x += w0
+        super().__init__()
+        vbox = QVBoxLayout(self)
+        self.table = QTableWidget(self)
+        vbox.addWidget(self.table)
+        self.setWindowTitle("?")
+        self.table.horizontalHeader().hide()
+        self.table.verticalHeader().hide()
+        self.table.itemActivated.connect(self._select)
+        self.table.itemClicked.connect(self._select)
+        # Enter the data
+        nrows = (len(items) + 2) // ncols
+        self.table.setColumnCount(ncols)
+        self.table.setRowCount(nrows)
+        i = 0
+        for row in range(nrows):
+            for col in range(ncols):
+                try:
+                    text = items[i]
+                    item = QTableWidgetItem(text)
+                    item.setTextAlignment(Qt.AlignHCenter)
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                    item._text = text
+                except IndexError:
+                    item = QTableWidgetItem('')
+                    item.setBackground(CellStyle.getBrush(NO_ITEM))
+                    item.setFlags(Qt.NoItemFlags)
+                    item._text = None
+                self.table.setItem(row, col, item)
+                i += 1
+        # This is all about fitting to contents, first the table,
+        # then the window
+        self.table.resizeColumnsToContents()
+        self.table.resizeRowsToContents()
+        h = 0
+        for r in range(nrows):
+            h += self.table.rowHeight(r)
+        w = 0
+        for c in range(ncols):
+            w += self.table.columnWidth(c)
+        _cm = self.table.contentsMargins()
+        h += _cm.top() + _cm.bottom()
+        w += _cm.left() + _cm.right()
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setFixedSize(w, h)
+        self.resize(0, 0)
 #
-    def hideMe(self, force):
-        """This should be called only by <GridView.popdown>.
-        This popup is hidden regardless of <force> as the
-        only interesting click is on one of the values.
-        """
-        self.setVisible(False)
-        return True
+    def _select(self, item):
+        if item._text != None:
+            self._value = item._text
+            self.accept()
 #
     def activate(self, tile, x, y):
         # x and y are scene coordinates.
-        # Get the visible area by converting view width and height to scene
-        # coordinates ...
-        self.tile = tile
-        # Try to keep the popup within the grid area
-        sx, sy = self._grid.viewWH()
-        overlapx = sx - (x + self.boxwidth + 2)
-        overlapy = sy - (y + self.boxheight + 2)
-        if overlapx < 0:
-            x += overlapx
-            if x < 0:
-                x = 0
-        if overlapy < 0:
-            y += overlapy
-            if y < 0:
-                y = 0
-        self.setPos(x, y)
-        self.setVisible(True)
-#
-    def selected(self, text):
-        self.setVisible(False)
-        self.tile.newValue(text)
+        self.move(self._grid.screen_coordinates(x, y))
+        if self.exec_():
+            tile.newValue(self._value)
 
 ###
 
@@ -821,13 +785,6 @@ class PopupDate(QDialog):
     def newDate(self, date):
         self.lbl.setText(QLocale().toString(date))
         self.date = date.toString('yyyy-MM-dd')
-#
-    def hideMe(self, force):
-        """This should be called only by <Grid.popdown>.
-        Here it is a dummy function because <PopupDate> is a modal
-        dialog.
-        """
-        return True
 
 ###
 
@@ -837,6 +794,7 @@ class PopupTextEdit(QDialog):
         super().__init__()
         vbox = QVBoxLayout(self)
         self.textedit = QTextEdit(self)
+        self.textedit.setTabChangesFocus(True)
         vbox.addWidget(self.textedit)
         self.lbl = QLabel(self)
         vbox.addWidget(self.lbl)
@@ -845,103 +803,44 @@ class PopupTextEdit(QDialog):
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
         vbox.addWidget(buttonBox)
-        self.setLayout(vbox)
         self.setWindowTitle(_TEXT_POPUP)
-#        self.setWindowFlags(Qt.SplashScreen)
 #
     def activate(self, tile, x, y):
-        """The text to be edited has <LINEBREAK> instead of line-breaks.
-        Leading and trailing whitespace is removed from each line.
-        """
-# There is no good way of putting a long text in a tsv (or any other table
-# format), but at least it is possible by replacing line-breaks, and
-# banning tabs!
         self.lbl.setText(tile.label)
-        self.tile = tile
         text = tile.value()
-        if text:
-            text = '\n'.join(text.split(LINEBREAK))
         self.textedit.setPlainText(text)
         self.move(self._grid.screen_coordinates(x, y))
         if self.exec_():
             text = self.textedit.toPlainText()
             if text:
-                text = LINEBREAK.join([l.strip() for l in text.splitlines()])
-            self.tile.newValue(text)
-#
-    def hideMe(self, force):
-        """This should be called only by <Grid.popdown>.
-        Here it is a dummy function because <PopupDate> is a modal
-        dialog.
-        """
-        return True
+                text = '\n'.join([l.rstrip() for l in text.splitlines()])
+            tile.newValue(text)
 
 ###
 
-class PopupLineEdit(QGraphicsProxyWidget):
-    """A line editor.
-    Press enter-key to accept new text.
-    """
+class PopupLineEdit(QDialog):
     def __init__(self, grid):
         self._grid = grid
         super().__init__()
-        self.setZValue(10)
-        self.lineedit = QLineEdit()
-        self.lineedit.setStyleSheet("background-color: #c0c0ff")
-#        self.lineedit.editingFinished.connect(self.onDone)
-        self.lineedit.returnPressed.connect(self.onDone)
-        self.setWidget(self.lineedit)
-        self.setVisible(False)
-        grid.addItem(self)
-#
-    def hideMe(self, force):
-        """This should be called only by <Grid.popdown>.
-        It hides only when <force> is true because the widget needs to
-        capture clicks.
-        """
-        if force:
-            self.setVisible(False)
-            return True
-        return False
+        vbox = QVBoxLayout(self)
+        self.lineedit = QLineEdit(self)
+        vbox.addWidget(self.lineedit)
+        self.lineedit.returnPressed.connect(self.accept)
 #
     def activate(self, tile, x, y):
-        """Start the editing widget.
-        x and y are scene coordinates.
-        """
-        # Get the visible area by converting view width and height to scene
-        # coordinates ...
-        self.tile = tile
+        self.setWindowTitle(tile.label)
         w = tile.width0
         if w < 50.0:
             w = 50.0
         self.lineedit.setFixedWidth(w)
         self.lineedit.setText(tile.value() or '')
-        self.setPos(x, y)
-        self.setVisible(True)
-        self.lineedit.setFocus()
-#
-# If signal "editingFinished" is used in place of "returnPressed", this
-# method is called twice on pressing "Enter".
-    def onDone(self):
-        if self.tile:
-            tile = self.tile
-            self.tile = None
-            self._grid.popdown(True)
+        self.move(self._grid.screen_coordinates(x, y))
+        if self.exec_():
             text = self.lineedit.text()
-            tile.textItem.setText(text)
             tile.newValue(text)
-#
-# This prevents other focussed widgets from getting an 'Enter' key-press ...
-# (Apparently in Qt more than one widget can have focus!)
-    def keyPressEvent(self, e):
-        if e.key() == Qt.Key_Return:
-            self.onDone()
-        else:
-            super().keyPressEvent(e)
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
-
 
 if __name__ == '__main__':
     from qtpy.QtWidgets import QApplication, QDialog, QHBoxLayout, \
@@ -972,7 +871,8 @@ if __name__ == '__main__':
     # Add some data
     rows = (10, 2, 6, 6, 6, 6, 6)
     cols = (25, 10, 8, 20, 8, 8, 25)
-    grid = Grid(gview, rows, cols)
+    cols = (25, 10, 8, 20, 8, 8, 15)
+    grid = Gridbase(gview, rows, cols)
 
     grid.new_style('title', font = 'Serif', size = 12,
             align = 'c', border = 2)
@@ -987,10 +887,10 @@ if __name__ == '__main__':
 
     grid.tile(2, 0, tag = 'd1', text = "2020-08-10", validation = 'DATE')
     grid.tile(2, 6, tag = 'd2', text = "2020-09-02", validation = 'DATE')
-# Why isn't the date centred? It is connected with shrink-fitting!
     grid.tile(4, 3, tag = 'd3', text = "2020-02-09", validation = 'DATE')
-    grid.tile(6, 0, tag = 'd4', text = "2020-01-31", validation = 'DATE')
-    grid.tile(6, 6, tag = 'd5', text = "2020-12-01", validation = 'DATE')
+    grid.tile(4, 0, cspan = 3, rspan = 3, tag = 'd4',
+            text = "Text\nwith\nmultiple lines.", validation = 'TEXT')
+    grid.tile(6, 6, tag = 'd5', text = "More than\none line.", validation = 'TEXT')
 
     grid.tile(5, 4, tag = 'g1', text = "4", validation = 'SGRADE')
     grid.tile(3, 2, tag = 'g2', validation = 'SGRADE')
@@ -999,4 +899,5 @@ if __name__ == '__main__':
     grid.tile(4, 5, tag = 't2', validation = 'LINE', text = "X")
 
     gview.set_scene(grid)
+    window.resize(600, 400)
     window.exec_()
