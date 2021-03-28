@@ -2,7 +2,7 @@
 """
 ui/pupil_grid.py
 
-Last updated:  2021-02-12
+Last updated:  2021-03-28
 
 Manage the grid for the pupil-data editor.
 
@@ -49,7 +49,7 @@ class PupilGrid(Grid):
 
         ### Pop-up editor for SEX and STREAM fields
         self.addSelect('SEX', info['SEX'])
-        self.addSelect('STREAM', info['STREAMS'])
+        self.addSelect('STREAM', list(info['STREAMS']))
         ### Non-editable fields
         noneditable = {'PID'}
         ### Title area
@@ -90,8 +90,8 @@ class PupilGrid(Grid):
         for field in self._info['FIELDS']:
             self.set_text_init(field, pdata.get(field) or '')
 #
-    def valueChanged(self, tag, text):
+    def value_changed(self, tile, text):
         """Called when a cell value is changed by the editor.
         """
-        super().valueChanged(tag, text)
-        self.pupil_data[tag] = text
+        super().value_changed(tile, text)
+        self.pupil_data[tile.tag] = text

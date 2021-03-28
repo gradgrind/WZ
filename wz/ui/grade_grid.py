@@ -2,7 +2,7 @@
 """
 ui/grade_grid.py
 
-Last updated:  2021-03-18
+Last updated:  2021-03-28
 
 Manage the grid for the grade-editor.
 
@@ -106,7 +106,7 @@ class GradeGrid(Grid):
 
         # Pop-up "selection" editors
         for sel_type, sel_values in selects:
-            self.addSelect(sel_type, sel_values)
+            self.addSelect(sel_type, sel_values + [''])
 
         # horizontal separator (after headers)
         self.tile(row_pids - 1, 0, cspan = len(_COLS), style = 'padding')
@@ -201,16 +201,14 @@ class GradeGrid(Grid):
             for sid, name in extras:
                 _tag = f'${pid}-{sid}'
                 _val = grades[sid]
-                _label = None
                 if sid.endswith('_D'):
                     validation = 'DATE'
                 elif sid == '*B':
                     validation = 'TEXT'
-                    _label = _COMMENT.format(name = pname)
                 else:
                     validation = sid
                 self.tile(row, col, text = _val, style = 'entry',
-                        validation = validation, tag = _tag, label = _label)
+                        validation = validation, tag = _tag)
                 col += 1
             row += 1
 #
@@ -234,17 +232,17 @@ class GradeGrid(Grid):
                 highlight = ':002562', mark = 'E00000')
         self.new_style('padding', bg = '666666')
 #
-    def valueChanged(self, tag, text):
+    def value_changed(self, tile, text):
         """Called when a cell value is changed by the editor.
         """
-        super().valueChanged(tag, text)
-        if tag.startswith('$'):
+        super().value_changed(tile, text)
+        if tile.tag.startswith('$'):
             # Averages should not be handled, but have no "validation"
             # so they won't land here at all.
-            pid, sid = tag[1:].split('-')
+            pid, sid = tile.tag[1:].split('-')
             BACKEND('GRADES_grade_changed', pid = pid, sid = sid, val = text)
         else:
-            BACKEND('GRADES_value_changed', tag = tag, val = text)
+            BACKEND('GRADES_value_changed', tag = tile.tag, val = text)
 #
     def set_grades(self, vlist):
         for pid, sid, cgrade in vlist:

@@ -2,7 +2,7 @@
 """
 ui/abitur_pupil_view.py
 
-Last updated:  2021-03-23
+Last updated:  2021-03-28
 
 Editor for Abitur results (single pupil).
 
@@ -30,15 +30,15 @@ Copyright 2021 Michael Towers
 
 ##### Configuration
 ## Measurements are in mm ##
-COLUMNS = (14, 14, 25, 14, 14, 4, 20, 6, 6, 14, 3, 18, 3, 11)
+COLUMNS = (12, 14, 25, 14, 14, 4, 20, 6, 8, 14, 3, 18, 3, 11)
 ROWS = (
-    6, 3, 6, 3, 4, 5, 4, 10, 5, 1,
+    6, 3, 6, 3, 4, 6, 4, 10, 6, 1,
     # Written subjects:
     5, 6, 6, 5, 6, 6, 5, 6, 6, 5, 6, 6,
     # Other subjects:
     5, 5, 6, 5, 6, 5, 6, 5, 6,
     # Results:
-    5, 5, 3, 5, 3, 5, 3, 5, 3, 5, 5, 6, 5, 6
+    5, 6, 3, 6, 3, 6, 3, 6, 3, 6, 5, 6, 5, 6
 )
 
 VALID_GRADES = (
@@ -200,13 +200,11 @@ class AbiPupilView(Grid):
 #TODO: Do I want to display the date in local format? If so, I would need
 # to adjust the popup editor ...
 #
-    def valueChanged(self, tag, text):
+    def value_changed(self, tile, text):
         """Called when a cell value is changed by the editor.
         """
-        super().valueChanged(tag, text)
-        BACKEND('ABITUR_set_value', tag = tag, val = text)
-#TODO:???
-#        self.set_change_mark(tag, text)
+        super().value_changed(tile, text)
+        BACKEND('ABITUR_set_value', tag = tile.tag, val = text)
 
 #
 #    def leaving(self, force):

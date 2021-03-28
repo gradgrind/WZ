@@ -2,7 +2,7 @@
 """
 ui/tab_template_fields.py
 
-Last updated:  2021-03-25
+Last updated:  2021-03-28
 
 Show template fields, set values and process template.
 This module is intended primarily for testing purposes.
@@ -154,12 +154,12 @@ class FieldGrid(Grid):
         for field in self.fields:
             self.set_text_init(field, mapping.get(field) or '')
 #
-    def valueChanged(self, tag, text):
+    def value_changed(self, tile, text):
         """Called when a cell value is changed by the editor.
         """
-        super().valueChanged(tag, text)
-        if tag in self.values:
-            self.values[tag] = text
+        super().value_changed(tile, text)
+        if tile.tag in self.values:
+            self.values[tile.tag] = text
 
 ###
 
