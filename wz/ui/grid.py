@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-03-28
+Last updated:  2021-03-29
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -30,10 +30,6 @@ NO_ITEM = '555555'  # colour for unused table cells, rrggbb
 ### Messages
 _TITLE_LOSE_CHANGES = "Ungespeicherte Änderungen"
 _LOSE_CHANGES = "Sind Sie damit einverstanden, dass die Änderungen verloren gehen?"
-
-### Dialog labels
-_FILESAVE = "Datei speichern"
-_PDF_FILE = "PDF-Datei (*.pdf)"
 
 #####################################################
 

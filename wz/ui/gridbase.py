@@ -2,7 +2,7 @@
 """
 ui/gridbase.py
 
-Last updated:  2021-03-28
+Last updated:  2021-03-29
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -274,9 +274,45 @@ class GridBase(QGraphicsScene):
         except AttributeError:
             return self.setPdfMargins()
 #
-    def to_pdf(self, filename = None):
+    def to_pdf(self, filepath):
         """Produce and save a pdf of the table.
-        <filename> is a suggestion for the save dialog.
+        The output orientation is selected according to the aspect ratio
+        of the table. If the table is too big for the page area, it will
+        be shrunk to fit.
+        """
+        if not filepath.endswith('.pdf'):
+            filepath += '.pdf'
+        printer = QPdfWriter(filepath)
+        printer.setPageSize(printer.A4)
+        printer.setPageMargins(QMarginsF(*self.pdfMargins()),
+                QPageLayout.Millimeter)
+        sceneRect = self._sceneRect
+        sw = sceneRect.width()
+        sh = sceneRect.height()
+        if sw > sh:
+            printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+        painter = QPainter()
+        painter.begin(printer)
+        scaling = printer.logicalDpiX() / self._gview.ldpi
+        # Do drawing with painter
+        page_layout = printer.pageLayout()
+        pdf_rect = page_layout.paintRect(QPageLayout.Point)
+        pdf_w = pdf_rect.width()
+        pdf_h = pdf_rect.height()
+        if sw > pdf_w or sh > pdf_h:
+            # Shrink to fit page
+            self.render(painter)
+        else:
+            # Scale resolution to keep size
+            pdf_rect.setWidth(sw * scaling)
+            pdf_rect.setHeight(sh * scaling)
+            self.render(painter, pdf_rect)
+        painter.end()
+        return filepath
+#
+# An earlier, alternative implementation of the pdf writer:
+    def to_pdf0(self, filepath):
+        """Produce and save a pdf of the table.
         The output orientation is selected according to the aspect ratio
         of the table. If the table is too big for the page area, it will
         be shrunk to fit.
@@ -314,33 +350,11 @@ class GridBase(QGraphicsScene):
         painter.end()
         qbuf.close()
         # Write resulting file
-#        QFileDialog.saveFileContent(qbytes, filename or 'grid.pdf')
-        dir0 = self._savedir or os.path.expanduser('~')
-        if filename:
-            if not filename.endswith('.pdf'):
-                filename += '.pdf'
-        else:
-            filename = 'grid.pdf'
-        fpath = QFileDialog.getSaveFileName(self._gview, _FILESAVE,
-                           os.path.join(dir0, filename), _PDF_FILE)[0]
-        if fpath:
-            self.set_savedir(os.path.dirname(fpath))
-            with open(fpath, 'wb') as fh:
-                fh.write(bytes(qbytes))
-
-    def to_pdf2(self, filepath):
-        # just a sketch ... needs stuff from above, too ...
-        printer = QPdfWriter(filepath)
-        logicalDPIX = printer.logicalDpiX() # int
-        PointsPerInch = 72
-        painter = QPainter()
-        painter.begin(printer)
-        t = QTransform()
-        scaling = logicalDPIX / PointsPerInch # float, 16.6
-        t.scale(scaling, scaling)
-        # do drawing with painter
-        painter.end()
-        painter.setTransform(t)
+        if not filepath.endswith('.pdf'):
+            filepath += '.pdf'
+        with open(filepath, 'wb') as fh:
+            fh.write(bytes(qbytes))
+        return filepath
 
 ###
 
@@ -570,8 +584,9 @@ class Tile(QGraphicsRectItem):
                             self.textItem.boundingRect().width())
                 if scale < 1:
                     self.textItem.setScale(scale)
-#TODO-
-            print("    -->", scale, text, w, h, maxw, maxh)
+# This print line can help find box size problems:
+#            print("BOX-SCALE: %5.3f (%s) *** w: %6.2f / %6.2f *** h: %6.2f / %6.2f"
+#                    % (scale, text, w, maxw, h, maxh))
         bdrect = self.textItem.mapRectToParent(
                 self.textItem.boundingRect())
         yshift = - bdrect.top() if self.rotation else 0.0

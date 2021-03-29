@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-03-25
+Last updated:  2021-03-29
 
 Editor for grades.
 
@@ -33,6 +33,7 @@ _TABLE_REPLACE = "Die neue Tabelle wird die alte ersetzen.\n" \
         "Soll sie jetzt gespeichert werden?"
 _TABLE_OVERWRITE = "{n} Noten werden geändert. Übernehmen?"
 _NOT_SAVED = "Änderungen nicht gespeichert"
+_PDF_TABLE_SAVED = "Notentabelle gespeichert:\n  {path}"
 
 ### Labels, etc.
 _EDIT_GRADES = "Noten verwalten"
@@ -53,6 +54,7 @@ _TAG_ENTER = "Geben Sie eine Bezeichnung für diesen Datensatz an.\n" \
         "Buchstaben, Ziffern, '~' und '-' sind zulässig, andere Zeichen" \
         " werden ersetzt."
 _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
+_PDF_FILE = "PDF-Datei (*.pdf)"
 
 #####################################################
 
@@ -65,8 +67,8 @@ from qtpy.QtCore import SIGNAL, QObject
 from ui.grid import GridView
 from ui.grade_grid import GradeGrid
 from ui.abitur_pupil_view import AbiPupilView
-from ui.ui_support import VLine, KeySelect, TabPage,openDialog, \
-        QuestionDialog, dirDialog, LineDialog
+from ui.ui_support import VLine, KeySelect, TabPage, openDialog, \
+        QuestionDialog, dirDialog, saveDialog, LineDialog
 
 ###
 
@@ -307,7 +309,10 @@ class GradeEdit(TabPage):
         BACKEND('GRADES_print_table')
 #
     def PDF_NAME(self, filename):
-        self.grade_scene.to_pdf(filename)
+        fpath = saveDialog(_PDF_FILE, filename)
+        if fpath:
+            SHOW_INFO(_PDF_TABLE_SAVED.format(
+                    path = self.grade_scene.to_pdf(fpath)))
 #
     def GET_TAG(self):
         tag = LineDialog(_TAG_ENTER)

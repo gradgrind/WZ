@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-03-24
+grades/gradetable.py - last updated 2021-03-29
 
 Access grade data, read and build grade tables.
 
@@ -206,7 +206,6 @@ class _GradeTable(dict):
         self.extras = None
         self.name = {}
         self.calcs = None
-        self.abicalc = None
 #
     def _new_group_table(self, pids = None, grade_data = None):
         """Initialize an empty table for <self.group> and <self.term>.
@@ -267,8 +266,6 @@ class _GradeTable(dict):
             self[pid] = grades
             for comp in self.composites:
                 grades.composite_calc(self.sid2subject_data[comp])
-            if self.term == 'Abitur':
-                grades.abicalc = AbiCalc(self, pid)
         if pidset:
             raise GradeTableError(_PIDS_NOT_IN_GROUP.format(
                     group = self.group, pids = ', '.join(pidset)))
@@ -420,19 +417,17 @@ class _GradeTable(dict):
         Return a list: [(sid, val), ... ]
         """
         svlist = []
+        if self.term == 'Abitur':
+            _ac = AbiCalc(self, pid).calculate()
         for sid in self.calcs:
             if sid == '.D':
                 svlist.append((sid, self.average(pid)))
             elif sid == '.Dx':
                 svlist.append((sid, self.average_dem(pid)))
             elif sid == '.Q':
-                try:
-                    _ac = self[pid].abicalc
-                except AttributeError:
-                    pass
-                else:
-                    _amap = _ac.calculate()
-                    svlist.append((sid, _amap['REPORT_TYPE']))
+                svlist.append((sid, _ac['REPORT_TYPE']))
+            elif sid == '.N':
+                svlist.append((sid, _ac['Note']))
         return svlist
 #
     def average(self, pid):
@@ -600,8 +595,6 @@ class GradeTable(_GradeTable):
             self[pid] = grades
             for comp in self.composites:
                 grades.composite_calc(self.sid2subject_data[comp])
-            if self.term == 'Abitur':
-                grades.abicalc = AbiCalc(self, pid)
 #
     def check_group_term(self, gtable):
         """Check that group and term in <gtable> match those of

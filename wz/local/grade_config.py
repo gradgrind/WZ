@@ -3,7 +3,7 @@
 """
 local/grade_config.py
 
-Last updated:  2021-03-24
+Last updated:  2021-03-29
 
 Configuration for grade handling.
 
@@ -110,6 +110,7 @@ class GradeBase(dict):
     # This is read/written only by cls._group_info().
     #
     GRADE_PATH = 'NOTEN_{term}/Noten_{group}' # grade table: file-name
+    PDF_FILE = 'Notentabelle_{group}'
     #
     REPORT_DIR = 'Notenzeugnisse_{term}' # grade report: folder
     REPORT_NAME = '{group}_{rtype}'      # grade report: file name
@@ -196,6 +197,22 @@ class GradeBase(dict):
         if cls.term_info(term, 'subselect') == 'TAG':
             return path + '_' + subselect
         return path
+#
+    @classmethod
+    def table_pdf_name(cls, group, term, subselect):
+        """Get file-name for the pdf grade table.
+        <group> is the group being graded.
+        <term> is the "reason" for the grade table (end-of-term, etc.).
+        <subselect> can be a pupil-id, a tag or a date, depending on the
+        category.
+        """
+        name = cls.PDF_FILE.format(group = group)
+        sstype = cls.term_info(term, 'subselect')
+        if sstype == 'TAG':
+            return name + '_' + subselect
+        if sstype == 'STUDENT':
+            return name + '_' + (subselect or term)
+        return name + '_' + term
 #
     @classmethod
     def report_name(cls, group, term, subselect, rtype):

@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2021-03-25
+Last updated:  2021-03-29
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -65,6 +65,7 @@ from local.base_config import year_path, class_year, \
         print_schoolyear, LINEBREAK
 from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
         GradeConfigError, NO_SUBJECT, GradeBase
+from local.abitur_config import AbiCalc
 from local.grade_template import info_extend
 from template_engine.template_sub import Template, TemplateError
 from grades.gradetable import GradeTable, GradeTableError
@@ -106,13 +107,18 @@ class GradeReports:
         """
         greport_type = {}
         no_report_type = []
+        if self.grade_table.term == 'Abitur':
+            self.abicalc = {}
         for pid, grades in self.grade_table.items():
             # <forGroupTerm> accepts only valid grade-groups.
             # Check pupil filter, <pids>:
             if pids and (pid not in pids):
                 continue
             if self.grade_table.term == 'Abitur':
-                rtype = grades.abicalc.calculate()['REPORT_TYPE']
+                _ac = AbiCalc(self.grade_table, pid)
+                _acc = _ac.calculate()
+                self.abicalc[pid] = (_ac, _acc)
+                rtype = _acc['REPORT_TYPE']
                 if not rtype:
                     REPORT("ERROR", _NOT_COMPLETE.format(
                             pupil = self.grade_table.name[pid]))
@@ -204,10 +210,11 @@ class GradeReports:
 
             ## Process the grades themselves ...
             if self.grade_table.term == 'Abitur':
+                _ac, _acc = self.abicalc[pid]
                 showgrades = {k: UNGRADED if v == NO_GRADE else v
-                        for k, v in grades.abicalc.tags.items()}
+                        for k, v in _ac.tags.items()}
                 gmap.update(showgrades)
-                gmap.update(grades.abicalc.calculate())
+                gmap.update(_acc)
             else:
                 # Sort into grade groups
                 grade_map = self.sort_grade_keys(pupils.name(pdata),

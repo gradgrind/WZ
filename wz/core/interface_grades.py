@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-03-25
+core/interface_grades.py - last updated 2021-03-29
 
 Controller/dispatcher for grade management.
 
@@ -42,6 +42,7 @@ _EXCEL_FILE = "Excel-Datei (*.xlsx)"
 import os, glob, datetime
 
 from core.base import Dates, asciify
+from core.pupils import PUPILS
 from local.base_config import year_path
 from local.grade_config import GradeBase, UNCHOSEN, GRADE_INFO_FIELDS, \
         GradeConfigError
@@ -378,8 +379,11 @@ class GradeManager:
     def print_table(cls):
         """Get the default file-name of a pdf grade-table.
         """
-        fname = os.path.basename(GradeBase.table_path(cls.group,
-                cls.term, cls.grade_table.subselect))
+        subselect = cls.grade_table.subselect
+        if cls.term == 'Abitur' and subselect:
+            subselect = PUPILS(SCHOOLYEAR).sorting_name(subselect)
+        fname = os.path.basename(GradeBase.table_pdf_name(cls.group,
+                cls.term, subselect))
         CALLBACK('grades_PDF_NAME', filename = fname)
         return True
 
@@ -390,8 +394,10 @@ class GradeManager:
         """A new pupil has been selected: reset the grid accordingly.
         """
         cls.pid_or_tag = pid
+        # Reload table in case of unsaved changes:
+        gtable = GradeTable(SCHOOLYEAR, cls.group, cls.term, pid)
+        cls.grade_table = gtable
         # Set pupil's name (NAME) and completion date (FERTIG_D)
-        gtable = cls.grade_table
         cells = []  # [(tag, value), ... ] -> use <set_text>
         cells.append(('SCHOOLYEAR', gtable.schoolyear))
         cells.append(('NAME', gtable.name[pid]))
@@ -422,7 +428,6 @@ class GradeManager:
 #
     @classmethod
     def abi_set_value(cls, tag, val):
-# Save in grade_table?
         if tag.startswith('GRADE_'):
             cls.abi_calc.set_editable_cell(tag, val)
             cls.update_abi_calc()
@@ -441,7 +446,6 @@ class GradeManager:
         pgtable.set_grade('*F_D', cls.abi_calc.value('FERTIG_D'))
         for s, g in cls.abi_calc.get_all_grades():
             pgtable.set_grade(s, g)
-#TODO: also '*ZA'? Is it really needed at all?
         cls.grade_table.save()
         return cls.set_abi_pupil(cls.pid_or_tag)
 

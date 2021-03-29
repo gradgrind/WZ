@@ -3,7 +3,7 @@
 """
 local/grade_template.py
 
-Last updated:  2021-03-25
+Last updated:  2021-03-29
 
 Manage template-specific fields for grade reports.
 
@@ -74,8 +74,7 @@ def info_extend(grade_map):
             tag = val
         grade_map[field] = val
         return tag
-
-    #-
+    #
     term = grade_map['TERM']
     HJ = set_field('HJ')
     stream = grade_map['STREAM']
@@ -145,7 +144,7 @@ def info_extend(grade_map):
                 if q in ('Erw', '12', 'RS', 'HS'):
                     grade_map['GS'] = GS_TEXT['HS']     # only HS-Abschluss
                     grade_map['GSVERMERK'] = "Gleichstellungsvermerk"
-    elif rtype in ('Abi', 'NA', 'FHS'):
+    elif rtype in ('Abi', 'X', 'FHS'):
         grade_map['FrHr'] = 'Herr' if grade_map['SEX'] == 'm' else 'Frau'
         grade_map['FERTIG_D'] = Dates.print_date(grade_map['*F_D'])
     elif rtype != 'Orientierung':

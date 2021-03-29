@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-03-21
+core/pupils.py - last updated 2021-03-29
 
 Manage pupil data.
 
@@ -147,6 +147,9 @@ class Pupils(PupilsBase):
         """Return a sorted list of class names.
         """
         return sorted(self._klasses)
+#
+    def sorting_name(self, pid):
+        return sortkey(self[pid])
 #
     @classmethod
     def name(cls, pdata):

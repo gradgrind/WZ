@@ -3,7 +3,7 @@
 """
 local/abitur_config.py
 
-Last updated:  2021-01-03
+Last updated:  2021-03-29
 
 Configuration for Abitur-grade handling.
 ====================================
@@ -71,8 +71,7 @@ class AbiCalc:
             """Return subject name without possible suffix.
             """
             return grade_table.subjects[sid].split('|', 1)[0].rstrip()
-#-
-        grade_table[pid].abicalc = self
+        #
         self.grade_map = grade_table[pid]   # {sid -> grade}
         # Indexes for subjects and grades:
         e, g, m = 0, 3, 4
@@ -305,6 +304,7 @@ class AbiCalc:
                     g2 = str ((g180 % 180) // 18)
                 fields['Note1'] = g1
                 fields['Note2'] = g2
+                fields['Note'] = g1 + ',' + g2
                 fields['NoteT'] = self._gradeText[g1] + ', ' + \
                         self._gradeText[g2]
                 fields['FINAL_GRADE'] = g1 + ',' + g2
@@ -312,7 +312,7 @@ class AbiCalc:
             elif self.fhs(fields):
                 fields['REPORT_TYPE'] = 'FHS'
             else:
-                fields['REPORT_TYPE'] = 'NA'
+                fields['REPORT_TYPE'] = 'X'
         else:
             fields['REPORT_TYPE'] = None
         self.calc_map = fields
