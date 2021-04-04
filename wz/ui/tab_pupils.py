@@ -363,6 +363,7 @@ class StackedWidget_pupil(GridView):
         for pb in ('ADD', 'REMOVE', 'C_CHOOSE'):
             self._tab.enable(pb, True)
         self._tab.enable('P_CHOOSE', exists)
+        self.exists = exists
 #
     def deactivate(self):
         self.pupil_scene = None
@@ -371,7 +372,11 @@ class StackedWidget_pupil(GridView):
     def remove_pupil(self):
         if QuestionDialog(_REMOVE_TITLE,
                 _REMOVE.format(name = self.pupil_scene.text('title'))):
-            BACKEND('PUPILS_remove', pid = self.pupil_scene.pupil_data['PID'])
+            if self.exists:
+                BACKEND('PUPILS_remove',
+                        pid = self.pupil_scene.pupil_data['PID'])
+            else:
+                BACKEND('PUPILS_get_classes', reset = '')
 #
     def save(self):
         BACKEND('PUPILS_new_data', data = self.pupil_scene.pupil_data)
