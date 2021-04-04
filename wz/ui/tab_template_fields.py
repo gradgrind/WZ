@@ -2,7 +2,7 @@
 """
 ui/tab_template_fields.py
 
-Last updated:  2021-03-28
+Last updated:  2021-04-03
 
 Show template fields, set values and process template.
 This module is intended primarily for testing purposes.
@@ -248,6 +248,7 @@ class FieldEdit(TabPage):
         else:
             # Clear pupil data
             self.pdata = {'CLASS': self.klass}
+#TODO?
         if not self.clear():
             self.pselect.reset(self.pupil_scene.pid)
             return

@@ -2,7 +2,7 @@
 """
 ui/pupil_grid.py
 
-Last updated:  2021-03-28
+Last updated:  2021-04-02
 
 Manage the grid for the pupil-data editor.
 
@@ -43,7 +43,7 @@ class PupilGrid(Grid):
     """
     def __init__(self, pupil_view, info):
         self._info = info
-        _ROWS = ROWS + (_HEIGHT_LINE,) * len(info['FIELDS'])
+        _ROWS = ROWS + (_HEIGHT_LINE,) * len(info['fields'])
         super().__init__(pupil_view, _ROWS, COLUMNS)
         self.styles()
 
@@ -56,7 +56,7 @@ class PupilGrid(Grid):
         self.tile(0, 0, text = '', cspan = 2, style = 'title', tag = 'title')
         ### field - value lines
         row = 1
-        for field, tfield in info['FIELDS'].items():
+        for field, tfield in info['fields']:
             self.tile(row, 0, text = tfield, style = 'key')
             vstyle = 'value'
             if field in noneditable:
@@ -87,7 +87,7 @@ class PupilGrid(Grid):
     def set_pupil(self, pdata, pname):
         self.pupil_data = pdata
         self.set_text('title', pname)
-        for field in self._info['FIELDS']:
+        for field, _ in self._info['fields']:
             self.set_text_init(field, pdata.get(field) or '')
 #
     def value_changed(self, tile, text):

@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-03-20
+Last updated:  2021-04-02
 
 General configuration items.
 
@@ -201,7 +201,8 @@ class PupilsBase(dict):
             'PID': str(int(sorted(self)[-1]) + 1),
             'CLASS': klass, 'FIRSTNAME': 'Hansi',
             'LASTNAME': 'von|Meierhausen', 'FIRSTNAMES': 'Hans Herbert',
-            'SEX': 'm'
+            'SEX': 'm', 'DOB_D': '2010-04-01', 'POB': 'Münster',
+            'ENTRY_D': '2016-11-11', 'HOME': 'Hannover'
         }
 #
     @classmethod

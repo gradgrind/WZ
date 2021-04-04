@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-03-25
+Last updated:  2021-04-02
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -25,15 +25,6 @@ Copyright 2021 Michael Towers
 =-LICENCE========================================
 """
 
-import sys, os, builtins, traceback
-
-from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
-        QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
-        QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox, \
-        QListWidget, QFileDialog, QLineEdit
-from qtpy.QtGui import QMovie, QPixmap
-from qtpy.QtCore import Qt, QObject
-
 ### Messages
 _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
 
@@ -50,7 +41,21 @@ _FILEOPEN = "Datei öffnen"
 _DIROPEN = "Ordner öffnen"
 _FILESAVE = "Datei speichern"
 
-###
+_TITLE_LOSE_CHANGES = "Ungespeicherte Änderungen"
+_LOSE_CHANGES = "Sind Sie damit einverstanden, dass die Änderungen verloren gehen?"
+
+#####################################################
+
+import sys, os, builtins, traceback
+
+from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
+        QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
+        QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox, \
+        QListWidget, QFileDialog, QLineEdit
+from qtpy.QtGui import QMovie, QPixmap
+from qtpy.QtCore import Qt, QObject
+
+### +++++
 
 class GuiError(Exception):
     pass
@@ -97,9 +102,9 @@ class KeySelect(QComboBox):
 # to be no signal; if before, then the first item is signalled.
         self.currentIndexChanged.connect(self._new)
 #
-    def selected(self):
+    def selected(self, display = False):
         try:
-            return self.value_mapping[self.currentIndex()][0]
+            return self.value_mapping[self.currentIndex()][1 if display else 0]
         except:
             return None
 #
@@ -232,6 +237,18 @@ class TabPage(QWidget):
 #
     def enter(self):
         pass
+#
+    def leave_ok(self):
+        """If there are unsaved changes, ask whether it is ok to lose
+        them. Return <True> if ok to lose them (or if there aren't any
+        changes), otherwise <False>.
+        """
+        if self.is_modified():
+            return QuestionDialog(_TITLE_LOSE_CHANGES, _LOSE_CHANGES)
+        return True
+#
+    def is_modified(self):
+        return True
 #
     def leave(self):
         return True

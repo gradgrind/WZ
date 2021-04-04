@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-03-29
+Last updated:  2021-04-04
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -27,10 +27,6 @@ Copyright 2021 Michael Towers
 ##### Configuration #####################
 NO_ITEM = '555555'  # colour for unused table cells, rrggbb
 
-### Messages
-_TITLE_LOSE_CHANGES = "Ungespeicherte Änderungen"
-_LOSE_CHANGES = "Sind Sie damit einverstanden, dass die Änderungen verloren gehen?"
-
 #####################################################
 
 import sys, os, copy
@@ -46,8 +42,33 @@ from qtpy.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
         QLocale
 
 from ui.gridbase import CellStyle, GridView, GridBase
-from ui.ui_support import QuestionDialog
 
+### ++++++
+
+class EditableGridView(GridView):
+    def is_modified(self):
+        return bool(self.scene().changes())
+#
+    def set_changed(self, mods):
+        """Called when there is a switch between 'no-changes' and 'changes'
+        (mods = True) or the reverse (mods = False) in the managed scene.
+        Override if needed.
+        """
+        pass
+#
+    def set_scene(self, scene):
+        """Set or clear the managed scene.
+        This clears the 'changes' state of the exited scene and
+        initializes that of the entered scene.
+        """
+        s0 = self.scene()
+        if s0:
+            s0.view(False)
+        super().set_scene(scene)
+        if scene:
+            scene.view(True)
+
+###
 
 class Grid(GridBase):
     def __init__(self, gview, rowheights, columnwidths):
@@ -61,13 +82,14 @@ class Grid(GridBase):
         }
         self._changes = None
 #
-    def view(self, activate):
+    def view(self, activate = True):
         """Called when the scene is (de)activated in the view.
         """
-        self._active = activate
         if activate:
             self._changes = set()
             self._gview.set_changed(False)
+        else:
+            self._changes = None
 #
     def changes(self):
         return list(self._changes)
@@ -78,22 +100,13 @@ class Grid(GridBase):
     def changes_discard(self, tag):
         if self._changes:
             self._changes.discard(tag)
-            if not self._changes and self._active:
+            if not self._changes:
                 self._gview.set_changed(False)
 #
     def changes_add(self, tag):
-        if not self._changes and self._active:
+        if not self._changes:
             self._gview.set_changed(True)
         self._changes.add(tag)
-#
-    def leave_ok(self):
-        """If there are unsaved changes, ask whether it is ok to lose
-        them. Return <True> if ok to lose them (or if there aren't any
-        changes), otherwise <False>.
-        """
-        if self._changes:
-            return QuestionDialog(_TITLE_LOSE_CHANGES, _LOSE_CHANGES)
-        return True
 #
     ### Methods dealing with cell editing
     def tile_left_clicked(self, tile):

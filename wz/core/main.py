@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-03-25
+core/main.py - last updated 2021-03-29
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -144,7 +144,10 @@ class _Main:
 ###
 
 def start():
-    with open(os.path.join(ZEUGSDIR, 'logs', 'debug'), 'w',
+    logdir = os.path.join(ZEUGSDIR, 'logs')
+    if not os.path.isdir(logdir):
+        os.makedirs(logdir)
+    with open(os.path.join(logdir, 'debug'), 'w',
             encoding = 'utf-8') as dbg_fh:
         main = _Main(dbg_fh)
         builtins.DEBUG = main.debug

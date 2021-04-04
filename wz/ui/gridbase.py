@@ -2,7 +2,7 @@
 """
 ui/gridbase.py
 
-Last updated:  2021-03-29
+Last updated:  2021-04-04
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -83,24 +83,11 @@ class GridView(QGraphicsView):
         """Set the QGraphicsScene for this view. The size will be fixed
         to that of the initial <sceneRect> (to prevent it from being
         altered by pop-ups).
-        If <scene> is empty (<None>), the current scene will be removed
-        if calling its method <leave_ok> returns a true value.
-        The result is a <bool>, <True> if the operation was successfully
-        completed.
+        <scene> may be <None>, to remove the current scene.
         """
-        s0 = self.scene()
-#TODO: Looks like a bodge ...
-        if s0:
-            if not scene and not s0.leave_ok():
-                return False
-            s0.view(False)
         self.setScene(scene)
         if scene:
-            # Set the view's scene area to a fixed size
-            # (pop-ups could otherwise extend it)
             self.setSceneRect(scene._sceneRect)
-            scene.view(True)
-        return True
 #
     def mousePressEvent(self, event):
         point = event.pos()
@@ -122,13 +109,6 @@ class GridView(QGraphicsView):
                             return
                 except AttributeError:
                     pass
-#
-    def set_changed(self, is_modified):
-        """Called when there is a switch from "no changes" to "changes"
-        or vice versa.
-        """
-        # Override this if something should happen!
-        pass
 #
     ### View scaling
     def scaleUp (self):
@@ -207,15 +187,6 @@ class GridBase(QGraphicsScene):
         else:
             self._styles[name] = CellStyle(params.pop('font', None),
                     params.pop('size', None), **params)
-#
-    def view(self, activate):
-        """Called when the scene is (de)activated in the view.
-        Override this if something should happen ...
-        """
-        pass
-#
-    def leave_ok(self):
-        return True
 #
     def ncols(self):
         return len(self.xmarks) - 1

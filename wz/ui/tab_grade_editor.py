@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-03-29
+Last updated:  2021-04-04
 
 Editor for grades.
 
@@ -64,7 +64,7 @@ from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
         QPushButton, QFileDialog
 from qtpy.QtCore import SIGNAL, QObject
 
-from ui.grid import GridView
+from ui.grid import EditableGridView
 from ui.grade_grid import GradeGrid
 from ui.abitur_pupil_view import AbiPupilView
 from ui.ui_support import VLine, KeySelect, TabPage, openDialog, \
@@ -72,20 +72,25 @@ from ui.ui_support import VLine, KeySelect, TabPage, openDialog, \
 
 ###
 
-class GView(GridView):
+class GView(EditableGridView):
+    def __init__(self, tab_widget):
+        self._tab = tab_widget
+        super().__init__()
+#
     def set_changed(self, show):
-        self.pbSave.setEnabled(show)
+        self._tab.enable('SAVE', show)
 
 ###
 
 class GradeEdit(TabPage):
     def __init__(self):
+        self._widgets = {}
         super().__init__(_EDIT_GRADES)
         topbox = QHBoxLayout()
         self.vbox.addLayout(topbox)
 
         #*********** The "main" widget ***********
-        self.gradeView = GView()
+        self.gradeView = GView(self)
         self.grade_scene = None
         topbox.addWidget(self.gradeView)
         topbox.addWidget(VLine())
@@ -112,9 +117,10 @@ class GradeEdit(TabPage):
         cbox.addSpacing(30)
 
         ### Save button (active when there are unsaved modifications)
-        self.gradeView.pbSave = QPushButton(_SAVE)
-        cbox.addWidget(self.gradeView.pbSave)
-        self.gradeView.pbSave.clicked.connect(self.save)
+        _w = QPushButton(_SAVE)
+        self._widgets['SAVE'] = _w
+        cbox.addWidget(_w)
+        _w.clicked.connect(self.save)
 
         cbox.addStretch(1)
 
@@ -153,13 +159,30 @@ class GradeEdit(TabPage):
         pbReport.clicked.connect(self.make_reports)
         topbox.addLayout(cbox)
 #
+    def enable(self, tag, on):
+        """Enable or disable the widget with given tag.
+        """
+        self._widgets[tag].setEnabled(on)
+#
+    def is_modified(self):
+        if self.grade_scene:
+            return bool(self.grade_scene.changes())
+        return False
+#
+    def set_scene(self, scene):
+        self.grade_scene = scene
+        self.gradeView.set_scene(scene)
+#
     def clear(self):
         """Check for changes in the current "scene", allowing these to
         be discarded if desired. If accepted (or no changes), clear the
         "scene" and return <True>, otherwise leave the display unaffected
         and return <False>.
         """
-        return self.gradeView.set_scene(None)
+        if self.leave_ok():
+            self.set_scene(None)
+            return True
+        return False
 #
     def year_change_ok(self):
         return self.clear()
@@ -177,7 +200,7 @@ class GradeEdit(TabPage):
 #
     def SET_TERMS(self, terms, term):
         """CALLBACK: Supplies the terms as a list of "keys" (the display
-        form must substitute '_' by ' ').
+        form substitutes ' ' for '_').
         Also the selected term is passed. Set the term selection widget
         and trigger a "change of term" signal.
         """
@@ -219,8 +242,7 @@ class GradeEdit(TabPage):
             # Switch to/from individual pupil display.
             # <itemtag> is the pid, empty to select the group.
             if itemtag:
-                self.grade_scene = AbiPupilView(self.gradeView)
-                self.gradeView.set_scene(self.grade_scene)
+                self.set_scene(AbiPupilView(self.gradeView))
                 BACKEND('ABITUR_set_pupil', pid = itemtag)
                 return True
         BACKEND('GRADES_subselect', tag = itemtag)
@@ -233,8 +255,7 @@ class GradeEdit(TabPage):
 #?        self.subselect.trigger()
 #
     def SET_GRID(self, **parms):
-        self.grade_scene = GradeGrid(self.gradeView, **parms)
-        self.gradeView.set_scene(self.grade_scene)
+        self.set_scene(GradeGrid(self.gradeView, **parms))
 #
     def SET_GRADES(self, grades):
         """<grades> is a list: [[pid, sid, val], ... ]

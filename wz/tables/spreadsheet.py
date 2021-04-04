@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-02-07
+Last updated:  2021-04-03
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -53,9 +53,9 @@ import io
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils import get_column_letter
 
-from local.base_config import USE_XLSX
 from tables.simple_ods_reader import OdsReader
 
+### +++++
 
 class TsvReader(dict):
     def __init__ (self, filepath):
@@ -77,7 +77,7 @@ class TsvReader(dict):
         rows = []
         maxlen = 0
         for row_b in lines:
-#            print(repr(row_b))
+            #print(repr(row_b))
             row = [cell.decode('utf-8').strip() or None
                     for cell in row_b.split(b'\t')]
             l = len(row)
@@ -89,12 +89,13 @@ class TsvReader(dict):
             if dl:
                 row += [None] * dl
         self['TSV'] = rows
-
+#
     def mergedRanges (self, sheetname):
         """Returns an empty list as tsv doesn't support cell merging.
         """
         return []
 
+###
 
 class XlsReader(dict):
     def __init__ (self, filepath):
@@ -131,15 +132,18 @@ class XlsReader(dict):
                 rows.append(values)
             self[wsname] = rows
             self._mergedRanges[wsname] = ws.merged_cells.ranges
-
+#
     def mergedRanges(self, sheetname):
         """Returns a list like ['AK2:AM2', 'H33:AD33', 'I34:J34', 'L34:AI34'].
         """
         return self._mergedRanges[sheetname]
 
+###
 
 class TableError(Exception):
     pass
+
+###
 
 class Spreadsheet:
     """This class manages a (read-only) representation of a spreadsheet file.
@@ -156,7 +160,7 @@ class Spreadsheet:
     All cell values are strings, or <None> if empty.
     """
     _SUPPORTED_TYPES = {'tsv': TsvReader, 'ods': OdsReader, 'xlsx': XlsReader}
-
+    #+
     @classmethod
     def supportedType(cls, filename):
         """Check the ending of a file name (or path).
@@ -167,8 +171,7 @@ class Spreadsheet:
             if fsplit[1] in cls._SUPPORTED_TYPES:
                 return True
         return False
-
-
+#
     def __init__(self, filepath):
         """The filepath can be passed with or without type-extension.
         If no type-extension is given, the folder will be searched for a
@@ -236,29 +239,29 @@ class Spreadsheet:
         self._sheetNames = list(self._spreadsheet)
         # Default sheet is the first:
         self._table = self._spreadsheet[self._sheetNames[0]]
-
+#
     def rowLen(self, table = None):
         if not table:
             table = self._table
         return len(table[0])
-
+#
     def colLen(self, table = None):
         if not table:
             table = self._table
         return len(table)
-
+#
     def getValue(self, rx, cx, table = None):
         if not table:
             table = self._table
         return table[rx][cx]
-
+#
     def getABValue(self, A1, table = None):
         r, c = self.rowcol(A1)
         return self.getValue(r, c, table)
-
+#
     def getTableNames(self):
         return self._sheetNames
-
+#
     def _getTable(self, tablename, failerror = True):
         try:
             #print (self._spreadsheet.keys())
@@ -267,7 +270,7 @@ class Spreadsheet:
             if failerror:
                 raise TableError(_INVALIDSHEETNAME.format(name=tablename))
             return None
-
+#
     def setTable(self, tablename):
         table = self._getTable(tablename)
         if table:
@@ -275,12 +278,12 @@ class Spreadsheet:
             return True
         else:
             return False
-
+#
     def dbTable(self, table = None):
         """Read the table as a database-like table (<DBtable>).
         """
         return DBtable(table or self._table)
-
+#
 #Is this needed?
     def getColumnHeaders(self, rowix, table = None):
         """Return a dict of table headers, header -> column index.
@@ -298,12 +301,11 @@ class Spreadsheet:
                     break
                 headers[cellV] = cellix
         return headers
-
+#
 #Is this needed?
     def getMergedRanges(self, tablename):
         return self._spreadsheet.mergedRanges(tablename)
-
-
+#
     @staticmethod
     def rowcol(cellname):
         """Return a tuple (row, column) representing a cell position from
@@ -324,15 +326,14 @@ class Spreadsheet:
             return(int (cell[i:]) - 1, col)
         except:
             raise TableError(_INVALIDCELLNAME.format(name=cellname))
-
-
+#
     @staticmethod
     def cellname(row, col):
         """Return the name of a cell given its coordinates (0-based):
         """
         return get_column_letter(col+1) + str(row+1)
 
-
+###
 
 class DBtable:
     """A database-like table, prepared from a list of rows, each row
@@ -416,13 +417,13 @@ class DBtable:
 
 ###
 
-def make_db_table(title, fields, items, info = None):
+def make_db_table(title, fields, items, info = None, xlsx = False):
     """Build a table with title, info lines, header line and records.
     The records are mappings {field: value}.
     If <fields> is a mapping, the names of the columns are taken from
     the values rather than the keys.
     """
-    table = NewSpreadsheet() if USE_XLSX else NewTable()
+    table = NewSpreadsheet() if xlsx else NewTable()
     table.add_row(('#', title))
     table.add_row(None)
     if info:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-03-21
+core/interface_pupils.py - last updated 2021-04-04
 
 Controller/dispatcher for pupil management.
 
@@ -23,29 +23,20 @@ Copyright 2021 Michael Towers
 
 ### Messages
 _BAD_PUPIL_TABLE = "Schülerdaten fehlerhaft:\n  {path}"
+_BAD_CLASS_TABLE = "Ungültige Schülertabelle für Klasse {klass}:\n  {path}"
 _PID_EXISTS = "Schülerkennung {pid} existiert schon"
 _YEAR_ALREADY_EXISTS = "Neues Schuljahr: Daten für {year} existieren schon"
+_NO_DELTA = "Keine Änderungen in angegebener Tabelle"
+_UPDATED_SOME = "Die gewählten Änderungen wurden übernommen.\n" \
+        "Die anderen werden noch angezeigt."
+_UPDATED_ALL = "Alle Änderungen wurden übernommen"
 
 from core.base import Dates
 from core.pupils import PUPILS, Pupils
 from core.courses import Subjects
 from local.base_config import year_path, SubjectsBase
 from local.grade_config import STREAMS
-
-###
-
-def get_classes():
-    CALLBACK('pupils_SET_CLASSES', classes = PUPILS(SCHOOLYEAR).classes())
-    return True
-#
-def get_class_data(klass):
-    pupils = PUPILS(SCHOOLYEAR)
-    CALLBACK('pupils_SET_CLASS', fields = pupils.FIELDS,
-            pupil_list = pupils.class_pupils(klass))
-    return True
-
-FUNCTIONS['PUPILS_get_classes'] = get_classes
-FUNCTIONS['PUPILS_get_data'] = get_class_data
+NONE = ''     # Use only strings in messages to front-end
 
 ###
 
@@ -63,17 +54,38 @@ class Pupils_Update:
         except:
             REPORT('ERROR', _BAD_PUPIL_TABLE.format(path = filepath))
             return False
+        if Pupil_Editor.klass:
+            if (len(cls.ptables) != 1) \
+                    or (Pupil_Editor.klass not in cls.ptables):
+                REPORT('ERROR', _BAD_CLASS_TABLE.format(
+                        klass = Pupil_Editor.klass, path = filepath))
+                return False
         cls.compare()
         return True
 #
     @classmethod
-    def compare(cls):
-        cls._changes = {}
+    def compare(cls, rerun = False):
+        cls._changes = {}   # Collect confirmed changes
         _delta = PUPILS(SCHOOLYEAR).compare_update(cls.ptables)
-        # Return the changes class-for-class
-        for klass, kdata in _delta.items():
-            CALLBACK('pupil_DELTA', klass = klass, delta = kdata)
-        CALLBACK('pupil_DELTA_COMPLETE')
+        # If limited to a single class, extract the data for this class
+        if Pupil_Editor.klass:
+            try:
+                _delta = {Pupil_Editor.klass: _delta[Pupil_Editor.klass]}
+            except KeyError:
+                _delta = None
+        if _delta:
+            if rerun:
+                REPORT('INFO', _UPDATED_SOME)
+            CALLBACK('pupils_DELTA_START')
+            # Return the changes class-for-class
+            for klass, kdata in _delta.items():
+                CALLBACK('pupils_DELTA', klass = klass, delta = kdata)
+            CALLBACK('pupils_DELTA_COMPLETE')
+        elif rerun:
+            REPORT('INFO', _UPDATED_ALL)
+            Pupil_Editor.get_classes(reset = False)
+        else:
+            REPORT('INFO', _NO_DELTA)
         return True
 #
     @classmethod
@@ -84,12 +96,12 @@ class Pupils_Update:
     @classmethod
     def update(cls):
         PUPILS(SCHOOLYEAR).update_classes(cls._changes)
-        return True
+        return cls.compare(rerun = True)
 
-FUNCTIONS['PUPIL_table_delta'] = Pupils_Update.start
-FUNCTIONS['PUPIL_table_delta2'] = Pupils_Update.compare
-FUNCTIONS['PUPIL_class_update'] = Pupils_Update.class_delta
-FUNCTIONS['PUPIL_table_update'] = Pupils_Update.update
+FUNCTIONS['PUPILS_table_delta'] = Pupils_Update.start
+FUNCTIONS['PUPILS_table_delta2'] = Pupils_Update.compare
+FUNCTIONS['PUPILS_class_update'] = Pupils_Update.class_delta
+FUNCTIONS['PUPILS_table_update'] = Pupils_Update.update
 
 ###
 
@@ -100,67 +112,70 @@ class Pupil_Editor:
         3) select a pupil: show pupil data
     """
     # Remember class and pupil-id
-    klass = None
-    pid = None
+    klass = NONE
+    pid = NONE
 
     @classmethod
-    def enter(cls, reset = True):
-        if reset:
-            cls.klass = None
-            cls.pid = None
+    def get_classes(cls, reset = True):
         pupils = PUPILS(SCHOOLYEAR)
         cls._class_list = pupils.classes()
         cls._class_list.reverse()   # start with the highest classes
-        if cls.klass:
-            klass = cls.klass if cls.klass in cls._class_list \
-                else cls._class_list[0]
-            cls.klass = None
-        else:
-            klass = cls._class_list[0]
-        CALLBACK('pupil_SET_CLASSES',
+        if reset:
+            cls.klass = NONE
+            cls.pid = NONE
+        elif cls.klass not in cls._class_list:
+            cls.klass = NONE
+        CALLBACK('pupils_SET_CLASSES',
                 classes = cls._class_list,
-                klass = klass)
+                klass = cls.klass)
         # This needs to signal "class changed" ...
         return True
 #
     @classmethod
     def set_class(cls, klass):
-        pupils = PUPILS(SCHOOLYEAR)
-        if klass not in cls._class_list:
-            raise Bug('Invalid class passed from front-end: %s' %  klass)
-        cls.klass = klass
-        cls._pdata_list = pupils.class_pupils(klass)
-        pupil_list = []
-        pidix, ix = 0, -1
-        for pd in cls._pdata_list:
-            ix += 1
-            _pid = pd['PID']
-            if _pid == cls.pid:
-                pidix = ix
-            pupil_list.append((_pid, Pupils.name(pd)))
-        pdata = cls._pdata_list[pidix]
-        pid = pdata['PID']
-        CALLBACK('pupil_SET_PUPILS',
-                pupils = pupil_list,
-                pid = pid)
+        _pid = cls.pid
+        cls.pid = NONE
+        plist = []
+        cls.pdata_map = {}
+        if klass:
+            pupils = PUPILS(SCHOOLYEAR)
+            if klass not in cls._class_list:
+                raise Bug('Invalid class passed from front-end: %s' %  klass)
+            cls.klass = klass
+            for pd in pupils.class_pupils(klass):
+                pid = pd['PID']
+                plist.append((pid, Pupils.name(pd)))
+                cls.pdata_map[pid] = pd
+                if pid == _pid:
+                    cls.pid = pid
+        else:
+            cls.klass = NONE
+        CALLBACK('pupils_SET_PUPILS',
+                pupils = plist,
+                pid = cls.pid)
         # This needs to signal "pupil changed" ...
         return True
 #
     @classmethod
     def set_pupil(cls, pid):
         try:
-            pdata = cls._pdata_list._pidmap[pid]
+            pdata = cls.pdata_map[pid]
         except KeyError:
-            raise Bug('Invalid pupil passed from front-end: %s' % pid)
-        cls.pid = pid
-        # Display pupil data
-        CALLBACK('pupil_SET_PUPIL_DATA',
-                data = pdata,
-                name = Pupils.name(pdata))
+            cls.pid = NONE
+            if cls.klass:
+                CALLBACK('pupils_SET_CLASS_VIEW',
+                        pdata_list = list(cls.pdata_map.values()))
+            else:
+                CALLBACK('pupils_SET_INFO_VIEW')
+        else:
+            cls.pid = pid
+            # Display pupil data
+            CALLBACK('pupils_SET_PUPIL_VIEW', pdata = pdata,
+                    name = Pupils.name(pdata))
         return True
 #
     @classmethod
-    def new_pupil(cls, pid = None):
+    def new_pupil(cls, pid = NONE):
         pupils = PUPILS(SCHOOLYEAR)
         pdata = pupils.nullPupilData(cls.klass)
         if pid:
@@ -173,27 +188,45 @@ class Pupil_Editor:
                     pdata['__ERROR__'] = _PID_EXISTS.format(pid = pid)
                 else:
                     pdata['PID'] = pid
-                    CALLBACK('pupil_NEW_PUPIL', data = pdata)
+                    CALLBACK('pupils_NEW_PUPIL', data = pdata)
                     return True
-        CALLBACK('pupil_NEW_PUPIL', data = pdata, ask_pid = pdata['PID'])
+        CALLBACK('pupils_NEW_PUPIL', data = pdata, ask_pid = pdata['PID'])
         return True
 #
     @classmethod
     def new_data(cls, data):
+        """New data for a single pupil (from single-pupil editor).
+        """
         # Update pupil data in database
-        if PUPILS(SCHOOLYEAR).modify_pupil(data):
+        if PUPILS(SCHOOLYEAR).modify_pupil([data]):
             cls.pid = data['PID']
             cls.klass = data['CLASS']
-            CALLBACK('pupil_CLEAR_CHANGES')
-            return cls.enter(reset = False)
+            # Redisplay class and pid
+            return cls.get_classes(reset = False)
+        return False
+#
+    @classmethod
+    def new_table_data(cls, data):
+        """New data from class-table editor.
+        """
+        # Update pupil data in database
+        if PUPILS(SCHOOLYEAR).modify_pupil(data):
+            # Redisplay class and pid
+            return cls.get_classes(reset = False)
         return False
 #
     @classmethod
     def remove(cls, pid):
         if PUPILS(SCHOOLYEAR).remove_pupil(pid):
-            CALLBACK('pupil_CLEAR_CHANGES')
-            return cls.enter(reset = False)
+            # Redisplay class
+            cls.pid = NONE
+            return cls.get_classes(reset = False)
         return False
+#
+    @classmethod
+    def export_data(cls, filepath, klass):
+        PUPILS(SCHOOLYEAR).backup(filepath, klass)
+        return True
 
 ###
 
@@ -232,18 +265,20 @@ def migrate(repeat_pids):
 ###
 
 def get_info():
-    CALLBACK('pupil_SET_INFO',
+    CALLBACK('pupils_SET_INFO',
             fields = [(f, t) for f, t in Pupils.FIELDS.items()],
-            sex = Pupils.SEX,
-            streams = STREAMS)
+            SEX = Pupils.SEX,
+            STREAMS = STREAMS)
     return True
 
-FUNCTIONS['PUPIL_get_info'] = get_info
-FUNCTIONS['PUPIL_enter'] = Pupil_Editor.enter
-FUNCTIONS['PUPIL_set_class'] = Pupil_Editor.set_class
-FUNCTIONS['PUPIL_set_pupil'] = Pupil_Editor.set_pupil
-FUNCTIONS['PUPIL_new_pupil'] = Pupil_Editor.new_pupil
-FUNCTIONS['PUPIL_new_data'] = Pupil_Editor.new_data
-FUNCTIONS['PUPIL_remove'] = Pupil_Editor.remove
+FUNCTIONS['PUPILS_get_info'] = get_info
+FUNCTIONS['PUPILS_get_classes'] = Pupil_Editor.get_classes
+FUNCTIONS['PUPILS_set_class'] = Pupil_Editor.set_class
+FUNCTIONS['PUPILS_set_pupil'] = Pupil_Editor.set_pupil
+FUNCTIONS['PUPILS_new_pupil'] = Pupil_Editor.new_pupil
+FUNCTIONS['PUPILS_new_data'] = Pupil_Editor.new_data
+FUNCTIONS['PUPILS_new_table_data'] = Pupil_Editor.new_table_data
+FUNCTIONS['PUPILS_remove'] = Pupil_Editor.remove
+FUNCTIONS['PUPILS_export_data'] = Pupil_Editor.export_data
 FUNCTIONS['PUPILS_get_leavers'] = get_leavers
 FUNCTIONS['PUPILS_migrate'] = migrate

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-minion.py - last updated 2021-03-10
+minion.py - last updated 2021-04-02
 
 Read MINION-formatted configuration data.
 
@@ -53,9 +53,12 @@ complex-string: <<< any characters ... >>>
     case the next line must (also) be prefixed by '<<<'. Empty and
     comment lines will be ignored. Line breaks within a string are not
     directly supported – but provision is made for specifying escape
-    characters. By default, the escape sequences are '\\', '\n' and '\t'
+    characters: the basic escape sequences are '\\', '\n' and '\t'
     (for backslash, newline and tab). Spaces at the end of a line are
-    ignored.
+    ignored. In addition, for the sake of "completeness", there are
+    '\s' (space character), which makes a space character at end of a
+    line possible, and '\g' for '>', which makes '>' just before the
+    closing '>>>' possible.
 
 Spaces are not needed around the control characters, but they may
 be used. Apart from within complex-strings and their use as separators,
@@ -64,8 +67,7 @@ spaces will be ignored.
 The top level of a MINION text is a "dict" – without the surrounding
 braces ({ ... }).
 
-#TODO:
-There is also a very limited macro-like feature. Element declared at the
+There is also a very limited macro-like feature. Elements declared at the
 top level which start with '&' may be referenced (which basically means
 included) at any later point in a data structure by means of the macro
 name, e.g.:
@@ -102,30 +104,22 @@ _STRING0 = '<<<'
 _lenSTRING0 = len(_STRING0)
 _STRING1 = '>>>'
 _REGEX = r'(\s+|#|:|\[|\]|\{|\}|<<<|>>>)' # all special items
+ESCAPE_DICT = {r'\n': '\n', r'\\': '\\', r'\t': '\t', r'\s': ' ', r'\g': '>'}
 
 import re, gzip
+_RXSUB ='|'.join([re.escape(e) for e in ESCAPE_DICT])
 
 class MinionError(Exception):
     pass
 
 ###
 
-# This should implement python's string escaping, if desired:
-#    escaped = codecs.escape_decode(bytes(myString, "utf-8"))[0].decode("utf-8")
-
 class Minion:
     """An impure recursive-descent parser for a MINION string.
     Usage:
-        minion = Minion(escape_dict = None)
+        minion = Minion()
         python_dict = minion.parse(text)
     """
-    def __init__(self, escape_dict = None):
-        if escape_dict == None:
-            escape_dict = {r'\n': '\n', r'\\': '\\', r'\t': '\t'}
-        self.escape_dict = escape_dict
-        if escape_dict:
-            elist = [re.escape(e) for e in escape_dict]
-            self.rxsub = '|'.join(elist)
 #
     def report(self, message, **params):
         msg = message.format(**params)
@@ -262,10 +256,9 @@ class Minion:
                 line, rest = line.split(_STRING1, 1)
                 lx.append(line)
                 s0 = ''.join(lx)
-                if self.escape_dict:
-                    s0 = re.sub(self.rxsub,
-                            lambda m: self.escape_dict[m.group(0)],
-                            s0)
+                s0 = re.sub(_RXSUB,
+                        lambda m: ESCAPE_DICT[m.group(0)],
+                        s0)
                 return s0, rest.lstrip()
             except ValueError:
                 # no end, continue to next line

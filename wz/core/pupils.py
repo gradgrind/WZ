@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-03-29
+core/pupils.py - last updated 2021-04-04
 
 Manage pupil data.
 
@@ -46,6 +46,8 @@ _NAME_MISSING = "Eingabezeile fehlerhaft, Name unvollständig:\n  {row}"
 _PID_DUPLICATE = "Schülerkennung {pid} mehrfach vorhanden:\n" \
         "  Klasse {c1} – {p1}\n  Klasse {c2} – {p2}"
 _MISSING_FIELDS = "Diese Felder dürfen nicht leer sein:\n  {fields}"
+_BACKUP_FILE = "Schülerdaten für Klasse {klass} gespeichert als:\n  {path}"
+_FULL_BACKUP_FILE = "Alle Schülerdaten gespeichert als:\n  {path}"
 
 import datetime, shutil, json, gzip
 
@@ -295,7 +297,8 @@ class Pupils(PupilsBase):
         for pid in pidset:
             pdata = self[pid]
             changes[pdata['CLASS']].append(('REMOVE', pdata))
-        return changes
+        # Only include non-empty lists in result
+        return {k: clist for k, clist in changes.items() if clist}
 #
     @staticmethod
     def compare(old, new):
@@ -347,30 +350,32 @@ class Pupils(PupilsBase):
         self.save()
         return True
 #
-    def modify_pupil(self, pupil_data):
+    def modify_pupil(self, pupil_data_list):
         """This is used by the pupil-data editor. All changes to a pupil's
         data should pass through here.
         It ensures that the internal structures are consistent and that
         the changes get saved to the persistent storage.
         By supplying a pupil-id which is not already in use, a new
         pupil can be added.
+        <pupil_data_list> is a list of pupil-data mappings.
         """
-        pid = pupil_data['PID']
-        # Check that essential fields are present
-        missing = []
-        for f in self.ESSENTIAL_FIELDS:
-            if not pupil_data.get(f):
-                missing.append(self.FIELDS[f])
-        if missing:
-            REPORT('ERROR', _MISSING_FIELDS.format(
-                    fields = '\n  '.join(missing)))
-            return False
-        if pid not in self:
-            # A new pupil ...
-            # Check PID validity
-            self.check_new_pid_valid(pid)
-        # Rebuild pupil entry
-        self[pid] = {f: pupil_data.get(f) or '' for f in self.FIELDS}
+        for pupil_data in pupil_data_list:
+            pid = pupil_data['PID']
+            # Check that essential fields are present
+            missing = []
+            for f in self.ESSENTIAL_FIELDS:
+                if not pupil_data.get(f):
+                    missing.append(self.FIELDS[f])
+            if missing:
+                REPORT('ERROR', _MISSING_FIELDS.format(
+                        fields = '\n  '.join(missing)))
+                return False
+            if pid not in self:
+                # A new pupil ...
+                # Check PID validity
+                self.check_new_pid_valid(pid)
+            # Rebuild pupil entry
+            self[pid] = {f: pupil_data.get(f) or '' for f in self.FIELDS}
         # Regenerate class lists
         self.fill_classes()
         # Make changes persistent
@@ -404,27 +409,45 @@ class Pupils(PupilsBase):
             json.dump(data, zipfile, ensure_ascii = False)
         self._modified = timestamp
 #
-    def backup(self, filepath):
+    def backup(self, filepath, klass = None):
         """Save a table with all the pupil data for back-up purposes.
         This can be used as an "update" source to reinstate an earlier
         state.
         The field names are "translated".
+        If <klass> is supplied, only the data for that class will be saved.
         """
-        info = (
+        info = [
             (self.SCHOOLYEAR, self.schoolyear),
             ('__MODIFIED__', self._modified),
             ('__KEEP_NAMES__', '*') # The names don't need "renormalizing"
-        )
+        ]
+        if klass:
+            info.append(('__CLASS__', klass))
+            classes = [klass]
+        else:
+            classes = self.classes()
         pdlist = []
-        for klass in self.classes():
+        for k in classes:
             pdlist.append({})
-            for pd in self.class_pupils(klass):
+            for pd in self.class_pupils(k):
                 pdlist.append(pd)
+        if filepath.endswith('.tsv'):
+            xlsx = False
+        elif filepath.endswith('.xlsx'):
+            xlsx = True
+        elif USE_XLSX:
+            filepath += '.xlsx'
+            xlsx = True
+        else:
+            filepath += '.tsv'
+            xlsx = False
         bstream = make_db_table(self.TITLE, self.FIELDS,
-                pdlist, info = info)
-        suffix = '.xlsx' if USE_XLSX else '.tsv'
-        with open(filepath + suffix, 'wb') as fh:
+                pdlist, info = info, xlsx = xlsx)
+        with open(filepath, 'wb') as fh:
             fh.write(bstream)
+        REPORT('INFO', _BACKUP_FILE.format(klass = klass,
+                path = filepath) if klass
+                else _FULL_BACKUP_FILE.format(path = filepath))
 #
     def migrate(self, repeat_pids):
         """Create a pupil-data structure for the following year.

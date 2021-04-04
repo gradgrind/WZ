@@ -85,8 +85,7 @@ builtins.FUNCTIONS = {}
 #TODO: first page ...
 TABS.append(TabPage("Page 1"))
 import ui.tab_subjects
-import ui.tab_pupils_update
-import ui.tab_pupil_editor
+import ui.tab_pupils
 import ui.tab_grade_editor
 #        self._addPage(TextReports())
 import ui.tab_calendar
