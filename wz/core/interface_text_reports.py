@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_text_reports.py - last updated 2021-03-20
+core/interface_text_reports.py - last updated 2021-04-04
 
 Controller/dispatcher for text-report management.
 
@@ -24,7 +24,7 @@ Copyright 2021 Michael Towers
 ### Messages
 
 
-#from core.base import Dates
+from core.base import Dates
 #from core.pupils import PUPILS, Pupils
 #from core.courses import Subjects
 #from local.base_config import year_path, SubjectsBase
@@ -32,13 +32,22 @@ Copyright 2021 Michael Towers
 from template_engine.coversheet import CoverSheets
 
 
-    def SET_CLASS(self, klass, pupil_list):
+def get_calendar():
+    CALLBACK('text_SET_CALENDAR', calendar = Dates.get_calendar(SCHOOLYEAR))
+    return True
+
+FUNCTIONS['TEXT_get_calendar'] = get_calendar
+
+###
+
+def SET_CLASS(self, klass, pupil_list):
 #TODO: check changes? (What does that mean?)
-        pupils = PUPILS(SCHOOLYEAR)
-        pdlist = pupils.class_pupils(klass)
-        plist = [('', _ALL_PUPILS)] + [(pdata['PID'], pupils.name(pdata))
-                for pdata in pdlist]
-        CALLBACK('text_SET_CLASS', klass = klass, pupil_list = plist)
+    pupils = PUPILS(SCHOOLYEAR)
+    pdlist = pupils.class_pupils(klass)
+    plist = [('', _ALL_PUPILS)] + [(pdata['PID'], pupils.name(pdata))
+            for pdata in pdlist]
+    CALLBACK('text_SET_CLASS', klass = klass, pupil_list = plist)
+    return True
 
 
 
@@ -50,7 +59,7 @@ def make_covers(self, date):
 
 ###
 
-class _MakeCovers(CORE.ThreadFunction):
+class _MakeCovers():
     def __init__(self, coversheets, klass, date, pids = None):
         super().__init__()
         self._coversheets = coversheets
@@ -67,5 +76,5 @@ class _MakeCovers(CORE.ThreadFunction):
         return False
 
 
-FUNCTIONS['TEXT_set_class'] = set_class
+#FUNCTIONS['TEXT_set_class'] = set_class
 FUNCTIONS['TEXT_make_covers'] = make_covers

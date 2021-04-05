@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-03-29
+core/main.py - last updated 2021-04-04
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -236,6 +236,7 @@ import core.interface_pupils
 import core.interface_subjects
 import core.interface_calendar
 import core.interface_grades
+import core.interface_text_reports
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

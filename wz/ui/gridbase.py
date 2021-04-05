@@ -2,7 +2,7 @@
 """
 ui/gridbase.py
 
-Last updated:  2021-04-04
+Last updated:  2021-04-05
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -34,6 +34,8 @@ MARK_COLOUR = 'E00000'      # rrggbb
 # Line width for borders
 UNDERLINE_WIDTH = 3.0
 BORDER_WIDTH = 1.0
+
+SCENE_MARGIN = 10.0 # Margin around content in GraphicsView widgets
 
 #####################
 
@@ -161,7 +163,6 @@ class GridBase(QGraphicsScene):
         self._styles = {'*': CellStyle(FONT_DEFAULT, FONT_SIZE_DEFAULT,
                 align = 'c', border = 1, mark = MARK_COLOUR)
         }
-        self.tagmap = {}        # {tag -> {Tile> instance}
         self.xmarks = [0.0]
         x = 0.0
         for c in columnwidths:
@@ -172,13 +173,12 @@ class GridBase(QGraphicsScene):
         for r in rowheights:
             y += r * self._gview.MM2PT
             self.ymarks.append(y)
-#TODO: Allow a little margin? e.g.
-        self._sceneRect = QRectF(-1.0, -1.0, x + 1.0, y + 1.0)
-# ... or not:
-#        self._sceneRect = QRectF(0.0, 0.0, x, y)
+        # Allow a little margin
+        self._sceneRect = QRectF(-SCENE_MARGIN, -SCENE_MARGIN,
+                x + 2 * SCENE_MARGIN, y + 2 * SCENE_MARGIN)
 #
-#    def style(self, name):
-#        return self._styles[name]
+    def style(self, name):
+        return self._styles[name]
 #
     def new_style(self, name, base = None, **params):
         if base:
@@ -200,10 +200,10 @@ class GridBase(QGraphicsScene):
         viewp = self._gview.mapFromScene(x, y)
         return self._gview.mapToGlobal(viewp)
 #
-    def tile(self, row, col, text = None, cspan = 1, rspan = 1,
-            style = None, tag = None):
-        """Add a tile to the grid.
-        If <tag> is not set, it will be set to '#row:col'.
+    def basic_tile(self, row, col, tag, text, style, cspan = 1, rspan = 1):
+        """Add a basic tile to the grid, checking coordinates and
+        converting row + col to x + y point-coordinates for the
+        <Tile> class.
         """
         # Check bounds
         if (row < 0 or col < 0
@@ -215,24 +215,9 @@ class GridBase(QGraphicsScene):
         y = self.ymarks[row]
         w = self.xmarks[col + cspan] - x
         h = self.ymarks[row + rspan] - y
-        if not tag:
-            tag = '#%d:%d' % (row, col)
-        cell_style = self._styles[style or '*']
-        t = Tile(self, tag, x, y, w, h, text, cell_style)
+        t = Tile(self, tag, x, y, w, h, text, self._styles[style])
         self.addItem(t)
-        self.tagmap[tag] = t
-        self.value0[tag] = text # initial value
         return t
-#
-    def text(self, tag):
-        """Read the contents of the cell with given tag.
-        """
-        return self.tagmap[tag].value() or ''
-#
-    def set_text(self, tag, text):
-        """Set the text in the given cell.
-        """
-        self.tagmap[tag].setText(text)
 #
     ### pdf output
     def setPdfMargins(self, left = 15, top = 15, right = 15, bottom = 15):

@@ -2,7 +2,7 @@
 """
 ui/tab_text_reports.py
 
-Last updated:  2021-03-20
+Last updated:  2021-04-04
 
 Manage text reports
 
@@ -36,60 +36,48 @@ _TEXT_REPORTS = "Waldorf-Zeugnisse"
 _CLASS = "Klasse"
 _FILESAVE = "Datei speichern"
 #_COVER_FILE = "Mantelbogen (*.pdf)"
-_ALL_PUPILS = "** Ganze Klasse **"
+_ALL_CLASSES = "* Alle Klassen *"
+_ALL_PUPILS = "* Ganze Klasse *"
 _COVERSHEETS = "Mantelbögen"
 _MAKE_COVERS = "Mantelbögen erstellen"
 
 #####################################################
-
-import sys, os
-if __name__ == '__main__':
-    # Enable package import if running as module
-    this = sys.path[0]
-    sys.path[0] = os.path.dirname(this)
-# <core.base> must be the first WZ-import
-import core.base as CORE
 
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
         QPushButton, QTextEdit, QDateEdit
 #from qtpy.QtGui import QTextOption
 from qtpy.QtCore import QDate
 
-from gui.gui_support import VLine, HLine, KeySelect, TabPage
-from core.pupils import Pupils
-#from local.base_config import year_path
-from template_engine.coversheet import CoverSheets
+from ui.ui_support import VLine, HLine, KeySelect, TabPage
 
 ###
 
 class TextReports(TabPage):
     def __init__(self):
+        self._widgets = {}
         super().__init__(_TEXT_REPORTS)
         topbox = QHBoxLayout()
         self.vbox.addLayout(topbox)
 
         #*********** The "main" widget ***********
-        self.edit = QTextEdit()
-        #self.edit.setLineWrapMode(self.edit.NoWrap)
-        self.edit.setAcceptRichText(False)
-        self.edit.setUndoRedoEnabled(True)
-        topbox.addWidget(self.edit)
+        self.text = QTextEdit(self)
+        topbox.addWidget(self.text)
         topbox.addWidget(VLine())
-
         cbox = QVBoxLayout()
         topbox.addLayout(cbox)
 
-        # Select class
-        hbox1 = QHBoxLayout()
-        cbox.addLayout(hbox1)
-        hbox1.addWidget(QLabel(_CLASS))
+        ### Select class
         self.class_select = KeySelect(changed_callback = self.class_changed)
-        hbox1.addWidget(self.class_select)
+        self._widgets['C_CHOOSE'] = self.class_select
+        cbox.addWidget(QLabel(_CLASS))
+        cbox.addWidget(self.class_select)
 
+        ### List of pupils
         self.pselect = KeySelect(changed_callback = self.pupil_changed)
+        self._widgets['P_CHOOSE'] = self.pselect
         cbox.addWidget(self.pselect)
 
-        cbox.addSpacing(30)
+        ### Save (changed) data
         cbox.addStretch(1)
 
         ### Cover sheets
@@ -111,29 +99,25 @@ class TextReports(TabPage):
 #        self.check_saved()      # see calendar.py
 #
     def year_changed(self):
-#TODO: check changes?
-        cal = CORE.Dates.get_calendar(ADMIN.schoolyear)
-        date = cal['LAST_DAY']
-        self.date.setDate(QDate.fromString(date, 'yyyy-MM-dd'))
-        self.pupils = Pupils(ADMIN.schoolyear)
-        self.class_select.set_items([(c, c)
-                for c in self.pupils.classes() if c < '13'])
-        self.class_select.trigger()
+        BACKEND('TEXT_get_calendar')
 #
-    def save(self):
-        header = CALENDER_HEADER.format(date = CORE.Dates.today())
-        text = self.edit.toPlainText()
+    def SET_CALENDAR(self, calendar):
+        self.calendar = calendar
+        date = self.calendar['LAST_DAY']
+        self.date.setDate(QDate.fromString(date, 'yyyy-MM-dd'))
+#
+    def SET_CLASSES(self, classes, klass):
+        """CALLBACK: Supplies the classes as a list: [class10, class9, ...]
+        and the selected class. Set the class selection widget
+        and trigger a "change of class" signal.
+        """
         try:
-            text = text.split('#---', 1)[1]
-            text = text.lstrip('-')
-            text = text.lstrip()
-        except:
-            pass
-        text = header + text
-
-        with open(self.calendar_file, 'w', encoding = 'utf-8') as fh:
-            fh.write(text)
-        self.edit.setPlainText(text)    # clear undo/redo history
+            ix = classes.index(klass) + 1
+        except ValueError:
+            ix = 0
+        self.class_select.set_items([('', _ALL_CLASSES)] +
+                [(c, c) for c in classes if c < '13'], index = ix)
+        self.class_select.trigger()
 #
     def class_changed(self, klass):
         BACKEND('TEXT_set_class', klass = klass)
@@ -149,7 +133,13 @@ class TextReports(TabPage):
 #
     def make_covers(self):
         date = self.date.date().toString('yyyy-MM-dd')
-        BACKEND('TEXT_make_covers', klass = self.klass, date = date)
+        BACKEND('TEXT_make_covers', date = date)
+
+
+        return
+
+
+
 #TODO
         print("TODO: individual pupils")
         coversheets = CoverSheets(ADMIN.schoolyear)
@@ -157,25 +147,9 @@ class TextReports(TabPage):
         fn = _MakeCovers(coversheets, self.klass, date)
         files = REPORT('RUN', runme = fn)
 
-###
-
-class _MakeCovers(CORE.ThreadFunction):
-    def __init__(self, coversheets, klass, date, pids = None):
-        super().__init__()
-        self._coversheets = coversheets
-        self._klass = klass
-        self._date = date
-        self._pids = pids
-#
-    def run(self):
-        fpath = self._coversheets.for_class(self._klass, self._date,
-                self._pids)
-        REPORT('INFO', _MADE_COVERS.format(path = fpath))
-#
-    def terminate(self):
-        return False
 
 
 tab_text_reports = TextReports()
 TABS.append(tab_text_reports)
-FUNCTIONS['text_SET_CLASS'] = tab_text_reports.SET_CLASS
+#FUNCTIONS['text_SET_CLASS'] = tab_text_reports.SET_CLASS
+FUNCTIONS['text_SET_CALENDAR'] = tab_text_reports.SET_CALENDAR

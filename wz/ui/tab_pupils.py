@@ -2,7 +2,7 @@
 """
 ui/tab_pupils.py
 
-Last updated:  2021-04-04
+Last updated:  2021-04-05
 
 Pupil table management.
 
@@ -119,7 +119,8 @@ from qtpy.QtCore import Qt
 from ui.ui_support import TabPage, openDialog, VLine, KeySelect, \
         QuestionDialog, GuiError, saveDialog
 from ui.table import TableWidget
-from ui.grid import GridView
+#? EditableGridView?
+from ui.gridbase import GridView
 from ui.pupil_grid import PupilGrid
 
 ### +++++
@@ -427,7 +428,6 @@ class ManagePupils(TabPage):
         self._widgets['C_CHOOSE'] = self.class_select
         cbox.addWidget(QLabel(_CLASS))
         cbox.addWidget(self.class_select)
-
 
         ### List of pupils
         self.pselect = KeySelect(changed_callback = self.pupil_changed)

@@ -27,10 +27,10 @@ _CHOICES_SAVED = "Fach-Wahl-Tabelle für Klasse {klass} gespeichert" \
         " als:\n  {fpath}"
 _CHOICES_CLASS = "Fach-Wahl-Tabelle für Klasse {klass} aktualisiert"
 
+from core.pupils import PUPILS
 from core.courses import Subjects
-from local.base_config import print_class
 
-#TODO: Would it be better with a cache, like for the pupils (Pupil_Base)?
+### +++++
 
 class _Subject_Base:
     """A cache for subject/course information.
@@ -55,17 +55,50 @@ def SUBJECTS():
 
 ###
 
+def get_classes():
+    subjects = SUBJECTS()
+    clist = [(c, c) for c in subjects.classes()]
+    CALLBACK('subjects_SET_CLASSES', classes = clist)
+    return True
+
+###
+
+def edit_choices(klass):
+    subjects = SUBJECTS()
+    info = (
+        (subjects.SCHOOLYEAR,    SCHOOLYEAR),
+        (subjects.CLASS,         klass)
+    )
+    slist = []
+    for sdata in subjects.class_subjects(klass):
+#TODO: Should there be anything else in the choice table?
+        if sdata.TIDS:
+            # Add subject
+            slist.append((sdata.SID, sdata.SUBJECT))
+            continue    # Not a "real" subject
+    pupils = PUPILS(SCHOOLYEAR)
+    pupil_data = []
+    for pdata in pupils.class_pupils(klass):
+        pid = pdata['PID']
+        pupil_data.append((pid, pupils.name(pdata), pdata['STREAM'],
+                list(subjects.choices(pid))))
+    CALLBACK('subjects_EDIT_CHOICES', info = info,
+            pupil_data = pupil_data, subjects = slist)
+    return True
+
+###
+
 def update_subjects(filepath):
     klass = SUBJECTS().import_source_table(filepath)
     REPORT('INFO', _SUBJECTS_CLASS.format(klass = klass))
     return True
 #
-def select_choice_class():
-    subjects = SUBJECTS()
-    clist = [(c, subjects.CLASS + ' ' + print_class(c))
-            for c in subjects.classes()]
-    CALLBACK('subjects_SELECT_CHOICE_TABLE', classes = clist)
-    return True
+#def select_choice_class():
+#    subjects = SUBJECTS()
+#    clist = [(c, subjects.CLASS + ' ' + print_class(c))
+#            for c in subjects.classes()]
+#    CALLBACK('subjects_SELECT_CHOICE_TABLE', classes = clist)
+#    return True
 #
 def make_choice_table(klass, filepath):
     xlsx_bytes = SUBJECTS().make_choice_table(klass)
@@ -80,7 +113,10 @@ def update_choice_table(filepath):
     return True
 
 
+FUNCTIONS['SUBJECT_get_classes'] = get_classes
 FUNCTIONS['SUBJECT_table_update'] = update_subjects
-FUNCTIONS['SUBJECT_select_choice_class'] = select_choice_class
+FUNCTIONS['SUBJECT_edit_choices'] = edit_choices
+
+#FUNCTIONS['SUBJECT_select_choice_class'] = select_choice_class
 FUNCTIONS['SUBJECT_make_choice_table'] = make_choice_table
 FUNCTIONS['SUBJECT_update_choice_table'] = update_choice_table

@@ -94,8 +94,8 @@ class GradeEdit(TabPage):
         self.grade_scene = None
         topbox.addWidget(self.gradeView)
         topbox.addWidget(VLine())
-
         cbox = QVBoxLayout()
+        topbox.addLayout(cbox)
 
         ### Select "term" (to which occasion the reports are to appear)
         ### That might be a term or semester, it might be a special
@@ -157,7 +157,6 @@ class GradeEdit(TabPage):
         pbReport = QPushButton(_REPORT_PDF)
         cbox.addWidget(pbReport)
         pbReport.clicked.connect(self.make_reports)
-        topbox.addLayout(cbox)
 #
     def enable(self, tag, on):
         """Enable or disable the widget with given tag.

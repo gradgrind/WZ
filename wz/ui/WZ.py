@@ -87,7 +87,7 @@ TABS.append(TabPage("Page 1"))
 import ui.tab_subjects
 import ui.tab_pupils
 import ui.tab_grade_editor
-#        self._addPage(TextReports())
+import ui.tab_text_reports
 import ui.tab_calendar
 #        self._lbox.addStretch(1)
 #import ui.tab_template_fields

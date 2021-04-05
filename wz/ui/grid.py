@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-04-04
+Last updated:  2021-04-05
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -73,6 +73,7 @@ class EditableGridView(GridView):
 class Grid(GridBase):
     def __init__(self, gview, rowheights, columnwidths):
         super().__init__(gview, rowheights, columnwidths)
+        self.tagmap = {}        # {tag -> <Tile> instance}
         self.value0 = {}        # initial values (text) of cells
         # For popup editors
         self.editors = {
@@ -90,6 +91,16 @@ class Grid(GridBase):
             self._gview.set_changed(False)
         else:
             self._changes = None
+#
+    def text(self, tag):
+        """Read the contents of the cell with given tag.
+        """
+        return self.tagmap[tag].value() or ''
+#
+    def set_text(self, tag, text):
+        """Set the text in the given cell.
+        """
+        self.tagmap[tag].setText(text)
 #
     def changes(self):
         return list(self._changes)
@@ -123,14 +134,21 @@ class Grid(GridBase):
             raise GridError(_EDITOR_TAG_REUSED.format(tag = tag))
         self.editors[tag] = PopupTable(self, valuelist)
 #
-    def tile(self, row, col, **kargs):
-        """Add a tile to the grid. Adds the attribute <value0> to the
-        base implementation.
+    def tile(self, row, col, text = None, cspan = 1, rspan = 1,
+            style = None, tag = None, validation = None):
+        """Add a tile to the grid.
+        <row> and <col> are grid-cell coordinates (0-based).
+        It adds the cell to the mapping <self.tagmap>.
+        Adds the initial text to the mapping <self.value0>.
+        If <tag> is not set, it will be set to '#row:col'.
+        The <validation> parameter (for cell editing) is added to the
+        tile.
         """
-        validation = kargs.pop('validation', None)
-        t = super().tile(row, col, **kargs)
-        t.validation = validation
+        tag = tag or f'#{row}:{col}'
+        t = self.basic_tile(row, col, tag, text, style or '*', cspan, rspan)
+        self.tagmap[tag] = t
         self.value0[t.tag] = t.value()  # initial value
+        t.validation = validation
         return t
 #
     def set_text_init(self, tag, text):
