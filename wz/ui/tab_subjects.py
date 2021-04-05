@@ -107,8 +107,7 @@ class StackedWidget_choices(GridView):
     def activate(self, info, pupil_data, subjects):
         self.choices_scene = ToggleGrid(self, info, pupil_data, subjects)
         self.set_scene(self.choices_scene)
-        for pb in ('MAKE_CHOICE_TABLE', 'UPDATE_CHOICE_TABLE',
-                'SAVE', 'C_CHOOSE'):
+        for pb in ('MAKE_CHOICE_TABLE', 'UPDATE_CHOICE_TABLE', 'C_CHOOSE'):
             self._tab.enable(pb, True)
 #
     def deactivate(self):
@@ -116,8 +115,8 @@ class StackedWidget_choices(GridView):
         self.set_scene(None)
 #
     def save(self):
-        BACKEND('SUBJECT_save_choices', data = self.choices_scene.data())
-#TODO: Do I have to pass the class?
+        BACKEND('SUBJECT_save_choices', klass = self._tab.klass,
+                data = self.choices_scene.data())
 
 ###
 
@@ -193,7 +192,6 @@ class Subjects(TabPage):
         self._widgets['SAVE'] = _w
         cbox.addWidget(_w)
         _w.clicked.connect(self.save)
-
 #
     def set_widget(self, tag, **params):
         """Select the widget to be displayed in the "main" stack.
@@ -232,18 +230,22 @@ class Subjects(TabPage):
         signal.
         """
         classes.reverse()
-        try:
-            ix = classes.index(self.klass) + 1
-        except ValueError:
+        ix = 0
+        for c, _ in classes:
+            ix += 1
+            if c == self.klass:
+                break
+        else:
             ix = 0
+            self.klass = None
         self.class_select.set_items([('', _NO_CLASS)] + classes, index = ix)
-        self.class_select.trigger()
+        self.class_changed(self.klass, force = True)
 #
-    def class_changed(self, klass):
+    def class_changed(self, klass, force = False):
         """Manual selection of a class (including the 'empty' class,
         meaning "no particular class").
         """
-        if self.leave_ok():
+        if force or self.leave_ok():
             self.klass = klass
             if klass:
                 self.edit_choices()

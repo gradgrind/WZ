@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-03-20
+core/courses.py - last updated 2021-04-05
 
 Manage course/subject data.
 
@@ -32,7 +32,8 @@ Copyright 2021 Michael Towers
 #           <sdata> is a mapping, field -> value
 # The pupil-choices part has the following structure:
 #   __CHOICES__: {pid: [sid, ... ], ... }
-# Only the sids of non-chosen courses are included.
+# Only the sids of non-chosen courses are included. Also, only pupils
+# who have non-chosen courses are included.
 #
 # It would probably be good to have a gui-editor for such files, but
 # the data could be exported as a table (tsv or xlsx).
@@ -316,7 +317,21 @@ class Subjects(SubjectsBase):
         except KeyError:
             return set()
 #
-#TODO: May want to provide gui editor ...
+    def save_choices(self, klass, data):
+        """Save the choices for the given class.
+        Note that the parameter <klass> is not used here, as choices
+        are saved purely on the basis of their pid.
+        Thus <data> must contain an entry for all pupils whose choices
+        are to be updated:
+            [[pid, [sid, ...]], ... ]
+        """
+        for pid, clist in data:
+            if clist:
+                self._choices[pid] = clist
+            else:
+                self._choices.pop(pid, None)
+        self.save()
+#
     def import_choice_table(self, filepath):
         """Read in the file containing the course choices and save the
         data to the internal representation.
@@ -357,6 +372,8 @@ class Subjects(SubjectsBase):
                 clist = [sid for sid, col in sid2col if row[col]]
                 if clist:
                     self._choices[pid] = clist
+                else:
+                    self._choices.pop(pid, None)
         self.save()
         return klass
 #

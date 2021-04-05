@@ -23,12 +23,14 @@ Copyright 2021 Michael Towers
 
 ### Messages
 _SUBJECTS_CLASS = " ... Fach-Tabelle für Klasse {klass} aktualisiert"
-_CHOICES_SAVED = "Fach-Wahl-Tabelle für Klasse {klass} gespeichert" \
+_CHOICES_SAVED = "Fächerwahl für Klasse {klass} aktualisiert"
+_CHOICE_TABLE_SAVED = "Fach-Wahl-Tabelle für Klasse {klass} gespeichert" \
         " als:\n  {fpath}"
 _CHOICES_CLASS = "Fach-Wahl-Tabelle für Klasse {klass} aktualisiert"
 
 from core.pupils import PUPILS
-from core.courses import Subjects
+from core.courses import Subjects, CourseError
+from tables.spreadsheet import TableError
 
 ### +++++
 
@@ -85,12 +87,24 @@ def edit_choices(klass):
     CALLBACK('subjects_EDIT_CHOICES', info = info,
             pupil_data = pupil_data, subjects = slist)
     return True
+#
+def save_choices(klass, data):
+    """Save the choice table for the given pupils.
+        <data>: [[pid, [sid, ... ]], ... ]
+    """
+    SUBJECTS().save_choices(klass, data)
+    REPORT('INFO', _CHOICES_SAVED.format(klass = klass))
+    return get_classes()
 
 ###
 
 def update_subjects(filepath):
-    klass = SUBJECTS().import_source_table(filepath)
-    REPORT('INFO', _SUBJECTS_CLASS.format(klass = klass))
+    try:
+        klass = SUBJECTS().import_source_table(filepath)
+    except (CourseError, TableError) as e:
+        REPORT('ERROR', str(e))
+    else:
+        REPORT('INFO', _SUBJECTS_CLASS.format(klass = klass))
     return True
 #
 #def select_choice_class():
@@ -104,18 +118,25 @@ def make_choice_table(klass, filepath):
     xlsx_bytes = SUBJECTS().make_choice_table(klass)
     with open(filepath, 'wb') as fh:
         fh.write(xlsx_bytes)
-    REPORT('INFO', _CHOICES_SAVED.format(klass = klass, fpath = filepath))
+    REPORT('INFO', _CHOICE_TABLE_SAVED.format(klass = klass,
+            fpath = filepath))
     return True
 #
 def update_choice_table(filepath):
-    klass = SUBJECTS().import_choice_table(filepath)
-    REPORT('INFO', _CHOICES_CLASS.format(klass = klass))
+    try:
+        klass = SUBJECTS().import_choice_table(filepath)
+    except TableError as e:
+        REPORT('ERROR', str(e))
+    else:
+        REPORT('INFO', _CHOICES_CLASS.format(klass = klass))
+        get_classes()
     return True
 
 
 FUNCTIONS['SUBJECT_get_classes'] = get_classes
 FUNCTIONS['SUBJECT_table_update'] = update_subjects
 FUNCTIONS['SUBJECT_edit_choices'] = edit_choices
+FUNCTIONS['SUBJECT_save_choices'] = save_choices
 
 #FUNCTIONS['SUBJECT_select_choice_class'] = select_choice_class
 FUNCTIONS['SUBJECT_make_choice_table'] = make_choice_table

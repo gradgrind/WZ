@@ -247,6 +247,7 @@ class ToggleGrid(GridBase):
     def data(self):
         """Return choice data as a list of "non-chosen" subject lists.
             [(pid, [sid, ...]), ... ]
+        Also pupils with empty lists are included.
         """
         clist = []
         y = 0
@@ -257,6 +258,6 @@ class ToggleGrid(GridBase):
                 if row[x].value():
                     slist.append(sid)
                 x += 1
-            if slist:
-                clist.append((self.pids[y], slist))
+            clist.append((self.pids[y], slist))
+            y += 1
         return clist
