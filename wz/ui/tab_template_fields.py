@@ -2,7 +2,7 @@
 """
 ui/tab_template_fields.py
 
-Last updated:  2021-04-03
+Last updated:  2021-04-06
 
 Show template fields, set values and process template.
 This module is intended primarily for testing purposes.
@@ -60,13 +60,6 @@ from ui.grid import GridView, Grid
 from ui.ui_support import VLine, KeySelect, TabPage, GuiError, TreeDialog
 
 
-#TODO: to back-end
-from core.pupils import Pupils, NullPupilData
-from local.base_config import PupilsBase, class_year, print_schoolyear, \
-        print_class
-from template_engine.template_sub import Template, TemplateError
-from template_engine.simpleodt import metadata
-
 ## Measurements are in mm ##
 _HEIGHT_LINE = 6
 COLUMNS = (40, 60)
@@ -82,9 +75,9 @@ class FieldGrid(Grid):
     individual fields.
     There is special handling for certain pupil fields.
     """
-    def __init__(self, view, template, selects):
+    def __init__(self, view, fields_style, selects = {}):
         """<view> is the QGraphicsView in which the grid is to be shown.
-        <template> is a <Template> instance.
+        <fields_style> is a list of (field, style) pairs.
         <selects> is a mapping containing selection lists.
         """
         # Get template fields: [(field, style or <None>), ...]
@@ -109,8 +102,6 @@ class FieldGrid(Grid):
         _ROWS = ROWS + (_HEIGHT_LINE,) * len(self.fields)
         super().__init__(view, _ROWS, COLUMNS)
         self.styles()
-        ### Non-editable fields
-        noneditable = {'PSORT'}
         ### Title area
         self.tile(0, 0, text = '', cspan = 2, style = 'title', tag = 'title')
         ### field - value lines
@@ -121,10 +112,10 @@ class FieldGrid(Grid):
                 text += ' (*%d)' % n
             self.tile(row, 0, text = text, style = 'key')
             vstyle = 'value'
-            if field in noneditable:
-                vstyle = 'fixed'
-                validation = None
-            elif field in self.editors:
+#            if field in noneditable:
+#                vstyle = 'fixed'
+#                validation = None
+            if field in self.editors:
                 validation = field
             elif field.endswith('_D'):
                 validation = 'DATE'
@@ -193,7 +184,6 @@ class FieldEdit(TabPage):
         self.pselect = KeySelect(changed_callback = self.pupil_changed)
         cbox.addWidget(self.pselect)
 
-        cbox.addSpacing(30)
         cbox.addStretch(1)
 
         testfields = QPushButton(_TEST_FIELDS)
@@ -215,16 +205,10 @@ class FieldEdit(TabPage):
         BACKEND('TEMPLATE_get_classes')
 #
     def SET_CLASSES(self, selects, classes):
-        self.selects = selects
         self.class_select.set_items([('', '–––')] + [(c, c)
                 for c in classes])
 #?        self.class_select.trigger()
 
-#
-    def leave(self):
-        """Called when the tab is deselected.
-        """
-        pass
 #
     def class_changed(self, klass):
         self.klass = klass
@@ -256,9 +240,11 @@ class FieldEdit(TabPage):
             self.renew()
 #
     def get_template(self):
+        BACKEND('TEMPLATE_get_start_dir') # ... -> CHOOSE_TEMPLATE
+#
+    def CHOOSE_TEMPLATE(self, startpath):
         data = []
-        for (root, dirs, files) in os.walk(os.path.join(RESOURCES,
-                'templates')):
+        for (root, dirs, files) in os.walk(startpath):
             tfiles = []
             for f in files:
                 if f.endswith('.odt'):
@@ -282,7 +268,16 @@ class FieldEdit(TabPage):
                     dir0, _TEMPLATE_FILE)[0]
             if not fpath:
                 return
+        BACKEND('TEMPLATE_set_template', template_path = fpath)
+# ... -> ???
+
+        return
+
+
         self.template = Template(fpath, full_path = True)
+
+
+
         self.field_scene = FieldGrid(self.fieldView, self.template)
         self.fieldView.set_scene(self.field_scene)
         title = fpath
@@ -399,3 +394,4 @@ class _MakePdf(CORE.ThreadFunction):
 tab_template_fields = FieldEdit()
 TABS.append(tab_template_fields)
 FUNCTIONS['template_SET_CLASSES'] = tab_template_fields.SET_CLASSES
+FUNCTIONS['template_CHOOSE_TEMPLATE'] = tab_template_fields.CHOOSE_TEMPLATE

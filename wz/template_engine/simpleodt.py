@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-simpleodt.py - last updated 2021-01-16
+simpleodt.py - last updated 2021-04-06
 
 1) OdtReader
 =============
@@ -73,6 +73,9 @@ import io, re
 
 _ODT_CONTENT_FILE = 'content.xml'
 _ODT_META_FILE = 'meta.xml'
+re_META = br'<dc:([a-zA-Z]+)>([^<]*)</dc:\1>'
+re_USER = br'<meta:user-defined meta:name="([a-zA-Z0-9_]+)">' \
+                br'([^<]*)</meta:user-defined>'
 
 
 from xml.parsers.expat import ParserCreate
@@ -93,20 +96,30 @@ class OdtError(Exception):
 
 ###
 
-def substituteZipContent(infile, process, metadata = False):
+def substituteZipContent(infile, process = None, metaprocess = None):
     """Process the contents of an odt file using the function <process>.
     Return the resulting odt file as a <bytes> array.
     Normally the contents will be read.
-    However, by setting <metadata> to true, the metadata can be read.
+    However, by setting <metaprocess> to a function, the metadata can
+    be read.
+    When information is to be read from the odt-file, rather than
+    performing a transformation, only one processing function should be
+    supplied and it should return an empty value: this will terminate
+    the whole function early, returning <None>. The information to be
+    read out must be extracted within the processing function and saved
+    separately (see, for example, the "listUserFields" function).
     """
-    xmlfile = _ODT_META_FILE if metadata else _ODT_CONTENT_FILE
     sio = io.BytesIO()
     with zf.ZipFile(sio, "w", compression=zf.ZIP_DEFLATED) as zio:
         with zf.ZipFile(infile, "r") as za:
             for fin in za.namelist():
                 indata = za.read(fin)
-                if fin == xmlfile:
+                if fin == _ODT_CONTENT_FILE and process:
                     indata = process(indata)
+                    if not indata:
+                        return None
+                elif fin == _ODT_META_FILE and metaprocess:
+                    indata = metaprocess(indata)
                     if not indata:
                         return None
                 zio.writestr(fin, indata)
@@ -160,7 +173,10 @@ class OdtFields:
         return tagmap
 #
     @classmethod
-    def fillUserFields(cls, odtfile, itemdict):
+    def fillUserFields(cls, odtfile, itemdict, remove_user = False):
+        """If <remove_user> is true, "user-defined" metadata will be
+        removed.
+        """
         useditems = set()
         nonitems = set()
 #
@@ -204,22 +220,27 @@ class OdtFields:
             their values substituted.
             """
             return re.sub(cls._combex, _sub, xmldata)
+#
+        def _metaprocess(xmldata):
+            """Remove user-defined fields.
+            """
+            return re.sub(re_USER, b'', xmldata)
 
-        odtBytes = substituteZipContent(odtfile, _process)
+        odtBytes = substituteZipContent(odtfile, _process,
+                metaprocess = _metaprocess if remove_user else None)
         return (odtBytes, useditems, nonitems)
 
 ###
 
-def metadata(odtfile):
-    """Read metatdata: "Title" and "Subject".
-    Return a tuple: (title field, subject field)
-    The regular expression parses
-        <dc:title>The Title</dc:title>
-    and
-        <dc:subject>A description</dc:subject>
-    in the xml metadata file.
+def metadata(odtfile, user = False):
+    """Read metatdata, by default "dc:***" fields.
+    If <user> is true, read "meta:user-defined ..." fields.
+    Return a mapping: {field name: field value, ... }
     """
-    _dcrex = br'<dc:([a-zA-Z]+)>([^<]*)</dc:\1>'
+    if user:
+        _dcrex = re_USER
+    else:
+        _dcrex = re_META
     tagmap = {}
     def _process(xmldata):
         #print("$:", xmldata)
@@ -227,9 +248,9 @@ def metadata(odtfile):
             tagmap[vals[0].decode('utf-8')] = vals[1].decode('utf-8')
         return None
 
-    substituteZipContent(odtfile, _process, metadata = True)
+    substituteZipContent(odtfile, metaprocess = _process)
     #print("§§§", tagmap)
-    return (tagmap.get('title'), tagmap.get('subject'))
+    return tagmap
 
 ###
 
@@ -324,8 +345,16 @@ if __name__ == '__main__':
     init()
 
     _odtfile = os.path.join(DATA, 'testing', 'testdoc.odt')
-    print("METADATA:", metadata(_odtfile))
+    print("\nMETADATA (normal):", metadata(_odtfile))
+    print("\nMETADATA (user):", metadata(_odtfile, user = True))
+
 #    quit(0)
+    _odir = os.path.join(DATA, 'testing', 'template-out')
+    _out = os.path.join(_odir, 'testdoc_1.odt')
+    odtBytes, used, notsub = OdtFields.fillUserFields(_odtfile,
+            {'TITLE': 'Zeugnisse ...'}, remove_user = True)
+    with open(_out, 'bw') as fout:
+        fout.write(odtBytes)
 
     print("\nREAD:", _odtfile)
     for l in OdtReader.readOdtFile(_odtfile):
