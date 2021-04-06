@@ -41,7 +41,6 @@ FUNCTIONS['TEXT_get_calendar'] = get_calendar
 ###
 
 def SET_CLASS(self, klass, pupil_list):
-#TODO: check changes? (What does that mean?)
     pupils = PUPILS(SCHOOLYEAR)
     pdlist = pupils.class_pupils(klass)
     plist = [('', _ALL_PUPILS)] + [(pdata['PID'], pupils.name(pdata))

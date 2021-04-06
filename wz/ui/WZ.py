@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-03-10
+Last updated:  2021-04-06
 
 Administration interface.
 
@@ -439,7 +439,8 @@ class TabWidget(QWidget):
         elif i0 >= 0:
             # Check that the old tab can be left
             tab0 = self._stack.widget(i0)
-            if tab0.leave():
+            if tab0.leave_ok():
+                tab0.leave()
                 # Deselect old button
                 self.tab_buttons[i0].setChecked(False)
             else:
@@ -455,10 +456,14 @@ class TabWidget(QWidget):
         if self.title_label:
             self.title_label.setText('<b>%s</b>' % tab.name)
 #
-    def clear(self):
+    def check_unsaved(self):
+        """Called when a "quit program" request is received.
+        Check for unsaved data, asking for confirmation if there is
+        some. Return <True> if it is ok to continue (quit).
+        """
         w = self._stack.currentWidget()
         if w:
-            return w.leave()
+            return w.leave_ok()
         return True
 #
     def current_page(self):
@@ -520,7 +525,7 @@ class Admin(QWidget):
         self.tab_widget.select(0)   # Enter default tab
 #
     def closeEvent(self, e):
-        if self.tab_widget.clear():
+        if self.tab_widget.check_unsaved():
             backend_instance.terminate()
             e.accept()
         else:
@@ -541,16 +546,16 @@ class Admin(QWidget):
         if chosenyear != current:
             self.year_select.reset(current)
 #
-    def YEAR_CHANGED(self):
-        tabpage = self.tab_widget.current_page()
-        tabpage.enter()
-#
     def year_changed(self, schoolyear):
         tabpage = self.tab_widget.current_page()
         if tabpage.year_change_ok():
-            BACKEND('BASE_set_year', year = schoolyear)
+            BACKEND('BASE_set_year', year = schoolyear) # ... -> YEAR_CHANGED
             return True
         return False
+#
+    def YEAR_CHANGED(self):
+        tabpage = self.tab_widget.current_page()
+        tabpage.enter()
 #
     def current_year(self):
         return self.year_select.selected()

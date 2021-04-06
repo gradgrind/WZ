@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-04-02
+Last updated:  2021-04-06
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -236,6 +236,15 @@ class TabPage(QWidget):
 #        self.vbox.addStretch(1)
 #
     def enter(self):
+        """Called when a tab page is activated (selected) and when there
+        is a change of year (which is treated as a reentry).
+        """
+        pass
+#
+    def leave(self):
+        """Called to tidy up the data structures of the tab page, for
+        example before leaving (deselecting) it.
+        """
         pass
 #
     def leave_ok(self):
@@ -248,16 +257,15 @@ class TabPage(QWidget):
         return True
 #
     def is_modified(self):
-        return True
-#
-    def leave(self):
-        return True
-#
-    def clear(self):
-        return True
+        """Return <True> if there are unsaved changes.
+        """
+        return False
 #
     def year_change_ok(self):
-        return True
+        """Called when a change of year is pending. Return <False> to
+        prevent the year-change being carried out.
+        """
+        return self.leave_ok()
 
 ###
 

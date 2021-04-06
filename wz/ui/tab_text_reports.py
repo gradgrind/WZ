@@ -2,7 +2,7 @@
 """
 ui/tab_text_reports.py
 
-Last updated:  2021-04-04
+Last updated:  2021-04-06
 
 Manage text reports
 
@@ -92,13 +92,6 @@ class TextReports(TabPage):
         pbCover.clicked.connect(self.make_covers)
 #
     def enter(self):
-        self.year_changed()
-#
-    def leave(self):
-        pass
-#        self.check_saved()      # see calendar.py
-#
-    def year_changed(self):
         BACKEND('TEXT_get_calendar')
 #
     def SET_CALENDAR(self, calendar):
@@ -115,18 +108,17 @@ class TextReports(TabPage):
             ix = classes.index(klass) + 1
         except ValueError:
             ix = 0
+            klass = 0
         self.class_select.set_items([('', _ALL_CLASSES)] +
                 [(c, c) for c in classes if c < '13'], index = ix)
-        self.class_select.trigger()
+        self.class_changed(klass)
 #
     def class_changed(self, klass):
         BACKEND('TEXT_set_class', klass = klass)
 #
     def SET_CLASS(self, klass, pupil_list):
-#TODO: check changes?
         self.klass = klass
         self.pselect.set_items(pupil_list)
-#?
 #
     def pupil_changed(self, pid):
         raise Bug("TODO")

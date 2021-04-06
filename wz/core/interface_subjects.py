@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_subjects.py - last updated 2021-02-20
+core/interface_subjects.py - last updated 2021-04-06
 
 Controller/dispatcher for subjects management.
 
@@ -59,7 +59,8 @@ def SUBJECTS():
 
 def get_classes():
     subjects = SUBJECTS()
-    clist = [(c, c) for c in subjects.classes()]
+    clist = subjects.classes()
+    clist.reverse()
     CALLBACK('subjects_SET_CLASSES', classes = clist)
     return True
 

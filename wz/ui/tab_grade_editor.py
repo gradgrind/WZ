@@ -2,7 +2,7 @@
 """
 ui/tab_grade_editor.py
 
-Last updated:  2021-04-04
+Last updated:  2021-04-06
 
 Editor for grades.
 
@@ -190,12 +190,8 @@ class GradeEdit(TabPage):
         BACKEND('GRADES_init')
 #
     def leave(self):
-        if self.clear():
-            # Drop the data structures associated with the grade view
-            self.grade_scene = None
-            return True
-        else:
-            return False
+        # Drop the data structures associated with the grade view
+        self.set_scene(None)
 #
     def SET_TERMS(self, terms, term):
         """CALLBACK: Supplies the terms as a list of "keys" (the display

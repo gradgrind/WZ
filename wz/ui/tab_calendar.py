@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-03-20
+Last updated:  2021-04-06
 
 Calendar editor. Also handles school-year migration and attendance lists.
 
@@ -28,8 +28,6 @@ Copyright 2021 Michael Towers
 ### Labels, etc.
 _CLASS = "Klasse"
 _EDIT_CALENDAR = "Kalender bearbeiten"
-_TITLE_LOSE_CHANGES = "Ungespeicherte Änderungen"
-_LOSE_CHANGES = "Sind Sie damit einverstanden, dass die Änderungen verloren gehen?"
 _SAVE = "Änderungen speichern"
 _ATTENDANCE = "Anwesenheit"
 _GET_ATTENDANCE = "Tabelle erstellen"
@@ -105,9 +103,9 @@ class Calendar(TabPage):
         pbAttUpdate.setToolTip(_UPDATE_TABLE_TT)
         cbox.addWidget(pbAttUpdate)
         pbAttUpdate.clicked.connect(self.update_attendance)
-
-
-#TODO: year_changed?
+#
+    def is_modified(self):
+        return self.modified
 #
     def enter(self):
         """Called when the tab is selected.
@@ -126,15 +124,8 @@ class Calendar(TabPage):
 #
     def leave(self):
         """Called when the tab is deselected.
-        If there are unsaved changes, ask whether it is ok to lose them.
-        Return <True> if ok to lose them (or if there aren't any changes),
-        otherwise <False>.
         """
-        if self.modified and not QuestionDialog(
-                _TITLE_LOSE_CHANGES, _LOSE_CHANGES):
-            return False
         self.edit.clear()
-        return True
 #
     def text_changed(self):
         """Callback when the text is edited.

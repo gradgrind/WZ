@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-04-05
+Last updated:  2021-04-06
 
 Subject table management.
 
@@ -32,7 +32,7 @@ _CLASS = "Klasse:"
 _NO_CLASS = "–––"
 _MANAGE_SUBJECTS = "Fächer verwalten"
 _MANAGE_SUBJECTS_TEXT = """## Fachliste aktualisieren
-Die Fachliste für eine Klasse kann von einer Tabelle (xlsx, ods or tsv)
+Die Fachliste für eine Klasse kann von einer Tabelle (xlsx, ods oder tsv)
 aktualisiert werden. Diese Tabelle muss die entsprechende Struktur
 aufweisen.
 
@@ -221,24 +221,17 @@ class Subjects(TabPage):
         self.klass = None
         BACKEND('SUBJECT_get_classes')   # -> SET_CLASSES(...)
 #
-    def year_change_ok(self):
-        return self.leave_ok()
-#
     def SET_CLASSES(self, classes):
-        """CALLBACK: Supplies the classes as a list.
-        Set the class selection widget and trigger a "change of class"
-        signal.
+        """CALLBACK: Supplies the classes as a list, [class10, class9, ...].
+        Set the class selection widget and handle the "change of class".
         """
-        classes.reverse()
-        ix = 0
-        for c, _ in classes:
-            ix += 1
-            if c == self.klass:
-                break
-        else:
+        try:
+            ix = classes.index(self.klass) + 1
+        except ValueError:
             ix = 0
             self.klass = None
-        self.class_select.set_items([('', _NO_CLASS)] + classes, index = ix)
+        self.class_select.set_items([('', _NO_CLASS)] +
+                [(c, c) for c in classes], index = ix)
         self.class_changed(self.klass, force = True)
 #
     def class_changed(self, klass, force = False):
@@ -258,7 +251,6 @@ class Subjects(TabPage):
         """Called when the tab is deselected.
         """
         self.main.currentWidget().deactivate()
-        return True
 #
     def update_subjects(self):
         fpath = openDialog(_TABLE_FILE)

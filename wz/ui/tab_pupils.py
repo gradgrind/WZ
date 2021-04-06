@@ -2,7 +2,7 @@
 """
 ui/tab_pupils.py
 
-Last updated:  2021-04-05
+Last updated:  2021-04-06
 
 Pupil table management.
 
@@ -511,14 +511,10 @@ class ManagePupils(TabPage):
         BACKEND('PUPILS_get_classes')   # -> SET_CLASSES(..., '')
         #
 #
-    def year_change_ok(self):
-        return self.leave_ok()
-#
     def leave(self):
         """Called when the tab is deselected.
         """
         self.main.currentWidget().deactivate()
-        return True
 #
     def SET_CLASSES(self, classes, klass):
         """CALLBACK: Supplies the classes as a list: [class10, class9, ...]
