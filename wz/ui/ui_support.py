@@ -195,7 +195,6 @@ def LineDialog(message, text = ''):
 
 ###
 
-
 def TextDialog(title, text):
     td = QDialog()
     td.setWindowTitle(title)

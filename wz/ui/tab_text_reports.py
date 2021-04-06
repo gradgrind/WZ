@@ -23,23 +23,19 @@ Copyright 2021 Michael Towers
 
 =-LICENCE========================================
 """
-#TODO ... fixing up – still much old code
 
 #TODO: only the cover sheets for a whole class have been implemented
-
-### Messages
-_MADE_COVERS = "Mantelbögen erstellt in:\n  {path}"
 
 ### Labels, etc.
 _TEXT_REPORTS = "Waldorf-Zeugnisse"
 #_SAVE = "Änderungen speichern"
 _CLASS = "Klasse"
-_FILESAVE = "Datei speichern"
+#_FILESAVE = "Datei speichern"
 #_COVER_FILE = "Mantelbogen (*.pdf)"
 _ALL_CLASSES = "* Alle Klassen *"
-_ALL_PUPILS = "* Ganze Klasse *"
 _COVERSHEETS = "Mantelbögen"
 _MAKE_COVERS = "Mantelbögen erstellen"
+_SAVE_FILE = "pdf-Datei (*.pdf)"
 
 #####################################################
 
@@ -48,9 +44,12 @@ from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
 #from qtpy.QtGui import QTextOption
 from qtpy.QtCore import QDate
 
-from ui.ui_support import VLine, HLine, KeySelect, TabPage
+from ui.ui_support import VLine, HLine, KeySelect, TabPage, GuiError, \
+        saveDialog
 
 ###
+
+NONE = ''
 
 class TextReports(TabPage):
     def __init__(self):
@@ -92,6 +91,8 @@ class TextReports(TabPage):
         pbCover.clicked.connect(self.make_covers)
 #
     def enter(self):
+        self.klass = NONE
+        self.pid = NONE
         BACKEND('TEXT_get_calendar')
 #
     def SET_CALENDAR(self, calendar):
@@ -99,49 +100,57 @@ class TextReports(TabPage):
         date = self.calendar['LAST_DAY']
         self.date.setDate(QDate.fromString(date, 'yyyy-MM-dd'))
 #
-    def SET_CLASSES(self, classes, klass):
+    def SET_CLASSES(self, classes):
         """CALLBACK: Supplies the classes as a list: [class10, class9, ...]
         and the selected class. Set the class selection widget
         and trigger a "change of class" signal.
         """
         try:
-            ix = classes.index(klass) + 1
+            ix = classes.index(self.klass) + 1
         except ValueError:
             ix = 0
-            klass = 0
+            self.klass = NONE
         self.class_select.set_items([('', _ALL_CLASSES)] +
                 [(c, c) for c in classes if c < '13'], index = ix)
-        self.class_changed(klass)
+        self.class_changed(self.klass)
 #
     def class_changed(self, klass):
-        BACKEND('TEXT_set_class', klass = klass)
-#
-    def SET_CLASS(self, klass, pupil_list):
         self.klass = klass
+        if klass:
+            BACKEND('TEXT_set_class', klass = klass)
+        else:
+            self.pselect.set_items(None)
+            self.pid = NONE
+        return True
+#
+    def SET_PUPILS(self, pupil_list):
         self.pselect.set_items(pupil_list)
+        try:
+            self.pselect.reset(self.pid)
+        except GuiError:
+            self.pid = NONE
 #
     def pupil_changed(self, pid):
-        raise Bug("TODO")
+        self.pid = pid
+        return True
 #
     def make_covers(self):
-        date = self.date.date().toString('yyyy-MM-dd')
-        BACKEND('TEXT_make_covers', date = date)
-
-
-        return
-
-
-
-#TODO
-        print("TODO: individual pupils")
-        coversheets = CoverSheets(ADMIN.schoolyear)
-        date = self.date.date().toString('yyyy-MM-dd')
-        fn = _MakeCovers(coversheets, self.klass, date)
-        files = REPORT('RUN', runme = fn)
-
-
+        if self.pid:
+            BACKEND('TEXT_covername', pid = self.pid)
+        else:
+            date = self.date.date().toString('yyyy-MM-dd')
+            BACKEND('TEXT_make_covers', date = date, klass = self.klass)
+#
+    def MAKE_ONE_COVER(self, filename):
+        fpath = saveDialog(_SAVE_FILE, filename)
+        if fpath:
+            date = self.date.date().toString('yyyy-MM-dd')
+            BACKEND('TEXT_make_one_cover', pid = self.pid,
+                    date = date, filepath = fpath)
 
 tab_text_reports = TextReports()
 TABS.append(tab_text_reports)
-#FUNCTIONS['text_SET_CLASS'] = tab_text_reports.SET_CLASS
 FUNCTIONS['text_SET_CALENDAR'] = tab_text_reports.SET_CALENDAR
+FUNCTIONS['text_SET_CLASSES'] = tab_text_reports.SET_CLASSES
+FUNCTIONS['text_SET_PUPILS'] = tab_text_reports.SET_PUPILS
+FUNCTIONS['text_MAKE_ONE_COVER'] = tab_text_reports.MAKE_ONE_COVER

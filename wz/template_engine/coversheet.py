@@ -3,7 +3,7 @@
 """
 template_engine/coversheet.py
 
-Last updated:  2021-01-11
+Last updated:  2021-04-06
 
 Build the outer sheets (cover sheets) for the text reports.
 User fields in template files are replaced by the report information.
@@ -28,10 +28,7 @@ Copyright 2021 Michael Towers
 
 
 ### Messages
-_PUPILSNOTINCLASS   = "Schüler {pids} nicht in Klasse {klass}"
-_NOPUPILS           = "Mantelbogen: keine Schüler"
-_BADPID             = "Schüler {pid} nicht in Klasse {klass}"
-
+# ---
 
 import sys, os
 if __name__ == '__main__':
@@ -41,7 +38,7 @@ if __name__ == '__main__':
 # <core.base> must be the first WZ-import
 from core.base import Dates
 
-from core.pupils import Pupils
+from core.pupils import PUPILS, sortkey
 from template_engine.template_sub import Template
 from local.base_config import print_schoolyear, print_class, year_path
 from local.text_config import cover_template, COVER_NAME, COVER_DIR
@@ -51,37 +48,49 @@ class CoverSheets:
     def __init__(self, schoolyear):
         """<schoolyear>: year in which school-year ends (int)
         """
-        self.pupils = Pupils(schoolyear)
+        self.pupils = PUPILS(schoolyear)
 #
-    def for_class(self, klass, date, pids = None):
+    def for_class(self, klass, date):
         """
         <data>: date of issue ('YYYY-MM-DD')
         <klass>: a <Klass> instance for the school-class
-        <pids>: a list of pids (must all be in the given klass), only
-            include pupils in this list.
-            If not supplied, include the whole klass.
         Return the path to the resulting pdf-file.
         """
         schoolyear = self.pupils.schoolyear
         pdlist = self.pupils.class_pupils(klass)
 #        pdlist = self.pupils.classPupils(klass, date = date)
-
-        if pids:
-            pall = pdlist
-            pset = set(pids)
-            pdlist = []
-            for pdata in pall:
-                try:
-                    pset.remove(pdata['PID'])
-                except KeyError:
-                    continue
-                pdlist.append(pdata)
-            if pset:
-                raise Bug(_PUPILSNOTINCLASS.format(pids = ', '.join(pset),
-                        klass = klass))
-
         template = Template(cover_template(klass))
-        gmap0 = {  ## data shared by all pupils in the group
+        gmap0 = self.base_data(klass, date)
+        gmaplist = []
+        for pdata in pdlist:
+            gmap = self.pupil_data(pdata)
+            gmap.update(gmap0)
+            gmaplist.append(gmap)
+        # make_pdf: data_list, dir_name, working_dir, double_sided = False
+        return template.make_pdf(gmaplist,
+                COVER_NAME.format(klass = klass),
+                year_path(schoolyear, COVER_DIR)
+        )
+#
+    def for_pupil(self, pid, date, filepath = None):
+        """Make a single cover sheet, for the pupil with the given <pid>.
+        If <filepath> is supplied, the pdf will be saved there.
+        An intermediate odt-file (with the same name) might also be
+        produced. Return the path of the pdf-file.
+        If no <filepath> is provided, return the contents (bytes) of the
+        pdf-file.
+        """
+        pdata = self.pupils[pid]
+        klass = pdata['CLASS']
+        template = Template(cover_template(klass))
+        gmap0 = self.base_data(klass, date)
+        gmap = self.pupil_data(pdata)
+        gmap.update(gmap0)
+        return template.make1pdf(gmap, file_path = filepath)
+#
+    def base_data(self, klass, date):
+        schoolyear = self.pupils.schoolyear
+        return {  ## data shared by all pupils in the group
             'A': '',    # 'Tage versäumt'
             'L': '',    # 'mal verspätet'
             'N': '',    # 'Blätter'
@@ -90,49 +99,30 @@ class CoverSheets:
             'CL': print_class(klass),
             'SYEAR': print_schoolyear(schoolyear)
         }
-
-        gmaplist = []
-        for pdata in pdlist:
-            gmap = gmap0.copy()
-            # Get pupil data
-            for k in pdata.keys():
-                v = pdata[k]
-                if v:
-                    if k.endswith('_D'):
-                        v = Dates.print_date(v)
-                else:
-                    v = ''
-                gmap[k] = v
-            gmaplist.append(gmap)
-
-        # make_pdf: data_list, dir_name, working_dir, double_sided = False
-        return template.make_pdf(gmaplist,
-                COVER_NAME.format(klass = klass),
-                year_path(schoolyear, COVER_DIR)
-        )
-
-
-#TODO
-def makeOneSheet(schoolyear, date, klass, pupil):
-    """
-    <schoolyear>: year in which school-year ends (int)
-    <data>: date of issue ('YYYY-MM-DD')
-    <klass>: a <Klass> instance for the school-class
-    <pupil>: a mapping with the necessary pupil information (at least a
-    subset of <PupilData>).
-    """
-    template = getTextTemplate('Mantelbogen', klass)
-    source = template.render(
-            SCHOOLYEAR = printSchoolYear(schoolyear),
-            DATE_D = date,
-            todate = Dates.dateConv,
-            pupils = [pupil],
-            klass = klass
-        )
-    html = HTML (string=source,
-            base_url=os.path.dirname (template.filename))
-    pdfBytes = html.write_pdf(font_config=FontConfiguration())
-    return pdfBytes
+#
+    def pupil_data(self, pdata):
+        gmap = {}
+        # Get pupil data
+        for k in pdata.keys():
+            v = pdata[k]
+            if v:
+                if k.endswith('_D'):
+                    v = Dates.print_date(v)
+            else:
+                v = ''
+            gmap[k] = v
+        # Alphabetical name-tag
+        gmap['PSORT'] = sortkey(pdata)
+        # "tussenvoegsel" separator in last names ...
+        gmap['LASTNAME'] = gmap['LASTNAME'].replace('|', ' ')
+        return gmap
+#
+    def filename1(self, pid):
+        """Suggest a file-name for the coversheet for the given pupil.
+        """
+        pdata = self.pupils[pid]
+        return COVER_NAME.format(klass = '%s-%s' % (pdata['CLASS'],
+                sortkey(pdata)))
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

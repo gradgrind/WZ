@@ -3,7 +3,7 @@
 """
 local/text_config.py
 
-Last updated:  2021-01-11
+Last updated:  2021-04-06
 
 Configuration items for text (Waldorf) reports.
 
@@ -23,7 +23,7 @@ Copyright 2021 Michael Towers
    limitations under the License.
 """
 
-COVER_NAME = '{klass}'      # report cover sheet: file name
+COVER_NAME = 'Mantel_{klass}'      # report cover sheet: file name
 COVER_DIR = 'MANTEL'        # report cover sheet: folder
 
 def cover_template(klass):

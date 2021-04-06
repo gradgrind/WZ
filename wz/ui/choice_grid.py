@@ -2,7 +2,7 @@
 """
 ui/choice_grid.py
 
-Last updated:  2021-04-05
+Last updated:  2021-04-06
 
 Manage the grid for the puil-subject-choice-editor.
 
@@ -164,10 +164,11 @@ class ToggleGrid(GridBase):
             y += 1
             row += 1
         # Need a highlighted/selected QBrush for a toggle-cell
-        self.mark_brush = QBrush(QColor('#60FFFF00'))
+        self.mark_brush = QBrush(QColor('#80FF7200'))
         self.no_mark = self.style('toggle').bgColour or QBrush(Qt.NoBrush)
         # Collect changed cell tags for signalling "table changed".
         self._changes = set()
+        self.toggle_start = None
 #
     def styles(self):
         """Set up the styles used in the table view.
@@ -192,16 +193,15 @@ class ToggleGrid(GridBase):
             if kbdmods & Qt.ShiftModifier:
                 if self.toggle_start:
                     # toggle range
-                    r0, c0 = self.toggle_start.tag
-                    r1, c1 = tile.tag
+                    c0, r0 = self.toggle_start.tag
+                    c1, r1 = tile.tag
                     r_range = range(r0, r1 + 1) if r1 >= r0 \
                             else range(r1, r0 + 1)
                     c_range = range(c0, c1 + 1) if c1 >= c0 \
                             else range(c1, c0 + 1)
                     for r in r_range:
                         for c in c_range:
-                            t = self.toggles[r][c]
-                            t.setText('' if t.value() else MARK)
+                            self.toggle(self.toggles[r][c])
                 else:
                     self.toggle_start = tile
                     # highlight cell

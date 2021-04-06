@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-03-25
+Last updated:  2021-04-06
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -86,13 +86,17 @@ def merge_pdf(ifile_list, pad2sided = False):
     return bstream.getvalue()
 
 
-def clean_dir(dpath):
-    """Ensure the given folder exists and is empty.
+def clean_dir(dpath, remove = False):
+    """If <remove> is true, remove the given folder and its (direct)
+    contents. Subfolders will raise an exception – they shouldn't exist.
+    If <remove> is false, ensure that the given folder exists and is empty.
     """
     if os.path.isdir(dpath):
         for f in os.listdir(dpath):
             os.remove(os.path.join(dpath, f))
-    else:
+        if remove:
+            os.rmdir(dpath)
+    elif not remove:
         os.makedirs(dpath)
 
 
@@ -223,7 +227,7 @@ class Template:
             pdf_path = os.path.join(wdir, pdf_file)
             with open(pdf_path, 'wb') as fout:
                     fout.write(pdf_bytes)
-            clean_dir(pdf_dir)
+            clean_dir(pdf_dir, remove = True)
             return pdf_path
         else:
             return pdf_bytes
