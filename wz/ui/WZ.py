@@ -89,9 +89,8 @@ import ui.tab_pupils
 import ui.tab_grade_editor
 import ui.tab_text_reports
 import ui.tab_calendar
-#        self._lbox.addStretch(1)
-#import ui.tab_template_fields
-#        self._addPage(FieldEdit())
+TABS.append(0)
+import ui.tab_template_fields
 
 ####+++++++++++++++++++++++++++++++++++++++
 
@@ -422,13 +421,18 @@ class TabWidget(QWidget):
         self.index = -1
 #
     def add_page(self, tab):
-        if tab:
+        try:
+            i = int(tab)
+        except TypeError:
             b = TabButton(tab.name, self)
             self.tab_buttons.append(b)
             self._lbox.addWidget(b)
             self._stack.addWidget(tab)
         else:
-            self._lbox.addStretch(1)
+            if i:
+                self._lbox.addSpacing(i)
+            else:
+                self._lbox.addStretch(1)
 #
     def select(self, index):
         i0 = self._stack.currentIndex()
@@ -520,7 +524,6 @@ class Admin(QWidget):
 
         for tab in TABS:
             self.tab_widget.add_page(tab)
-        self.tab_widget.add_page(None)
 
         self.tab_widget.select(0)   # Enter default tab
 #

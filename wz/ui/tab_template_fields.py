@@ -2,7 +2,7 @@
 """
 ui/tab_template_fields.py
 
-Last updated:  2021-04-06
+Last updated:  2021-04-07
 
 Show template fields, set values and process template.
 This module is intended primarily for testing purposes.
@@ -25,11 +25,15 @@ Copyright 2021 Michael Towers
 =-LICENCE========================================
 """
 
-#TODO ...
+## Measurements are in mm ##
+_HEIGHT_LINE = 6
+COLUMNS = (40, 60)
+ROWS = (
+#title
+    12,
+) # + _HEIGHT_LINE * n
 
 ### Messages
-_DONE_PDF = "Neue Dateien erstellt:\n  {fodt}\n  {fpdf}"
-_DONE_SHOW = "Zwischendateien gelöscht"
 
 ### Labels, etc.
 _EDIT_FIELDS = "Vorlage ausfüllen"
@@ -57,100 +61,62 @@ from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
         QPushButton, QCheckBox, QFileDialog, QSpacerItem
 
 from ui.grid import GridView, Grid
-from ui.ui_support import VLine, KeySelect, TabPage, GuiError, TreeDialog
+from ui.ui_support import VLine, KeySelect, TabPage, GuiError, \
+        TreeDialog, saveDialog
 
+### +++++
 
-## Measurements are in mm ##
-_HEIGHT_LINE = 6
-COLUMNS = (40, 60)
-ROWS = (
-#title
-    12,
-) # + _HEIGHT_LINE * n
-
-###
+NONE = ''
 
 class FieldGrid(Grid):
     """Present the data for a template, allowing editing of the
     individual fields.
     There is special handling for certain pupil fields.
     """
-    def __init__(self, view, fields_style, selects = {}):
+    def __init__(self, view, fields, selects):
         """<view> is the QGraphicsView in which the grid is to be shown.
-        <fields_style> is a list of (field, style) pairs.
+        <fields> is a list of [field, field name, "validation"] items.
         <selects> is a mapping containing selection lists.
         """
-        # Get template fields: [(field, style or <None>), ...]
-        fields_style = template.fields()
-        # The fields are in order of appearance in the template file,
-        # keys may be present more than once!
-        # The style is only present for fields which are alone within a
-        # paragraph. It indicates that multiple lines are possible, so
-        # normally a multi-line editor will be provided.
-        # Reduce to one entry per field, collect number of each field.
-        self.fields = {}    # {field-name -> number of occurrences}
-        multiline = {}      # {field-name -> <bool>}
-        for field, fstyle in fields_style:
-            try:
-                self.fields[field] += 1
-                if not fstyle:
-                    # all occurrences must allow multi-line values
-                    multiline[field] = False
-            except KeyError:
-                self.fields[field] = 1
-                multiline[field] = bool(fstyle)
-        _ROWS = ROWS + (_HEIGHT_LINE,) * len(self.fields)
+        _ROWS = ROWS + (_HEIGHT_LINE,) * len(fields)
         super().__init__(view, _ROWS, COLUMNS)
         self.styles()
         ### Title area
         self.tile(0, 0, text = '', cspan = 2, style = 'title', tag = 'title')
         ### field - value lines
         row = 1
-        for field, n in self.fields.items():
-            text = field
-            if n > 1:
-                text += ' (*%d)' % n
+        for field, slist in selects.items():
+            self.addSelect(field, slist)
+        self.values = {}
+        for field, text, validation in fields:
             self.tile(row, 0, text = text, style = 'key')
-            vstyle = 'value'
-#            if field in noneditable:
-#                vstyle = 'fixed'
-#                validation = None
-            if field in self.editors:
-                validation = field
-            elif field.endswith('_D'):
-                validation = 'DATE'
-            elif field in selects:  # Special pop-up editor
-                validation = field
-                self.addSelect(field, selects[field])
-            elif multiline[field]:
-                validation = 'TEXT'
-            else:
-                validation = 'LINE'
-            self.tile(row, 1, text = '', style = vstyle,
+            self.tile(row, 1, text = '', style = 'value',
                     validation = validation, tag = field)
+            self.values[field] = ''
             row += 1
 #
     def styles(self):
         """Set up the styles used in the table view.
         """
-        self.new_style('base', font = SCHOOL_DATA.FONT, size = 11)
-        self.new_style('title', font = SCHOOL_DATA.FONT, size = 12,
+        self.new_style('base', font = ADMIN.school_data['FONT'], size = 11)
+        self.new_style('title', base = 'base', size = 12,
                 align = 'c', border = 0, highlight = 'b')
         self.new_style('key', base = 'base', align = 'l')
-        self.new_style('fixed', base = 'key', highlight = ':808080')
+        #self.new_style('fixed', base = 'key', highlight = ':808080')
         self.new_style('value', base = 'key',
                 highlight = ':002562', mark = 'E00000')
 #
     def set_fields(self, mapping):
-        for field in self.fields:
-            self.set_text_init(field, mapping.get(field) or '')
+        for field, val in mapping.items():
+            self.set_text_init(field, val)
+            self.values[field] = val
 #
-    def value_changed(self, tile, text):
+    def value_changed(self, tile, val):
         """Called when a cell value is changed by the editor.
         """
-        super().value_changed(tile, text)
+        super().value_changed(tile, val)
         if tile.tag in self.values:
-            self.values[tile.tag] = text
+            self.values[tile.tag] = val
 
 ###
 
@@ -186,212 +152,121 @@ class FieldEdit(TabPage):
 
         cbox.addStretch(1)
 
-        testfields = QPushButton(_TEST_FIELDS)
-        cbox.addWidget(testfields)
-        testfields.clicked.connect(self.test_fields)
+        self.testfields = QPushButton(_TEST_FIELDS)
+        cbox.addWidget(self.testfields)
+        self.testfields.clicked.connect(self.test_fields)
         cbox.addSpacing(30)
         self.nullempty = QCheckBox(_NULLEMPTY)
         self.nullempty.setToolTip(_NULLEMPTY_TIP)
         self.nullempty.setChecked(False)
         cbox.addWidget(self.nullempty)
-        odtgen = QPushButton(_GEN_ODT)
-        cbox.addWidget(odtgen)
-        odtgen.clicked.connect(self.gen_doc)
-        pdfgen = QPushButton(_GEN_PDF)
-        cbox.addWidget(pdfgen)
-        pdfgen.clicked.connect(self.gen_pdf)
+        self.odtgen = QPushButton(_GEN_ODT)
+        cbox.addWidget(self.odtgen)
+        self.odtgen.clicked.connect(self.gen_doc)
+        self.pdfgen = QPushButton(_GEN_PDF)
+        cbox.addWidget(self.pdfgen)
+        self.pdfgen.clicked.connect(self.gen_pdf)
 #
     def enter(self):
-        BACKEND('TEMPLATE_get_classes')
+        self.odtgen.setEnabled(False)
+        self.pdfgen.setEnabled(False)
+        self.testfields.setEnabled(False)
+        BACKEND('TEMPLATE_get_classes') # ... -> SET_CLASSES
 #
-    def SET_CLASSES(self, selects, classes):
+    def SET_CLASSES(self, classes):
         self.class_select.set_items([('', '–––')] + [(c, c)
                 for c in classes])
-#?        self.class_select.trigger()
-
+        self.class_changed(NONE)
 #
     def class_changed(self, klass):
         self.klass = klass
         if klass:
-            self.pdlist = self.pupils.class_pupils(klass)
-            self.pselect.set_items([('', '–––')] + [(pdata['PID'],
-                    pdata.name())   for pdata in self.pdlist])
+            BACKEND('TEMPLATE_set_class', klass = klass) # ... -> SET_PUPILS
         else:
-            self.pselect.clear()
-            self.pid = None
-            self.pdata = None
-        self.pselect.trigger()
+            self.SET_PUPILS(None)
+        return True
+#
+    def SET_PUPILS(self, pupil_list):
+        self.pselect.set_items(pupil_list)
+        self.pid = NONE
 #
     def pupil_changed(self, pid):
-        """A new pupil has been selected: reset the grid accordingly.
-        """
         self.pid = pid
-        if pid:
-            # Replace pupil data
-            self.pdata = self.pdlist.pid2pdata(pid)
-        else:
-            # Clear pupil data
-            self.pdata = {'CLASS': self.klass}
-#TODO?
-        if not self.clear():
-            self.pselect.reset(self.pupil_scene.pid)
-            return
-        if self.field_scene:
-            self.renew()
+#TODO: redisplay ...
+        return True
 #
     def get_template(self):
-        BACKEND('TEMPLATE_get_start_dir') # ... -> CHOOSE_TEMPLATE
+        BACKEND('TEMPLATE_get_template_dir') # ... -> CHOOSE_TEMPLATE
 #
-    def CHOOSE_TEMPLATE(self, startpath):
-        data = []
-        for (root, dirs, files) in os.walk(startpath):
-            tfiles = []
-            for f in files:
-                if f.endswith('.odt'):
-                    title, subject = metadata(os.path.join(root, f))
-                    if title and title.startswith('WZ-template'):
-                        tfiles.append('%s:: %s' % (f, subject))
-            if tfiles:
-                tfiles.sort()
-                data.append((root, tfiles))
-        data.sort()
+    def CHOOSE_TEMPLATE(self, templates):
         cc = TreeDialog(_CHOOSE_TEMPLATE, _SELECT_OR_BROWSE,
-                data, button = _BROWSE)
+                templates, button = _BROWSE)
         if not cc:
             return
         if cc[0]:
             fpath = os.path.join(cc[0], cc[1].split('::', 1)[0])
         else:
-            # file dialog – start at template folder
-            dir0 = os.path.join(RESOURCES, 'templates')
-            fpath = QFileDialog.getOpenFileName(self, _FILEOPEN,
-                    dir0, _TEMPLATE_FILE)[0]
+            # file dialog
+            fpath = openDialog(_TEMPLATE_FILE)
             if not fpath:
                 return
         BACKEND('TEMPLATE_set_template', template_path = fpath)
-# ... -> ???
-
-        return
-
-
-        self.template = Template(fpath, full_path = True)
-
-
-
-        self.field_scene = FieldGrid(self.fieldView, self.template)
+        # ... -> SET_FIELDS
+#
+    def SET_FIELDS(self, path, fields, selects):
+        self.field_scene = FieldGrid(self.fieldView, fields, selects)
         self.fieldView.set_scene(self.field_scene)
-        title = fpath
+        self.template = path
+        title = self.template
         if len(title) > 42:
             title = '... ' + title[-40:]
         self.field_scene.set_text_init('title', title)
-        self.renew()
+        BACKEND('TEMPLATE_renew', klass = self.klass, pid = self.pid)
+        self.odtgen.setEnabled(True)
+        self.pdfgen.setEnabled(True)
+        self.testfields.setEnabled(True)
 #
-    def renew(self):
-        ### Initial fields
-        _sy = ADMIN.schoolyear
-        _syL = print_schoolyear(_sy)
-        _cl = print_class(self.klass) if self.klass else ''
-        self.field_values = {
-            'schoolyear': _sy,
-            'SCHOOLYEAR': _syL,
-            'SYEAR': _syL,
-            'CL': _cl,
-            'CYEAR': class_year(self.klass) if self.klass else '',
-            'SCHOOL': SCHOOL_DATA.SCHOOL_NAME,
-            'SCHOOLBIG': SCHOOL_DATA.SCHOOL_NAME.upper()
-        }
-        # Add pupil data
-        if self.pdata:
-            self.field_values.update(self.pdata)
-        self.field_scene.set_fields(self.field_values)
-#
-    def test_fields(self):
-        """Substitute all fields with *<field>* (to be easily visible)
-        and display the result.
-        """
-        # Run as background thread because of potential delay.
-        all_fields = {f: '*%s*' % f for f in self.field_scene.fields}
-        fn = _MakePdf(self.template, all_fields)
-        REPORT('RUN', runme = fn)
+    def RENEW(self, field_values):
+        valmap = {}
+        for f in self.field_scene.values:
+            valmap[f] = field_values.get(f) or ''
+        self.field_scene.set_fields(valmap)
 #
     def gen_doc(self):
         """If the "nullempty" checkbox is true, fields for which no
         value is supplied will be cleared. Otherwise the "tag" is left.
         """
-        if self.nullempty.isChecked():
-            all_fields = {f: self.field_values.get(f, '')
-                    for f in self.field_scene.fields}
-            odtBytes = self.template.make_doc(all_fields)
-        else:
-            odtBytes = self.template.make_doc(self.field_values)
-        dir0 = ADMIN._savedir or os.path.expanduser('~')
-        try:
-            filename = self.pdata.name() + '_'
-        except:
-            filename = '_'
-        filename += os.path.basename(self.template.template_path).rsplit(
-                '.', 1)[0]
-        fpath = QFileDialog.getSaveFileName(self.fieldView, _FILESAVE,
-                os.path.join(dir0, filename), _ODT_FILE)[0]
+        filename = self.pid + '_' + os.path.basename(
+                self.template).rsplit('.', 1)[0]
+        fpath = saveDialog(_ODT_FILE, filename)
         if fpath:
-            ADMIN.set_savedir(os.path.dirname(fpath))
-            if not fpath.endswith('.odt'):
-                fpath += '.odt'
-            with open(fpath, 'wb') as fh:
-                fh.write(odtBytes)
+            BACKEND('TEMPLATE_gen_doc', fields = self.field_scene.values,
+                    clear_empty = self.nullempty.isChecked(),
+                    filepath = fpath)
 #
     def gen_pdf(self):
         """If the "nullempty" checkbox is true, fields for which no
         value is supplied will be cleared. Otherwise the "tag" is left.
         """
-        # Run as background thread because of potential delay.
-        dir0 = ADMIN._savedir or os.path.expanduser('~')
-        try:
-            filename = self.pdata.name() + '_'
-        except:
-            filename = '_'
-        filename += os.path.basename(self.template.template_path).rsplit(
-                '.', 1)[0]
-        fpath = QFileDialog.getSaveFileName(self.fieldView, _FILESAVE,
-                os.path.join(dir0, filename), _PDF_FILE)[0]
+        filename = self.pid + '_' + os.path.basename(
+                self.template).rsplit('.', 1)[0]
+        fpath = saveDialog(_PDF_FILE, filename)
         if fpath:
-            ADMIN.set_savedir(os.path.dirname(fpath))
-            if not fpath.endswith('.pdf'):
-                fpath += '.pdf'
-        else:
-            return
-        if self.nullempty.isChecked():
-            all_fields = {self.field_values.get(f, '')
-                    for f in self.field_scene.fields}
-        else:
-            all_fields = self.field_values
-        fn = _MakePdf(self.template, all_fields, fpath)
-        REPORT('RUN', runme = fn)
-
-###
-
-class _MakePdf(CORE.ThreadFunction):
-    def __init__(self, template, all_fields, filepath = None):
-        super().__init__()
-        self._template = template
-        self._fields = all_fields
-        self._filepath = filepath
-        self._show_only = not filepath
+            BACKEND('TEMPLATE_gen_pdf', fields = self.field_scene.values,
+                    clear_empty = self.nullempty.isChecked(),
+                    filepath = fpath)
 #
-    def run(self):
-        cc = self._template.make1pdf(self._fields,
-                show_only = self._show_only, file_path = self._filepath)
-        if cc:
-            REPORT('INFO', _DONE_PDF.format(fpdf = cc,
-                    fodt = cc.rsplit('.', 1)[0] + '.odt'))
-        else:
-            REPORT('INFO', _DONE_SHOW)
-#
-    def terminate(self):
-        return False
+    def test_fields(self):
+        """Substitute all fields with {field} (to be easily visible)
+        and display the result.
+        """
+        BACKEND('TEMPLATE_show')
 
 
 tab_template_fields = FieldEdit()
 TABS.append(tab_template_fields)
 FUNCTIONS['template_SET_CLASSES'] = tab_template_fields.SET_CLASSES
+FUNCTIONS['template_SET_PUPILS'] = tab_template_fields.SET_PUPILS
 FUNCTIONS['template_CHOOSE_TEMPLATE'] = tab_template_fields.CHOOSE_TEMPLATE
+FUNCTIONS['template_SET_FIELDS'] = tab_template_fields.SET_FIELDS
+FUNCTIONS['template_RENEW'] = tab_template_fields.RENEW

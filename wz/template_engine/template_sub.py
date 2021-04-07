@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-04-06
+Last updated:  2021-04-07
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -36,6 +36,8 @@ of the window) and then reselecting the desired style. If that doesn't
 help, it may be necessary to retype the field.
 """
 
+#TODO: pass remove_user to fillUserFields?
+
 ### Messages:
 _MISSING_PDFS = "pdf-Erstellung schlug fehl:\n  von {spath}\n  nach {dpath}"
 _MISSING_PDF = "pdf-Erstellung schlug fehl: {fpath}"
@@ -58,7 +60,7 @@ import tempfile
 from pikepdf import Pdf, Page
 
 from core.run_extern import run_extern
-from template_engine.simpleodt import OdtFields
+from template_engine.simpleodt import OdtFields, metadata
 from local.base_config import LIBREOFFICE
 
 
@@ -165,7 +167,19 @@ class Template:
         return OdtFields.listUserFields(self.template_path)
 #
     def all_keys(self):
-        return {k for k,s in OdtFields.listUserFields(self.template_path)}
+        """Return a <set> of all field names.
+        """
+        return {k for k, s in self.fields()}
+#
+    def user_info(self):
+        """Return "custom" metadata from the template.
+        """
+        return metadata(self.template_path, user = True)
+#
+    def metadata(self):
+        """Return "normal" metadata from the template.
+        """
+        return metadata(self.template_path)
 #
     def make_pdf(self, data_list, dir_name, working_dir = None,
             double_sided = False):
@@ -194,10 +208,10 @@ class Template:
         clean_dir(odt_dir)
         odt_list = []
         for datamap in data_list:
+            # Force removal of custom metadata
+            datamap['__REMOVE_USER_DATA__'] = True
             _outfile = os.path.join(odt_dir, datamap['PSORT'] + '.odt')
-            odtBytes, used, notsub = OdtFields.fillUserFields(
-                    self.template_path, datamap)
-#TODO: Do something with <used> and <notsub>?
+            odtBytes = self.make_odt_bytes(datamap)
             # Save the <bytes>
             with open(_outfile, 'bw') as fout:
                 fout.write(odtBytes)
@@ -232,29 +246,20 @@ class Template:
         else:
             return pdf_bytes
 #
-    def make1pdf(self, datamap, show_only = False, file_path = None):
+    def make1pdf(self, datamap, file_path = None):
         """From the supplied data mapping produce a pdf of the
         corresponding report.
-        1) <show_only> is false (default).
-           The behaviour depends on whether <file_path> is supplied.
-            (a) If <file_path> is empty, the resulting files are placed
-                in a temporary folder, which is deleted on return. The
-                pdf-file is returned as <bytes>.
-            (b) <file_path> is the full path to the resulting pdf-file.
-                Intermediate folders will be created, if necessary.
-                The '.pdf' ending need not be supplied, it will be added
-                automatically. Also the '.odt' file is produced (using
-                the same file path, but with appropriate file suffix).
-        2) <show_only> is true.
-           In this case, <file_path> should be empty.
-           The resulting file is shown in a viewer, at present only the
-           odt-file is generated and shown in LibreOffice. The file is
-           not saved anywhere (but could be within LibreOffice).
+        The behaviour depends on whether <file_path> is supplied.
+        (a) If <file_path> is empty, the resulting files are placed
+            in a temporary folder, which is deleted on return. The
+            pdf-file is returned as <bytes>.
+        (b) <file_path> is the full path to the resulting pdf-file.
+            Intermediate folders will be created, if necessary.
+            The '.pdf' ending need not be supplied, it will be added
+            automatically. Also the '.odt' file is produced (using
+            the same file path, but with appropriate file suffix).
         """
         if file_path:
-            if show_only:
-                raise Bug("make1pdf: If <show_only> is true, no"
-                        " <file_path> should be given")
             if file_path.endswith('.pdf'):
                 # Remove pdf ending
                 fpath = file_path.rsplit('.', 1)[0]
@@ -264,20 +269,14 @@ class Template:
             if not os.path.isdir(wdir):
                 os.makedirs(wdir)
         else:
-            # This can be to return the file-bytes, or for "show_only".
+            # This is for intermediate files on the way to the file-bytes
             wdirTD = tempfile.TemporaryDirectory()
             fpath = os.path.join(wdirTD.name, '_TMP_')
         _outfile = fpath + '.odt'
-        odtBytes, used, notsub = OdtFields.fillUserFields(
-                self.template_path, datamap)
-#TODO: Do something with <used> and <notsub>?
+        odtBytes = self.make_odt_bytes(datamap)
         # Save the <bytes>
         with open(_outfile, 'bw') as fout:
             fout.write(odtBytes)
-        if show_only:
-            # Open in external viewer
-            open_odt(_outfile)
-            return None
         libre_office([_outfile], os.path.dirname(_outfile))
         pdf_file = fpath + '.pdf'
         if not os.path.isfile(pdf_file):
@@ -293,9 +292,32 @@ class Template:
         """From the supplied data mapping produce a text document (odt)
         of the corresponding report, returning the file content as <bytes>.
         """
-        odtBytes, used, notsub = OdtFields.fillUserFields(
-                self.template_path, datamap)
+        return self.make_odt_bytes(datamap)
+#
+    def show(self, datamap):
+        """The resulting file is shown in a viewer, at present only the
+        odt-file is generated and shown in LibreOffice. The file is
+        not saved anywhere (but could be within LibreOffice).
+        """
+        odtBytes = self.make_odt_bytes(datamap)
+        wdirTD = tempfile.TemporaryDirectory()
+        fpath = os.path.join(wdirTD.name, '_TMP_')
+        _outfile = fpath + '.odt'
+        # Save the <bytes>
+        with open(_outfile, 'bw') as fout:
+            fout.write(odtBytes)
+            # Open in external viewer
+            open_odt(_outfile)
+        return None
+#
+    def make_odt_bytes(self, datamap):
 #TODO: Do something with <used> and <notsub>?
+        try:
+            ru =  bool(datamap.pop('__REMOVE_USER_DATA__'))
+        except KeyError:
+            ru = False
+        odtBytes, used, notsub = OdtFields.fillUserFields(
+                self.template_path, datamap, remove_user = ru)
         return odtBytes
 
 
@@ -365,13 +387,12 @@ if __name__ == '__main__':
     t.FILES_PATH = 'GRADE_REPORTS'
     print("\nKeys:", sorted(t.all_keys()))
 
-#    t.make1pdf(sdict0, show_only = True)
-
-    quit(0)
+#    t.show(sdict0)
+#    quit(0)
 
     wdir = os.path.join(DATA, 'testing', 'tmp')
     file_name = '%s_%s' % (sdict0['PSORT'], sdict0['issue_d'])
-    fpath = t.make_pdf1(sdict0, file_name, wdir)
+    fpath = t.make1pdf(sdict0, os.path.join(wdir, file_name))
 #    pdf_bytes = t.make_pdf1(sdict0, file_name)
 #    fpath = os.path.join(wdir, file_name) + '.pdf'
 #    with open(fpath, 'wb') as fout:
