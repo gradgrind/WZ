@@ -60,7 +60,7 @@ import os
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
         QPushButton, QCheckBox, QFileDialog, QSpacerItem
 
-from ui.grid import GridView, Grid
+from ui.grid import EditableGridView, Grid
 from ui.ui_support import VLine, KeySelect, TabPage, GuiError, \
         TreeDialog, saveDialog
 
@@ -127,7 +127,7 @@ class FieldEdit(TabPage):
         self.vbox.addLayout(topbox)
 
         #*********** The "main" widget ***********
-        self.fieldView = GridView()
+        self.fieldView = EditableGridView()
         self.field_scene = None
         topbox.addWidget(self.fieldView)
         topbox.addWidget(VLine())
@@ -168,10 +168,14 @@ class FieldEdit(TabPage):
         self.pdfgen.clicked.connect(self.gen_pdf)
 #
     def enter(self):
+        self.template = None
         self.odtgen.setEnabled(False)
         self.pdfgen.setEnabled(False)
         self.testfields.setEnabled(False)
         BACKEND('TEMPLATE_get_classes') # ... -> SET_CLASSES
+#
+    def leave(self):
+        self.fieldView.set_scene(None)
 #
     def SET_CLASSES(self, classes):
         self.class_select.set_items([('', '–––')] + [(c, c)
@@ -188,11 +192,12 @@ class FieldEdit(TabPage):
 #
     def SET_PUPILS(self, pupil_list):
         self.pselect.set_items(pupil_list)
-        self.pid = NONE
+        self.pupil_changed(NONE)
 #
     def pupil_changed(self, pid):
         self.pid = pid
-#TODO: redisplay ...
+        if self.template:
+            BACKEND('TEMPLATE_renew', klass = self.klass, pid = self.pid)
         return True
 #
     def get_template(self):

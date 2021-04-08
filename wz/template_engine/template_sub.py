@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-04-07
+Last updated:  2021-04-08
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -60,7 +60,7 @@ import tempfile
 from pikepdf import Pdf, Page
 
 from core.run_extern import run_extern
-from template_engine.simpleodt import OdtFields, metadata
+from template_engine.simpleodt import OdtFields, Metadata
 from local.base_config import LIBREOFFICE
 
 
@@ -174,12 +174,12 @@ class Template:
     def user_info(self):
         """Return "custom" metadata from the template.
         """
-        return metadata(self.template_path, user = True)
+        return Metadata(self.template_path).user_meta()
 #
     def metadata(self):
         """Return "normal" metadata from the template.
         """
-        return metadata(self.template_path)
+        return Metadata(self.template_path).doc_meta()
 #
     def make_pdf(self, data_list, dir_name, working_dir = None,
             double_sided = False):

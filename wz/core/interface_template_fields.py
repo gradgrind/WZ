@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_template_fields.py - last updated 2021-04-07
+core/interface_template_fields.py - last updated 2021-04-08
 
 Controller/dispatcher for the template-filler module.
 
@@ -27,13 +27,11 @@ _DONE_ODT = "Neue Datei erstellt:\n  {fodt}"
 _DONE_PDF = "Neue Dateien erstellt:\n  {fodt}\n  {fpdf}"
 _DONE_SHOW = "Zwischendateien gelöscht"
 
-
-### Labels, etc.
-_ALL_PUPILS = "* Ganze Klasse *"
+################################################
 
 import os
 
-from core.base import Dates
+from core.base import Dates, DataError
 from core.pupils import PUPILS
 from local.base_config import PupilsBase, class_year, print_schoolyear, \
         print_class
@@ -57,7 +55,7 @@ class Template_Filler:
     @staticmethod
     def set_class(klass):
         pupils = PUPILS(SCHOOLYEAR)
-        plist = [('', _ALL_PUPILS)] + [(pdata['PID'], pupils.name(pdata))
+        plist = [('', '–––')] + [(pdata['PID'], pupils.name(pdata))
                 for pdata in pupils.class_pupils(klass)]
         CALLBACK('template_SET_PUPILS', pupil_list = plist)
         return True
@@ -105,21 +103,20 @@ class Template_Filler:
         # The fields are in order of appearance in the template file,
         # keys may be present more than once!
         # The style is only present for fields which are alone within a
-        # paragraph. It indicates that multiple lines are possible, so
-        # normally a multi-line editor will be provided.
+        # paragraph. This is a prerequisite for an entry with multiple
+        # lines. A field-name ending '_T' is intended to allow multiple
+        # lines, so in this case a check will be made for the style.
         # Reduce to one entry per field, collect number of each field.
         fields = {}         # {field-name -> number of occurrences}
-        multiline = set()   # set of (potentially) multi-line fields
         for field, fstyle in fields_style:
+            if field.endswith('_T'):
+                if not style:
+                    REPORT('ERROR', _BAD_MULTILINE.format(field = field))
+                    return False
             try:
                 fields[field] += 1
-                if not fstyle:
-                    # all occurrences must allow multi-line values
-                    multiline.discard(field)
             except KeyError:
                 fields[field] = 1
-                if fstyle:
-                    multiline.add(field)
         ### Get "selections", lists of permissible values for certain
         # template fields. These are in the template as space-separated
         # lists. Perform the substitution '_' -> ' ' on the values.
@@ -133,11 +130,12 @@ class Template_Filler:
                 text += ' (*%d)' % n
             if field.endswith('_D'):
                 validation = 'DATE'
-            elif field in selects:  # Special pop-up editor
-                slist[field] = selects[field].split().replace('_', ' ')
-                validation = field
-            elif field in multiline:
+            elif field.endswith('_T'):
                 validation = 'TEXT'
+            elif field in selects:  # Special pop-up editor
+                slist[field] = [s.replace('_', ' ') for s in
+                        selects[field].split()]
+                validation = field
             else:
                 validation = 'LINE'
             field_info.append((field, text, validation))
@@ -173,8 +171,15 @@ class Template_Filler:
         for f, v in fields.items():
             if v or clear_empty:
                 if f.endswith('_D'):
-                    v = Dates.print_date(v)
+                    try:
+                        v = Dates.print_date(v)
+                    except DataError:
+                        pass
                 fmap[f] = v
+        try:
+            fmap['LASTNAME'] = fmap['LASTNAME'].replace('|', ' ')
+        except:
+            pass
         return fmap
 #
     @classmethod

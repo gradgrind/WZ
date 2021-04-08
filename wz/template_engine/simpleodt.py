@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-simpleodt.py - last updated 2021-04-06
+simpleodt.py - last updated 2021-04-08
 
 1) OdtReader
 =============
@@ -40,6 +40,8 @@ if __name__ == '__main__':
 
 import zipfile as zf
 import io, re
+
+import xmltodict
 
 """
     odt-format
@@ -233,7 +235,7 @@ class OdtFields:
 ###
 
 def metadata(odtfile, user = False):
-    """Read metatdata, by default "dc:***" fields.
+    """Read metadata, by default "dc:***" fields.
     If <user> is true, read "meta:user-defined ..." fields.
     Return a mapping: {field name: field value, ... }
     """
@@ -251,6 +253,60 @@ def metadata(odtfile, user = False):
     substituteZipContent(odtfile, metaprocess = _process)
     #print("§§§", tagmap)
     return tagmap
+
+#TODO: Use instead of function <metadata>:
+class Metadata:
+    """Manage the metadata of an odt-file.
+    """
+    def __init__(self, odtfile):
+        """<odtfile> is the full path to the file to be processed.
+        Its metadata will be read (to <self.xmldict>).
+        """
+        self.odtfile = odtfile
+        substituteZipContent(odtfile, metaprocess = self._process)
+#
+    def _process(self, xmldata):
+        self.xmldict = xmltodict.parse(xmldata)
+        self.office_meta = self.xmldict['office:document-meta']['office:meta']
+        return None
+#
+    def doc_meta(self):
+        kv = {}
+        for k, v in self.office_meta.items():
+            try:
+                k1, k2 = k.split(':', 1)
+            except ValueError:
+                continue
+            if k1 == 'dc':
+                kv[k2] = v
+        return kv
+#
+    def user_meta(self):
+        kv = {}
+        for ud in self.office_meta.get('meta:user-defined', []):
+            try:
+                kv[ud['@meta:name']] = ud['#text']
+            except KeyError:
+                pass
+        return kv
+#
+    def replace(self, data = None):
+        """All existing user-meta data will be removed.
+        If <data> is supplied, it should be a <dict> containing new
+        user-meta values.
+        Return the resulting odt-file as a <bytes> array.
+        """
+        def _replace(xmldata):
+            self.office_meta.pop('meta:user-defined', None)
+            if data:
+                self.office_meta['meta:user-defined'] = [
+                    {   '@meta:name': k,
+                        '@meta:value-type': 'string',
+                        '#text': v
+                    } for k, v in data.items()]
+            return xmltodict.unparse(self.xmldict).encode('utf-8')
+        #+
+        return substituteZipContent(self.odtfile, metaprocess = _replace)
 
 ###
 
@@ -344,12 +400,29 @@ if __name__ == '__main__':
     from core.base import init
     init()
 
-    _odtfile = os.path.join(DATA, 'testing', 'testdoc.odt')
-    print("\nMETADATA (normal):", metadata(_odtfile))
-    print("\nMETADATA (user):", metadata(_odtfile, user = True))
+    _filename = 'SekI.odt'
+    _odtfile = os.path.join(DATA, 'testing', _filename)
+    md = Metadata(_odtfile)
+    print("\nMETADATA (normal):", md.doc_meta())
+    print("\nMETADATA (user):", md.user_meta())
+
+    _odir = os.path.join(DATA, 'testing', 'tmp')
+    os.makedirs(_odir, exist_ok = True)
+    _out = os.path.join(_odir, 'MOD0_' + _filename)
+    with open(_out, 'wb') as fh:
+        fh.write(md.replace())
+    print("\nWrote" + _out)
+    _out = os.path.join(_odir, 'MOD1_' + _filename)
+    with open(_out, 'wb') as fh:
+        fh.write(md.replace(
+            {   'USER-DATA': 'First entry',
+                'NEW.*_': 'Just added this: <&> öÄüß§€'
+            })
+        )
+    print("\nWrote" + _out)
 
 #    quit(0)
-    _odir = os.path.join(DATA, 'testing', 'template-out')
+
     _out = os.path.join(_odir, 'testdoc_1.odt')
     odtBytes, used, notsub = OdtFields.fillUserFields(_odtfile,
             {'TITLE': 'Zeugnisse ...'}, remove_user = True)
@@ -361,8 +434,6 @@ if __name__ == '__main__':
         print("§§§", l)
 
     _odtfile = os.path.join(RESOURCES, 'templates', 'Noten', 'SekI.odt')
-    _odir = os.path.join(DATA, 'testing', 'template-out')
-    os.makedirs(_odir, exist_ok = True)
     print("\n USER FIELDS:")
     for match in OdtFields.listUserFields(_odtfile):
         print("  ::", match)
