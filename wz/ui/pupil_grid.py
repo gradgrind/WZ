@@ -2,7 +2,7 @@
 """
 ui/pupil_grid.py
 
-Last updated:  2021-04-02
+Last updated:  2021-04-08
 
 Manage the grid for the pupil-data editor.
 
@@ -25,6 +25,7 @@ Copyright 2021 Michael Towers
 """
 
 from ui.grid import Grid
+from ui.grid import EditableGridView as GridView
 from ui.ui_support import QuestionDialog
 
 ## Measurements are in mm ##

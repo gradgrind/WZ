@@ -199,6 +199,8 @@ class Template_Filler:
     @classmethod
     def gen_pdf(cls, fields, clear_empty, filepath):
         fieldmap = cls.all_fields(fields, clear_empty)
+        # Force removal of custom metadata
+        fieldmap['__REMOVE_USER_DATA__'] = True
         cc = cls.template.make1pdf(fieldmap, file_path = filepath)
         if cc:
             REPORT('INFO', _DONE_PDF.format(fpdf = cc,

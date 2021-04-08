@@ -2,7 +2,7 @@
 """
 ui/tab_pupils.py
 
-Last updated:  2021-04-06
+Last updated:  2021-04-08
 
 Pupil table management.
 
@@ -119,9 +119,7 @@ from qtpy.QtCore import Qt
 from ui.ui_support import TabPage, openDialog, VLine, KeySelect, \
         QuestionDialog, GuiError, saveDialog
 from ui.table import TableWidget
-#? EditableGridView?
-from ui.gridbase import GridView
-from ui.pupil_grid import PupilGrid
+from ui.pupil_grid import PupilGrid, GridView
 
 ### +++++
 
@@ -135,8 +133,8 @@ class StackedWidget_info(QTextEdit):
     def is_modified(self):
         return False
 #
-    def changes(self):
-        return False
+#    def changes(self):
+#        return False
 #
     def activate(self):
         for pb in ('EXPORT', 'IMPORT', 'C_CHOOSE'):

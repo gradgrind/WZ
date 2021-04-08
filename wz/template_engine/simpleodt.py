@@ -75,9 +75,7 @@ import xmltodict
 
 _ODT_CONTENT_FILE = 'content.xml'
 _ODT_META_FILE = 'meta.xml'
-re_META = br'<dc:([a-zA-Z]+)>([^<]*)</dc:\1>'
-re_USER = br'<meta:user-defined meta:name="([a-zA-Z0-9_]+)">' \
-                br'([^<]*)</meta:user-defined>'
+re_USER = br'<meta:user-defined [^<]*</meta:user-defined>'
 
 
 from xml.parsers.expat import ParserCreate
@@ -234,27 +232,6 @@ class OdtFields:
 
 ###
 
-def metadata(odtfile, user = False):
-    """Read metadata, by default "dc:***" fields.
-    If <user> is true, read "meta:user-defined ..." fields.
-    Return a mapping: {field name: field value, ... }
-    """
-    if user:
-        _dcrex = re_USER
-    else:
-        _dcrex = re_META
-    tagmap = {}
-    def _process(xmldata):
-        #print("$:", xmldata)
-        for vals in re.findall(_dcrex, xmldata):
-            tagmap[vals[0].decode('utf-8')] = vals[1].decode('utf-8')
-        return None
-
-    substituteZipContent(odtfile, metaprocess = _process)
-    #print("§§§", tagmap)
-    return tagmap
-
-#TODO: Use instead of function <metadata>:
 class Metadata:
     """Manage the metadata of an odt-file.
     """
@@ -423,6 +400,7 @@ if __name__ == '__main__':
 
 #    quit(0)
 
+    _odtfile = os.path.join(DATA, 'testing', 'testdoc.odt')
     _out = os.path.join(_odir, 'testdoc_1.odt')
     odtBytes, used, notsub = OdtFields.fillUserFields(_odtfile,
             {'TITLE': 'Zeugnisse ...'}, remove_user = True)

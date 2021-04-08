@@ -2,7 +2,7 @@
 """
 ui/tab_template_fields.py
 
-Last updated:  2021-04-07
+Last updated:  2021-04-08
 
 Show template fields, set values and process template.
 This module is intended primarily for testing purposes.
@@ -34,7 +34,14 @@ ROWS = (
 ) # + _HEIGHT_LINE * n
 
 ### Messages
+_TEMPLATES_TEXT = """## Dokument-Vorlagen
 
+Hier können die ersetzbaren Felder der Dokument-Vorlagen angezeigt werden.
+Werte können für die Felder eingegeben werden und die Dokumente können
+so ausgefüllt ausgegeben werden.
+
+
+"""
 ### Labels, etc.
 _EDIT_FIELDS = "Vorlage ausfüllen"
 _CLASS = "Klasse:"
@@ -42,8 +49,6 @@ _TEST_FIELDS = "Felder testen"
 _GEN_ODT = "ODT erstellen"
 _GEN_PDF = "PDF erstellen"
 _CHOOSE_TEMPLATE = "Vorlage wählen"
-_FILEOPEN = "Datei öffnen"
-_FILESAVE = "Datei speichern"
 _TEMPLATE_FILE = "LibreOffice Text-Vorlage (*.odt)"
 _ODT_FILE = "LibreOffice Text-Dokument (*.odt)"
 _PDF_FILE = "PDF-Dokument (*.pdf)"
@@ -52,21 +57,207 @@ _NULLEMPTY_TIP = "Felder, für die keinen Wert gesetzt ist werden leer" \
         " dargestellt. Ansonsten bleibt die Feldmarke."
 _SELECT_OR_BROWSE = "Datei wählen – oder suchen"
 _BROWSE = "Suchen"
+_SAVE = "Änderungen Speichern"
 
 #####################################################
 
 import os
 
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
-        QPushButton, QCheckBox, QFileDialog, QSpacerItem
+        QPushButton, QCheckBox, QFileDialog, QSpacerItem, \
+        QWidget, QTextEdit, QStackedWidget
 
 from ui.grid import EditableGridView, Grid
 from ui.ui_support import VLine, KeySelect, TabPage, GuiError, \
         TreeDialog, saveDialog
+from ui.table import TableWidget
 
 ### +++++
 
 NONE = ''
+
+class StackedWidget_info(QTextEdit):
+    def __init__(self, tab_widget):
+        self._tab = tab_widget
+        super().__init__()
+        self.setReadOnly(True)
+        self.setMarkdown(_TEMPLATES_TEXT)
+#
+    def is_modified(self):
+        return False
+#
+    def changes(self):
+        return False
+#
+    def activate(self):
+        return
+        for pb in ('TEMPLATE',):
+            self._tab.enable(pb, True)
+#
+    def deactivate(self):
+        return True
+
+###
+
+class StackedWidget_fill(EditableGridView):
+    def __init__(self, tab_widget):
+        self._tab = tab_widget
+        super().__init__()
+        self.fill_scene = None
+#
+#    def is_modified(self):
+#        return bool(self.fill_scene.changes())
+#
+#    def set_changed(self, show):
+#        self._tab.enable('SAVE', show)
+#
+    def activate(self, title, fields, selects):
+        self.fill_scene = FieldGrid(self, fields, selects)
+        self.set_scene(self.fill_scene)
+        for pb in ('ODT', 'PDF', 'TEST', 'NULLEMPTY'):
+            self._tab.enable(pb, True)
+        self.fill_scene.set_text_init('title', title)
+        BACKEND('TEMPLATE_renew', klass = self._tab.klass,
+                pid = self._tab.pid)
+#
+    def deactivate(self):
+        self.fill_scene = None
+        self.set_scene(None)
+#
+#    def save(self):
+#        BACKEND('PUPILS_new_data', data = self.fill_scene.pupil_data)
+#
+    def renew(self, field_values):
+        valmap = {}
+        for f in self.fill_scene.values:
+            valmap[f] = field_values.get(f) or ''
+        self.fill_scene.set_fields(valmap)
+#
+    def gen_doc(self, template):
+        """If the "NULLEMPTY" checkbox is true, fields for which no
+        value is supplied will be cleared. Otherwise the "tag" is left.
+        """
+        filename = self._tab.pid + '_' + os.path.basename(
+                template).rsplit('.', 1)[0]
+        fpath = saveDialog(_ODT_FILE, filename)
+        if fpath:
+            BACKEND('TEMPLATE_gen_doc', fields = self.fill_scene.values,
+                    clear_empty = self._tab._widgets['NULLEMPTY'].isChecked(),
+                    filepath = fpath)
+#
+    def gen_pdf(self, template):
+        """If the "NULLEMPTY" checkbox is true, fields for which no
+        value is supplied will be cleared. Otherwise the "tag" is left.
+        """
+        filename = self._tab.pid + '_' + os.path.basename(
+                template).rsplit('.', 1)[0]
+        fpath = saveDialog(_PDF_FILE, filename)
+        if fpath:
+            BACKEND('TEMPLATE_gen_pdf', fields = self.fill_scene.values,
+                    clear_empty = self._tab._widgets['NULLEMPTY'].isChecked(),
+                    filepath = fpath)
+
+###
+
+class StackedWidget_meta(QWidget):
+    def __init__(self, tab_widget):
+        self._tab = tab_widget
+        super().__init__()
+        vbox = QVBoxLayout(self)
+        self.table = TableWidget(paste = True, on_changed = self.val_changed)
+        vbox.addWidget(self.table)
+        self._changes = None
+        self._row = -1
+        self.table.itemSelectionChanged.connect(self.selection_changed)
+#
+    def selection_changed(self):
+        """Selection changes are used to enable and disable the "remove
+        pupil data" button.
+        """
+        tsr = self.table.selectedRanges()
+        if len(tsr) == 1:
+            tsr1 = tsr[0]
+            if tsr1.rowCount() == 1:
+                self._row = tsr1.topRow()
+                self._tab.enable('REMOVE', True)
+                return
+        self._tab.enable('REMOVE', False)
+        self._row = -1
+#
+    def is_modified(self):
+        return bool(self._changes)
+#
+    def activate(self, fields, pupil_list):
+        for pb in ('SAVE',):
+            self._tab.enable(pb, True)
+        # Translated headers:
+        self.flist, tlist = [], []
+        for f, t in fields:
+            if f == 'PID':
+                tpid = t
+                continue
+            self.flist.append(f)
+            tlist.append(t)
+        self.table.setColumnCount(len(self.flist))
+        self.table.setRowCount(len(pupil_list))
+        self.table.setHorizontalHeaderLabels(tlist)
+        # Use the pupil-ids as row headers
+        self.pidlist = [pdata['PID'] for pdata in pupil_list]
+        self.table.setVerticalHeaderLabels(self.pidlist)
+        self.rows = []
+        for pdata in pupil_list:
+            r = len(self.rows)
+            cols = []
+            for f in self.flist:
+                val = pdata.get(f) or ''
+                self.table.set_text(r, len(cols), val)
+                cols.append(val)
+            self.rows.append(cols)
+#?
+        self.table.resizeColumnsToContents()
+        self._changes = set()
+#
+    def deactivate(self):
+        self.table.clear()
+        self._changes = None
+        self.pidlist = None
+        self.rows = None
+        self.flist = None
+#
+    def val_changed(self, row, col, text):
+        if self._changes == None:  # table not active
+            return
+        tag = f'{row:02}:{col:02}'
+        old = self.rows[row][col]
+        if text == old:
+            self._changes.discard(tag)
+        else:
+            self._changes.add(tag)
+        self._tab.enable('SAVE', self.is_modified())
+#
+    def remove_pupil(self):
+        pid = self.pidlist[self._row]
+        if QuestionDialog(_REMOVE_TITLE,
+                _REMOVE_PID.format(pid = pid)):
+            BACKEND('PUPILS_remove', pid = pid)
+#
+    def save(self):
+        """Update pupils with modified fields.
+        """
+        data = []
+        rows = {int(tag.split(':', 1)[0]) for tag in self._changes}
+        for row in rows:
+            pdata = {'PID': self.pidlist[row]}
+            col = 0
+            for f in self.flist:
+                pdata[f] = self.table.get_text(row, col)
+                col += 1
+            data.append(pdata)
+        #for pdata in data:
+        #    print("§§§", pdata)
+        BACKEND('PUPILS_new_table_data', data = data)
+
+######################################################################
 
 class FieldGrid(Grid):
     """Present the data for a template, allowing editing of the
@@ -123,13 +314,27 @@ class FieldGrid(Grid):
 class FieldEdit(TabPage):
     def __init__(self):
         super().__init__(_EDIT_FIELDS)
+        self._widgets = {}
         topbox = QHBoxLayout()
         self.vbox.addLayout(topbox)
 
         #*********** The "main" widget ***********
-        self.fieldView = EditableGridView()
-        self.field_scene = None
-        topbox.addWidget(self.fieldView)
+        self.main = QStackedWidget()
+        topbox.addWidget(self.main)
+        ### The stacked widgets:
+        # 0) Text describing the available functions
+        _w = StackedWidget_info(self)
+        self.main.addWidget(_w)
+        self._widgets['INFO'] = _w
+        # 1) Table for filling template fields
+        _w = StackedWidget_fill(self)
+        self.main.addWidget(_w)
+        self._widgets['FILL'] = _w
+        # 2) Table for editing template user-meta fields
+        _w = StackedWidget_meta(self)
+        self.main.addWidget(_w)
+        self._widgets['META'] = _w
+
         topbox.addWidget(VLine())
 
         cbox = QVBoxLayout()
@@ -152,30 +357,85 @@ class FieldEdit(TabPage):
 
         cbox.addStretch(1)
 
-        self.testfields = QPushButton(_TEST_FIELDS)
-        cbox.addWidget(self.testfields)
-        self.testfields.clicked.connect(self.test_fields)
+        ### Test template fields
+        # (generate output file with all fields slightly changed)
+        _w = QPushButton(_TEST_FIELDS)
+        self._widgets['TEST'] = _w
+        cbox.addWidget(_w)
+        _w.clicked.connect(self.test_fields)
+
         cbox.addSpacing(30)
-        self.nullempty = QCheckBox(_NULLEMPTY)
-        self.nullempty.setToolTip(_NULLEMPTY_TIP)
-        self.nullempty.setChecked(False)
-        cbox.addWidget(self.nullempty)
-        self.odtgen = QPushButton(_GEN_ODT)
-        cbox.addWidget(self.odtgen)
-        self.odtgen.clicked.connect(self.gen_doc)
-        self.pdfgen = QPushButton(_GEN_PDF)
-        cbox.addWidget(self.pdfgen)
-        self.pdfgen.clicked.connect(self.gen_pdf)
+
+        ### Toggle "leave tags if value empty"
+        _w = QCheckBox(_NULLEMPTY)
+        self._widgets['NULLEMPTY'] = _w
+        _w.setToolTip(_NULLEMPTY_TIP)
+        _w.setChecked(False)
+        cbox.addWidget(_w)
+
+        ### Generate odt-file
+        _w = QPushButton(_GEN_ODT)
+        self._widgets['ODT'] = _w
+        cbox.addWidget(_w)
+        _w.clicked.connect(self.gen_doc)
+
+        ### Generate pdf-file (and odt-file), without user-meta data.
+        _w = QPushButton(_GEN_PDF)
+        self._widgets['PDF'] = _w
+        cbox.addWidget(_w)
+        _w.clicked.connect(self.gen_pdf)
+
+        ### Save (template changed)
+        _w = QPushButton(_SAVE)
+        self._widgets['SAVE'] = _w
+        cbox.addWidget(_w)
+        _w.clicked.connect(self.save)
+#
+    def set_widget(self, tag, **params):
+        """Select the widget to be displayed in the "main" stack.
+        """
+        current = self.main.currentWidget()
+        if current:
+            current.deactivate()
+        new = self._widgets[tag]
+        self.main.setCurrentWidget(new)
+        # Allow each function group to decide which buttons are enabled
+        for pb in ('NULLEMPTY', 'TEST', 'ODT', 'PDF', 'SAVE'):
+            self.enable(pb, False)
+        new.activate(**params)
+#
+    def enable(self, tag, on):
+        """Enable or disable the widget with given tag.
+        """
+        self._widgets[tag].setEnabled(on)
 #
     def enter(self):
+        """Called when the tab is selected.
+        """
+        self.set_widget('INFO')
         self.template = None
-        self.odtgen.setEnabled(False)
-        self.pdfgen.setEnabled(False)
-        self.testfields.setEnabled(False)
         BACKEND('TEMPLATE_get_classes') # ... -> SET_CLASSES
 #
     def leave(self):
-        self.fieldView.set_scene(None)
+        """Called when the tab is deselected.
+        """
+        self.main.currentWidget().deactivate()
+
+
+
+
+#?
+    def is_modified(self):
+        return self.main.currentWidget().is_modified()
+
+
+
+
+
+
+
+
+
 #
     def SET_CLASSES(self, classes):
         self.class_select.set_items([('', '–––')] + [(c, c)
@@ -219,53 +479,30 @@ class FieldEdit(TabPage):
         # ... -> SET_FIELDS
 #
     def SET_FIELDS(self, path, fields, selects):
-        self.field_scene = FieldGrid(self.fieldView, fields, selects)
-        self.fieldView.set_scene(self.field_scene)
         self.template = path
         title = self.template
         if len(title) > 42:
             title = '... ' + title[-40:]
-        self.field_scene.set_text_init('title', title)
-        BACKEND('TEMPLATE_renew', klass = self.klass, pid = self.pid)
-        self.odtgen.setEnabled(True)
-        self.pdfgen.setEnabled(True)
-        self.testfields.setEnabled(True)
+        self.set_widget('FILL', title = title,
+                fields = fields, selects = selects)
 #
     def RENEW(self, field_values):
-        valmap = {}
-        for f in self.field_scene.values:
-            valmap[f] = field_values.get(f) or ''
-        self.field_scene.set_fields(valmap)
+        self.main.currentWidget().renew(field_values)
 #
     def gen_doc(self):
-        """If the "nullempty" checkbox is true, fields for which no
-        value is supplied will be cleared. Otherwise the "tag" is left.
-        """
-        filename = self.pid + '_' + os.path.basename(
-                self.template).rsplit('.', 1)[0]
-        fpath = saveDialog(_ODT_FILE, filename)
-        if fpath:
-            BACKEND('TEMPLATE_gen_doc', fields = self.field_scene.values,
-                    clear_empty = self.nullempty.isChecked(),
-                    filepath = fpath)
+        self.main.currentWidget().gen_doc(self.template)
 #
     def gen_pdf(self):
-        """If the "nullempty" checkbox is true, fields for which no
-        value is supplied will be cleared. Otherwise the "tag" is left.
-        """
-        filename = self.pid + '_' + os.path.basename(
-                self.template).rsplit('.', 1)[0]
-        fpath = saveDialog(_PDF_FILE, filename)
-        if fpath:
-            BACKEND('TEMPLATE_gen_pdf', fields = self.field_scene.values,
-                    clear_empty = self.nullempty.isChecked(),
-                    filepath = fpath)
+        self.main.currentWidget().gen_pdf(self.template)
 #
     def test_fields(self):
         """Substitute all fields with {field} (to be easily visible)
         and display the result.
         """
         BACKEND('TEMPLATE_show')
+#
+    def save(self):
+        self.main.currentWidget().save()
 
 
 tab_template_fields = FieldEdit()
