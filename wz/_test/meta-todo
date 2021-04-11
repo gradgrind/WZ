@@ -1,0 +1,57 @@
+### Just in template
+COMMENT: [FROM *B_T]
+
+G.*: [MAPSELECT {
+    1: <<<sehr gut>>>
+    2: gut
+    3: befriedigend
+    4: ausreichend
+    5: mangelhaft
+    6: ungenügend
+    nt: <<<nicht teilgenommen>>>
+    t: teilgenommen
+    nb: <<<kann nicht beurteilt werden>>>
+    *: ––––––
+    }]
+
+LEVEL: [MAPFROM STREAM {
+    Gym: Gymnasium
+    RS: Realschule
+    HS: Hauptschule
+    }]
+
+NOCOMMENT: [IF COMMENT <<<>>> ––––––––––]
+
+ZEUGNIS: [UPPER Zeugnis]
+
+Zeugnis: [SELECT [Zeugnis Zwischenzeugnis]]
+
+
+### Needed by grade editor, etc. -> SCHOOLDATA? (move data files to year folder?)
+
+GRADES: [SELECT [1+ 1 1- 2+ 2 2- 3+ 3 3- 4+ 4 4- 5+ 5 5- 6 nt t * nb]]
+
+GRADES_Abi: [SELECT [15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00 nt t * nb]]
+
+# Depends on class? This may be really better as a function, perhaps
+# using preconfigured options here?
+STREAM [SELECT [Gym RS HS]]
+
+# Grade table "info" items???
+GRADE_INFO_FIELDS: [MAPSELECT {
+    SCHOOLYEAR: Schuljahr
+    GROUP: Klasse/Gruppe
+    TERM: Anlass
+    # or 'Ausstellungsdatum'?:
+    ISSUE_D: Ausgabedatum
+    GRADES_D: Notendatum
+    }]
+
+
+SELECT and MAPSELECT provide selection lists.
+
+The others are not writeable, they are calculated from other fields:
+FROM is a simple copy from the given field
+UPPER is a simple transform from the given field
+MAPFROM is a map transform from the given field
+IF is a conditional based on the given field

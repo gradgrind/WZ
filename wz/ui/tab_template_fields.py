@@ -2,7 +2,7 @@
 """
 ui/tab_template_fields.py
 
-Last updated:  2021-04-08
+Last updated:  2021-04-11
 
 Show template fields, set values and process template.
 This module is intended primarily for testing purposes.
@@ -39,9 +39,8 @@ _TEMPLATES_TEXT = """## Dokument-Vorlagen
 Hier können die ersetzbaren Felder der Dokument-Vorlagen angezeigt werden.
 Werte können für die Felder eingegeben werden und die Dokumente können
 so ausgefüllt ausgegeben werden.
-
-
 """
+
 ### Labels, etc.
 _EDIT_FIELDS = "Vorlage ausfüllen"
 _CLASS = "Klasse:"
@@ -57,7 +56,7 @@ _NULLEMPTY_TIP = "Felder, für die keinen Wert gesetzt ist werden leer" \
         " dargestellt. Ansonsten bleibt die Feldmarke."
 _SELECT_OR_BROWSE = "Datei wählen – oder suchen"
 _BROWSE = "Suchen"
-_SAVE = "Änderungen Speichern"
+#_SAVE = "Änderungen Speichern"
 
 #####################################################
 
@@ -70,7 +69,6 @@ from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
 from ui.grid import EditableGridView, Grid
 from ui.ui_support import VLine, KeySelect, TabPage, GuiError, \
         TreeDialog, saveDialog
-from ui.table import TableWidget
 
 ### +++++
 
@@ -105,8 +103,8 @@ class StackedWidget_fill(EditableGridView):
         super().__init__()
         self.fill_scene = None
 #
-#    def is_modified(self):
-#        return bool(self.fill_scene.changes())
+    def is_modified(self):
+        return False
 #
 #    def set_changed(self, show):
 #        self._tab.enable('SAVE', show)
@@ -130,7 +128,7 @@ class StackedWidget_fill(EditableGridView):
     def renew(self, field_values):
         valmap = {}
         for f in self.fill_scene.values:
-            valmap[f] = field_values.get(f) or ''
+            valmap[f] = field_values[f]
         self.fill_scene.set_fields(valmap)
 #
     def gen_doc(self, template):
@@ -157,106 +155,6 @@ class StackedWidget_fill(EditableGridView):
                     clear_empty = self._tab._widgets['NULLEMPTY'].isChecked(),
                     filepath = fpath)
 
-###
-
-class StackedWidget_meta(QWidget):
-    def __init__(self, tab_widget):
-        self._tab = tab_widget
-        super().__init__()
-        vbox = QVBoxLayout(self)
-        self.table = TableWidget(paste = True, on_changed = self.val_changed)
-        vbox.addWidget(self.table)
-        self._changes = None
-        self._row = -1
-        self.table.itemSelectionChanged.connect(self.selection_changed)
-#
-    def selection_changed(self):
-        """Selection changes are used to enable and disable the "remove
-        pupil data" button.
-        """
-        tsr = self.table.selectedRanges()
-        if len(tsr) == 1:
-            tsr1 = tsr[0]
-            if tsr1.rowCount() == 1:
-                self._row = tsr1.topRow()
-                self._tab.enable('REMOVE', True)
-                return
-        self._tab.enable('REMOVE', False)
-        self._row = -1
-#
-    def is_modified(self):
-        return bool(self._changes)
-#
-    def activate(self, fields, pupil_list):
-        for pb in ('SAVE',):
-            self._tab.enable(pb, True)
-        # Translated headers:
-        self.flist, tlist = [], []
-        for f, t in fields:
-            if f == 'PID':
-                tpid = t
-                continue
-            self.flist.append(f)
-            tlist.append(t)
-        self.table.setColumnCount(len(self.flist))
-        self.table.setRowCount(len(pupil_list))
-        self.table.setHorizontalHeaderLabels(tlist)
-        # Use the pupil-ids as row headers
-        self.pidlist = [pdata['PID'] for pdata in pupil_list]
-        self.table.setVerticalHeaderLabels(self.pidlist)
-        self.rows = []
-        for pdata in pupil_list:
-            r = len(self.rows)
-            cols = []
-            for f in self.flist:
-                val = pdata.get(f) or ''
-                self.table.set_text(r, len(cols), val)
-                cols.append(val)
-            self.rows.append(cols)
-#?
-        self.table.resizeColumnsToContents()
-        self._changes = set()
-#
-    def deactivate(self):
-        self.table.clear()
-        self._changes = None
-        self.pidlist = None
-        self.rows = None
-        self.flist = None
-#
-    def val_changed(self, row, col, text):
-        if self._changes == None:  # table not active
-            return
-        tag = f'{row:02}:{col:02}'
-        old = self.rows[row][col]
-        if text == old:
-            self._changes.discard(tag)
-        else:
-            self._changes.add(tag)
-        self._tab.enable('SAVE', self.is_modified())
-#
-    def remove_pupil(self):
-        pid = self.pidlist[self._row]
-        if QuestionDialog(_REMOVE_TITLE,
-                _REMOVE_PID.format(pid = pid)):
-            BACKEND('PUPILS_remove', pid = pid)
-#
-    def save(self):
-        """Update pupils with modified fields.
-        """
-        data = []
-        rows = {int(tag.split(':', 1)[0]) for tag in self._changes}
-        for row in rows:
-            pdata = {'PID': self.pidlist[row]}
-            col = 0
-            for f in self.flist:
-                pdata[f] = self.table.get_text(row, col)
-                col += 1
-            data.append(pdata)
-        #for pdata in data:
-        #    print("§§§", pdata)
-        BACKEND('PUPILS_new_table_data', data = data)
-
 ######################################################################
 
 class FieldGrid(Grid):
@@ -281,7 +179,8 @@ class FieldGrid(Grid):
         self.values = {}
         for field, text, validation in fields:
             self.tile(row, 0, text = text, style = 'key')
-            self.tile(row, 1, text = '', style = 'value',
+            self.tile(row, 1, text = '',
+                    style = 'value' if validation else 'fixed',
                     validation = validation, tag = field)
             self.values[field] = ''
             row += 1
@@ -293,7 +192,7 @@ class FieldGrid(Grid):
         self.new_style('title', base = 'base', size = 12,
                 align = 'c', border = 0, highlight = 'b')
         self.new_style('key', base = 'base', align = 'l')
-        #self.new_style('fixed', base = 'key', highlight = ':808080')
+        self.new_style('fixed', base = 'key', highlight = ':808080')
         self.new_style('value', base = 'key',
                 highlight = ':002562', mark = 'E00000')
 #
@@ -330,10 +229,6 @@ class FieldEdit(TabPage):
         _w = StackedWidget_fill(self)
         self.main.addWidget(_w)
         self._widgets['FILL'] = _w
-        # 2) Table for editing template user-meta fields
-        _w = StackedWidget_meta(self)
-        self.main.addWidget(_w)
-        self._widgets['META'] = _w
 
         topbox.addWidget(VLine())
 
@@ -384,12 +279,6 @@ class FieldEdit(TabPage):
         self._widgets['PDF'] = _w
         cbox.addWidget(_w)
         _w.clicked.connect(self.gen_pdf)
-
-        ### Save (template changed)
-        _w = QPushButton(_SAVE)
-        self._widgets['SAVE'] = _w
-        cbox.addWidget(_w)
-        _w.clicked.connect(self.save)
 #
     def set_widget(self, tag, **params):
         """Select the widget to be displayed in the "main" stack.
@@ -400,7 +289,7 @@ class FieldEdit(TabPage):
         new = self._widgets[tag]
         self.main.setCurrentWidget(new)
         # Allow each function group to decide which buttons are enabled
-        for pb in ('NULLEMPTY', 'TEST', 'ODT', 'PDF', 'SAVE'):
+        for pb in ('NULLEMPTY', 'TEST', 'ODT', 'PDF'):
             self.enable(pb, False)
         new.activate(**params)
 #
@@ -420,22 +309,9 @@ class FieldEdit(TabPage):
         """Called when the tab is deselected.
         """
         self.main.currentWidget().deactivate()
-
-
-
-
-#?
+#
     def is_modified(self):
         return self.main.currentWidget().is_modified()
-
-
-
-
-
-
-
-
-
 #
     def SET_CLASSES(self, classes):
         self.class_select.set_items([('', '–––')] + [(c, c)
@@ -501,8 +377,8 @@ class FieldEdit(TabPage):
         """
         BACKEND('TEMPLATE_show')
 #
-    def save(self):
-        self.main.currentWidget().save()
+#    def save(self):
+#        self.main.currentWidget().save()
 
 
 tab_template_fields = FieldEdit()

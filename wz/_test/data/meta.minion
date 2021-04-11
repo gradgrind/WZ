@@ -1,0 +1,29 @@
+#*** MINION 1.0 ***#
+# ************** user-meta für SekI-Zeugnis-Vorlage **************
+
+COMMENT: [FROM *B_T]
+
+G.*: [MAPSELECT {
+    1: sehr_gut
+    2: gut
+    3: befriedigend
+    4: ausreichend
+    5: mangelhaft
+    6: ungenügend
+    nt: <<<nicht teilgenommen>>>
+    t: teilgenommen
+    *: ––––––
+    nb: <<<kann nicht beurteilt werden>>>
+    }]
+
+LEVEL: [MAP STREAM {
+    Gym: Gymnasium
+    RS: Realschule
+    HS: Hauptschule
+    }]
+
+NOCOMMENT: [IFNOT COMMENT ––––––––––]
+
+ZEUGNIS: [UPPER Zeugnis]
+
+Zeugnis: [SELECT Zeugnis Zwischenzeugnis]

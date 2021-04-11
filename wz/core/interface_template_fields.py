@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_template_fields.py - last updated 2021-04-08
+core/interface_template_fields.py - last updated 2021-04-11
 
 Controller/dispatcher for the template-filler module.
 
@@ -35,6 +35,7 @@ from core.base import Dates, DataError
 from core.pupils import PUPILS
 from local.base_config import PupilsBase, class_year, print_schoolyear, \
         print_class
+from local.field_handlers import ManageHandlers, FieldMap, FieldHandlerError
 from template_engine.template_sub import Template, TemplateError
 
 ### +++++
@@ -104,48 +105,63 @@ class Template_Filler:
         # keys may be present more than once!
         # The style is only present for fields which are alone within a
         # paragraph. This is a prerequisite for an entry with multiple
-        # lines. A field-name ending '_T' is intended to allow multiple
-        # lines, so in this case a check will be made for the style.
-        # Reduce to one entry per field, collect number of each field.
-        fields = {}         # {field-name -> number of occurrences}
-        for field, fstyle in fields_style:
-            if field.endswith('_T'):
-                if not style:
-                    REPORT('ERROR', _BAD_MULTILINE.format(field = field))
-                    return False
+        # lines – if an entry has line-breaks but no style, the generator
+        # will raise an Exception (TemplateError).
+        ### Count number of appearances, reduce to single entries
+        _fields = {}
+        for f, s in fields_style:
             try:
-                fields[field] += 1
+                _fields[f] += 1
             except KeyError:
-                fields[field] = 1
-        ### Get "selections", lists of permissible values for certain
-        # template fields. These are in the template as space-separated
-        # lists. Perform the substitution '_' -> ' ' on the values.
-        selects = cls.template.user_info()  # {key -> value (spaced list)}
-        slist = {}  # collect used "selects" with python list values
-        ### Allocate "editors" (via <validation> parameter) for the fields
-        field_info = []
-        for field, n in fields.items():
-            text = field
-            if n > 1:
-                text += ' (*%d)' % n
-            if field.endswith('_D'):
-                validation = 'DATE'
-            elif field.endswith('_T'):
-                validation = 'TEXT'
-            elif field in selects:  # Special pop-up editor
-                slist[field] = [s.replace('_', ' ') for s in
-                        selects[field].split()]
-                validation = field
-            else:
-                validation = 'LINE'
-            field_info.append((field, text, validation))
-        CALLBACK('template_SET_FIELDS', path = cls.template.template_path,
-                fields = field_info, selects = slist)
+                _fields[f] = 1
+        ### Get field information from the template file.
+        # This tells us how to handle certain fields.
+        # There can be "selections", for example, a list of permissible
+        # values for a particular template field.
+        try:
+            handlers = ManageHandlers(cls.template.metadata().get('FIELD_INFO'))
+            # Order the fields so that dependencies come before the fields
+            # that need them:
+            fields, deps = handlers.sort_dependencies(_fields)
+            # One problem now is to distinguish between dependent fields
+            # with only internal dependencies and those with (also)
+            # external dependencies. The former are non-editable, for
+            # the latter an editor must be provided.
+            cls.field_map = FieldMap(handlers, {})
+            field_info = []
+            selects = {}  # collect used "selects" with python list values
+            for field in fields:
+                text, n = field, _fields[field]
+                if n != 1:
+                    text += f' (*{n})'
+                sel = cls.field_map.selection(field)
+                if sel == 'LINE':
+                    validation = 'LINE'
+                elif sel == 'DATE':
+                    validation = 'DATE'
+                elif sel == 'TEXT':
+                    validation = 'TEXT'
+                elif not sel:
+                    # Field not writeable
+                    validation = NONE
+                else:
+                    # It must be a selection list/map
+                    validation, slist = sel
+                    if validation not in selects:
+                        selects[validation] = slist
+                cls.field_map[field] = NONE
+                field_info.append((field, text, validation))
+            CALLBACK('template_SET_FIELDS', path = cls.template.template_path,
+                    fields = field_info, selects = selects)
+        except FieldHandlerError as e:
+            REPORT('ERROR', str(e))
+            return False
         return True
 #
-    @staticmethod
-    def renew(klass, pid):
+    @classmethod
+    def renew(cls, klass, pid):
 #TODO: part -> local?
+# Some of this can be done by template transforms ...
         ### Initial fields
         year = SCHOOLYEAR
         _syL = print_schoolyear(year)
@@ -161,9 +177,25 @@ class Template_Filler:
             field_values['CLASS'] = print_class(klass)
             field_values['CYEAR'] = class_year(klass)
         if pid:
+            # This could (perhaps ...) change CLASS
             field_values.update(PUPILS(SCHOOLYEAR)[pid])
-        CALLBACK('template_RENEW', field_values = field_values)
+
+#TODO: transforms ...
+        _fields = {}
+        for f in cls.field_map:
+            try:
+                cls.field_map[f] = field_values[f]
+            except KeyError:
+                pass
+            val = cls.field_map.exec_(f, force = True)
+            _fields[f] = val
+
+
+        CALLBACK('template_RENEW', field_values = _fields)
         return True
+
+#TODO: handle changes
+
 #
     @staticmethod
     def all_fields(fields, clear_empty):
@@ -199,8 +231,6 @@ class Template_Filler:
     @classmethod
     def gen_pdf(cls, fields, clear_empty, filepath):
         fieldmap = cls.all_fields(fields, clear_empty)
-        # Force removal of custom metadata
-        fieldmap['__REMOVE_USER_DATA__'] = True
         cc = cls.template.make1pdf(fieldmap, file_path = filepath)
         if cc:
             REPORT('INFO', _DONE_PDF.format(fpdf = cc,

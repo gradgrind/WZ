@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-simpleodt.py - last updated 2021-04-08
+simpleodt.py - last updated 2021-04-11
 
 1) OdtReader
 =============
@@ -75,8 +75,6 @@ import xmltodict
 
 _ODT_CONTENT_FILE = 'content.xml'
 _ODT_META_FILE = 'meta.xml'
-re_USER = br'<meta:user-defined [^<]*</meta:user-defined>'
-
 
 from xml.parsers.expat import ParserCreate
 from xml.sax.saxutils import escape
@@ -91,7 +89,7 @@ def xmlescape(text):
 
 ###
 
-class OdtError(Exception):
+class DocumentError(Exception):
     pass
 
 ###
@@ -173,9 +171,12 @@ class OdtFields:
         return tagmap
 #
     @classmethod
-    def fillUserFields(cls, odtfile, itemdict, remove_user = False):
-        """If <remove_user> is true, "user-defined" metadata will be
-        removed.
+    def fillUserFields(cls, odtfile, itemdict, FIELD_INFO = None):
+        """<odtfile> is the full file-path to the template file.
+        <itemdict> is a mapping of field values, the substitutions.
+        <FIELD_INFO> may be a <str>, specifying a new "comment" metadata
+        ("dc.description"). If the value is '', the metadata item
+        will be removed.
         """
         useditems = set()
         nonitems = set()
@@ -210,7 +211,7 @@ class OdtFields:
                 sub_lines = [para + line + b'</text:p>' for line in lines]
                 sub_string = b''.join(sub_lines)
             elif len(lines) > 1:
-                raise OdtError(_MULTILINE_NO_PARA.format(tag = tag))
+                raise DocumentError(_MULTILINE_NO_PARA.format(tag = tag))
             #print(sub_string)
             return sub_string
 #
@@ -224,16 +225,23 @@ class OdtFields:
         def _metaprocess(xmldata):
             """Remove user-defined fields.
             """
-            return re.sub(re_USER, b'', xmldata)
+            if FIELD_INFO:
+                bc = b'<dc:description>%s</dc:description>' % \
+                        escape(FIELD_INFO).encode('utf-8')
+            else:
+                bc = b''
+            return re.sub(b'<dc:description>[^<]*</dc:description>',
+                    bc, xmldata)
 
         odtBytes = substituteZipContent(odtfile, _process,
-                metaprocess = _metaprocess if remove_user else None)
+                metaprocess = None if FIELD_INFO == None else _metaprocess)
         return (odtBytes, useditems, nonitems)
 
 ###
 
 class Metadata:
-    """Manage the metadata of an odt-file.
+    """Manage the metadata of an odt-file (it could also be used on an
+    ods-file).
     """
     def __init__(self, odtfile):
         """<odtfile> is the full path to the file to be processed.
@@ -267,23 +275,57 @@ class Metadata:
                 pass
         return kv
 #
-    def replace(self, data = None):
-        """All existing user-meta data will be removed.
-        If <data> is supplied, it should be a <dict> containing new
-        user-meta values.
+    def replace(self, data = None, dc = None):
+        """If <data> is supplied, all existing user-meta data will be
+        removed. It should be a <dict> containing new
+        user-meta values. This can be an empty <dict>.
+        If <dc> is supplied, it should be a <dict> containing new
+        values for selected items of the "dc:" metadata An item can be
+        removed by giving it value ''.
         Return the resulting odt-file as a <bytes> array.
         """
         def _replace(xmldata):
-            self.office_meta.pop('meta:user-defined', None)
             if data:
                 self.office_meta['meta:user-defined'] = [
                     {   '@meta:name': k,
                         '@meta:value-type': 'string',
                         '#text': v
                     } for k, v in data.items()]
+            elif data != None:
+                self.office_meta.pop('meta:user-defined', None)
+            if dc:
+                for k, v in dc.items():
+                    if v:
+                        self.office_meta['dc:' + k] = v
+                    else:
+                        self.office_meta.pop('dc:' + k, None)
             return xmltodict.unparse(self.xmldict).encode('utf-8')
         #+
         return substituteZipContent(self.odtfile, metaprocess = _replace)
+"""
+Note that only <, > and & are escaped as XML-entities. LibreOffice also
+escapes " and '. However, this does not seem to be necessary, LibreOffice
+will apparently quite happily read in these characters unescaped.
+Keys with escaped characters should probably be avoided completely.
+If escaping of " and ' in the generated XML is desired, it is probably
+necessary to patch xmltodict
+
+At the top, replace the import of XMLGenerator:
+
+from xml.sax.saxutils import XMLGenerator as Generator
+from xml.sax.saxutils import escape
+class XMLGenerator(Generator):
+    def characters(self, content):
+        if content:
+            self._finish_pending_start_element()
+            if not isinstance(content, str):
+                content = str(content, self._encoding)
+            self._write(escape(content, entities = {
+                    "'": "&apos;",
+                    "\"": "&quot;"
+                }))
+
+"""
 
 ###
 
@@ -324,7 +366,7 @@ class OdtReader:
         #print('>>> Start element:', name, attrs)
         if name == 'text:p':
             if cls._text != None:
-                raise OdtError('OdtNestedParagraph')
+                raise DocumentError('OdtNestedParagraph')
             cls._text = ""
 #
     @classmethod
@@ -332,7 +374,7 @@ class OdtReader:
         #print('>>> End element:', name)
         if name == 'text:p':
             if cls._text == None:
-                raise OdtError('OdtParagraphEnd')
+                raise DocumentError('OdtParagraphEnd')
             cls._lines.append(cls._text)
             cls._text = None
 #
@@ -340,7 +382,7 @@ class OdtReader:
     def _char_data(cls, data):
         #print('>>> Character data:', type (data), repr(data))
         if cls._text == None:
-            raise OdtError('OdtBadData')
+            raise DocumentError('OdtBadData')
         else:
             cls._text += data
 #
@@ -387,23 +429,24 @@ if __name__ == '__main__':
     os.makedirs(_odir, exist_ok = True)
     _out = os.path.join(_odir, 'MOD0_' + _filename)
     with open(_out, 'wb') as fh:
-        fh.write(md.replace())
-    print("\nWrote" + _out)
+        fh.write(md.replace(dc = {'description': '', 'title': 'New "Title"'}))
+    print("\nWrote (with new meta-data)" + _out)
+    md = Metadata(_odtfile)
     _out = os.path.join(_odir, 'MOD1_' + _filename)
     with open(_out, 'wb') as fh:
-        fh.write(md.replace(
+        fh.write(md.replace(data =
             {   'USER-DATA': 'First entry',
                 'NEW.*_': 'Just added this: <&> öÄüß§€'
             })
         )
-    print("\nWrote" + _out)
+    print("\nWrote (with new custom meta-data)" + _out)
 
 #    quit(0)
 
     _odtfile = os.path.join(DATA, 'testing', 'testdoc.odt')
     _out = os.path.join(_odir, 'testdoc_1.odt')
     odtBytes, used, notsub = OdtFields.fillUserFields(_odtfile,
-            {'TITLE': 'Zeugnisse ...'}, remove_user = True)
+            {'TITLE': 'Zeugnisse ...'}, FIELD_INFO = '')
     with open(_out, 'bw') as fout:
         fout.write(odtBytes)
 
@@ -411,7 +454,7 @@ if __name__ == '__main__':
     for l in OdtReader.readOdtFile(_odtfile):
         print("§§§", l)
 
-    _odtfile = os.path.join(RESOURCES, 'templates', 'Noten', 'SekI.odt')
+    _odtfile = os.path.join(DATA, 'testing', 'SekI.odt')
     print("\n USER FIELDS:")
     for match in OdtFields.listUserFields(_odtfile):
         print("  ::", match)
@@ -436,12 +479,20 @@ if __name__ == '__main__':
         'NOCOMMENT': ''
     }
     _out = os.path.join(_odir, 'test-out1.odt')
-    odtBytes, used, notsub = OdtFields.fillUserFields(_odtfile, _itemdict)
+    odtBytes, used, notsub = OdtFields.fillUserFields(_odtfile, _itemdict,
+            FIELD_INFO = '')
     with open(_out, 'bw') as fout:
         fout.write(odtBytes)
     print("\nSUBSTITUTE from %s to %s" % (_odtfile, _out))
     print("  ... used:", sorted(used))
     print("\n  ... not supplied:", sorted(notsub))
+    _out = os.path.join(_odir, 'test-out2.odt')
+    odtBytes, used, notsub = OdtFields.fillUserFields(_odtfile, _itemdict,
+            FIELD_INFO = "A New Comment:\n'Line 2'\n\"Line 3\"\n<&>§€ß")
+    with open(_out, 'bw') as fout:
+        fout.write(odtBytes)
+    print("\n Changed \"comment\" metadata -> %s" % _out)
+
 #    quit(0)
 
     _dirpath = os.path.join(RESOURCES, 'templates', 'Noten')

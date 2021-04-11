@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-04-08
+Last updated:  2021-04-11
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -36,11 +36,10 @@ of the window) and then reselecting the desired style. If that doesn't
 help, it may be necessary to retype the field.
 """
 
-#TODO: pass remove_user to fillUserFields?
-
 ### Messages:
 _MISSING_PDFS = "pdf-Erstellung schlug fehl:\n  von {spath}\n  nach {dpath}"
 _MISSING_PDF = "pdf-Erstellung schlug fehl: {fpath}"
+_BAD_FIELD_INFO = "Ungültige Feld-Info ({error}) in:\n  {path}"
 
 ### Paths:
 _Grades_Single = 'Notenzeugnisse/Einzeln'
@@ -61,11 +60,11 @@ from pikepdf import Pdf, Page
 
 from core.run_extern import run_extern
 from template_engine.simpleodt import OdtFields, Metadata
+from template_engine.simpleodt import DocumentError as TemplateError
 from local.base_config import LIBREOFFICE
+from minion import Minion, MinionError
 
-
-class TemplateError(Exception):
-    pass
+### +++++
 
 def merge_pdf(ifile_list, pad2sided = False):
     """Join the pdf-files in the input list <ifile_list> to produce a
@@ -179,7 +178,15 @@ class Template:
     def metadata(self):
         """Return "normal" metadata from the template.
         """
-        return Metadata(self.template_path).doc_meta()
+        md = Metadata(self.template_path).doc_meta()
+        _fi = md.pop('description', None)
+        if _fi:
+            try:
+                md['FIELD_INFO'] = Minion().parse(_fi)
+            except MinionError as e:
+                REPORT('ERROR', _BAD_FIELD_INFO.format(error = str(e),
+                        path = self.template_path))
+        return md
 #
     def make_pdf(self, data_list, dir_name, working_dir = None,
             double_sided = False):
@@ -208,10 +215,9 @@ class Template:
         clean_dir(odt_dir)
         odt_list = []
         for datamap in data_list:
-            # Force removal of custom metadata
-            datamap['__REMOVE_USER_DATA__'] = True
             _outfile = os.path.join(odt_dir, datamap['PSORT'] + '.odt')
-            odtBytes = self.make_odt_bytes(datamap)
+            # Force removal of comment-metadata
+            odtBytes = self.make_odt_bytes(datamap, no_info = True)
             # Save the <bytes>
             with open(_outfile, 'bw') as fout:
                 fout.write(odtBytes)
@@ -273,7 +279,8 @@ class Template:
             wdirTD = tempfile.TemporaryDirectory()
             fpath = os.path.join(wdirTD.name, '_TMP_')
         _outfile = fpath + '.odt'
-        odtBytes = self.make_odt_bytes(datamap)
+        # Force removal of comment-metadata
+        odtBytes = self.make_odt_bytes(datamap, no_info = True)
         # Save the <bytes>
         with open(_outfile, 'bw') as fout:
             fout.write(odtBytes)
@@ -310,14 +317,11 @@ class Template:
             open_odt(_outfile)
         return None
 #
-    def make_odt_bytes(self, datamap):
+    def make_odt_bytes(self, datamap, no_info = False):
 #TODO: Do something with <used> and <notsub>?
-        try:
-            ru =  bool(datamap.pop('__REMOVE_USER_DATA__'))
-        except KeyError:
-            ru = False
         odtBytes, used, notsub = OdtFields.fillUserFields(
-                self.template_path, datamap, remove_user = ru)
+                self.template_path, datamap,
+                FIELD_INFO = '' if no_info else None)
         return odtBytes
 
 
