@@ -204,6 +204,9 @@ class FieldGrid(Grid):
     def value_changed(self, tile, val):
         """Called when a cell value is changed by the editor.
         """
+#TODO: Pass it to the back-end ...
+# The automatic processing, handling of dependencies, etc. must be done
+# before anything new is displayed.
         super().value_changed(tile, val)
         if tile.tag in self.values:
             self.values[tile.tag] = val

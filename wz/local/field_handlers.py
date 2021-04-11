@@ -28,13 +28,11 @@ There are two basic types of handler:
 
 ### Messages
 _CIRCULAR_DEPENDENCIES = "Zirkuläre Abhängigkeiten: [{fields}]"
-_BAD_HANDLER_CALL = "Fehler beim Verarbeiten von Feld {field}:\n" \
+_BAD_HANDLER_CALL = "Fehler beim Verarbeiten vom Händler {tag}:\n" \
         "  {handler}: {parms}"
 _MISSING_FIELD = "{field}: Feld nicht bekannt"
 
 ########################################################################
-
-from fnmatch import fnmatchcase as match
 
 NONE = ''
 EMPTY = '???'
@@ -46,32 +44,73 @@ class FieldHandlerError(Exception):
 
 ###
 
+#TODO: Perhaps shouldn't use '*' as normal part of field name ('*B_T',
+# etc.), because of possible interference with its use as a "joker".
+# Use '+' instead. Maybe '$' instead of '.'?
 class ManageHandlers(dict):
+    """This manages the handlers for "special tags" in a template or
+    grade table. These are tags that undergo some sort of processing
+    rather than being directly entered into the template.
+    Entries are provided as a <dict>, {handler: definition, ...}, or
+    multiple <dicts> using the method <extend> (repeatedly).
+
+    By including a wild-card ('*') in the handler tag, the handler can
+    be used for multiple source tags.
+    """
     def __init__(self, handler_map):
+        self.handlers = {}
+        self.wildmatches = {}
         super().__init__()
         if handler_map:
             self.extend(handler_map)
 #
     def extend(self, handler_map):
-        for field, handler in handler_map.items():
+        for tag, handler in handler_map.items():
             _h = HANDLERS[handler[0]]
             try:
                 h = _h(*handler[1:])
             except TypeError:
                 # Probably wrong number of arguments
-                REPORT('ERROR', _BAD_HANDLER_CALL.format(field = field,
-                        handler = handler[0], parms = repr(handler[1:])))
-            self[field] = h
-            h.name = field
+                raise FieldHandlerError(_BAD_HANDLER_CALL.format(
+                        tag = tag, handler = handler[0],
+                        parms = repr(handler[1:])))
+            self[tag] = h
+            h.name = tag
+            # Test for a wild-card in the field name
+#TODO: If I stop using '*' as a "subject" prefix, I can remove the
+# second part of the test:
+            if tag.count('*') == 1 and tag[0] != '*':
+                rex0 = re.escape(tag.replace('*', '@'))
+                h.rex = rex0.replace('@', '(.*)') + '$'
+            else:
+                h.rex = None
 #
     def get_handler(self, field):
+        """Fetch the "special handler" for the given field, if there is
+        one. If the handler is found by a wild-card match, save the part
+        of the field name matching the '*' in the mapping
+        <self.wildmatches>.
+        Return the handler, or <None> if there is no special handler for
+        the field.
+        """
+        # Use a cache for the handlers
         try:
-            return self[field]
+            return self.handlers[field]
         except KeyError:
-            # Try "glob" match
-            for f in self:
-                if match(field, f):
-                    return self[f]
+            pass
+        try:
+            h = self[field]
+            self.handlers[field] = h
+            return h
+        except KeyError:
+            # Try to match '*'
+            for f, h in self.items():
+                if h.rex:
+                    m = re.match(h.rex, field)
+                    if m:
+                        self.handlers[field] = h
+                        self.wildmatches[field] = m.group(1)
+                        return h
         return None
 #
     def sort_dependencies(self, fields):
@@ -120,9 +159,6 @@ class ManageHandlers(dict):
 
 ###
 
-#TODO: Perhaps shouldn't use '*' as normal part of field name ('*B_T',
-# etc.), although it ought not to interfere with the use of fnmatch?
-# Use '+' instead. Maybe '$' instead of '.'?
 class FieldMap(dict):
     def __init__(self, manager, dict0):
         super().__init__(dict0)
@@ -178,15 +214,16 @@ _DATE_FORMAT = '%d.%m.%Y'
 
 ### Messages
 _BAD_DATE_VALUE = "DATE-Feld {field}: Ungültiger Wert ({value})"
-_FROM_BAD_FIELD = "FROM-Feld {field}: Feldquelle {source} unbekannt"
 _MAPSELECT_BAD_VALUE = "MAPSELECT-Feld {field}: Ungültiger Wert ({value})"
-_MAPFROM_BAD_FIELD = "MAPFROM-Feld {field}: Feldquelle {source} unbekannt"
 _MAPFROM_BAD_VALUE = "MAPFROM-Feld {field}: Ungültiger Wert ({value})"
+_SELECT_BAD_VALUE = "SELECT-Feld {field}: Ungültiger Wert ({value})"
+_FROM_BAD_FIELD = "FROM-Feld {field}: Feldquelle {source} unbekannt"
+_MAPFROM_BAD_FIELD = "MAPFROM-Feld {field}: Feldquelle {source} unbekannt"
 _IF_BAD_FIELD = "IF-Feld {field}: Feldquelle {source} unbekannt"
 _UPPER_BAD_FIELD = "UPPER-Feld {field}: Feldquelle {source} unbekannt"
-_SELECT_BAD_VALUE = "SELECT-Feld {field}: Ungültiger Wert ({value})"
+_MAPIF_BAD_FIELD = "MAPIF-Feld {field}: Feldquelle {source} unbekannt"
 
-import datetime
+import datetime, re
 
 class F_DATE:
     """Template value is a locale-determined representation (e.g.
@@ -228,6 +265,28 @@ class F_TEXT:
 #
     def values(self):
         return 'TEXT'
+
+###
+
+class F_IFEMPTY:
+    """Shown value is customized when the field is empty, e.g.:
+        S.*: [IFEMPTY ––––––––––]
+    """
+    def __init__(self, no_entry):
+        self.no_entry = no_entry
+#
+    def exec_(self, fieldmap, field, force):
+        """output value != field value
+        The value is unchanged.
+        """
+        val = fieldmap.value(field)
+        if val:
+            return val
+        else:
+            return self.no_entry
+#
+    def values(self):
+        return 'LINE'
 
 ###
 
@@ -278,6 +337,39 @@ class F_MAPSELECT:
 #
     def values(self):
         return [self.name, list(self.value_map)]
+
+###
+
+class F_MAPIF(F_MAPSELECT):
+    """Like MAPSELECT, but make the selection display conditional on
+    another field being set.
+    """
+    def __init__(self, source_field, no_entry, value_map):
+        super().__init__(value_map)
+        self.source_field = source_field
+        self.no_entry = no_entry
+#
+    def exec_(self, fieldmap, field, force):
+        """output value != field value
+        The field value will be cleared if it was invalid.
+        """
+        source = self.source_field
+        try:
+            wildmatch = fieldmap.manager.wildmatches[field]
+            if wildmatch:
+                source = source.replace('*', wildmatch)
+        except KeyError:
+            pass
+        try:
+            cond = fieldmap[source]
+        except KeyError:
+            # This makes no sense without the source field, so raise an
+            # exception even if force is true
+            raise FieldHandlerError(_MAPIF_BAD_FIELD.format(
+                    field = self.name, source = source))
+        if cond:
+            return super().exec_(fieldmap, field, force)
+        return self.no_entry
 
 ###
 
@@ -446,5 +538,5 @@ if __name__ == '__main__':
             }]
     })
 
-    fields = {}
-    print(" ==>", mh['G.*'].exec_(fields, '4'))
+    fields = FieldMap(mh, {'G1': '4'})
+    print(" ==>", mh['G.*'].exec_(fields, 'G1', False))
