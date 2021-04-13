@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-field_handlers.py - last updated 2021-04-11
+field_handlers.py - last updated 2021-04-13
 
 Handlers for special report/template fields.
 
@@ -119,10 +119,15 @@ class ManageHandlers(dict):
         fields not within <fields> are gathered in a separate list – it
         is assumed these will be provided before the dependent fields
         in <fields> are filled.
+        In addition, each field which is required by another gets an
+        entry in the mapping <self.depmap>, which maps the field to the
+        set of other fields which require it.
         """
         # Results:
         ordered_fields = []
         dependencies = set()
+        self.depmap = {}   # Build a dependants mapping here:
+        # field -> {required-by-1, required-by-2, ...}
         #
         remaining = dict.fromkeys(fields)
         while remaining:
@@ -139,6 +144,10 @@ class ManageHandlers(dict):
                         # Check dependencies
                         resolved = True
                         for d in dlist:
+                            try:
+                                self.depmap[d].add(f)
+                            except KeyError:
+                                self.depmap[d] = {f}
                             if d in remaining:
                                 resolved = False
                             elif d not in ordered_fields:

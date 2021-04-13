@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_template_fields.py - last updated 2021-04-11
+core/interface_template_fields.py - last updated 2021-04-13
 
 Controller/dispatcher for the template-filler module.
 
@@ -179,8 +179,6 @@ class Template_Filler:
         if pid:
             # This could (perhaps ...) change CLASS
             field_values.update(PUPILS(SCHOOLYEAR)[pid])
-
-#TODO: transforms ...
         _fields = {}
         for f in cls.field_map:
             try:
@@ -189,13 +187,25 @@ class Template_Filler:
                 pass
             val = cls.field_map.exec_(f, force = True)
             _fields[f] = val
-
-
         CALLBACK('template_RENEW', field_values = _fields)
         return True
+#
+    @classmethod
+    def value_changed(cls, field, value):
+        cls.field_map[field] = value
+        value = cls.field_map.exec_(field, force = True)
+        # All dependent fields (and those dependent on them ...) must
+        # also be updated.
+        deps = cls.field_map.manager.depmap.get(field)
+        while deps:
+            _deps = set()
+            for d in deps:
+#TODO: actually handle the dependants!
+                REPORT('WARN', "Update pending: %s" % d)
 
-#TODO: handle changes
+            break
 
+        CALLBACK('template_NEW_VALUE', field = field, value = value)
 #
     @staticmethod
     def all_fields(fields, clear_empty):
@@ -253,3 +263,4 @@ FUNCTIONS['TEMPLATE_renew'] = Template_Filler.renew
 FUNCTIONS['TEMPLATE_gen_doc'] = Template_Filler.gen_doc
 FUNCTIONS['TEMPLATE_gen_pdf'] = Template_Filler.gen_pdf
 FUNCTIONS['TEMPLATE_show'] = Template_Filler.show
+FUNCTIONS['TEMPLATE_value_changed'] = Template_Filler.value_changed

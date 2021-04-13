@@ -2,7 +2,7 @@
 """
 ui/tab_template_fields.py
 
-Last updated:  2021-04-11
+Last updated:  2021-04-13
 
 Show template fields, set values and process template.
 This module is intended primarily for testing purposes.
@@ -126,10 +126,10 @@ class StackedWidget_fill(EditableGridView):
 #        BACKEND('PUPILS_new_data', data = self.fill_scene.pupil_data)
 #
     def renew(self, field_values):
-        valmap = {}
-        for f in self.fill_scene.values:
-            valmap[f] = field_values[f]
-        self.fill_scene.set_fields(valmap)
+        self.fill_scene.set_fields(field_values)
+#
+    def new_value(self, field, value):
+        self.fill_scene.new_value(field, value)
 #
     def gen_doc(self, template):
         """If the "NULLEMPTY" checkbox is true, fields for which no
@@ -176,13 +176,11 @@ class FieldGrid(Grid):
         row = 1
         for field, slist in selects.items():
             self.addSelect(field, slist)
-        self.values = {}
         for field, text, validation in fields:
             self.tile(row, 0, text = text, style = 'key')
             self.tile(row, 1, text = '',
                     style = 'value' if validation else 'fixed',
                     validation = validation, tag = field)
-            self.values[field] = ''
             row += 1
 #
     def styles(self):
@@ -199,17 +197,15 @@ class FieldGrid(Grid):
     def set_fields(self, mapping):
         for field, val in mapping.items():
             self.set_text_init(field, val)
-            self.values[field] = val
 #
     def value_changed(self, tile, val):
         """Called when a cell value is changed by the editor.
         """
-#TODO: Pass it to the back-end ...
-# The automatic processing, handling of dependencies, etc. must be done
-# before anything new is displayed.
-        super().value_changed(tile, val)
-        if tile.tag in self.values:
-            self.values[tile.tag] = val
+        BACKEND('TEMPLATE_value_changed', field = tile.tag, value = val)
+        # -> NEW_VALUE callback ... -> new_value:
+#
+    def new_value(self, field, value):
+        super().value_changed(self.tagmap[field], value)
 
 ###
 
@@ -368,6 +364,9 @@ class FieldEdit(TabPage):
     def RENEW(self, field_values):
         self.main.currentWidget().renew(field_values)
 #
+    def NEW_VALUE(self, field, value):
+        self.main.currentWidget().new_value(field, value)
+#
     def gen_doc(self):
         self.main.currentWidget().gen_doc(self.template)
 #
@@ -391,3 +390,4 @@ FUNCTIONS['template_SET_PUPILS'] = tab_template_fields.SET_PUPILS
 FUNCTIONS['template_CHOOSE_TEMPLATE'] = tab_template_fields.CHOOSE_TEMPLATE
 FUNCTIONS['template_SET_FIELDS'] = tab_template_fields.SET_FIELDS
 FUNCTIONS['template_RENEW'] = tab_template_fields.RENEW
+FUNCTIONS['template_NEW_VALUE'] = tab_template_fields.NEW_VALUE
