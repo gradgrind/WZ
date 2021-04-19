@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-minion.py - last updated 2021-04-02
+minion.py - last updated 2021-04-19
 
 Read MINION-formatted configuration data.
 
@@ -74,6 +74,10 @@ name, e.g.:
     &MACRO1: [A list of words]
     ...
     DEF1: { X: &MACRO1 }
+There is a predefined macro for the empty string, '&', equivalent to the
+following declaration (except that the key '&' doesn't appear in the
+resulting mapping):
+    &: <<<>>>
 """
 
 ### Messages
@@ -108,6 +112,10 @@ ESCAPE_DICT = {r'\n': '\n', r'\\': '\\', r'\t': '\t', r'\s': ' ', r'\g': '>'}
 
 import re, gzip
 _RXSUB ='|'.join([re.escape(e) for e in ESCAPE_DICT])
+
+MACRO_BUILTINS = {
+    _MACRO: ''
+}
 
 class MinionError(Exception):
     pass
@@ -227,8 +235,11 @@ class Minion:
                     try:
                         dmap[key] = self.toplevel[val]
                     except KeyError:
-                        self.report(_BAD_MACRO, line = self.line_number,
-                                val = val)
+                        try:
+                            dmap[key] = MACRO_BUILTINS[val]
+                        except KeyError:
+                            self.report(_BAD_MACRO, line = self.line_number,
+                                    val = val)
                 else:
                     dmap[key] = val
                     if sep == _DICT1:
@@ -328,8 +339,12 @@ if __name__ == '__main__':
         print("\n *** SECTION %s ***" % k)
         for k1, v1 in v.items():
             print("  ... %s: %s" % (k1, v1))
+    print("TOPLEVEL:", minion.toplevel)
+
     print("\n ++ Test gzipped file ++")
     data = minion.parse_file_gz('_test/data/test2.minion.gz')
+    print("\n???", data)
+    quit(0)
     for k, v in data.items():
         print("\n *** SECTION %s ***" % k)
         for k1, v1 in v.items():
