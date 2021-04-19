@@ -2,7 +2,7 @@
 """
 ui/tab_template_fields.py
 
-Last updated:  2021-04-13
+Last updated:  2021-04-18
 
 Show template fields, set values and process template.
 This module is intended primarily for testing purposes.
@@ -24,6 +24,10 @@ Copyright 2021 Michael Towers
 
 =-LICENCE========================================
 """
+
+PRESET = {}
+#TODO- ... just for testing!
+PRESET = {'template': 'Noten/SekI', 'class': '11', 'pid': '200501'}
 
 ## Measurements are in mm ##
 _HEIGHT_LINE = 6
@@ -68,7 +72,7 @@ from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
 
 from ui.grid import EditableGridView, Grid
 from ui.ui_support import VLine, KeySelect, TabPage, GuiError, \
-        TreeDialog, saveDialog
+        TreeDialog, openDialog, saveDialog
 
 ### +++++
 
@@ -139,7 +143,7 @@ class StackedWidget_fill(EditableGridView):
                 template).rsplit('.', 1)[0]
         fpath = saveDialog(_ODT_FILE, filename)
         if fpath:
-            BACKEND('TEMPLATE_gen_doc', fields = self.fill_scene.values,
+            BACKEND('TEMPLATE_gen_doc',
                     clear_empty = self._tab._widgets['NULLEMPTY'].isChecked(),
                     filepath = fpath)
 #
@@ -151,7 +155,7 @@ class StackedWidget_fill(EditableGridView):
                 template).rsplit('.', 1)[0]
         fpath = saveDialog(_PDF_FILE, filename)
         if fpath:
-            BACKEND('TEMPLATE_gen_pdf', fields = self.fill_scene.values,
+            BACKEND('TEMPLATE_gen_pdf',
                     clear_empty = self._tab._widgets['NULLEMPTY'].isChecked(),
                     filepath = fpath)
 
@@ -315,7 +319,7 @@ class FieldEdit(TabPage):
     def SET_CLASSES(self, classes):
         self.class_select.set_items([('', '–––')] + [(c, c)
                 for c in classes])
-        self.class_changed(NONE)
+        self.class_changed(PRESET.get('class') or NONE)
 #
     def class_changed(self, klass):
         self.klass = klass
@@ -327,12 +331,20 @@ class FieldEdit(TabPage):
 #
     def SET_PUPILS(self, pupil_list):
         self.pselect.set_items(pupil_list)
-        self.pupil_changed(NONE)
+        if PRESET.get('class') == self.klass:
+            pid = PRESET.get('pid')
+        else:
+            pid = NONE
+        self.pupil_changed(pid)
 #
     def pupil_changed(self, pid):
         self.pid = pid
-        if self.template:
-            BACKEND('TEMPLATE_renew', klass = self.klass, pid = self.pid)
+        try:
+            template = PRESET['template']
+            BACKEND('TEMPLATE_force_template', path = template)
+        except KeyError:
+            if self.template:
+                BACKEND('TEMPLATE_renew', klass = self.klass, pid = self.pid)
         return True
 #
     def get_template(self):

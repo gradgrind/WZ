@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-04-06
+Last updated:  2021-04-18
 
 Administration interface.
 
@@ -91,6 +91,7 @@ import ui.tab_text_reports
 import ui.tab_calendar
 TABS.append(0)
 import ui.tab_template_fields
+TAB0 = 0 # Initially selected tab
 
 ####+++++++++++++++++++++++++++++++++++++++
 
@@ -524,8 +525,6 @@ class Admin(QWidget):
 
         for tab in TABS:
             self.tab_widget.add_page(tab)
-
-        self.tab_widget.select(0)   # Enter default tab
 #
     def closeEvent(self, e):
         if self.tab_widget.check_unsaved():
@@ -548,6 +547,7 @@ class Admin(QWidget):
         chosenyear = self.year_select.selected()
         if chosenyear != current:
             self.year_select.reset(current)
+        self.tab_widget.select(TAB0)   # Enter default tab
 #
     def year_changed(self, schoolyear):
         tabpage = self.tab_widget.current_page()
@@ -575,6 +575,7 @@ FUNCTIONS['base_YEAR_CHANGED'] = ADMIN.YEAR_CHANGED
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
+    TAB0 = 6
     from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
     from qtpy.QtGui import QIcon
 

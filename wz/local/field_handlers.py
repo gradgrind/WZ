@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-field_handlers.py - last updated 2021-04-13
+field_handlers.py - last updated 2021-04-19
 
 Handlers for special report/template fields.
 
@@ -28,18 +28,22 @@ There are two basic types of handler:
 
 ### Messages
 _CIRCULAR_DEPENDENCIES = "Zirkuläre Abhängigkeiten: [{fields}]"
-_BAD_HANDLER_CALL = "Fehler beim Verarbeiten vom Händler {tag}:\n" \
+_BAD_HANDLER_CALL = "Fehler beim Verarbeiten vom Händler {tag}\n" \
+        " ... wahrscheinlich falsche Parameteranzahl:\n" \
         "  {handler}: {parms}"
 _MISSING_FIELD = "{field}: Feld nicht bekannt"
 
 ########################################################################
 
 NONE = ''
-EMPTY = '???'
+EMPTY = '!'
 
 ### +++++
 
 class FieldHandlerError(Exception):
+    pass
+
+class EmptyField(Exception):
     pass
 
 ###
@@ -47,49 +51,59 @@ class FieldHandlerError(Exception):
 #TODO: Perhaps shouldn't use '*' as normal part of field name ('*B_T',
 # etc.), because of possible interference with its use as a "joker".
 # Use '+' instead. Maybe '$' instead of '.'?
-class ManageHandlers(dict):
-    """This manages the handlers for "special tags" in a template or
-    grade table. These are tags that undergo some sort of processing
-    rather than being directly entered into the template.
-    Entries are provided as a <dict>, {handler: definition, ...}, or
-    multiple <dicts> using the method <extend> (repeatedly).
 
-    By including a wild-card ('*') in the handler tag, the handler can
-    be used for multiple source tags.
+
+class FieldMap(dict):
+    """This manages fields and their values, especially for templates
+    but it could also be used by a grade table, for example.
+
+    Also special handlers for particular fields are possible. Firstly
+    they allow a field value to be formatted differently for display
+    (print, etc.) purposes – the value undergoes some sort of processing
+    rather than being directly entered into the template.
+    It is also possible to provide processing which depends on the
+    values of other fields.
+    Particular types of input validation or entry (e.g. list selection
+    or date entry) can be specified.
+
+    The special handlers are are provided as a <dict>:
+        {handler: definition, ...},
+    or multiple <dicts> by using the method <add_handlers> (repeatedly).
+
+    Normally handlers are specified by keying on the field name, but by
+    including a wild-card ('*') in the key, the same handler definition
+    can be used for multiple field names.
+
+    The handlers themselves are provided as classes with names starting
+    'F_' (followed by the "type-name" of the handler).
     """
-    def __init__(self, handler_map):
+    def __init__(self, dict0):
+        super().__init__(dict0)
         self.handlers = {}
-        self.wildmatches = {}
-        super().__init__()
-        if handler_map:
-            self.extend(handler_map)
+        self.normaltags = {}
+        self.generictags = []
 #
-    def extend(self, handler_map):
-        for tag, handler in handler_map.items():
-            _h = HANDLERS[handler[0]]
-            try:
-                h = _h(*handler[1:])
-            except TypeError:
-                # Probably wrong number of arguments
-                raise FieldHandlerError(_BAD_HANDLER_CALL.format(
-                        tag = tag, handler = handler[0],
-                        parms = repr(handler[1:])))
-            self[tag] = h
-            h.name = tag
-            # Test for a wild-card in the field name
-#TODO: If I stop using '*' as a "subject" prefix, I can remove the
-# second part of the test:
-            if tag.count('*') == 1 and tag[0] != '*':
-                rex0 = re.escape(tag.replace('*', '@'))
-                h.rex = rex0.replace('@', '(.*)') + '$'
-            else:
-                h.rex = None
+    def add_handlers(self, handler_map):
+        if handler_map:
+            for tag, handler in handler_map.items():
+                htype, params = handler[0], handler[1:]
+                _h = HANDLERS[htype]
+                try:
+                    h = _h.init(htype, tag, *params)
+                except TypeError:
+                    # Probably wrong number of arguments
+                    raise FieldHandlerError(_BAD_HANDLER_CALL.format(
+                            tag = tag, handler = htype,
+                            parms = repr(params)))
+                h['handler'] = _h
+                if 'rex' in h:
+                    self.generictags.append(h)
+                else:
+                    self.normaltags[tag] = h
 #
     def get_handler(self, field):
         """Fetch the "special handler" for the given field, if there is
-        one. If the handler is found by a wild-card match, save the part
-        of the field name matching the '*' in the mapping
-        <self.wildmatches>.
+        one.
         Return the handler, or <None> if there is no special handler for
         the field.
         """
@@ -99,19 +113,22 @@ class ManageHandlers(dict):
         except KeyError:
             pass
         try:
-            h = self[field]
-            self.handlers[field] = h
-            return h
+            _h = self.normaltags[field]
         except KeyError:
-            # Try to match '*'
-            for f, h in self.items():
-                if h.rex:
-                    m = re.match(h.rex, field)
-                    if m:
-                        self.handlers[field] = h
-                        self.wildmatches[field] = m.group(1)
-                        return h
-        return None
+            # Not found, try a "generic":
+            for _h in self.generictags:
+                try:
+                    h = _h['handler'](field, _h)
+                    break
+                except _NoMatch:
+                    pass
+            else:
+                return None
+        else:
+            # A "normal" field handler
+            h = _h['handler'](field, _h)
+        self.handlers[field] = h
+        return h
 #
     def sort_dependencies(self, fields):
         """Order the given fields so that a field which depends on other
@@ -144,18 +161,20 @@ class ManageHandlers(dict):
                         # Check dependencies
                         resolved = True
                         for d in dlist:
-                            try:
-                                self.depmap[d].add(f)
-                            except KeyError:
-                                self.depmap[d] = {f}
                             if d in remaining:
                                 resolved = False
-                            elif d not in ordered_fields:
-                                # inefficient because of repetitions,
-                                # but simple ...
-                                dependencies.add(d)
+                                break
                         if not resolved:
                             continue
+                        for d in dlist:
+                            if d not in ordered_fields:
+                                # potentially inefficient because of
+                                # repetitions, but simple ...
+                                dependencies.add(d)
+                            try:
+                                self.depmap[d][f] = None
+                            except KeyError:
+                                self.depmap[d] = {f: None}
                 to_add.append(f)
             if to_add:
                 for f in to_add:
@@ -165,24 +184,20 @@ class ManageHandlers(dict):
                 raise FieldHandlerError(_CIRCULAR_DEPENDENCIES.format(
                         fields = ', '.join(remaining)))
         return (ordered_fields, dependencies)
-
-###
-
-class FieldMap(dict):
-    def __init__(self, manager, dict0):
-        super().__init__(dict0)
-        self.manager = manager
 #
-    def exec_(self, field, force = False):
-        """If <force> is true, dependent fields with missing dependencies
-        will use their own value. Otherwise missing dependencies will
-        raise an exception.
+    def exec_(self, field, value = None):
+        """If <value> is provided, this will be used as value by
+        dependent fields with missing dependencies. Otherwise missing
+        dependencies will raise an exception.
         Return the processed field value (for display/print).
         """
-        m = self.manager.get_handler(field)
+        m = self.get_handler(field)
         if m:
-            return m.exec_(self, field, force)
-        return self.value(field)
+            return m.exec_(self, field, value)
+        val = self.value(field)
+        if val:
+            return NONE if val == EMPTY else val
+        raise EmptyField
 #
     def value(self, field):
         try:
@@ -200,7 +215,7 @@ class FieldMap(dict):
         are not available – such is needed by the template-filler
         module – the <force_values> method of the handler is called.
         """
-        m = self.manager.get_handler(field)
+        m = self.get_handler(field)
         if m:
             try:
                 return m.values()
@@ -234,118 +249,213 @@ _MAPIF_BAD_FIELD = "MAPIF-Feld {field}: Feldquelle {source} unbekannt"
 
 import datetime, re
 
-class F_DATE:
-    """Template value is a locale-determined representation (e.g.
-    "06.12.2016") of the iso-date (e.g. "2016-12-06") stored in the
-    field.
+"""Handler instances provide methods for dealing with template fields.
+Each field has a handler, its class depending on the definition in
+a source file. The value of a field with no handler is simply passed
+on unchanged.
+Some fields depend on others. Such a field has a <depends> method
+returning a list of the fields it depends on.
+
+It is possible that a template is normally supplied with data using
+different field names or data which is not formatted correctly for the
+intended usage. The handler for a field which uses this data will then
+depend on this "external" data and use it to prepare a value for the
+field in question. In the case of the template-filler module, this data
+is not available, so the data must be supplied directly by means of the
+<value> parameter to the <exec_> method. This value is used only when
+"external" data sources are not available.
+Note that there can still be a reformatting of the value for
+display purposes, that is independent of the processing required to
+get the internal value.
+To communicate to a handler that it should use internal rather than
+external data, there is a <value> parameter to the <exec_> method.
+
+This is managed in a two-stage process. First the definition of the
+handlers is read as <dict> and pre-processed by the static method
+<init> of the corresponding handler class. This returns a data structure
+which can be provided to the class as instantiation data when needed for
+handling a particular field. It is done like this because some special
+processing is needed for handlers where the "key" has a wildcard.
+Without this feature, the two stages would not be necessary. It means
+certain information can be shared among all instances using this key.
+(with no wildcard there will be only one instance).
+"""
+
+class _NoMatch(Exception):
+    pass
+#
+class FieldHandler:
+    @staticmethod
+    def init(htype, tag):
+        h = {'name': tag, 'type': htype}
+        # Test for a wild-card in the field name
+#TODO: If I stop using '*' as a "subject" prefix, I can remove the
+# second part of the test:
+        if tag.count('*') == 1 and tag[0] != '*':
+            # The tag contains a wildcard
+            rex0 = re.escape(tag.replace('*', '@'))
+            h['rex'] = rex0.replace('@', '(.*)') + '$'
+        return h
+#
+    def __init__(self, field, data):
+        try:
+            rex = data['rex']
+        except KeyError:
+            # This is a normal field
+            pass
+        else:
+            # This is a "generic" field.
+            m = re.match(rex, field)
+            if m:
+                self.wildmatch = m.group(1)
+            else:
+                raise _NoMatch
+        self.name = field
+
+###
+
+class F_DATE(FieldHandler):
+    """Handler for a "standard" date field.
+    Deliver a locale-determined representation (e.g. "06.12.2016") of
+    the iso-date (e.g. "2016-12-06") stored in the field.
     In order to assist editing such a field, a calendar pop-up can be
     provided.
     """
-    def exec_(self, fieldmap, field, force):
+    def exec_(self, fieldmap, field, value):
         """output value != field value
         The value is unchanged.
         """
         date = fieldmap.value(field)
+        if not date:
+            raise EmptyField
+        if date == EMPTY:
+            return NONE
         try:
             d = datetime.datetime.strptime(date, "%Y-%m-%d")
             return d.strftime(_DATE_FORMAT)
         except:
-            if date:
-                raise FieldHandlerError(_BAD_DATE_VALUE.format(
-                        field = self.name, value = fieldmap.value(field)))
-            return EMPTY
+            raise FieldHandlerError(_BAD_DATE_VALUE.format(
+                    field = self.name, value = date))
 #
     def values(self):
         return 'DATE'
 
 ###
 
-class F_TEXT:
+class F_TEXT(FieldHandler):
     """Template value is a potentially multi-line text.
     In order to assist editing such a field, a text-area pop-up can be
     provided.
     """
 #
-    def exec_(self, fieldmap, field, force):
+    def exec_(self, fieldmap, field, value):
         """output value != field value.
         The value is unchanged.
         """
-        return fieldmap.value(field)
+        val = fieldmap.value(field)
+        if val:
+            return NONE if val == EMPTY else val
+        raise EmptyField
 #
     def values(self):
         return 'TEXT'
 
 ###
 
-class F_IFEMPTY:
+class F_IFEMPTY(FieldHandler):
     """Shown value is customized when the field is empty, e.g.:
         S.*: [IFEMPTY ––––––––––]
     """
-    def __init__(self, no_entry):
-        self.no_entry = no_entry
+    @classmethod
+    def init(cls, htype, tag, no_entry):
+        h = super().init(htype, tag)
+        h['no_entry'] = no_entry
+        return h
 #
-    def exec_(self, fieldmap, field, force):
+    def __init__(self, field, data):
+        super().__init__(field, data)
+        self.no_entry = data['no_entry']
+#
+    def exec_(self, fieldmap, field, value):
         """output value != field value
         The value is unchanged.
         """
         val = fieldmap.value(field)
-        if val:
-            return val
-        else:
+        if not val:
+            raise EmptyField
+        if val == EMPTY:
             return self.no_entry
+        else:
+            return val
 #
     def values(self):
         return 'LINE'
 
 ###
 
-class F_SELECT:
+class F_SELECT(FieldHandler):
     """Field value may be one of the given values.
     """
-    def __init__(self, value_list):
-        self.value_list = value_list
+    @classmethod
+    def init(cls, htype, tag, value_list):
+        h = super().init(htype, tag)
+        h['value_list'] = value_list
+        return h
 #
-    def exec_(self, fieldmap, field, force):
+    def __init__(self, field, data):
+        super().__init__(field, data)
+        self.validation = data['name']
+        self.value_list = data['value_list']
+#
+    def exec_(self, fieldmap, field, value):
         """output value == field value
         The field value will be cleared if it was invalid.
         """
-        value = fieldmap.value(field)
-        if value in self.value_list:
-            return value
-        if value:
-            fieldmap[field] = NONE
-            raise FieldHandlerError(_SELECT_BAD_VALUE.format(
-                    field = self.name, value = value))
-        return EMPTY
+        val = fieldmap.value(field)
+        if not val:
+            raise EmptyField
+        if val in self.value_list:
+            return NONE if val == EMPTY else val
+        fieldmap[field] = NONE
+        raise FieldHandlerError(_SELECT_BAD_VALUE.format(
+                field = self.name, value = val))
 #
     def values(self):
-        return [self.name, self.value_list.copy()]
+        return [self.validation, self.value_list.copy()]
 
 ###
 
-class F_MAPSELECT:
+class F_MAPSELECT(FieldHandler):
     """Like SELECT, but the selected value will be transformed via the
     mapping for insertion in the template.
     """
-    def __init__(self, value_map):
-        self.value_map = value_map
+    @classmethod
+    def init(cls, htype, tag, value_map):
+        h = super().init(htype, tag)
+        h['value_map'] = value_map
+        return h
 #
-    def exec_(self, fieldmap, field, force):
+    def __init__(self, field, data):
+        super().__init__(field, data)
+        self.validation = data['name']
+        self.value_map = data['value_map']
+#
+    def exec_(self, fieldmap, field, value):
         """output value != field value
         The field value will be cleared if it was invalid.
         """
-        value = fieldmap.value(field)
+        val = fieldmap.value(field)
+        if not val:
+            raise EmptyField
         try:
-            return self.value_map[value]
+            return self.value_map[val]
         except KeyError:
-            if value:
-                fieldmap[field] = NONE
-                raise FieldHandlerError(_MAPSELECT_BAD_VALUE.format(
-                        field = self.name, value = value))
-            return EMPTY
+            fieldmap[field] = NONE
+            raise FieldHandlerError(_MAPSELECT_BAD_VALUE.format(
+                    field = self.name, value = value))
 #
     def values(self):
-        return [self.name, list(self.value_map)]
+        return [self.validation, list(self.value_map)]
 
 ###
 
@@ -353,55 +463,76 @@ class F_MAPIF(F_MAPSELECT):
     """Like MAPSELECT, but make the selection display conditional on
     another field being set.
     """
-    def __init__(self, source_field, no_entry, value_map):
-        super().__init__(value_map)
-        self.source_field = source_field
-        self.no_entry = no_entry
+    @classmethod
+    def init(cls, htype, tag, source_field, no_entry, value_map):
+        h = super().init(htype, tag, value_map)
+        h['source_field'] = source_field
+        h['no_entry'] = no_entry
+        return h
 #
-    def exec_(self, fieldmap, field, force):
+    def __init__(self, field, data):
+        super().__init__(field, data)
+        self.validation = data['name']
+        self.value_map = data['value_map']
+        try:
+            self.source_field = data['source_field'].replace('?',
+                    self.wildmatch)
+        except AttributeError:
+            self.source_field = data['source_field']
+        self.no_entry = data['no_entry']
+#
+    def exec_(self, fieldmap, field, value):
         """output value != field value
         The field value will be cleared if it was invalid.
         """
-        source = self.source_field
         try:
-            wildmatch = fieldmap.manager.wildmatches[field]
-            if wildmatch:
-                source = source.replace('*', wildmatch)
-        except KeyError:
-            pass
-        try:
-            cond = fieldmap[source]
+            cond = fieldmap[self.source_field]
         except KeyError:
             # This makes no sense without the source field, so raise an
-            # exception even if force is true
+            # exception even if value is provided
             raise FieldHandlerError(_MAPIF_BAD_FIELD.format(
-                    field = self.name, source = source))
+                    field = self.name, source = self.source_field))
         if cond:
-            return super().exec_(fieldmap, field, force)
-        return self.no_entry
+            if cond == EMPTY:
+                return self.no_entry
+            return super().exec_(fieldmap, field, value)
+        raise EmptyField
 
 ###
 
-class F_FROM:
+class F_FROM(FieldHandler):
     """Simply copy a field value from another field.
     """
-    def __init__(self, source_field, ftype = None):
-        self.field_type = ftype or 'LINE'
-        self.source_field = source_field
+    @classmethod
+    def init(cls, htype, tag, source_field, ftype = None):
+        h = super().init(htype, tag)
+        h['source_field'] = source_field
+        h['field_type'] = ftype or 'LINE'
+        return h
 #
-    def exec_(self, fieldmap, field, force):
+    def __init__(self, field, data):
+        super().__init__(field, data)
+        self.field_type = data['field_type']
+        try:
+            self.source_field = data['source_field'].replace('?',
+                    self.wildmatch)
+        except AttributeError:
+            self.source_field = data['source_field']
+#
+    def exec_(self, fieldmap, field, value):
         """output value == field value
         The field value will be updated if the source has changed.
         """
-        try:
-            value = fieldmap[self.source_field]
-            fieldmap[field] = value
-        except KeyError:
-            if not force:
+        if value == None:
+            try:
+                value = fieldmap[self.source_field]
+            except KeyError:
                 raise FieldHandlerError(_FROM_BAD_FIELD.format(
                         field = self.name, source = self.source_field))
-            value = fieldmap.value(field)
-        return value
+        fieldmap[field] = value
+        if value:
+            return NONE if value == EMPTY else value
+        raise EmptyField
 #
     def depends(self):
         return [self.source_field]
@@ -413,25 +544,38 @@ class F_FROM:
 
 ###
 
-class F_UPPER:
+class F_UPPER(FieldHandler):
     """Field value is upper cased version of source field.
     """
-    def __init__(self, source_field):
-        self.source_field = source_field
+    @classmethod
+    def init(cls, htype, tag, source_field):
+        h = super().init(htype, tag)
+        h['source_field'] = source_field
+        return h
 #
-    def exec_(self, fieldmap, field, force):
+    def __init__(self, field, data):
+        super().__init__(field, data)
+        try:
+            self.source_field = data['source_field'].replace('?',
+                    self.wildmatch)
+        except AttributeError:
+            self.source_field = data['source_field']
+#
+    def exec_(self, fieldmap, field, value):
         """output value == field value
         The field value will be updated if the source has changed.
         """
-        try:
-            value = fieldmap[self.source_field].upper()
-            fieldmap[field] = value
-        except KeyError:
-            if not force:
+        if value == None:
+            try:
+                value = fieldmap[self.source_field].upper()
+            except KeyError:
                 raise FieldHandlerError(_UPPER_BAD_FIELD.format(
                         field = self.name, source = self.source_field))
-            value = fieldmap.value(field)
-        return value
+        value = value.upper()
+        fieldmap[field] = value
+        if value:
+            return NONE if value == EMPTY else value
+        raise EmptyField
 #
     def depends(self):
         return [self.source_field]
@@ -443,40 +587,42 @@ class F_UPPER:
 
 ###
 
-class F_MAPFROM:
-    def __init__(self, source_field, value_map):
-        self.source_field = source_field
-        self.value_map = value_map
+class F_MAPFROM(FieldHandler):
+    @classmethod
+    def init(cls, htype, tag, source_field, value_map):
+        h = super().init(htype, tag)
+        h['source_field'] = source_field
+        h['value_map'] = value_map
+        return h
 #
-    def exec_(self, fieldmap, field, force):
+    def __init__(self, field, data):
+        super().__init__(field, data)
+        try:
+            self.source_field = data['source_field'].replace('?',
+                    self.wildmatch)
+        except AttributeError:
+            self.source_field = data['source_field']
+        self.value_map = data['value_map']
+#
+    def exec_(self, fieldmap, field, value):
         """output value != field value
         The field value will be updated if the source has changed.
         """
-        try:
-            value = fieldmap[self.source_field]
-        except KeyError:
-            if not force:
+        if value == None:
+            try:
+                value = fieldmap[self.source_field]
+            except KeyError:
                 raise FieldHandlerError(_MAPFROM_BAD_FIELD.format(
                         field = self.name, source = self.source_field))
-            value = fieldmap.value(field)
-            try:
-                return self.value_map[value]
-            except KeyError:
-                if value:
-                    fieldmap[field] = NONE
-                    raise FieldHandlerError(_MAPFROM_BAD_VALUE.format(
-                            field = self.name, value = value))
-        else:
-            try:
-                val = self.value_map[value]
-                fieldmap[field] = val
-                return val
-            except KeyError:
-                if value:
-                    fieldmap[self.source_field] = NONE
-                    raise FieldHandlerError(_MAPFROM_BAD_VALUE.format(
-                            field = self.source_field, value = value))
-        return EMPTY
+        fieldmap[field] = value
+        if not value:
+            raise EmptyField
+        try:
+            return self.value_map[value]
+        except KeyError:
+            fieldmap[field] = NONE
+            raise FieldHandlerError(_MAPFROM_BAD_VALUE.format(
+                    field = self.name, value = value))
 #
     def depends(self):
         return [self.source_field]
@@ -488,23 +634,35 @@ class F_MAPFROM:
 
 ###
 
-class F_IF:
-    def __init__(self, source_field, trueval, falseval):
-        self.source_field = source_field
-        self.trueval = trueval
-        self.falseval = falseval
+class F_IF(FieldHandler):
+    @classmethod
+    def init(cls, htype, tag, source_field, trueval, falseval):
+        h = super().init(htype, tag)
+        h['source_field'] = source_field
+        h['trueval'] = trueval
+        h['falseval'] = falseval
+        return h
 #
-    def exec_(self, fieldmap, field, force):
+    def __init__(self, field, data):
+        super().__init__(field, data)
+        try:
+            self.source_field = data['source_field'].replace('?',
+                    self.wildmatch)
+        except AttributeError:
+            self.source_field = data['source_field']
+        self.trueval = data['trueval']
+        self.falseval = data['falseval']
+#
+    def exec_(self, fieldmap, field, value):
         """output value == field value
         The field value will be updated if the source has changed.
         """
-        try:
-            value = fieldmap[self.source_field]
-        except KeyError:
-            if not force:
+        if value == None:
+            try:
+                value = fieldmap[self.source_field]
+            except KeyError:
                 raise FieldHandlerError(_IF_BAD_FIELD.format(
                         field = self.name, source = self.source_field))
-            return fieldmap.value(field)
         val = self.trueval if value else self.falseval
         fieldmap[field] = val
         return val
@@ -517,6 +675,45 @@ class F_IF:
             return NONE   # dependent on existing field
         return 'LINE'
 
+## +++ Special handlers for particular fields +++ ##
+
+from local.base_config import print_schoolyear
+
+class F_SCHOOLYEAR(FieldHandler):
+    """Handler for the school-year representation.
+    """
+    def exec_(self, fieldmap, field, value):
+        """output value != field value
+        The value is unchanged.
+        """
+        val = fieldmap.value(field)
+        if val:
+            return NONE if val == EMPTY else print_schoolyear(val)
+        raise EmptyField
+#
+    def values(self):
+        return 'LINE'
+
+###
+
+from local.base_config import print_class
+
+class F_CLASS(FieldHandler):
+    """Handler for the school-year representation.
+    """
+    def exec_(self, fieldmap, field, value):
+        """output value != field value
+        The value is unchanged.
+        """
+        val = fieldmap.value(field)
+        if val:
+            return NONE if val == EMPTY else print_class(val)
+        raise EmptyField
+#
+    def values(self):
+        return 'LINE'
+
+
 
 HANDLERS = {k[2:]: v for k, v in locals().items() if k[:2] == 'F_'}
 
@@ -525,7 +722,8 @@ HANDLERS = {k[2:]: v for k, v in locals().items() if k[:2] == 'F_'}
 if __name__ == '__main__':
     print("\nHANDLERS:", HANDLERS)
 
-    mh = ManageHandlers({
+    fieldmap = FieldMap({'G1': '4'})
+    fieldmap.add_handlers({
         'COMMENT': ['FROM', '*B_T'],
         'LEVEL': ['MAPFROM', 'STREAM', {
             'Gym': 'Gymnasium',
@@ -547,5 +745,4 @@ if __name__ == '__main__':
             }]
     })
 
-    fields = FieldMap(mh, {'G1': '4'})
-    print(" ==>", mh['G.*'].exec_(fields, 'G1', False))
+    print(" ==>", fieldmap.exec_('G1', False))

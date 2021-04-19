@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_template_fields.py - last updated 2021-04-13
+core/interface_template_fields.py - last updated 2021-04-19
 
 Controller/dispatcher for the template-filler module.
 
@@ -33,14 +33,13 @@ import os
 
 from core.base import Dates, DataError
 from core.pupils import PUPILS
-from local.base_config import PupilsBase, class_year, print_schoolyear, \
-        print_class
-from local.field_handlers import ManageHandlers, FieldMap, FieldHandlerError
+from local.field_handlers import FieldMap, FieldHandlerError, EmptyField
 from template_engine.template_sub import Template, TemplateError
 
 ### +++++
 
 NONE = ''
+EMPTY = '#'     # used to indicate that a field is intentionally empty
 
 class Template_Filler:
     template = None
@@ -59,6 +58,15 @@ class Template_Filler:
         plist = [('', '–––')] + [(pdata['PID'], pupils.name(pdata))
                 for pdata in pupils.class_pupils(klass)]
         CALLBACK('template_SET_PUPILS', pupil_list = plist)
+        return True
+#
+    @classmethod
+    def force_template(cls, path):
+        """FOR TESTING: preselect a template.
+        <path> is relative to the templates folder, e.g. 'Noten/SekI'.
+        """
+        fpath = os.path.join(RESOURCES, 'templates', *path.split('/'))
+        cls.set_template(fpath)
         return True
 #
     @staticmethod
@@ -119,18 +127,19 @@ class Template_Filler:
         # There can be "selections", for example, a list of permissible
         # values for a particular template field.
         try:
-            handlers = ManageHandlers(cls.template.metadata().get('FIELD_INFO'))
+            cls.field_map = FieldMap({})
+            cls.field_map.add_handlers(
+                    cls.template.metadata().get('FIELD_INFO'))
             # Order the fields so that dependencies come before the fields
             # that need them:
-            fields, deps = handlers.sort_dependencies(_fields)
+            cls.fields, deps = cls.field_map.sort_dependencies(_fields)
             # One problem now is to distinguish between dependent fields
             # with only internal dependencies and those with (also)
             # external dependencies. The former are non-editable, for
             # the latter an editor must be provided.
-            cls.field_map = FieldMap(handlers, {})
             field_info = []
             selects = {}  # collect used "selects" with python list values
-            for field in fields:
+            for field in cls.fields:
                 text, n = field, _fields[field]
                 if n != 1:
                     text += f' (*{n})'
@@ -143,7 +152,7 @@ class Template_Filler:
                     validation = 'TEXT'
                 elif not sel:
                     # Field not writeable
-                    validation = NONE
+                    continue
                 else:
                     # It must be a selection list/map
                     validation, slist = sel
@@ -160,64 +169,47 @@ class Template_Filler:
 #
     @classmethod
     def renew(cls, klass, pid):
-#TODO: part -> local?
-# Some of this can be done by template transforms ...
         ### Initial fields
-        year = SCHOOLYEAR
-        _syL = print_schoolyear(year)
         field_values = {
-            'schoolyear': year,
-            'SCHOOLYEAR': _syL,
-            'SYEAR': _syL,
-            'SCHOOL': SCHOOL_DATA['SCHOOL_NAME'],
-            'SCHOOLBIG': SCHOOL_DATA['SCHOOL_NAME'].upper()
+            'SCHOOLYEAR': SCHOOLYEAR,
+            'SCHOOL': SCHOOL_DATA['SCHOOL_NAME']
         }
         if klass:
-            field_values['CL'] = print_class(klass)
-            field_values['CLASS'] = print_class(klass)
-            field_values['CYEAR'] = class_year(klass)
+            field_values['CLASS'] = klass
         if pid:
             # This could (perhaps ...) change CLASS
             field_values.update(PUPILS(SCHOOLYEAR)[pid])
-        _fields = {}
         for f in cls.field_map:
-            try:
-                cls.field_map[f] = field_values[f]
-            except KeyError:
-                pass
-            val = cls.field_map.exec_(f, force = True)
-            _fields[f] = val
-        CALLBACK('template_RENEW', field_values = _fields)
+            # Collect internal values for all editable fields
+            cls.field_map[f] = field_values.get(f) or ''
+        CALLBACK('template_RENEW', field_values = cls.field_map)
         return True
 #
     @classmethod
     def value_changed(cls, field, value):
         cls.field_map[field] = value
-        value = cls.field_map.exec_(field, force = True)
-        # All dependent fields (and those dependent on them ...) must
-        # also be updated.
-        deps = cls.field_map.manager.depmap.get(field)
-        while deps:
-            _deps = set()
-            for d in deps:
-#TODO: actually handle the dependants!
-                REPORT('WARN', "Update pending: %s" % d)
-
-            break
-
         CALLBACK('template_NEW_VALUE', field = field, value = value)
+        return True
 #
-    @staticmethod
-    def all_fields(fields, clear_empty):
+    @classmethod
+    def all_fields(cls, clear_empty):
+        """Prepare all fields for entry into the template.
+        The <exec_> methods are called (so far as they exist) to
+        perform all necessary processing.
+        """
         fmap = {}
-        for f, v in fields.items():
-            if v or clear_empty:
-                if f.endswith('_D'):
-                    try:
-                        v = Dates.print_date(v)
-                    except DataError:
-                        pass
-                fmap[f] = v
+        for f in cls.fields:
+            val = cls.field_map.get(f)
+            try:
+                dval = cls.field_map.exec_(f, value = val)
+            except EmptyField:
+                if clear_empty:
+                    dval = NONE
+                dval = NONE if clear_empty else None
+            if dval != None:
+                fmap[f] = dval
+            #REPORT('INFO', 'FIELD %s: %s -> %s' % (f, val, dval))
+        # A tweak to handle '|' in last-names ...
         try:
             fmap['LASTNAME'] = fmap['LASTNAME'].replace('|', ' ')
         except:
@@ -225,8 +217,8 @@ class Template_Filler:
         return fmap
 #
     @classmethod
-    def gen_doc(cls, fields, clear_empty, filepath):
-        fieldmap = cls.all_fields(fields, clear_empty)
+    def gen_doc(cls, clear_empty, filepath):
+        fieldmap = cls.all_fields(clear_empty)
         if not fieldmap:
             REPORT('WARN', _NO_SUBSTITUTIONS)
             return False
@@ -239,8 +231,8 @@ class Template_Filler:
         return True
 #
     @classmethod
-    def gen_pdf(cls, fields, clear_empty, filepath):
-        fieldmap = cls.all_fields(fields, clear_empty)
+    def gen_pdf(cls, clear_empty, filepath):
+        fieldmap = cls.all_fields(clear_empty)
         cc = cls.template.make1pdf(fieldmap, file_path = filepath)
         if cc:
             REPORT('INFO', _DONE_PDF.format(fpdf = cc,
@@ -258,6 +250,7 @@ class Template_Filler:
 FUNCTIONS['TEMPLATE_get_classes'] = Template_Filler.get_classes
 FUNCTIONS['TEMPLATE_set_class'] = Template_Filler.set_class
 FUNCTIONS['TEMPLATE_get_template_dir'] = Template_Filler.get_template_dir
+FUNCTIONS['TEMPLATE_force_template'] = Template_Filler.force_template
 FUNCTIONS['TEMPLATE_set_template'] = Template_Filler.set_template
 FUNCTIONS['TEMPLATE_renew'] = Template_Filler.renew
 FUNCTIONS['TEMPLATE_gen_doc'] = Template_Filler.gen_doc
