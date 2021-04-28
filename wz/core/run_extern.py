@@ -2,7 +2,7 @@
 """
 core/run_extern.py
 
-Last updated:  2021-01-15
+Last updated:  2021-04-28
 
 
 =+LICENCE=============================
@@ -87,6 +87,13 @@ def run_extern(command, *args, cwd = None, xpath = None, feedback = None):
 
     except FileNotFoundError:
         return (-1, _COMMANDNOTPOSSIBLE.format(cmd=repr(cmd)))
+
+
+def spawn_extern(*args):
+    subprocess.Popen(args, stdin = subprocess.DEVNULL,
+            stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
+
+###
 
 
 ### A handler for lualatex files

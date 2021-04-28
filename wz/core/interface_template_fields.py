@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_template_fields.py - last updated 2021-04-19
+core/interface_template_fields.py - last updated 2021-04-28
 
 Controller/dispatcher for the template-filler module.
 
@@ -33,13 +33,13 @@ import os
 
 from core.base import Dates, DataError
 from core.pupils import PUPILS
-from local.field_handlers import FieldMap, FieldHandlerError, EmptyField
+from local.field_handlers import FieldMap, FieldHandlerError, \
+        EmptyField
 from template_engine.template_sub import Template, TemplateError
 
 ### +++++
 
 NONE = ''
-EMPTY = '#'     # used to indicate that a field is intentionally empty
 
 class Template_Filler:
     template = None
@@ -192,23 +192,25 @@ class Template_Filler:
         return True
 #
     @classmethod
-    def all_fields(cls, clear_empty):
+    def all_fields(cls, null_empty):
         """Prepare all fields for entry into the template.
         The <exec_> methods are called (so far as they exist) to
         perform all necessary processing.
+        If <null_empty> is true, empty fields will not be substituted,
+        allowing for partial template filling.
         """
         fmap = {}
         for f in cls.fields:
-            val = cls.field_map.get(f)
             try:
-                dval = cls.field_map.exec_(f, value = val)
+                val = cls.field_map.exec_(f,
+                        value = cls.field_map.get(f) or '',
+                        trap_empty = null_empty)
             except EmptyField:
-                if clear_empty:
-                    dval = NONE
-                dval = NONE if clear_empty else None
-            if dval != None:
-                fmap[f] = dval
-            #REPORT('INFO', 'FIELD %s: %s -> %s' % (f, val, dval))
+                continue
+            except FieldHandlerError as e:
+                REPORT('ERROR', str(e))
+                continue
+            fmap[f] = val
         # A tweak to handle '|' in last-names ...
         try:
             fmap['LASTNAME'] = fmap['LASTNAME'].replace('|', ' ')
@@ -217,29 +219,13 @@ class Template_Filler:
         return fmap
 #
     @classmethod
-    def gen_doc(cls, clear_empty, filepath):
-        fieldmap = cls.all_fields(clear_empty)
-        if not fieldmap:
-            REPORT('WARN', _NO_SUBSTITUTIONS)
-            return False
-        odtBytes = cls.template.make_doc(fieldmap)
-        if not filepath.endswith('.odt'):
-            filepath += '.odt'
-        with open(filepath, 'wb') as fh:
-            fh.write(odtBytes)
-        REPORT('INFO', _DONE_ODT.format(fodt = filepath))
-        return True
-#
-    @classmethod
-    def gen_pdf(cls, clear_empty, filepath):
-        fieldmap = cls.all_fields(clear_empty)
-        cc = cls.template.make1pdf(fieldmap, file_path = filepath)
-        if cc:
-            REPORT('INFO', _DONE_PDF.format(fpdf = cc,
-                    fodt = cc.rsplit('.', 1)[0] + '.odt'))
+    def gen_doc(cls, filename, null_empty):
+        fieldmap = cls.all_fields(null_empty)
+        if fieldmap:
+            cls.template.show(fieldmap, filename)
             return True
-        else:
-            return False
+        REPORT('WARN', _NO_SUBSTITUTIONS)
+        return False
 #
     @classmethod
     def show(cls):
@@ -254,6 +240,5 @@ FUNCTIONS['TEMPLATE_force_template'] = Template_Filler.force_template
 FUNCTIONS['TEMPLATE_set_template'] = Template_Filler.set_template
 FUNCTIONS['TEMPLATE_renew'] = Template_Filler.renew
 FUNCTIONS['TEMPLATE_gen_doc'] = Template_Filler.gen_doc
-FUNCTIONS['TEMPLATE_gen_pdf'] = Template_Filler.gen_pdf
 FUNCTIONS['TEMPLATE_show'] = Template_Filler.show
 FUNCTIONS['TEMPLATE_value_changed'] = Template_Filler.value_changed

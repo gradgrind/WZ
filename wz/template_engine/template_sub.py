@@ -3,7 +3,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-04-11
+Last updated:  2021-04-28
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -125,11 +125,6 @@ def libre_office(odt_list, pdf_dir):
             *odt_list,
             feedback = extern_out
         )
-
-###
-
-def open_odt(filepath):
-    rc, msg = run_extern(LIBREOFFICE, filepath)
 
 ###
 
@@ -301,20 +296,20 @@ class Template:
         """
         return self.make_odt_bytes(datamap)
 #
-    def show(self, datamap):
+    def show(self, datamap, filename = None):
         """The resulting file is shown in a viewer, at present only the
         odt-file is generated and shown in LibreOffice. The file is
         not saved anywhere (but could be within LibreOffice).
         """
         odtBytes = self.make_odt_bytes(datamap)
         wdirTD = tempfile.TemporaryDirectory()
-        fpath = os.path.join(wdirTD.name, '_TMP_')
+        fpath = os.path.join(wdirTD.name, filename or '_TMP_')
         _outfile = fpath + '.odt'
         # Save the <bytes>
         with open(_outfile, 'bw') as fout:
             fout.write(odtBytes)
             # Open in external viewer
-            open_odt(_outfile)
+            run_extern(LIBREOFFICE, '--view', _outfile)
         return None
 #
     def make_odt_bytes(self, datamap, no_info = False):

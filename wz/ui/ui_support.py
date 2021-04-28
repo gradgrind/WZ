@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-04-06
+Last updated:  2021-04-19
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -190,7 +190,7 @@ def LineDialog(message, text = ''):
     bbox.addWidget(ok)
     cancel.setDefault(True)
     if td.exec_() == QDialog.Accepted:
-        return lineedit.text()
+        return lineedit.text().strip()
     return None
 
 ###
@@ -213,7 +213,7 @@ def TextDialog(title, text):
     bbox.addWidget(ok)
     cancel.setDefault(True)
     if td.exec_() == QDialog.Accepted:
-        return textedit.toPlainText()
+        return textedit.toPlainText().strip()
     return None
 
 ###

@@ -2,7 +2,7 @@
 """
 ui/tab_template_fields.py
 
-Last updated:  2021-04-18
+Last updated:  2021-04-28
 
 Show template fields, set values and process template.
 This module is intended primarily for testing purposes.
@@ -50,14 +50,12 @@ _EDIT_FIELDS = "Vorlage ausfüllen"
 _CLASS = "Klasse:"
 _TEST_FIELDS = "Felder testen"
 _GEN_ODT = "ODT erstellen"
-_GEN_PDF = "PDF erstellen"
 _CHOOSE_TEMPLATE = "Vorlage wählen"
 _TEMPLATE_FILE = "LibreOffice Text-Vorlage (*.odt)"
 _ODT_FILE = "LibreOffice Text-Dokument (*.odt)"
-_PDF_FILE = "PDF-Dokument (*.pdf)"
-_NULLEMPTY = "Null-Felder leer"
-_NULLEMPTY_TIP = "Felder, für die keinen Wert gesetzt ist werden leer" \
-        " dargestellt. Ansonsten bleibt die Feldmarke."
+_NULLEMPTY = "Null-Felder überspringen"
+_NULLEMPTY_TIP = "Felder, für die keinen Wert gesetzt ist, werden nicht" \
+        " ersetzt, die Feldmarke bleibt."
 _SELECT_OR_BROWSE = "Datei wählen – oder suchen"
 _BROWSE = "Suchen"
 #_SAVE = "Änderungen Speichern"
@@ -72,7 +70,7 @@ from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, \
 
 from ui.grid import EditableGridView, Grid
 from ui.ui_support import VLine, KeySelect, TabPage, GuiError, \
-        TreeDialog, openDialog, saveDialog
+        TreeDialog, openDialog
 
 ### +++++
 
@@ -116,7 +114,7 @@ class StackedWidget_fill(EditableGridView):
     def activate(self, title, fields, selects):
         self.fill_scene = FieldGrid(self, fields, selects)
         self.set_scene(self.fill_scene)
-        for pb in ('ODT', 'PDF', 'TEST', 'NULLEMPTY'):
+        for pb in ('ODT', 'TEST'):
             self._tab.enable(pb, True)
         self.fill_scene.set_text_init('title', title)
         BACKEND('TEMPLATE_renew', klass = self._tab.klass,
@@ -135,29 +133,14 @@ class StackedWidget_fill(EditableGridView):
     def new_value(self, field, value):
         self.fill_scene.new_value(field, value)
 #
-    def gen_doc(self, template):
-        """If the "NULLEMPTY" checkbox is true, fields for which no
-        value is supplied will be cleared. Otherwise the "tag" is left.
+    def gen_doc(self, template, null_empty):
+        """Empty fields will not be substituted. Also fields depending
+        on a non-substituted field will not be substituted.
         """
         filename = self._tab.pid + '_' + os.path.basename(
                 template).rsplit('.', 1)[0]
-        fpath = saveDialog(_ODT_FILE, filename)
-        if fpath:
-            BACKEND('TEMPLATE_gen_doc',
-                    clear_empty = self._tab._widgets['NULLEMPTY'].isChecked(),
-                    filepath = fpath)
-#
-    def gen_pdf(self, template):
-        """If the "NULLEMPTY" checkbox is true, fields for which no
-        value is supplied will be cleared. Otherwise the "tag" is left.
-        """
-        filename = self._tab.pid + '_' + os.path.basename(
-                template).rsplit('.', 1)[0]
-        fpath = saveDialog(_PDF_FILE, filename)
-        if fpath:
-            BACKEND('TEMPLATE_gen_pdf',
-                    clear_empty = self._tab._widgets['NULLEMPTY'].isChecked(),
-                    filepath = fpath)
+        BACKEND('TEMPLATE_gen_doc', filename = filename,
+                null_empty = 'true' if null_empty else '')
 
 ######################################################################
 
@@ -277,11 +260,6 @@ class FieldEdit(TabPage):
         cbox.addWidget(_w)
         _w.clicked.connect(self.gen_doc)
 
-        ### Generate pdf-file (and odt-file), without user-meta data.
-        _w = QPushButton(_GEN_PDF)
-        self._widgets['PDF'] = _w
-        cbox.addWidget(_w)
-        _w.clicked.connect(self.gen_pdf)
 #
     def set_widget(self, tag, **params):
         """Select the widget to be displayed in the "main" stack.
@@ -292,7 +270,7 @@ class FieldEdit(TabPage):
         new = self._widgets[tag]
         self.main.setCurrentWidget(new)
         # Allow each function group to decide which buttons are enabled
-        for pb in ('NULLEMPTY', 'TEST', 'ODT', 'PDF'):
+        for pb in ('TEST', 'ODT'):
             self.enable(pb, False)
         new.activate(**params)
 #
@@ -380,10 +358,8 @@ class FieldEdit(TabPage):
         self.main.currentWidget().new_value(field, value)
 #
     def gen_doc(self):
-        self.main.currentWidget().gen_doc(self.template)
-#
-    def gen_pdf(self):
-        self.main.currentWidget().gen_pdf(self.template)
+        self.main.currentWidget().gen_doc(self.template,
+                null_empty = self._widgets['NULLEMPTY'].isChecked())
 #
     def test_fields(self):
         """Substitute all fields with {field} (to be easily visible)

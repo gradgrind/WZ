@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-field_handlers.py - last updated 2021-04-19
+field_handlers.py - last updated 2021-04-28
 
 Handlers for special report/template fields.
 
@@ -32,11 +32,12 @@ _BAD_HANDLER_CALL = "Fehler beim Verarbeiten vom Händler {tag}\n" \
         " ... wahrscheinlich falsche Parameteranzahl:\n" \
         "  {handler}: {parms}"
 _MISSING_FIELD = "{field}: Feld nicht bekannt"
+_NO_YEAR = "Kein Schuljahr im Feld {field}"
+_NO_CLASS = "Keine Klasse im Feld {field}"
 
 ########################################################################
 
 NONE = ''
-EMPTY = '!'
 
 ### +++++
 
@@ -185,19 +186,19 @@ class FieldMap(dict):
                         fields = ', '.join(remaining)))
         return (ordered_fields, dependencies)
 #
-    def exec_(self, field, value = None):
+    def exec_(self, field, value = None, trap_empty = False):
         """If <value> is provided, this will be used as value by
         dependent fields with missing dependencies. Otherwise missing
-        dependencies will raise an exception.
+        dependencies will raise a <FieldHandlerError> exception.
+        If <trap_empty> is true, empty fields – and fields depending
+        on empty fields – will cause an <EmptyField> exception to be
+        raised. This allows for such fields to remain unsubstituted.
         Return the processed field value (for display/print).
         """
         m = self.get_handler(field)
         if m:
-            return m.exec_(self, field, value)
-        val = self.value(field)
-        if val:
-            return NONE if val == EMPTY else val
-        raise EmptyField
+            return m.exec_(self, field, value, trap_empty)
+        return self.value(field)
 #
     def value(self, field):
         try:
@@ -321,15 +322,13 @@ class F_DATE(FieldHandler):
     In order to assist editing such a field, a calendar pop-up can be
     provided.
     """
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value != field value
         The value is unchanged.
         """
         date = fieldmap.value(field)
-        if not date:
+        if (not date) and trap_empty:
             raise EmptyField
-        if date == EMPTY:
-            return NONE
         try:
             d = datetime.datetime.strptime(date, "%Y-%m-%d")
             return d.strftime(_DATE_FORMAT)
@@ -348,14 +347,15 @@ class F_TEXT(FieldHandler):
     provided.
     """
 #
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value != field value.
         The value is unchanged.
         """
         val = fieldmap.value(field)
-        if val:
-            return NONE if val == EMPTY else val
-        raise EmptyField
+        if (not val) and trap_empty:
+            raise EmptyField
+        return val
+
 #
     def values(self):
         return 'TEXT'
@@ -376,17 +376,16 @@ class F_IFEMPTY(FieldHandler):
         super().__init__(field, data)
         self.no_entry = data['no_entry']
 #
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value != field value
         The value is unchanged.
         """
         val = fieldmap.value(field)
-        if not val:
-            raise EmptyField
-        if val == EMPTY:
-            return self.no_entry
-        else:
+        if val:
             return val
+        if trap_empty:
+            raise EmptyField
+        return self.no_entry
 #
     def values(self):
         return 'LINE'
@@ -407,15 +406,15 @@ class F_SELECT(FieldHandler):
         self.validation = data['name']
         self.value_list = data['value_list']
 #
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value == field value
         The field value will be cleared if it was invalid.
         """
         val = fieldmap.value(field)
-        if not val:
+        if (not val) and trap_empty:
             raise EmptyField
         if val in self.value_list:
-            return NONE if val == EMPTY else val
+            return val
         fieldmap[field] = NONE
         raise FieldHandlerError(_SELECT_BAD_VALUE.format(
                 field = self.name, value = val))
@@ -440,19 +439,25 @@ class F_MAPSELECT(FieldHandler):
         self.validation = data['name']
         self.value_map = data['value_map']
 #
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value != field value
         The field value will be cleared if it was invalid.
         """
         val = fieldmap.value(field)
-        if not val:
+        if (not val) and trap_empty:
             raise EmptyField
         try:
-            return self.value_map[val]
+            return self.valmod(val)
         except KeyError:
             fieldmap[field] = NONE
             raise FieldHandlerError(_MAPSELECT_BAD_VALUE.format(
                     field = self.name, value = value))
+#
+    def valmod(self, value):
+        """This allows subclasses to easily add preprocessing to the
+        internal value before using it as key to the lookup table.
+        """
+        return self.value_map[value]
 #
     def values(self):
         return [self.validation, list(self.value_map)]
@@ -481,7 +486,7 @@ class F_MAPIF(F_MAPSELECT):
             self.source_field = data['source_field']
         self.no_entry = data['no_entry']
 #
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value != field value
         The field value will be cleared if it was invalid.
         """
@@ -493,10 +498,10 @@ class F_MAPIF(F_MAPSELECT):
             raise FieldHandlerError(_MAPIF_BAD_FIELD.format(
                     field = self.name, source = self.source_field))
         if cond:
-            if cond == EMPTY:
-                return self.no_entry
-            return super().exec_(fieldmap, field, value)
-        raise EmptyField
+            return super().exec_(fieldmap, field, value, trap_empty)
+        elif trap_empty:
+            raise EmptyField
+        return self.no_entry
 
 ###
 
@@ -519,7 +524,7 @@ class F_FROM(FieldHandler):
         except AttributeError:
             self.source_field = data['source_field']
 #
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value == field value
         The field value will be updated if the source has changed.
         """
@@ -530,9 +535,9 @@ class F_FROM(FieldHandler):
                 raise FieldHandlerError(_FROM_BAD_FIELD.format(
                         field = self.name, source = self.source_field))
         fieldmap[field] = value
-        if value:
-            return NONE if value == EMPTY else value
-        raise EmptyField
+        if (not value) and trap_empty:
+            raise EmptyField
+        return value
 #
     def depends(self):
         return [self.source_field]
@@ -561,21 +566,21 @@ class F_UPPER(FieldHandler):
         except AttributeError:
             self.source_field = data['source_field']
 #
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value == field value
         The field value will be updated if the source has changed.
         """
-        if value == None:
-            try:
-                value = fieldmap[self.source_field].upper()
-            except KeyError:
+        try:
+            val = fieldmap[self.source_field].upper()
+        except KeyError:
+            if value == None:
                 raise FieldHandlerError(_UPPER_BAD_FIELD.format(
                         field = self.name, source = self.source_field))
-        value = value.upper()
-        fieldmap[field] = value
-        if value:
-            return NONE if value == EMPTY else value
-        raise EmptyField
+            val = value.upper()
+        fieldmap[field] = val
+        if (not val) and trap_empty:
+            raise EmptyField
+        return val
 #
     def depends(self):
         return [self.source_field]
@@ -604,7 +609,7 @@ class F_MAPFROM(FieldHandler):
             self.source_field = data['source_field']
         self.value_map = data['value_map']
 #
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value != field value
         The field value will be updated if the source has changed.
         """
@@ -615,7 +620,7 @@ class F_MAPFROM(FieldHandler):
                 raise FieldHandlerError(_MAPFROM_BAD_FIELD.format(
                         field = self.name, source = self.source_field))
         fieldmap[field] = value
-        if not value:
+        if (not value) and trap_empty:
             raise EmptyField
         try:
             return self.value_map[value]
@@ -653,16 +658,19 @@ class F_IF(FieldHandler):
         self.trueval = data['trueval']
         self.falseval = data['falseval']
 #
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value == field value
         The field value will be updated if the source has changed.
         """
-        if value == None:
-            try:
-                value = fieldmap[self.source_field]
-            except KeyError:
-                raise FieldHandlerError(_IF_BAD_FIELD.format(
-                        field = self.name, source = self.source_field))
+        try:
+            value = fieldmap[self.source_field]
+        except KeyError:
+            # This makes no sense without the source field, so raise an
+            # exception even if value is provided
+            raise FieldHandlerError(_IF_BAD_FIELD.format(
+                    field = self.name, source = self.source_field))
+        if (not value) and trap_empty:
+            raise EmptyField
         val = self.trueval if value else self.falseval
         fieldmap[field] = val
         return val
@@ -677,41 +685,58 @@ class F_IF(FieldHandler):
 
 ## +++ Special handlers for particular fields +++ ##
 
-from local.base_config import print_schoolyear
+# This is a bit of a bodge to allow the test code to run ...
+if __name__ != '__main__': from local.base_config import print_schoolyear
 
 class F_SCHOOLYEAR(FieldHandler):
     """Handler for the school-year representation.
     """
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value != field value
         The value is unchanged.
         """
         val = fieldmap.value(field)
         if val:
-            return NONE if val == EMPTY else print_schoolyear(val)
-        raise EmptyField
+            return print_schoolyear(val)
+        if trap_empty:
+            raise EmptyField
+        raise FieldHandlerError(_NO_YEAR.format(field = field))
 #
     def values(self):
         return 'LINE'
 
 ###
 
-from local.base_config import print_class
+# This is a bit of a bodge to allow the test code to run ...
+if __name__ != '__main__': from local.base_config import print_class
 
 class F_CLASS(FieldHandler):
-    """Handler for the school-year representation.
+    """Handler for the school-class representation.
     """
-    def exec_(self, fieldmap, field, value):
+    def exec_(self, fieldmap, field, value, trap_empty):
         """output value != field value
         The value is unchanged.
         """
         val = fieldmap.value(field)
         if val:
-            return NONE if val == EMPTY else print_class(val)
-        raise EmptyField
+            return print_class(val)
+        if trap_empty:
+            raise EmptyField
+        raise FieldHandlerError(_NO_CLASS.format(field = field))
 #
     def values(self):
         return 'LINE'
+
+###
+
+#TODO: This is just an idea ...
+class F_MAPSELECT_GRADE(F_MAPSELECT):
+    """Like SELECT, but the selected value will be transformed via the
+    mapping for insertion in the template. This is a special version
+    for grades, stripping off + and -.
+    """
+    def valmod(self, value):
+        return self.value_map[value.rstrip('+-')]
 
 
 
@@ -722,7 +747,7 @@ HANDLERS = {k[2:]: v for k, v in locals().items() if k[:2] == 'F_'}
 if __name__ == '__main__':
     print("\nHANDLERS:", HANDLERS)
 
-    fieldmap = FieldMap({'G1': '4'})
+    fieldmap = FieldMap({'G.1': '4-'})
     fieldmap.add_handlers({
         'COMMENT': ['FROM', '*B_T'],
         'LEVEL': ['MAPFROM', 'STREAM', {
@@ -731,7 +756,7 @@ if __name__ == '__main__':
             'HS': 'Hauptschule'
             }],
         'NOCOMMENT': ['IF', 'COMMENT', '', '––––––––––'],
-        'G.*': ['MAPSELECT', {
+        'G.*': ['MAPSELECT_GRADE', {
             '1': 'sehr gut',
             '2': 'gut',
             '3': 'befriedigend',
@@ -745,4 +770,4 @@ if __name__ == '__main__':
             }]
     })
 
-    print(" ==>", fieldmap.exec_('G1', False))
+    print(" ==>", fieldmap.exec_('G.1', None))

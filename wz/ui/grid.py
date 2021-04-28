@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-04-05
+Last updated:  2021-04-19
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -275,12 +275,17 @@ class PopupDate(QDialog):
         vbox.addWidget(self.cal)
         self.lbl = QLabel(self)
         buttonBox = QDialogButtonBox(QDialogButtonBox.Ok
-                | QDialogButtonBox.Cancel)
+                | QDialogButtonBox.Cancel | QDialogButtonBox.Reset)
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
+        buttonBox.button(QDialogButtonBox.Reset).clicked.connect(self.reset)
         vbox.addWidget(self.lbl)
         vbox.addWidget(buttonBox)
         self.setLayout(vbox)
+#
+    def reset(self):
+        self.date = ''
+        self.accept()
 #
     def activate(self, tile, x, y):
         self.setWindowTitle(tile.tag)
