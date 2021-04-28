@@ -575,7 +575,8 @@ FUNCTIONS['base_YEAR_CHANGED'] = ADMIN.YEAR_CHANGED
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    TAB0 = 6
+# To change initial tab
+#    TAB0 = 6
     from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
     from qtpy.QtGui import QIcon
 

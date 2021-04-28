@@ -26,8 +26,8 @@ Copyright 2021 Michael Towers
 """
 
 PRESET = {}
-#TODO- ... just for testing!
-PRESET = {'template': 'Noten/SekI', 'class': '11', 'pid': '200501'}
+# ... just for testing!
+#PRESET = {'template': 'Noten/SekI', 'class': '11', 'pid': '200501'}
 
 ## Measurements are in mm ##
 _HEIGHT_LINE = 6
