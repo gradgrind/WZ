@@ -2,7 +2,7 @@
 """
 ui/gridbase.py
 
-Last updated:  2021-04-05
+Last updated:  2021-04-29
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -74,8 +74,9 @@ class GridView(QGraphicsView):
         super ().__init__()
         # Change update mode: The default, MinimalViewportUpdate, seems
         # to cause artefacts to be left, i.e. it updates too little.
-        #self.setViewportUpdateMode(self.SmartViewportUpdate)
-        self.setViewportUpdateMode(self.BoundingRectViewportUpdate)
+        # Also BoundingRectViewportUpdate seems not to be 100% effective.
+        #self.setViewportUpdateMode(self.BoundingRectViewportUpdate)
+        self.setViewportUpdateMode(self.FullViewportUpdate)
         self.ldpi = self.logicalDpiX()
         if self.logicalDpiY() != self.ldpi:
             REPORT('WARNING', "LOGICAL DPI different for x and y")

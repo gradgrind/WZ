@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-04-04
+core/pupils.py - last updated 2021-05-02
 
 Manage pupil data.
 
@@ -537,6 +537,15 @@ if __name__ == '__main__':
     pupils = Pupils(_year)
     print("\nCLASSES:", pupils.classes())
 
+    _ptables = pupils.read_source_table(os.path.join(DATA, 'testing',
+            'PUPILS_2016.tsv')) # original table
+    _delta = pupils.compare_update(_ptables)
+    for k, dlist in _delta.items():
+        print("\n --- KLASSE:", k)
+        for d in dlist:
+            print("  ", d)
+    pupils.update_classes(_delta)
+    quit(0)
     ### Migrate to next year
     pupils.migrate([])
     quit(0)

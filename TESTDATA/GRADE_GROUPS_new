@@ -54,7 +54,6 @@ __DEFAULT__: {
         # Angeben, dass es Bemerkungen gibt:
         [+B Bemerkungen]
     ]
-    +ZA/Sonderzeugnis: [- Abgang Zeugnis]
     +B: [X]
 
     # Berechnete Felder, z.B. Durchschnitte für Notenkonferenz:

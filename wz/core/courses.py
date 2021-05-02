@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-04-05
+core/courses.py - last updated 2021-05-02
 
 Manage course/subject data.
 
@@ -45,7 +45,16 @@ Copyright 2021 Michael Towers
 # reloaded.
 
 ### Messages
+_BAD_LINE = "Ungültige Zeile:\n  {line}\n  ... in {path}"
+_UNKNOWN_SID = "Unbekanntes Fach-Kürzel: {sid}"
 _SCHOOLYEAR_MISMATCH = "Fachdaten: falsches Jahr in:\n  {filepath}"
+_MULTIPLE_SID = "Fach-Kürzel {sid} wird in Klasse {klass} für Gruppe" \
+        " {group} mehrfach definiert"
+_MULTIPLE_PID_SID = "Fach-Kürzel {sid} wird für {pname} (Klasse {klass})" \
+        " mehrfach definiert: Gruppen {groups}"
+_NAME_MISMATCH = "Fach-Kürzel {sid} hat in der Eingabe einen Namen" \
+        " ({name2}), der vom voreingestellten Namen ({name1}) abweicht"
+
 _YEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {path}"
 _INFO_MISSING = "Info-Feld „{field}“ fehlt in Fachtabelle:\n  {fpath}"
 _FIELD_MISSING = "Feld „{field}“ fehlt in Fachtabelle:\n  {fpath}"
@@ -68,7 +77,7 @@ if __name__ == '__main__':
 from collections import namedtuple
 
 from core.base import Dates
-from core.pupils import Pupils
+from core.pupils import PUPILS
 from local.base_config import SubjectsBase, USE_XLSX, year_path
 from local.grade_config import NULL_COMPOSITE, NOT_GRADED, UNCHOSEN
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
@@ -78,23 +87,19 @@ from tables.matrix import KlassMatrix
 class CourseError(Exception):
     pass
 
-SubjectData = namedtuple('SubjectData', SubjectsBase.FIELDS)
-GradeSubject = namedtuple('GradeSubject', ('sid', 'tids', 'composite',
-        'report_groups', 'name'))
+NONE = ''
+WHOLE_CLASS = '*'
 
-class _SubjectList(list):
-    """Representation for a list of <SubjectData> instances.
-    It also maintains a mapping {pid -> <SubjectData> instance}.
-    The resulting list should be regarded as immutable!
+def klass_group(group):
+    """Split a group name (e.g. '11.G' into class ('11') and group tag ('G').
+    If there is no '.' in the group name, this is assumed to be the class
+    and the group is <NONE>.
     """
-    def __init__(self, klass):
-        self.klass = klass
-        super().__init__()
-        self._sidmap = {}
-
-    def append(self, item):
-        super().append(item)
-        self._sidmap[item.SID] = item
+    try:
+        klass, gtag = group.split('.')
+    except ValueError:
+        klass, gtag = group, NONE
+    return klass, gtag
 
 ###
 
@@ -106,7 +111,7 @@ class Subjects(SubjectsBase):
         self.filepath = year_path(self.schoolyear, self.COURSE_TABLE)
         try:
             with gzip.open(self.filepath + '.json.gz', 'rt',
-                    encoding='UTF-8') as zipfile:
+                    encoding = 'utf-8') as zipfile:
                 data = json.load(zipfile)
         except FileNotFoundError:
             self._modified = '–––'
@@ -119,28 +124,37 @@ class Subjects(SubjectsBase):
             self._modified = data.get('__MODIFIED__')
             self._choices = data.get('__CHOICES__')
             self._klasses = data.get('__SUBJECTS__')
+        self._names = None
+#
+#TODO: Consider whether to integrate the subject names in the json file.
+# There could be methods to read and save it ... also a gui editor ...
+    def subject_name(self, sid):
+        if not self._names:
+            fpath = year_path(self.schoolyear, self.SUBJECT_NAMES)
+            names = {}
+            with open(fpath, 'r', encoding = 'utf-8') as fh:
+                for line in fh:
+                    l = line.lstrip()
+                    if l:
+                        if l[0] == '#':
+                            continue
+                        try:
+                            k, v = l.split(':', 1)
+                        except ValueError:
+                            raise CourseError(_BAD_LINE.format(
+                                    path = fpath, line = line))
+                        name = v.split('#', 1)[0].strip()
+                        names[k.rstrip()] = name
+            self._names = names
+        try:
+            return self._names[sid]
+        except KeyError:
+            raise CourseError(_UNKNOWN_SID.format(sid = sid))
 #
     def classes(self):
         """Return a sorted list of class names.
         """
         return sorted(self._klasses)
-#
-    def class_subjects(self, klass):
-        """Read the course data for the given school-class.
-        Return a <_SubjectList> instance, a list of <SubjectData> tuples,
-        the items being ordered as in the source table.
-        The result also has the attribute <_sidmap>, which maps the sid
-        to the course data.
-        """
-        table = _SubjectList(klass)
-        # Read table rows
-        sclist = self._klasses.get(klass)
-        if sclist:
-            for sdata in sclist:
-                fdata = [sdata.get(f) or '' for f in self.FIELDS]
-                sdata = SubjectData(*fdata)
-                table.append(sdata)
-        return table
 #
 #TODO: May want to provide gui editor ... would then also need an exporter!
     def import_source_table(self, filepath):
@@ -184,102 +198,17 @@ class Subjects(SubjectsBase):
                     fpath = filepath, field = t))
         # Read the rows
         for line in dbtable:
-            fdata = {f: line[i] for f, i in findex.items()}
+            fdata = {f: line[i] or NONE for f, i in findex.items()}
+            sname = fdata.pop('SUBJECT')
+            sid = fdata['SID']
+            sname0 = self.subject_name(sid)
+            if sname != sname0:
+                REPORT('WARN', _NAME_MISMATCH.format(sid = sid,
+                        name1 = sname0, name2 = sname))
             table.append(fdata)
         self._klasses[klass] = table
         self.save()
         return klass
-#
-    def grade_subjects(self, group):
-        """Return a list of <GradeSubject> named-tuples for the given group.
-        Only subjects relevant for grade reports are included, i.e. those
-        with non-empty report_groups (see below). That does not mean
-        they will all be included in the report – that depends on the
-        slots in the template.
-        Each element has the following fields:
-            sid: the subject tag;
-            tids: a list of teacher ids, empty if the subject is a composite;
-            composite: if the subject is a component, this will be the
-                sid of its composite; if the subject is a composite, this
-                will be the list of components, each is a tuple
-                (sid, weight); otherwise the field is empty;
-            report_groups: a list of tags representing a particular block
-                of grades in the report template;
-            name: the full name of the subject.
-        "Composite" grades are marked in the database by having no tids.
-        Grade "components" are marked by having an entry starting with '*'
-        in their FLAGS field. The first element of this field (after
-        stripping the '*') is the composite subject tag.
-        *** Weighting of components ***
-         Add to composite in FLAGS field: *Ku:2  for weight 2.
-        Weights should be <int>, to preserve exact rouding.
-        """
-        composites = {}
-        subjects = []
-        for sdata in self.group_subjects(group):    # see <SubjectsBase>
-            sid = sdata.SID
-            _rgroups = sdata.SGROUPS
-            if (not _rgroups) or _rgroups == NOT_GRADED:
-                # Subject not relevant for grades
-                continue
-            rgroups = _rgroups.split()
-            flags = sdata.FLAGS
-            comp = None     # no associated composite
-            if flags:
-                for f in flags.split():
-                    if f[0] == '*':
-                        # This subject is a grade "component"
-                        if comp:
-                            # >1 "composite"
-                            raise CourseError(_MULTI_COMPOSITE.format(
-                                    sid = sid))
-                        # Get the associated composite and the weighting:
-                        comp = f[1:]    # remove the '*'
-                        try:
-                            comp, _weight = comp.split(':')
-                        except ValueError:
-                            weight = 1
-                        else:
-                            weight = int(_weight)
-                        if comp == NULL_COMPOSITE:
-                            continue
-                        try:
-                            composites[comp].append((sid, weight))
-                        except KeyError:
-                            composites[comp] = [(sid, weight)]
-            tids = sdata.TIDS
-            if tids:
-                tids = tids.split()
-            else:
-                # composite subject
-                tids = None
-                if comp:
-                    raise CourseError(_COMPOSITE_IS_COMPONENT.format(
-                            sid = sid))
-                # The 'composite' field must be modified later
-            subjects.append(GradeSubject(sid, tids, comp, rgroups,
-                    sdata.SUBJECT))
-        ### Add the 'composite' field to composite subjects,
-        ### check that the referenced composites are valid,
-        ### check that all composites have components.
-        result = []
-        for sbjdata in subjects:
-            if sbjdata.tids:
-                # Not a composite
-                result.append(sbjdata)
-            else:
-                # A composite
-                try:
-                    comp = composites.pop(sbjdata.sid)
-                except KeyError:
-                    raise CourseError(_NO_COMPONENTS.format(sid = sbjdata.sid))
-                result.append(sbjdata._replace(composite = comp))
-        for sid, sid_w_list in composites.items():
-            # Invalid composite,
-            # more than one is not very likely, just report the first one
-            raise CourseError(_NOT_A_COMPOSITE.format(
-                    sidc = sid, sid = sid_w_list[0][0]))
-        return result
 #
     def save(self):
         """Save the couse data as a compressed json file.
@@ -305,6 +234,93 @@ class Subjects(SubjectsBase):
         with gzip.open(fpath, 'wt', encoding = 'utf-8') as zipfile:
             json.dump(data, zipfile, ensure_ascii = False)
         self._modified = timestamp
+#
+    def grade_subjects(self, group):
+        """Return a mapping {sid -> subject-data} for the given group.
+        subject-data is also a mapping ({field -> value}).
+        An iterator over the subject-data mappings is available using
+        the <values> method of the result mapping. This should retain
+        the input order (automatic using the <dict> class).
+
+        Note that the COMPOSITE field can contain multiple, space-
+        separated entries. Normally these are just the tag (~sid) of a
+        dependent special field, but they may take an optional argument
+        after a ':' (no spaces!). This could, for example, be used to
+        provide a weighting for averaging, e.g. '$D:2'.
+        Weights should be <int>, to preserve exact rounding.
+        """
+        klass, grouptag = klass_group(group)
+        table = {}
+        # Read table rows
+        sclist = self._klasses.get(klass)
+        if sclist:
+            for sdata in sclist:
+                # Filter on GROUP and SGROUP fields
+                g = sdata['GROUP']
+                if g != WHOLE_CLASS:
+                    if not grouptag:
+                        continue
+                    if grouptag != g:
+                        continue
+                sgroup = sdata['SGROUP']
+                if sgroup and sgroup != '-':
+                    sid = sdata['SID']
+                    if sid in table:
+                        # Only a single entry per sid is permitted
+                        raise CourseError(_MULTIPLE_SID.format(
+                                klass = klass, group = grouptag,
+                                sid = sid))
+                    table[sid] = sdata
+        return table
+#
+    def class_subjects(self, klass):
+        """Return a mapping {pid -> {sid: group}} for the given class.
+        The group is here the group in which the pupil takes the subject
+        under consideration.
+        Subjects which are not possible for a pupil because of their
+        groups are not included.
+        A second result is an ordered mapping of all subjects relevant
+        for the class: {sid -> subject name}.
+        """
+        table = {}
+        # Get pupil-data list
+        pupils = PUPILS(self.schoolyear)
+        plist = pupils.class_pupils(klass)
+        # Get all subject data
+        sclist = self._klasses.get(klass)
+        class_sids = {}
+        for sdata in sclist:
+            if sdata['GROUP'] and sdata['SGROUP']:
+                sid = sdata['SID']
+                if sid not in class_sids:
+                    class_sids[sid] = self.subject_name(sid)
+        if sclist and plist:
+            for pdata in plist:
+                pid = pdata['PID']
+                psids = {}
+                table[pid] = psids
+                for sdata in sclist:
+                    sid = sdata['SID']
+                    g = sdata['GROUP']
+                    if (g != WHOLE_CLASS) \
+                            and (g not in pdata['GROUPS'].split()):
+                        continue    # Skip
+                    try:
+                        g0 = psids[sid]
+                    except KeyError:
+                        # ok!!
+                        psids[sid] = g
+                    else:
+                        raise CourseError(_MULTIPLE_PID_SID.format(
+                                klass = klass, pname = pupils.name(pdata),
+                                sid = sid, groups = f'[{g0}, {g}]'))
+        return table, class_sids
+
+# -------------------------------------------------------
+#
+#?
+
+
 #
     def migrate(self):
         self.schoolyear = str(int(self.schoolyear) + 1)
@@ -379,6 +395,7 @@ class Subjects(SubjectsBase):
 #
     def make_choice_table(self, klass):
         """Build a basic pupil/subject table for course choices:
+
         Non-taken courses will be marked with <UNCHOSEN>.
         The field names will be localized.
         """
@@ -442,6 +459,8 @@ if __name__ == '__main__':
     init()
 
     _subjects = Subjects(_year)
+    print("INITIAL CLASSES:", _subjects.classes())
+
     print("\nIMPORT SUBJECT TABLES:")
     sdir = os.path.join(DATA, 'testing', 'FACHLISTEN')
     for f in sorted(os.listdir(sdir)):
@@ -449,15 +468,29 @@ if __name__ == '__main__':
             print("  ... Reading", f)
             table = _subjects.import_source_table(os.path.join(sdir, f))
 
-    for k in _subjects._klasses:
-        sdlist = _subjects.class_subjects(k)
-        print("\n  --> %s:" % k)
-        for sd in sdlist:
-            print(sd)
+    print("\nCLASSES:", _subjects.classes())
 
-    print("\n**** Subject data for class 11: grading ****")
-    for sdata in _subjects.grade_subjects('11.G'):
+    _g = '12.G'
+    print("\n**** Subject data for group %s: grading ****" % _g)
+    for sdata in _subjects.grade_subjects(_g).values():
         print("  ++", sdata)
+    _g = '12.R'
+    print("\n**** Subject data for group %s: grading ****" % _g)
+    for sdata in _subjects.grade_subjects(_g).values():
+        print("  ++", sdata)
+
+    for k in _subjects._klasses:
+        table, subjects = _subjects.class_subjects(k)
+        print("\n  --> %s:" % k)
+        print("\n SUBJECTS:", subjects)
+        print("\n PUPILS:")
+        for pid, data in table.items():
+            print("\n &&", pid, data)
+
+
+    quit(0)
+
+
 
     print("\nIMPORT CHOICE TABLES:")
     idir = os.path.join(DATA, 'testing', 'FACHWAHL')

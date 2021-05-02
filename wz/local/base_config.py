@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-04-02
+Last updated:  2021-05-02
 
 General configuration items.
 
@@ -111,9 +111,10 @@ class SubjectsBase:
     FIELDS = {
         'SID'       : 'Fach-Kürzel',
         'SUBJECT'   : 'Fach',
-        'TIDS'      : 'Lehrer-Kürzel',
-        'FLAGS'     : 'Merkmale',
-        'SGROUPS'   : 'Fachgruppe'
+        'TIDS'      : 'Lehrer-Kürzel',  # can be multiple, space-separated
+        'GROUP'     : 'Gruppe',
+        'COMPOSITE' : 'Sammelfach',     # can be multiple, space-separated
+        'SGROUP'    : 'Fachgruppe'
     }
 #
     SCHOOLYEAR = 'Schuljahr'    # info-line
@@ -121,6 +122,8 @@ class SubjectsBase:
 #
     # The path to the course data for a school-year:
     COURSE_TABLE = 'Klassen/Kurse'
+    # The path to the list of sid: name definitions:
+    SUBJECT_NAMES = 'Fachliste'
 #TODO: deprecated ...
 #
     CHOICE_TEMPLATE = 'Fachwahl'
@@ -153,7 +156,7 @@ class PupilsBase(dict):
         'PID'       : 'ID',
         'FIRSTNAME' : 'Rufname',
         'LASTNAME'  : 'Name',
-        'STREAM'    : 'Maßstab',        # probably not in imported data
+        'GROUPS'    : 'Gruppen',        # probably not in imported data
         'FIRSTNAMES': 'Vornamen',
         'DOB_D'     : 'Geburtsdatum',
         'POB'       : 'Geburtsort',
@@ -176,6 +179,8 @@ class PupilsBase(dict):
 #
     def group2pupils(self, group, date = None):
         """Return a list of pupil-data items for the pupils in the group.
+
+
         Only those groups relevant for grade reports are acceptable.
         A date may be supplied to filter out pupils who have left.
         """

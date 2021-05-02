@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-field_handlers.py - last updated 2021-04-28
+field_handlers.py - last updated 2021-04-30
 
 Handlers for special report/template fields.
 
@@ -289,13 +289,11 @@ class FieldHandler:
     @staticmethod
     def init(htype, tag):
         h = {'name': tag, 'type': htype}
-        # Test for a wild-card in the field name
-#TODO: If I stop using '*' as a "subject" prefix, I can remove the
-# second part of the test:
-        if tag.count('*') == 1 and tag[0] != '*':
-            # The tag contains a wildcard
-            rex0 = re.escape(tag.replace('*', '@'))
-            h['rex'] = rex0.replace('@', '(.*)') + '$'
+        # Test for wild-cards in the field name
+        if '*' in tag:
+            # The tag contains wildcards
+            h['rex'] = '(.*)'.join([re.escape(r)
+                    for r in r0.split('*')]) + '$'
         return h
 #
     def __init__(self, field, data):
@@ -308,7 +306,7 @@ class FieldHandler:
             # This is a "generic" field.
             m = re.match(rex, field)
             if m:
-                self.wildmatch = m.group(1)
+                self.wildmatch = m.groups()
             else:
                 raise _NoMatch
         self.name = field
@@ -726,6 +724,90 @@ class F_CLASS(FieldHandler):
 #
     def values(self):
         return 'LINE'
+
+###
+
+class F_GRADE_SUBJECT(FieldHandler):
+    """Handler for a slot accepting a subject name. The field tag should
+    have the form "S.x.nn", where x is the subject-block tag (e.g. "1"
+    or "B") and nn is a two digit number (e.g. 03). The nn part should
+    start at 01 (for the first entry) and each subsequent field is then
+    incremented by 1.
+    There is an associated grade field having the form "G.x.nn", where
+    x and nn are the same as in the subject field.
+    The <exec_> method seeks matching subject-grade entries in the
+    supplied data.
+    """
+#TODO
+    def __init__(self, field, data):
+        super().__init__(field, data)
+        self.grade_field = 'G' + self.name[1:]
+#
+    def exec_(self, fieldmap, field, value, trap_empty):
+        """output value may differ from field value:
+        anything after '|' (if present) is stripped.
+        If there is a fitting subject-grade entry, this will be
+        entered in the corresponding grade field.
+        """
+        if value == None:
+            # Get subject-grade data
+#TODO: What about the subject name???
+# It could come from the subjects mapping, if this is attached ...
+            subject_block = self.wildmatch[0]
+            for k, v in fieldmap.items():
+                try:
+                    s0, b = k.split('.', 1)
+                except ValueError:
+                    continue
+                if b != subject_block:
+                    continue
+#TODO: I think this may be problematic because of reuse of fieldmap?
+# presumably that can be cleared before starting?
+                if k in fieldmap.subject_block_index:
+                    continue
+
+                fieldmap.subject_block_index[k] = self.wildmatch[1]
+
+# Let's assume that v is a tuple (name, grade) ...
+                fieldmap[field] = v[0]
+                fieldmap[self.grade_field] = v[1]
+
+
+
+
+
+
+
+
+            try:
+                value = fieldmap[self.source_field]
+            except KeyError:
+                raise FieldHandlerError(_MAPFROM_BAD_FIELD.format(
+                        field = self.name, source = self.source_field))
+
+
+
+        fieldmap[self.grade_field] = value
+
+
+        if (not value) and trap_empty:
+            raise EmptyField
+        try:
+            return self.value_map[value]
+        except KeyError:
+            fieldmap[field] = NONE
+            raise FieldHandlerError(_MAPFROM_BAD_VALUE.format(
+                    field = self.name, value = value))
+#
+    def depends(self):
+        return [self.source_field]
+#
+    def force_values(self, fieldmap):
+        if self.source_field in fieldmap:
+            return NONE   # dependent on existing field
+        return [self.name, list(self.value_map)]
+
+
 
 ###
 

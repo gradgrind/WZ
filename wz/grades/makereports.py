@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2021-03-29
+Last updated:  2021-04-29
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -38,7 +38,7 @@ Copyright 2021 Michael Towers
 #       Sozialpraktikum:        3 Wochen
 #TODO: Maybe component courses (& eurythmy?) merely as "teilgenommen"?
 
-_REPORT_TYPE_FIELD = '*ZA'
+_REPORT_TYPE_FIELD = '+ZA'
 
 import sys, os
 if __name__ == '__main__':
@@ -85,16 +85,19 @@ class GradeReports:
         self.gmap0 = {  ## data shared by all pupils in the group
             'GROUP': group,
             'TERM': term,
-            'CYEAR': class_year(group),
-            'issue_d': self.grade_table.issue_d,  # for file-names
-            'ISSUE_D': Dates.print_date(self.grade_table.issue_d,
-                    trap = False),
-            'GRADES_D': Dates.print_date(self.grade_table.grades_d,
-                    trap = False),
+#            'CYEAR': class_year(group),
+#            'issue_d': self.grade_table.issue_d,  # for file-names
+#            'ISSUE_D': Dates.print_date(self.grade_table.issue_d,
+#                    trap = False),
+            'ISSUE_D': self.grade_table.issue_d,
+            'GRADES_D': self.grade_table.grades_d,
+#            'GRADES_D': Dates.print_date(self.grade_table.grades_d,
+#                    trap = False),
             'SCHOOL': SCHOOL_DATA['SCHOOL_NAME'],
-            'SCHOOLBIG': SCHOOL_DATA['SCHOOL_NAME'].upper(),
-            'schoolyear': schoolyear,
-            'SCHOOLYEAR': print_schoolyear(schoolyear)
+#            'SCHOOLBIG': SCHOOL_DATA['SCHOOL_NAME'].upper(),
+#            'schoolyear': schoolyear,
+#            'SCHOOLYEAR': print_schoolyear(schoolyear)
+            'SCHOOLYEAR': schoolyear
         }
 #
     def makeReports(self, pids = None):
@@ -109,6 +112,8 @@ class GradeReports:
         no_report_type = []
         if self.grade_table.term == 'Abitur':
             self.abicalc = {}
+#TODO: Could the Abi calculations be instigated by the template configuration?
+
         for pid, grades in self.grade_table.items():
             # <forGroupTerm> accepts only valid grade-groups.
             # Check pupil filter, <pids>:
@@ -184,36 +189,28 @@ class GradeReports:
         gmaplist = []
         for pid in pid_list:
             gmap = self.gmap0.copy()
-            # Get pupil data
+            # Add pupil data
             pdata = pupils[pid]
-# could just do gmap[k] = pdata[k] or '' and later substitute all dates?
-            for k in pdata.keys():
-                v = pdata[k]
-                if v:
-                    if k.endswith('_D'):
-                        v = Dates.print_date(v)
-                else:
-                    v = ''
-                gmap[k] = v
+            gmap.update(pdata)
+            # Alphabetical name-tag
+            gmap['PSORT'] = sortkey(pdata)
+
             grades = self.grade_table[pid]
             # Grade parameters
             gmap['STREAM'] = grades.stream
             gmap['SekII'] = grades.sekII
-            comment = grades.pop('*B', '')
-            if comment:
-                comment = comment.replace(LINEBREAK, '\n')
-            gmap['COMMENT'] = comment
-            # Alphabetical name-tag
-            gmap['PSORT'] = sortkey(pdata)
-            # "tussenvoegsel" separator in last names ...
-            gmap['LASTNAME'] = gmap['LASTNAME'].replace('|', ' ')
+#            comment = grades.pop('+B', '')
+#            if comment:
+#                comment = comment.replace(LINEBREAK, '\n')
+#            gmap['COMMENT'] = comment
 
             ## Process the grades themselves ...
             if self.grade_table.term == 'Abitur':
                 _ac, _acc = self.abicalc[pid]
-                showgrades = {k: UNGRADED if v == NO_GRADE else v
-                        for k, v in _ac.tags.items()}
-                gmap.update(showgrades)
+#                showgrades = {k: UNGRADED if v == NO_GRADE else v
+#                        for k, v in _ac.tags.items()}
+#                gmap.update(showgrades)
+                gmap.update(_ac.tags)
                 gmap.update(_acc)
             else:
                 # Sort into grade groups
@@ -228,6 +225,10 @@ class GradeReports:
 
         return (gTemplate, gmaplist)
 #
+
+#TODO: Could this be instigated / driven by the template configuration?
+# E.g. Field type GRADE_GROUP + G looks for the next subject/grade in
+# group G? If the subjects need to be searched, perhaps a cache could help?
     def sort_grade_keys(self, name, grades, template):
         """Allocate the subjects and grades to the appropriate slots in the
         template.
@@ -243,7 +244,7 @@ class GradeReports:
         gmap = {}   # for the result
         for sid, grade in grades.items():
             # Get the print representation of the grade
-            if sid[0] == '*':
+            if sid[0] == '+':
                 gmap[sid] = grade
                 continue
             g = grades.print_grade(grade)
@@ -347,8 +348,8 @@ if __name__ == '__main__':
     _year = '2016'
 
     # Build reports for a group
-    greports = GradeReports(_year, '13', 'Abitur', None)
-#    greports = GradeReports(_year, '11.G', '2._Halbjahr', None)
+#    greports = GradeReports(_year, '13', 'Abitur', None)
+    greports = GradeReports(_year, '11.G', '2._Halbjahr', None)
 #    greports = GradeReports(_year, '13', '1._Halbjahr', None)
     for f in greports.makeReports():
         print("\n$$$: %s\n" % f)
