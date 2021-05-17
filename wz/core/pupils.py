@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-05-02
+core/pupils.py - last updated 2021-05-13
 
 Manage pupil data.
 
@@ -20,6 +20,7 @@ Copyright 2021 Michael Towers
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+#TODO: streams are no longer used, there is now a field "GROUPS".
 
 # Use a single json file to contain all the pupil data, as a list of
 # value mappings (one for each pupil).
@@ -49,11 +50,12 @@ _MISSING_FIELDS = "Diese Felder dürfen nicht leer sein:\n  {fields}"
 _BACKUP_FILE = "Schülerdaten für Klasse {klass} gespeichert als:\n  {path}"
 _FULL_BACKUP_FILE = "Alle Schülerdaten gespeichert als:\n  {path}"
 
-import datetime, shutil, json, gzip
+import datetime
 
-from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from local.base_config import year_path, PupilsBase, USE_XLSX
 from core.base import tussenvoegsel_filter, Dates, sortingName
+from tables.spreadsheet import Spreadsheet, TableError, make_db_table
+from tables.datapack import get_pack, save_pack
 
 class PupilError(Exception):
     pass
@@ -110,9 +112,7 @@ class Pupils(PupilsBase):
         if pupil_map:
             self.update(pupil_map)
         else:
-            with gzip.open(self.filepath + '.json.gz', 'rt',
-                    encoding='UTF-8') as zipfile:
-                data = json.load(zipfile)
+            data = get_pack(self.filepath)
             if data['SCHOOLYEAR'] != self.schoolyear:
                 raise PupilError(_SCHOOLYEAR_MISMATCH.format(
                         filepath = self.filepath))
@@ -173,17 +173,17 @@ class Pupils(PupilsBase):
         items = ['{k}={v}'.format(k = f, v = v) for f, v in pdata.items()]
         return 'Pupil Data: <%s>' % '; '.join(items)
 #
-    def class_pupils(self, klass, *streams, date = None):
+    def class_pupils(self, klass, group = None, date = None):
         """Read the pupil data for the given school-class (possibly with
-        stream).
+        group filter).
         Return a list of mappings {field -> value} (the table rows), the
         pupils being ordered alphabetically.
         The result also has the attribute <_pidmap>, which maps the pid
         to the pupil data.
         If a <date> is supplied, pupils who left the school before that
         date will not be included.
-        If <*streams> are provided, only pupils in one of those streams
-        are included, otherwise all pupils in the class.
+        If <group> is provided, only pupils in this group are included,
+        otherwise all pupils in the class.
         """
         plist = _PupilList()
         for pdata in self._klasses[klass]:
@@ -192,7 +192,7 @@ class Pupils(PupilsBase):
                 exd = pdata.get('EXIT_D')
                 if exd and exd < date:
                     continue
-            if streams and pdata.get('STREAM') not in streams:
+            if group and group not in pdata.get('GROUPS'):
                 continue
             plist.append(pdata)
         return plist
@@ -388,14 +388,7 @@ class Pupils(PupilsBase):
         """
         # Back up old table, if it exists
         timestamp = Dates.timestamp()
-        if not os.path.isdir(self.filepath):
-            os.makedirs(self.filepath)
-        fpath = self.filepath + '.json.gz'
-        if os.path.isfile(fpath):
-            today = timestamp.split('_', 1)[0]
-            bpath = os.path.join(self.filepath, today + '.json.gz')
-            if not os.path.isfile(bpath):
-                shutil.copyfile(fpath, bpath)
+        today = timestamp.split('_', 1)[0]
         pdlist = []
         for klass in sorted(self._klasses):
             pdlist += self._klasses[klass]
@@ -405,8 +398,7 @@ class Pupils(PupilsBase):
             '__MODIFIED__': timestamp,
             '__PUPILS__': pdlist
         }
-        with gzip.open(fpath, 'wt', encoding = 'utf-8') as zipfile:
-            json.dump(data, zipfile, ensure_ascii = False)
+        save_pack(filepath, data, today)
         self._modified = timestamp
 #
     def backup(self, filepath, klass = None):
@@ -476,6 +468,7 @@ class Pupils(PupilsBase):
     def final_year_pupils(self, klass):
         """Return list of pupils in their final year.
         """
+#TODO: streams ...
         streams = self.leaving_groups(klass)
         if streams:
             plist = []

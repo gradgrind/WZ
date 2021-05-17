@@ -2,7 +2,7 @@
 """
 ui/choice_grid.py
 
-Last updated:  2021-04-06
+Last updated:  2021-05-04
 
 Manage the grid for the puil-subject-choice-editor.
 
@@ -27,7 +27,7 @@ Copyright 2021 Michael Towers
 
 ### Display texts
 _PUPIL = "Schüler"
-_STREAM = "Maßstab"
+_GROUPS = "Gruppen"
 
 ## Measurements are in mm ##
 _SEP_SIZE = 1
@@ -70,11 +70,11 @@ class ToggleGrid(GridBase):
     def __init__(self, gview, info, pupil_data, subjects):
         """<gview> is the "View" on which this "Scene" is to be presented.
         <info>: general information, [[key, value], ... ]
-        <pupil_data>: A list of pupil lines, only non-taken subjects are
-            included:
-                [[pid, name, stream, [sid, ... ]], ... ]
+        <pupil_data>: A list of pupil lines, only valid sids are included:
+                [[pid, name, groups, {sid: val, ... }], ... ]
+            val: true if marked
         <subjects>: The list of subjects, possibly containing spacers:
-                [[key, name], ... , null-value, [key, name], ... ]
+                [[sid, name], ... , null-value, [sid, name], ... ]
         """
         # Set up grid: get number of rows and columns
         row_pids = len(ROWS)
@@ -112,7 +112,7 @@ class ToggleGrid(GridBase):
         rspan = line - 1
         self.basic_tile(line, 0, tag = None, text = _PUPIL,
                 style = 'small', cspan = 2)
-        self.basic_tile(line, 2, tag = None, text = _STREAM,
+        self.basic_tile(line, 2, tag = None, text = _GROUPS,
                 style = 'small')
         col = col_sids
         self.sids = []
@@ -137,25 +137,33 @@ class ToggleGrid(GridBase):
         self.pids = []
         self.value0 = set() # Set of initially marked cells (x, y)
         y = 0
-        for pid, pname, stream, choices_list in pupil_data:
-            choices = set(choices_list)
+        for pid, pname, groups, choices in pupil_data:
             self.basic_tile(row, 0, tag = None, text = pname,
                     style = 'name', cspan = 2)
-            self.basic_tile(row, 2, tag = None, text = stream,
+            self.basic_tile(row, 2, tag = None, text = groups,
                     style = 'small')
             col = col_sids
             x = 0
             _toggles = []
             for sid_name in subjects:
                 if sid_name:
-                    tag = (x, y)
-                    if sid_name[0] in choices:
-                        self.value0.add(tag)
-                        val = MARK
+                    try:
+                        marked = choices[sid_name[0]]
+                    except KeyError:
+                        # Invalid key: not editable
+                        tag = None
+                        style = 'padding'
+                        val = None
                     else:
-                        val = ''
-                    tile = self.basic_tile(row, col, tag = (x, y),
-                            text = val, style = 'toggle')
+                        tag = (x, y)
+                        style = 'toggle'
+                        if marked:
+                            self.value0.add(tag)
+                            val = MARK
+                        else:
+                            val = ''
+                    tile = self.basic_tile(row, col, tag = tag,
+                            text = val, style = style)
                     _toggles.append(tile)
                     x += 1
                 col += 1
@@ -184,6 +192,7 @@ class ToggleGrid(GridBase):
         self.new_style('v', base = 'small', align = 'b')
         self.new_style('toggle', base = 'base', highlight = ':002562',
                 mark = 'E00000')
+#        self.new_style('no-toggle', bg = '666666')
         self.new_style('padding', bg = '666666')
 #
     def tile_left_clicked(self, tile):

@@ -2,7 +2,7 @@
 """
 ui/grade_grid.py
 
-Last updated:  2021-03-28
+Last updated:  2021-05-04
 
 Manage the grid for the grade-editor.
 
@@ -25,8 +25,6 @@ Copyright 2021 Michael Towers
 =-LICENCE========================================
 """
 
-#TODO ...
-
 ### Display texts
 _PUPIL = "Schüler"
 _STREAM = "Maßstab"
@@ -41,10 +39,10 @@ COLUMNS = (35, 15, 15, _SEP_SIZE) # + ...
 
 # Specify widths of special columns explicitly:
 COL_WIDTH = {
-    '*ZA': 30,
-    '*Q': 8,
-    '*F_D': 20,
-    '*B': 8,
+    '+ZA': 30,
+    '+Q': 8,
+    '+F_D': 20,
+    '+B': 8,
 }
 
 ROWS = (

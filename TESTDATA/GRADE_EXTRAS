@@ -1,0 +1,63 @@
+### Notenzeugnisse: zusätzliche Felder
+### Version: 2016-05-04
+############################################################
+#-----------------------------------------------------------
+#*** MINION 1.0 ***#
+
+# Gruppe '13' (ohne Abschlusskonfiguration):
+13: [
+#?    [+Z <<<Zeugnis (Art)>>> SELECT [Zeugnis Abgang]]
+    [+Z <<<Zeugnis (Art)>>> REPORT_TYPE]
+    [+B Bemerkungen TEXT]
+]
+
+12.G: [
+#?    [+Z <<<Zeugnis (Art)>>> SELECT [Zeugnis Abgang]]
+    [+Z <<<Zeugnis (Art)>>> REPORT_TYPE]
+    [+Q Qualifikation SELECT [Erw RS HS]]
+    [+B Bemerkungen TEXT]
+]
+
+12.R: [
+    [$D <<<Φ Alle Fächer>>> AVERAGE]
+    [$Dx <<<Φ De-En-Ma>>> AVERAGE]
+#?    [+Z <<<Zeugnis (Art)>>> SELECT [Abschluss Zeugnis Abgang]]
+    [+Z <<<Zeugnis (Art)>>> REPORT_TYPE]
+#?    [+M Maßstab SELECT [RS HS]]
+    [+Q Qualifikation SELECT [Erw RS HS -]]
+    [+B Bemerkungen TEXT]
+]
+
+11.G: [
+    [$D <<<Φ Alle Fächer>>> AVERAGE]
+#?    [+Z <<<Zeugnis (Art)>>> SELECT [Zeugnis Abgang Orientierung Abschluss]]
+    [+Z <<<Zeugnis (Art)>>> REPORT_TYPE]
+#?    [+M Maßstab SELECT [Gym RS HS]]
+    [+Q Qualifikation SELECT [12 RS HS -]]
+    [+B Bemerkungen TEXT]
+]
+
+11.R: [
+    [$D <<<Φ Alle Fächer>>> AVERAGE]
+    [$Dx <<<Φ De-En-Ma>>> AVERAGE]
+#?    [+Z <<<Zeugnis (Art)>>> SELECT [Zeugnis Abgang Orientierung Abschluss]]
+    [+Z <<<Zeugnis (Art)>>> REPORT_TYPE]
+#?    [+M Maßstab SELECT [RS HS]]
+    [+Q Qualifikation SELECT [RS HS -]]
+    [+B Bemerkungen TEXT]
+]
+
+10: [
+#?    [+Z <<<Zeugnis (Art)>>> SELECT [Orientierung Abgang Zeugnis]]
+    [+Z <<<Zeugnis (Art)>>> REPORT_TYPE]
+#?    [+M Maßstab SELECT [Gym RS HS]]
+    [+Q Qualifikation SELECT [HS -]]
+    [+B Bemerkungen TEXT]
+]
+
+# Gruppen '09', '08', ...
+*: [
+    [+Z <<<Zeugnis (Art)>>> REPORT_TYPE]
+#?    [+M Maßstab SELECT [Gym RS HS]]
+    [+B Bemerkungen TEXT]
+]

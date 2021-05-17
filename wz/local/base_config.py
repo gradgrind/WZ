@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-05-02
+Last updated:  2021-05-04
 
 General configuration items.
 
@@ -64,6 +64,8 @@ import os, glob, builtins
 
 from local.grade_config import GradeBase, all_streams
 
+NONE = ''
+
 ###
 
 SCHOOLYEARS = 'SCHULJAHRE'
@@ -102,6 +104,19 @@ def class_year(klass):
     except:
         k = int(klass[0])
     return f'{k:02}'
+
+###
+
+def klass_group(group):
+    """Split a group name (e.g. '11.G' into class ('11') and group tag ('G').
+    If there is no '.' in the group name, this is assumed to be the class
+    and the group is <NONE>.
+    """
+    try:
+        klass, gtag = group.split('.')
+    except ValueError:
+        klass, gtag = group, NONE
+    return klass, gtag
 
 ###
 

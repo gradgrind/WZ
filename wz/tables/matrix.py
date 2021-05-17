@@ -1,7 +1,7 @@
 ### python >= 3.7
 # -*- coding: utf-8 -*-
 """
-tables/matrix.py - last updated 2021-01-03
+tables/matrix.py - last updated 2021-05-03
 
 Edit a table template (xlsx).
 
@@ -37,7 +37,9 @@ from io import BytesIO
 
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter#, column_index_from_string
+from openpyxl.styles import Protection
 
+### +++++
 
 class Table:
     """openpyxl based spreadsheet handler ('.xlsx'-files).
@@ -47,8 +49,7 @@ class Table:
         """Return the column letter(s) for the given (0-based) index.
         """
         return get_column_letter(i+1)
-
-
+#
     def __init__(self, filepath):
         self.template = filepath + '.xlsx'
         self._wb = load_workbook(self.template)
@@ -67,56 +68,54 @@ class Table:
                     v = str(v)
                 values.append(v)
             self.rows.append(values)
-
-
+        self.protected = Protection(locked = True)
+        self.unprotected = Protection(locked = False)
+#
     def getCell(self, celltag):
         return self._wb.active[celltag].value
-
-
+#
     def read(self, row, col):
         """Read the cell at the given position (0-based indexes).
         """
         coltag = self.columnLetter(col)
         return self.getCell(coltag + str(row+1))
-
-
+#
     def setCell(self, celltag, value=None, style=None):
         cell = self._wb.active[celltag]
         cell.value = value
         if style:
             cell.style = style
-
-
-    def write(self, row, col, val):
+#
+    def write(self, row, col, val, protect = None):
         """Write to the cell at the given position (0-based indexes).
         """
         coltag = self.columnLetter(col)
-        self.setCell(coltag + str(row+1), val)
-
-
+        cell = self._wb.active[coltag + str(row+1)]
+        cell.value = val
+#TODO: test!!!
+        if protect != None:
+            cell.protection = self.protected if protect else self.unprotected
+#
     def delEndCols(self, col0):
         """Delete last columns, starting at index <col0> (0-based).
         """
         ndel = len(self.rows[0]) - col0
         if ndel > 0:
             self._wb.active.delete_cols(col0+1, ndel)
-
-
+#
     def delEndRows(self, row0):
         """Delete last rows, starting at index <row0> (0-based).
         """
         ndel = len(self.rows) - row0
         if ndel > 0:
             self._wb.active.delete_rows(row0+1, ndel)
-
-
+#
     def protectSheet (self, pw=None):
         if pw:
             self._wb.active.protection.set_password(pw)
         else:
             self._wb.active.protection.enable()
-
-
+#
     def save (self, filepath=None):
         if filepath:
             self._wb.save(filepath + '.xlsx')
@@ -126,24 +125,21 @@ class Table:
             self._wb.save(virtual_workbook)
             return virtual_workbook.getvalue()
 
-
+###
 
 class KlassMatrix(Table):
     """An extension of the <Table> class to deal with pupil-subject tables.
     """
-
     def setTitle(self, title):
         """The title cell is at a fixed position, "B1". "A1" contains "#".
         """
         self.setCell('B1', title)
-
-
+#
     def setTitle2(self, title2):
         """The subtitle cell is at a fixed position, "F1".
         """
         self.setCell('F1', title2)
-
-
+#
     def setInfo(self, info):
         i, x = 0, 0
         for row in self.rows:
@@ -172,15 +168,13 @@ class KlassMatrix(Table):
         self.rowindex = i
         # column index for header column iteration
         self.hcol = 0
-
-
+#
     def row0(self):
         """Return the index (0-based) of the header row – the first row
         with a non-empty, non-'#' first cell.
         """
         return self._header_rowindex
-
-
+#
     def hideCol(self, index, clearheader=False):
         """Hide the given column (0-indexed). Optionally clear the subject.
         """
@@ -191,8 +185,7 @@ class KlassMatrix(Table):
             # Clear any existing "subject"
             self.write(self.rowindex-1, index, None)
             self.write(self.rowindex, index, None)
-
-
+#
     def nextcol(self):
         """Iterate over header columns with 'X' in template.
         """
@@ -203,8 +196,7 @@ class KlassMatrix(Table):
                     return self.hcol
             except:
                 REPORT.Fail(_TOO_FEW_COLUMNS, path=self.template)
-
-
+#
     def nextrow(self):
         """Iterate over pupil rows ('X' in first column).
         """

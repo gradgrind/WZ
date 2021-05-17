@@ -1,50 +1,12 @@
 #*** MINION 1.0 ***#
 # ************** Zeugnis-Gruppen **************
 # Eine Sammlung der Daten für die Zeugnisgruppen.
-# Nur für die hier eingetragenen Gruppen können Notenzeugnisse erstellt
-# werden.
-#TODO: Auch Zwischenzeugnisse hier durch 'Zeugnis' vertreten?
-# Letzte Änderung: 2021-04-29
-
-###########################
-### Lists of valid grades
-# *: ("no grade" ->) "––––––"
-# nt: "nicht teilgenommen"
-# t: "teilgenommen"
-# nb: "kann nich beurteilt werden"
-## ne: "nicht erteilt"
-# <UNCHOSEN>: Subject not included in report
-&NO_GRADE: *
-&UNCHOSEN: /
-&NORMAL_GRADES: [1+ 1 1- 2+ 2 2- 3+ 3 3- 4+ 4 4- 5+ 5 5- 6
-        &NO_GRADE nt t nb &UNCHOSEN]
-&ABITUR_GRADES: [15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00
-        &NO_GRADE nt t nb &UNCHOSEN]
-###########################
+# Letzte Änderung: 2021-05-13
 
 # Voreinstellungen ("defaults")
 __DEFAULT__: {
     # Es gibt "SekI" und "SekII".
-    Stufe: SekI
-
-    # (engl. "grade table template"):
-    NotentabelleVorlage: Noten/Noteneingabe
-
-    # (engl. "grade report template"):
-    NotenzeugnisVorlage: [
-        [Zeugnis      SekI]
-        [Abgang       SekI-Abgang]
-        [Abschluss    SekI-Abschluss]
-        [Orientierung Orientierung]
-    ]
-
-    # Notengruppen, deren Noten nicht im Zeugnis erscheinen:
-    Nullgruppen: []
-
-    # Welche Bewertungsmaßstäbe (engl. "streams") in dieser Gruppe
-    # zulässig sind:
-    # leer => keine Untergruppen in dieser Klasse/Gruppe
-    Maßstäbe: []
+#?    Stufe: SekI
 
     # (extra "grade" fields in internal table):
     # Zusätzliche "Notenfelder" in interner Notentabelle
@@ -59,20 +21,11 @@ __DEFAULT__: {
     # Berechnete Felder, z.B. Durchschnitte für Notenkonferenz:
     Calc: []
     # gültige "Noten":
-    NotenWerte: &NORMAL_GRADES
 }
 
 # Gruppe '13':
 13: {
-    Stufe: SekII
-    NotentabelleVorlage: Noten/Noteneingabe-Abitur
-    NotenzeugnisVorlage: [
-        [Zeugnis SekII-13_1]
-        [Abgang  SekII-13-Abgang]
-        [Abi     Abitur]
-        [FHS     Fachhochschulreife]
-        [NA      Abitur-nicht-bestanden]
-    ]
+#?    Stufe: SekII
 
     Notenfelder_X: [
         # Zulässige Zeugnisarten (je nach Anlass)
@@ -98,14 +51,7 @@ __DEFAULT__: {
 }
 
 12.G: {
-    Stufe: SekII
-    NotentabelleVorlage: Noten/Noteneingabe-SII
-    NotenzeugnisVorlage: [
-        [Zeugnis  SekII-12]
-        [Abgang   SekII-12-Abgang]
-    ]
-    Nullgruppen: [X]
-    Maßstäbe: [Gym]
+#?    Stufe: SekII
 
     Notenfelder_X: [
         # Zulässige Zeugnisarten (je nach Anlass):

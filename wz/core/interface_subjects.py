@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_subjects.py - last updated 2021-04-06
+core/interface_subjects.py - last updated 2021-05-04
 
 Controller/dispatcher for subjects management.
 
@@ -29,36 +29,15 @@ _CHOICE_TABLE_SAVED = "Fach-Wahl-Tabelle für Klasse {klass} gespeichert" \
 _CHOICES_CLASS = "Fach-Wahl-Tabelle für Klasse {klass} aktualisiert"
 
 from core.pupils import PUPILS
-from core.courses import Subjects, CourseError
+from core.courses import SUBJECTS, CourseError
 from tables.spreadsheet import TableError
+
+TRUE, FALSE = 'X', ''
 
 ### +++++
 
-class _Subject_Base:
-    """A cache for subject/course information.
-    """
-    schoolyear = None
-    subjects = None
-#
-    @classmethod
-    def set_year(cls, year = None):
-        """Load subject/course data for the given year.
-        Clear data if no year.
-        """
-        if year == cls.schoolyear:
-            return
-        cls.schoolyear = year
-        cls.subjects = Subjects(year) if year else None
-##
-def SUBJECTS():
-    if _Subject_Base.schoolyear != SCHOOLYEAR:
-        _Subject_Base.set_year(SCHOOLYEAR)
-    return _Subject_Base.subjects
-
-###
-
 def get_classes():
-    subjects = SUBJECTS()
+    subjects = SUBJECTS(SCHOOLYEAR)
     clist = subjects.classes()
     clist.reverse()
     CALLBACK('subjects_SET_CLASSES', classes = clist)
@@ -67,33 +46,35 @@ def get_classes():
 ###
 
 def edit_choices(klass):
-    subjects = SUBJECTS()
+    subjects = SUBJECTS(SCHOOLYEAR)
     info = (
         (subjects.SCHOOLYEAR,    SCHOOLYEAR),
         (subjects.CLASS,         klass)
     )
-    slist = []
-    for sdata in subjects.class_subjects(klass):
-#TODO: Should there be anything else in the choice table?
-        if sdata.TIDS:
-            # Add subject
-            slist.append((sdata.SID, sdata.SUBJECT))
-            continue    # Not a "real" subject
+    pid_sidmap, sid_name = subjects.class_subjects(klass)
+    # Note that this includes "composite" subjects
+    slist = [(sid, sname) for sid, sname in sid_name.items()]
     pupils = PUPILS(SCHOOLYEAR)
     pupil_data = []
-    for pdata in pupils.class_pupils(klass):
+    for pid, sid_sdata in pid_sidmap.items():
+        pdata = pupils[pid]
         pid = pdata['PID']
-        pupil_data.append((pid, pupils.name(pdata), pdata['STREAM'],
-                list(subjects.choices(pid))))
+        # Get saved choices
+        pchoice = subjects.optouts(pid)
+        clist = {sid: TRUE if sid in pchoice else FALSE
+                for sid, sname in slist if sid in sid_sdata}
+        pupil_data.append((pid, pupils.name(pdata), pdata['GROUPS'], clist))
     CALLBACK('subjects_EDIT_CHOICES', info = info,
             pupil_data = pupil_data, subjects = slist)
     return True
-#
+
+###
+
 def save_choices(klass, data):
     """Save the choice table for the given pupils.
         <data>: [[pid, [sid, ... ]], ... ]
     """
-    SUBJECTS().save_choices(klass, data)
+    SUBJECTS(SCHOOLYEAR).save_choices(klass, data)
     REPORT('INFO', _CHOICES_SAVED.format(klass = klass))
     return get_classes()
 
@@ -101,22 +82,15 @@ def save_choices(klass, data):
 
 def update_subjects(filepath):
     try:
-        klass = SUBJECTS().import_source_table(filepath)
+        klass = SUBJECTS(SCHOOLYEAR).import_source_table(filepath)
     except (CourseError, TableError) as e:
         REPORT('ERROR', str(e))
     else:
         REPORT('INFO', _SUBJECTS_CLASS.format(klass = klass))
     return True
 #
-#def select_choice_class():
-#    subjects = SUBJECTS()
-#    clist = [(c, subjects.CLASS + ' ' + print_class(c))
-#            for c in subjects.classes()]
-#    CALLBACK('subjects_SELECT_CHOICE_TABLE', classes = clist)
-#    return True
-#
 def make_choice_table(klass, filepath):
-    xlsx_bytes = SUBJECTS().make_choice_table(klass)
+    xlsx_bytes = SUBJECTS(SCHOOLYEAR).make_choice_table(klass)
     with open(filepath, 'wb') as fh:
         fh.write(xlsx_bytes)
     REPORT('INFO', _CHOICE_TABLE_SAVED.format(klass = klass,
@@ -125,7 +99,7 @@ def make_choice_table(klass, filepath):
 #
 def update_choice_table(filepath):
     try:
-        klass = SUBJECTS().import_choice_table(filepath)
+        klass = SUBJECTS(SCHOOLYEAR).import_choice_table(filepath)
     except TableError as e:
         REPORT('ERROR', str(e))
     else:

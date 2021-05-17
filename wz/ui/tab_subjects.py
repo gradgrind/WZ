@@ -2,7 +2,7 @@
 """
 ui/tab_subjects.py
 
-Last updated:  2021-04-06
+Last updated:  2021-05-04
 
 Subject table management.
 
@@ -57,6 +57,7 @@ _SUBJECT_CHOICE_FILE = 'Fachwahl_{klass}.xlsx'
 _TABLE_FILE = "Tabellendatei (*.xlsx *.ods *.tsv)"
 _EXCEL_FILE = "Excel-Tabelle (*.xlsx)"
 _SAVE = "Änderungen Speichern"
+_UNSAVED_CHANGES = "Es gibt Änderungen, die zuerst gespeichert werden müssen."
 
 #####################################################
 
@@ -272,6 +273,9 @@ class Subjects(TabPage):
         BACKEND('SUBJECT_update_choice_table', filepath = fpath)
 #
     def choice_table(self):
+        if self.is_modified():
+            SHOW_WARNING(_UNSAVED_CHANGES)
+            return
         fpath = saveDialog(_EXCEL_FILE,
                 _SUBJECT_CHOICE_FILE.format(klass = self.klass))
         if fpath:

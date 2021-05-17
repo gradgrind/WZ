@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-03-29
+core/interface_grades.py - last updated 2021-05-06
 
 Controller/dispatcher for grade management.
 
@@ -215,7 +215,11 @@ class GradeManager:
         grades.set_grade(sid, val)
         if sid in cls.grade_table.extras:
             return True
-        # If it is a component, recalculate the composite
+        # If it is a component, recalculate the dependent fields
+#TODO
+
+
+
         if sid in cls.grade_table.components:
             csid = cls.grade_table.sid2subject_data[sid].composite
             if csid == UNCHOSEN:

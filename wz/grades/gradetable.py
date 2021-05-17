@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-03-29
+grades/gradetable.py - last updated 2021-05-13
 
 Access grade data, read and build grade tables.
 
@@ -19,6 +19,9 @@ Copyright 2021 Michael Towers
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+
+#TODO: Reimplement table handling based on "straight" (dict) data
+# and the new JSON structure.
 
 ### Messages
 _INVALID_INFO_KEY = "Ungüliges INFO-Feld ({key}) in Notentabelle:\n  {fpath}"
@@ -53,11 +56,12 @@ from collections import namedtuple
 
 from core.base import Dates
 from core.pupils import PUPILS
-from core.courses import Subjects
+from core.courses import SUBJECTS
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from tables.matrix import KlassMatrix
 from tables.datapack import get_pack, save_pack
-from local.base_config import DECIMAL_SEP, USE_XLSX, year_path, NO_DATE
+from local.base_config import DECIMAL_SEP, USE_XLSX, year_path, NO_DATE, \
+        klass_group
 from local.grade_config import GradeBase, UNCHOSEN, NO_GRADE, \
         GRADE_INFO_FIELDS, GradeConfigError
 from local.abitur_config import AbiCalc
@@ -68,114 +72,19 @@ class GradeTableError(Exception):
 class FailedSave(Exception):
     pass
 
-###
+### +++++
 
-class _Grades(GradeBase):
-    """A <_Grades> instance manages the set of grades in the database for
-    a pupil and "term".
-    """
-#    def __init__(self, group, stream, term):
-#        super().__init__(group, stream, term)
-#
-    def init_grades(self, gmap):
-        """Initialize the subject-grade mapping.
-        This cannot be in <__init__> because the <_Grades> instance may
-        be needed to prepare the grades (if they depend on group/term).
-        """
-        for sid, g in gmap.items():
-            self.set_grade(sid, g)
-#
-    def filter_grade(self, sid, g):
-        """Return the possibly filtered grade <g> for the subject <sid>.
-        Integer values are stored additionally in the mapping
-        <self.i_grade> – only for subjects with numerical grades, others
-        are set to -1.
-        """
-        if sid[0] == '*':
-            # An "extra" field – there may be default values ...
-            return self.extras_default(sid, g)
-        # There can be normal, empty, non-numeric and badly-formed grades
-        gi = -1     # integer value
-        if g:
-            if g in self.valid_grades:
-                # Separate out numeric grades, ignoring '+' and '-'.
-                # This can also be used for the Abitur scale, though the
-                # stripping is superfluous.
-                try:
-                    gi = int(g.rstrip('+-'))
-                except ValueError:
-                    pass
-            else:
-                REPORT('ERROR', _BAD_GRADE.format(sid = sid, g = g))
-                g = ''
-        else:
-            g = ''  # ensure that the grade is a <str>
-        self.i_grade[sid] = gi
-        return g
-#
-    def set_grade(self, sid, grade):
-        """Update a single grade.
-        """
-        self[sid] = self.filter_grade(sid, grade)
-#
-    def composite_calc(self, sdata):
-        """Recalculate a composite grade.
-        <sdata> is the subject-data for the composite, the (weighted)
-        average of the components will be calculated, if possible.
-        If there are no numeric grades, choose NO_GRADE, unless all
-        components are UNCHOSEN (in which case also the composite will
-        be UNCHOSEN).
-        """
-        asum = 0
-        ai = 0
-        non_grade = UNCHOSEN
-        for csid, weight in sdata.composite:
-            gi = self.i_grade[csid]
-            if gi >= 0:
-                ai += weight
-                asum += gi * weight
-            elif self[csid] != UNCHOSEN:
-                non_grade = NO_GRADE
-        if ai:
-            g = Frac(asum, ai).round()
-            self[sdata.sid] = self.grade_format(g)
-            self.i_grade[sdata.sid] = int(g)
-        else:
-            self[sdata.sid] = non_grade
-
-###
-
-class Frac(Fraction):
-    """A <Fraction> subclass with custom <truncate> and <round> methods
-    returning strings.
-    """
-    def truncate(self, decimal_places = 0):
-        if not decimal_places:
-            return str(int(self))
-        v = int(self * 10**decimal_places)
-        sval = ("{:0%dd}" % (decimal_places+1)).format(v)
-        return (sval[:-decimal_places] + DECIMAL_SEP + sval[-decimal_places:])
-#
-    def round(self, decimal_places = 0):
-        f = Fraction(1,2) if self >= 0 else Fraction(-1, 2)
-        if not decimal_places:
-            return str(int(self + f))
-        v = int(self * 10**decimal_places + f)
-        sval = ("{:0%dd}" % (decimal_places+1)).format(v)
-        return (sval[:-decimal_places] + DECIMAL_SEP + sval[-decimal_places:])
-
-###
-
-class _GradeTable(dict):
+class GradeTable:
     """Manage the grade data for a term (etc.) and group.
-    <term> need not actually be a "school term", though it may well be.
-    It is used rather to specify the "occasion" determining the issue
-    of the reports.
-    For each possible, valid combination of "term" and group there is
-    a grade table (pupil-subject, with some general information).
-    The class instance is a mapping: {pid -> <_Grades> instance}. The
-    stream is available in the <_Grades> instance.
-    Additional information is available as attributes:
+    The data is a mapping (see documentation) which is stored in JSON.
+    It contains header information, for the whole table, and the grades
+    (etc.) for each pupil in the group. It is available as <self.data>.
+    Methods provide further information connected to the grades:
+     - <subjects()>: {sid -> subject-name}   (just "real" sids)
+     -
+
+     ... ?
+
         <group>: school-class/group, as specified in
                 <GradeBase.REPORT_GROUPS>
         <term>: a string representing a valid "term" (school-term, etc.)
@@ -192,30 +101,173 @@ class _GradeTable(dict):
         <name>: {pid -> (short) name}
     """
 #
-    def __init__(self, schoolyear):
-        super().__init__()
+    def __init__(self, schoolyear, group, term = None):
         self.schoolyear = schoolyear
-        self.group = None
-        self.term = None
-        self.subselect = None
-        self.issue_d = None
-        self.grades_d = None
-        self.sid2subject_data = None
-        self.subjects = None
-        self.composites = None
-        self.extras = None
-        self.name = {}
-        self.calcs = None
+        self.group = group
+        self.klass, self.grouptag = klass_group(group)
+        self.term = term
+        if term:
+            # Try to load existing table
+            table_path = year_path(schoolyear,
+                    GradeBase.table_path(group, term))
+
+            try:
+                gdata = get_pack(table_path)
+
+                #? Check SCHOOLYEAR = schoolyear,
+                #        GROUP = group, TERM = term)
+            except FileNotFoundError:
+                # File doesn't exist
+
+
+#?
+        self.new_group_table(gdata)
+
+
+
+
+        issue_d = gdata.get('ISSUE_D') or NO_DATE
+        if issue_d == NO_DATE or issue_d >= Dates.today():
+            # The data is not yet "closed".
+            self._new_group_table(grade_data = gdata)
+            return
+        self.issue_d = issue_d
+        self.grades_d = gdata.get('GRADES_D') or NO_DATE
+        for row in gdata.get('__PUPILS__'):
+            pid = row['PID']
+            gmap = row['__DATA__']
+            self.name[pid] = row['NAME']
+            grades = _Grades(group, row.get('STREAM'), term)
+            grades.init_grades(self._include_grades(grades, gmap))
+            self[pid] = grades
+            for comp in self.composites:
+                grades.composite_calc(self.sid2subject_data[comp])
+
+
+
+
+        self.data = None
 #
-    def _new_group_table(self, pids = None, grade_data = None):
+
+
+
+#
+    def new_group_table(self, grade_data = None):
         """Initialize an empty table for <self.group> and <self.term>.
-        If <pids> is not null, only include these pupils.
-        <grade_data> is a grade-table. It is used for including existing
-        data in a current, non-finished table.
+        If <grade_data> is supplied, it should be a grade-table. Its
+        contents are added to the new table, in so far as there are
+        corresponding slots.
+
+            {'HEADER':
+                {'SCHOOLYEAR': '2021',
+                 'GROUP': '12.G',
+                 'TERM': '2',
+                 'ISSUE_D': '2021-07-21',
+                 'GRADES_D': '2021-07-10'
+                },
+             'MEMBERS':
+                [{'PID': '001234', 'NAME': 'Hans Müller', 'LEVEL': 'Gym',
+                  '__GRADES__': {'De': '08', 'En': '11', ...},
+                  '__EXTRA__': {..., '+Q': '13', '+Z': 'Zeugnis', ...}
+                 },
+                    ...
+                ],
+                ...
+            }
         """
+        # First get pupils and subjects
+        pupils = PUPILS(self.schoolyear)
+        subjects = SUBJECTS(self.schoolyear)
+        self.sid2subject_data = subjects.grade_subjects(self.klass,
+                self.grouptag)
+        # <sid2subject_data> contains composite subjects, but not other
+        # calculated or extra tags.
+#TODO: get (other) calcs and extras
+
+#+++++++++++++++++++++
+
+# Actually, can't I store the composite and tids fields in already processed
+# form? No, rather keep it all in one place ...
+
+
+#TODO: This bit should probably be separate ... or I add the possibility
+# of a "table" for a single pupil – needed for custom reports.
+
+        self.real_subjects = {} # name-mapping just for "real" subjects
+        self.composites = {}    # name-mapping for composite sids
+        ### Collect weighted components for composites, etc.
+        self.comp2weights = {}
+        self.depends = {}   # which sids depend on an entry
+        for sid, sdata in self.sid2subject_data.items():
+            if sdata['TIDS']:
+                # "real" (taught) subject
+                self.real_subjects[sid] = subjects.subject_name(sid)
+            else:
+                # "composite" subject
+                self.composites[sid] = subjects.subject_name(sid)
+# Note that it is thus impossible to have "special subjects" other than
+# composites under this scheme. That is, no other intermediate values
+# can be registered here. Maybe that is no problem, though.
+# Composites are a bit special in that they produce grades which appear
+# in the reports.
+            compos = sdata['COMPOSITE']
+            if compos:
+                _compos = []
+                self.depends[sid] = _compos
+                for c in compos.split():
+                    try:
+                        ctag, w = c.split(':')
+                    except ValueError:
+                        ctag, w = c, 1
+                    else:
+                        w = int(w)
+                    _compos.append(ctag)
+                    self.comp2weights.setdefault(ctag, {})[sid] = w
+#TODO: cache the minion file or the processed data?
+# Allow term to play a role in configuration?
+        _extras = MINION(os.path.join(DATA, 'GRADE_EXTRAS'))
+        self.extras = {}
+        self.extra2handler = {}
+        try:
+            extras = _extras[self.group]
+        except:
+            pass
+        else:
+            for e in extras:
+                self.extras[e[0]] = e[1]
+                self.extra2handler[e[0]] = e[2:]
+
+#TODO: If the calculated fields are not included in the stored version
+# (which is the intended behaviour), it will be necessary to be able to
+# distinguish them from the extra fields which will be saved!
+# The simplest might be to insist that calculated fields start with '$'.
+
+#---------------------
+
+        pupils = pupils.class_pupils(self.klass, self.grouptag)
+        # Build MEMBERS list:
+        self.members = []
+        self.pid2members = {}
+        for pdata in pupils:
+            pid = pdata['PID']
+            mdata = {'PID': pid, 'NAME': pupils.name(pdata),
+#TODO:
+                    'LEVEL': GradeBase.get_level(self.klass, self.grouptag),
+                    '__GRADES__': ,
+                    '__EXTRA__':
+                    }
+
+            self.members.append()
+
+
+#TODO
         if grade_data:
-            date = grade_data.get('ISSUE_D') or NO_DATE
-            self.issue_d = date
+            self.set_header('ISSUE_D',
+                    grade_data.get_header('ISSUE_D') or NO_DATE)
+            self.set_header('GRADES_D',
+                    grade_data.get_header('GRADES_D') or NO_DATE)
+
+            issue_d = date
             self.grades_d = grade_data.get('GRADES_D') or NO_DATE
             grade_maps = {}
             for pdata in grade_data['__PUPILS__']:
@@ -279,21 +331,57 @@ class _GradeTable(dict):
         self.subselect = tag
         # Get subjects
         subjects = Subjects(self.schoolyear)
-        self.sid2subject_data = {} # {sid -> subject_data}
+        # {sid -> subject_data}:
+        self.sid2subject_data = subjects.grade_subjects(group)
         self.subjects = {}   # name-mapping just for "real" subjects
         self.composites = {} # name-mapping for composite sids
-        self.components = set() # set of "component" sids
-        for gs in subjects.grade_subjects(group):
-            sid = gs.sid
-            self.sid2subject_data[sid] = gs
-            if gs.tids:
+        comp2weights = {} # collect weighted components for composites, etc.
+
+        for sid, sdata in self.sid2subject_data.items():
+            tids = sdata['TIDS']
+            if tids:
                 # "real" (taught) subject
-                self.subjects[sid] = gs.name
-                if gs.composite:
-                    self.components.add(sid)
+                self.subjects[sid] = subjects.subject_name(sid)
+                sdata['TIDS'] = tids.split()
             else:
                 # "composite" subject
-                self.composites[sid] = gs.name
+                self.composites[sid] = subjects.subject_name(sid)
+            compos = sdata['COMPOSITE']
+            _compos = []
+            sdata['COMPOSITE'] = _compos
+            if compos:
+                for c in compos.split():
+                    try:
+                        ctag, w = c.split(':')
+                    except ValueError:
+                        ctag, w = c, 1
+                    else:
+                        w = int(w)
+                    _compos.append(ctag)
+                    comp2weights.setdefault(ctag, {})[sid] = w
+        # Add components to composites ...
+        self.extra_components = {}
+        for sid, s2w in comp2weights.items():
+            if sid in self.composites:
+                sdata = self.sid2subject_data[sid]
+                sdata['COMPONENTS'] = s2w
+            else:
+                self.extra_components.setdefault(sid, {})['COMPONENTS'] = s2w
+#TODO?
+        self.components = set() # set of "component" sids
+        # The "real components" are not directly identifiable. They can
+        # be found by looking for a "real composite" in the COMPOSITE field.
+        # But actually, why should they be identified specifically?
+        # Perhaps to mark/separate them in the table? There is perhaps
+        # a better way of handling that? E.g. on the basis of their
+        # SGROUP?
+        for sid in self.subjects:
+            sdata = self.sid2subject_data[sid]
+            for c in sdata['COMPOSITE']:
+                if c in self.composites:
+                    self.components.add(sid)
+
+#TODO?
         # data for "extra" sid-fields:
         self.extras = _Grades.xgradefields(group, term)
         # data for additional info fields, whose values are calculated
@@ -555,7 +643,7 @@ class NewGradeTable(_GradeTable):
 
 ###
 
-class GradeTable(_GradeTable):
+class oldGradeTable(_GradeTable):
     def __init__(self, schoolyear, group, term, tag = None, ok_new = False):
         """If <ok_new> is true, a new table may be created, otherwise
         the table must already exist.

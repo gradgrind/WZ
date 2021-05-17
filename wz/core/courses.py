@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-05-02
+core/courses.py - last updated 2021-05-17
 
 Manage course/subject data.
 
@@ -66,9 +66,11 @@ _COMPOSITE_IS_COMPONENT = "Fach-Kürzel „{sid}“ ist sowohl als „Sammelfach
         " als auch als „Unterfach“ definiert"
 
 ### Fields
-_SCHOOLYEAR = 'Schuljahr'
+_TITLE = "Fachdaten"
 
-import sys, os, shutil, datetime, gzip, json
+###############################################################
+
+import sys, os, datetime
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
@@ -78,53 +80,62 @@ from collections import namedtuple
 
 from core.base import Dates
 from core.pupils import PUPILS
-from local.base_config import SubjectsBase, USE_XLSX, year_path
-from local.grade_config import NULL_COMPOSITE, NOT_GRADED, UNCHOSEN
+from local.base_config import SubjectsBase, year_path, klass_group
+from local.grade_config import NOT_GRADED, UNCHOSEN
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from tables.matrix import KlassMatrix
-
+from tables.datapack import get_pack, save_pack
 
 class CourseError(Exception):
     pass
 
 NONE = ''
 WHOLE_CLASS = '*'
+NULL = 'X'
 
-def klass_group(group):
-    """Split a group name (e.g. '11.G' into class ('11') and group tag ('G').
-    If there is no '.' in the group name, this is assumed to be the class
-    and the group is <NONE>.
-    """
-    try:
-        klass, gtag = group.split('.')
-    except ValueError:
-        klass, gtag = group, NONE
-    return klass, gtag
+### +++++
 
-###
-
+def SUBJECTS(schoolyear):
+    return Subjects._set_year(schoolyear)
+##
 class Subjects(SubjectsBase):
     """Manage the course/subject tables.
     """
+    ## Implement a cache for subject/course information.
+    _schoolyear = None
+    _subjects = None
+#
+    @classmethod
+    def _set_year(cls, year = None):
+        """Load subject/course data for the given year.
+        Clear data if no year.
+        """
+        if year != cls._schoolyear:
+            cls._subjects = cls(year) if year else None
+            cls._schoolyear = year
+        return cls._subjects
+
+##
+
     def __init__(self, schoolyear):
         self.schoolyear = schoolyear
         self.filepath = year_path(self.schoolyear, self.COURSE_TABLE)
         try:
-            with gzip.open(self.filepath + '.json.gz', 'rt',
-                    encoding = 'utf-8') as zipfile:
-                data = json.load(zipfile)
+            data = get_pack(self.filepath)
         except FileNotFoundError:
             self._modified = '–––'
-            self._choices = {}
+            self._optouts = {}
             self._klasses = {}
         else:
             if data['SCHOOLYEAR'] != self.schoolyear:
                 raise CourseError(_SCHOOLYEAR_MISMATCH.format(
                         filepath = self.filepath))
             self._modified = data.get('__MODIFIED__')
-            self._choices = data.get('__CHOICES__')
             self._klasses = data.get('__SUBJECTS__')
+            self._optouts = data.get('__CHOICES__')
         self._names = None
+#TODO: It is not clear that this method is actually needed!
+        self.chosen(None)   # Initialize chosen-subject cache
 #
 #TODO: Consider whether to integrate the subject names in the json file.
 # There could be methods to read and save it ... also a gui editor ...
@@ -216,26 +227,18 @@ class Subjects(SubjectsBase):
         """
         # Back up old table, if it exists
         timestamp = Dates.timestamp()
-        if not os.path.isdir(self.filepath):
-            os.makedirs(self.filepath)
-        fpath = self.filepath + '.json.gz'
-        if os.path.isfile(fpath):
-            today = timestamp.split('_', 1)[0]
-            bpath = os.path.join(self.filepath, today + '.json.gz')
-            if not os.path.isfile(bpath):
-                shutil.copyfile(fpath, bpath)
+        today = timestamp.split('_', 1)[0]
         data = {
-            'TITLE': 'Course Data',
+            'TITLE': _TITLE,
             'SCHOOLYEAR': self.schoolyear,
             '__MODIFIED__': timestamp,
             '__SUBJECTS__': self._klasses,
-            '__CHOICES__': self._choices
+            '__CHOICES__': self._optouts
         }
-        with gzip.open(fpath, 'wt', encoding = 'utf-8') as zipfile:
-            json.dump(data, zipfile, ensure_ascii = False)
+        save_pack(self.filepath, data, today)
         self._modified = timestamp
 #
-    def grade_subjects(self, group):
+    def grade_subjects(self, klass, grouptag = None):
         """Return a mapping {sid -> subject-data} for the given group.
         subject-data is also a mapping ({field -> value}).
         An iterator over the subject-data mappings is available using
@@ -249,7 +252,6 @@ class Subjects(SubjectsBase):
         provide a weighting for averaging, e.g. '$D:2'.
         Weights should be <int>, to preserve exact rounding.
         """
-        klass, grouptag = klass_group(group)
         table = {}
         # Read table rows
         sclist = self._klasses.get(klass)
@@ -274,11 +276,15 @@ class Subjects(SubjectsBase):
         return table
 #
     def class_subjects(self, klass):
-        """Return a mapping {pid -> {sid: group}} for the given class.
-        The group is here the group in which the pupil takes the subject
-        under consideration.
-        Subjects which are not possible for a pupil because of their
-        groups are not included.
+        """Return a mapping {pid -> {sid: subject-data}} for the given
+        class.
+        Only subjects are included which have an entry in the SGROUPS
+        field, i.e. those for direct inclusion in reports.
+        Note that also "composite" subjects will be included and
+        subjects for which no grade is given (but a text report is
+        expected).
+        Subjects which are not possible for a pupil because of a group
+        mismatch are not included.
         A second result is an ordered mapping of all subjects relevant
         for the class: {sid -> subject name}.
         """
@@ -288,48 +294,78 @@ class Subjects(SubjectsBase):
         plist = pupils.class_pupils(klass)
         # Get all subject data
         sclist = self._klasses.get(klass)
-        class_sids = {}
-        for sdata in sclist:
-            if sdata['GROUP'] and sdata['SGROUP']:
-                sid = sdata['SID']
-                if sid not in class_sids:
-                    class_sids[sid] = self.subject_name(sid)
+        sid_name = {}
         if sclist and plist:
+            for sdata in sclist:
+                if sdata['GROUP'] and sdata['SGROUP']:
+                    sid = sdata['SID']
+                    if sid not in sid_name:
+                        sid_name[sid] = self.subject_name(sid)
             for pdata in plist:
                 pid = pdata['PID']
+                pgroups = pdata['GROUPS'].split()
                 psids = {}
                 table[pid] = psids
                 for sdata in sclist:
                     sid = sdata['SID']
+                    if sid not in sid_name:
+                        continue
                     g = sdata['GROUP']
-                    if (g != WHOLE_CLASS) \
-                            and (g not in pdata['GROUPS'].split()):
-                        continue    # Skip
-                    try:
-                        g0 = psids[sid]
-                    except KeyError:
-                        # ok!!
-                        psids[sid] = g
-                    else:
-                        raise CourseError(_MULTIPLE_PID_SID.format(
-                                klass = klass, pname = pupils.name(pdata),
-                                sid = sid, groups = f'[{g0}, {g}]'))
-        return table, class_sids
+                    if g == WHOLE_CLASS or g in pgroups:
+                        try:
+                            sd0 = psids[sid]
+                        except KeyError:
+                            # ok!!
+                            psids[sid] = sdata
+                        else:
+                            g0 = sd0['GROUP']
+                            raise CourseError(_MULTIPLE_PID_SID.format(
+                                    klass = klass,
+                                    pname = pupils.name(pdata),
+                                    sid = sid,
+                                    groups = f'[{g0}, {g}]'))
+        return table, sid_name
 
 # -------------------------------------------------------
-#
-#?
 
-
-#
     def migrate(self):
         self.schoolyear = str(int(self.schoolyear) + 1)
         self.filepath = year_path(self.schoolyear, self.COURSE_TABLE)
         self.save()
 #
-    def choices(self, pid):
+#TODO: It is not clear that this method is actually needed!
+    def chosen(self, pid):
+        """Return a mapping {sid -> subject-data} for chosen, valid sids
+        for the given pupil.
+        All subjects are included which are valid for the pupil's groups
+        and which are not marked in the choices table.
+        The values are cached, and the cache must be initialized by
+        calling this method with pid = <None>.
+        """
+        if not pid:
+            # Initialization
+            self._pid_choices = None
+            return
+        if not self._pid_choices:
+            self._pid_choices = {}
+            pid_sidmap, sid_name = self.class_subjects(klass)
+            # Note that this includes "composite" subjects
+            pupils = PUPILS(SCHOOLYEAR)
+            for pid, sid_sdata in pid_sidmap.items():
+                pdata = pupils[pid]
+                pid = pdata['PID']
+                # Get saved choices
+                pchoice = self.optouts(pid)
+                clist = {sid: sdata for sid, sdata in sid_sdata.items()
+                        if sid not in pchoice}
+                self._pid_choices[pid] = clist
+        return self._pid_choices[pid]
+#
+    def optouts(self, pid):
+        """Return a set of subjects which the given pupil has opted out of.
+        """
         try:
-            return set(self._choices[pid])
+            return set(self._optouts[pid])
         except KeyError:
             return set()
 #
@@ -343,9 +379,9 @@ class Subjects(SubjectsBase):
         """
         for pid, clist in data:
             if clist:
-                self._choices[pid] = clist
+                self._optouts[pid] = clist
             else:
-                self._choices.pop(pid, None)
+                self._optouts.pop(pid, None)
         self.save()
 #
     def import_choice_table(self, filepath):
@@ -387,9 +423,9 @@ class Subjects(SubjectsBase):
             if pid and pid != '$':
                 clist = [sid for sid, col in sid2col if row[col]]
                 if clist:
-                    self._choices[pid] = clist
+                    self._optouts[pid] = clist
                 else:
-                    self._choices.pop(pid, None)
+                    self._optouts.pop(pid, None)
         self.save()
         return klass
 #
@@ -416,14 +452,14 @@ class Subjects(SubjectsBase):
         sidcol = []
         col = 0
         rowix = table.row0()    # index of header row
-        for sdata in self.class_subjects(klass):
-            if not sdata.TIDS:
-                continue    # Not a "real" subject
+        pid_sidmap, sid_name = self.class_subjects(klass)
+        # Note that this includes "composite" subjects
+        for sid, sname in sid_name.items():
             # Add subject
             col = table.nextcol()
-            sidcol.append((sdata.SID, col))
-            table.write(rowix, col, sdata.SID)
-            table.write(rowix + 1, col, sdata.SUBJECT)
+            sidcol.append((sid, col))
+            table.write(rowix, col, sid)
+            table.write(rowix + 1, col, sname)
         # Enforce minimum number of columns
         while col < 18:
             col = table.nextcol()
@@ -431,18 +467,22 @@ class Subjects(SubjectsBase):
         # Delete excess columns
         table.delEndCols(col + 1)
         ### Add pupils
-        pupils = Pupils(self.schoolyear)
-        for pdata in pupils.class_pupils(klass):
+        pupils = PUPILS(self.schoolyear)
+        for pid, sid_sdata in pid_sidmap.items():
+            pdata = pupils[pid]
             pid = pdata['PID']
             row = table.nextrow()
             table.write(row, 0, pid)
-            table.write(row, 1, Pupils.name(pdata))
-            table.write(row, 2, pdata['STREAM'])
+            table.write(row, 1, pupils.name(pdata))
+            table.write(row, 2, pdata['GROUPS'])
             # Get saved choices
-            pchoice = self.choices(pid)
+            pchoice = self.optouts(pid)
             for sid, col in sidcol:
-                if sid in pchoice:
-                    table.write(row, col, UNCHOSEN)
+                if sid in sid_sdata:
+                    if sid in pchoice:
+                        table.write(row, col, UNCHOSEN)
+                else:
+                    table.write(row, col, NULL, protect = True)
         # Delete excess rows
         row = table.nextrow()
         table.delEndRows(row)
@@ -470,13 +510,13 @@ if __name__ == '__main__':
 
     print("\nCLASSES:", _subjects.classes())
 
-    _g = '12.G'
-    print("\n**** Subject data for group %s: grading ****" % _g)
-    for sdata in _subjects.grade_subjects(_g).values():
+    _k, _g = '12', 'G'
+    print("\n**** Subject data for group %s.%s: grading ****" % (_k, _g))
+    for sdata in _subjects.grade_subjects(_k, _g).values():
         print("  ++", sdata)
-    _g = '12.R'
-    print("\n**** Subject data for group %s: grading ****" % _g)
-    for sdata in _subjects.grade_subjects(_g).values():
+    _k, _g = '12', 'R'
+    print("\n**** Subject data for group %s.%s: grading ****" % (_k, _g))
+    for sdata in _subjects.grade_subjects(_k, _g).values():
         print("  ++", sdata)
 
     for k in _subjects._klasses:
@@ -488,9 +528,15 @@ if __name__ == '__main__':
             print("\n &&", pid, data)
 
 
-    quit(0)
-
-
+    for _class in '11', '12', '13':
+        odir = os.path.join(DATA, 'testing', 'tmp')
+        os.makedirs(odir, exist_ok = True)
+        xlsx_bytes = _subjects.make_choice_table(_class)
+        tfile = os.path.join(odir, 'CHOICE_%s.xlsx' % _class)
+        with open(tfile, 'wb') as fh:
+            fh.write(xlsx_bytes)
+            print("\nOUT (choice table):", tfile)
+#    quit(0)
 
     print("\nIMPORT CHOICE TABLES:")
     idir = os.path.join(DATA, 'testing', 'FACHWAHL')
@@ -498,14 +544,14 @@ if __name__ == '__main__':
         print("  ...", f)
         _subjects.import_choice_table(os.path.join(idir, f))
 
-    for pid, choices in _subjects._choices.items():
-        print(" --> %s:" % pid, ', '.join(choices))
+    for pid, optouts in _subjects._optouts.items():
+        print(" --> %s:" % pid, ', '.join(optouts))
 
-    _class = '12'
+    _class = '13'
     odir = os.path.join(DATA, 'testing', 'tmp')
     os.makedirs(odir, exist_ok = True)
     xlsx_bytes = _subjects.make_choice_table(_class)
-    tfile = os.path.join(odir, 'CHOICE_%s.xlsx' % _class)
+    tfile = os.path.join(odir, 'CHOICE2_%s.xlsx' % _class)
     with open(tfile, 'wb') as fh:
         fh.write(xlsx_bytes)
         print("\nOUT (choice table):", tfile)
