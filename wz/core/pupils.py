@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-05-13
+core/pupils.py - last updated 2021-05-19
 
 Manage pupil data.
 
@@ -20,15 +20,14 @@ Copyright 2021 Michael Towers
    See the License for the specific language governing permissions and
    limitations under the License.
 """
-#TODO: streams are no longer used, there is now a field "GROUPS".
 
 # Use a single json file to contain all the pupil data, as a list of
-# value mappings (one for each pupil).
+# field-value mappings (one for each pupil).
 # When changes are made, date-timed back-ups are made, but only the
 # first change of a day is backed up.
 # Structure of the json file:
 # SCHOOLYEAR: schoolyear
-# TITLE: "Schülerliste"
+# TITLE: "Schülerliste"     # not used
 # __PUPILS__: [<pdata>]     # <pdata> is a mapping, field -> value
 # __MODIFIED__: <date-time>
 # It would probably be good to have a gui-editor for such files, but
@@ -43,6 +42,7 @@ if __name__ == '__main__':
 
 ### Messages
 _SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filepath}"
+_NO_SCHOOLYEAR = "Kein '{year}' angegeben in Schülertabelle:\n {filepath}"
 _NAME_MISSING = "Eingabezeile fehlerhaft, Name unvollständig:\n  {row}"
 _PID_DUPLICATE = "Schülerkennung {pid} mehrfach vorhanden:\n" \
         "  Klasse {c1} – {p1}\n  Klasse {c2} – {p2}"
@@ -52,82 +52,172 @@ _FULL_BACKUP_FILE = "Alle Schülerdaten gespeichert als:\n  {path}"
 
 import datetime
 
-from local.base_config import year_path, PupilsBase, USE_XLSX
-from core.base import tussenvoegsel_filter, Dates, sortingName
+from local.base_config import asciify, year_path, PupilsBase, USE_XLSX, \
+        SCHOOLYEAR, NONE
+from core.base import Dates
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from tables.datapack import get_pack, save_pack
+
+### -----
 
 class PupilError(Exception):
     pass
 
-def sortkey(pdata):
-    _lastname = pdata['LASTNAME']
-    try:
-        tv, lastname = _lastname.split('|', 1)
-    except ValueError:
-        tv, lastname = None, _lastname
-    return sortingName(pdata['FIRSTNAME'], tv, lastname)
-
 ###
 
-class _PupilList(list):
-    """Representation for a list of pupil-data mappings.
-    It also maintains a mapping {pid -> pupil-data}.
-    The resulting list should only be modified via the
-    methods provided here.
+def PUPILS(year):
+    """Fetch pupil data for the given year as a <_Pupils> instance,
+    using a cache for the last year used (normally the current one).
     """
-    def __init__(self):
-        super().__init__()
-        self._pidmap = {}
-#
-    def append(self, item):
-        super().append(item)
-        self._pidmap[item['PID']] = item
-#
-    def remove(self, item):
-        super().remove(item)
-        del(self._pidmap[item['PID']])
-#
-    def pid2pdata(self, pid):
-        return self._pidmap[pid]
-#
-    def sortlist(self):
-        """Alphabetical sort.
+    if _Pupils._schoolyear != year:
+        _Pupils._set_year(year)
+    return _Pupils._pupils
+##
+def Pupils_File(year, filepath, all_fields = True):
+    """Fetch pupil data from the given file as a <_Pupils> instance.
+    If <all_fields> is true, add any missing fields (set to empty),
+    otherwise leave them undefined.
+    """
+    pupils = _Pupils(year)
+    plist = pupils.get_data(filepath)
+    pupils.set_data(plist, all_fields)
+    return pupils
+##
+class _Pupils(PupilsBase):
+    """Handler for pupil data. It is initialized with the school-year.
+    Pupil-data items (mappings) can be added from various sources:
+     - the internal database
+     - an external file
+     - a modified version of the existing data.
+    Normally all fields defined for a pupil (<self.FIELDS>, in module
+    "base_config") will be included, adding empty ones (<NONE>)if
+    necessary. However, by specifying <all_fields = False> to the
+    <set_data> method the addition of fields is prevented, so that only
+    the fields in the source file are present in the result.
+
+    An instance of this class is a <dict> holding the pupil data as a
+    mapping: {pid -> {field: value, ...}}.
+    The data is also sorted (alphabetically) into classes, the results
+    being available through the method <class_pupils>.
+    """
+    _schoolyear = None
+    _pupils = None
+    @classmethod
+    def _set_year(cls, year = None):
+        """Load pupil data for the given year, from the standard (internal)
+        location. Clear data if no year is given.
         """
-        self.sort(key = sortkey)
-
-###
-
-class Pupils(PupilsBase):
-    """Load the pupil data for the given year.
-    Normally it comes from the pupil-data file, but by passing <pupil_map>
-    it can be provided from elsewhere.
-    The pupil data is held as a mapping: {pid -> {field: value, ...}}.
-    The data is also sorted (alphabetically) into classes.
-    """
-    def __init__(self, schoolyear, pupil_map = None):
-        super().__init__()
-        self.schoolyear = schoolyear
-        self.filepath = year_path(self.schoolyear, self.CLASS_TABLE)
-        if pupil_map:
-            self.update(pupil_map)
+        if year == cls._schoolyear:
+            return
+        cls._schoolyear = year
+        if year:
+            cls._pupils = cls(year)
+            plist = cls._pupils.get_data()
+            cls._pupils.set_data(plist, all_fields = True)
         else:
-            data = get_pack(self.filepath)
-            if data['SCHOOLYEAR'] != self.schoolyear:
+            cls._pupils = None
+#
+    def __init__(self, schoolyear):
+        self.schoolyear = schoolyear
+        self._modified = '–––'
+        super().__init__()
+#
+    def get_data(self, filepath = None):
+        if filepath:
+            """Read in the file containing the "master" pupil data.
+            The file-path can be passed with or without type-extension.
+            If no type-extension is given, the folder will be searched for a
+            suitable file.
+            Alternatively, <filepath> may be an in-memory binary stream
+            (io.BytesIO) with attribute 'filename' (so that the
+            type-extension can be read).
+            """
+            ptable = Spreadsheet(filepath).dbTable()
+            data = {r[0]:r[1] for r in ptable.info}
+            try:
+                sy = data[SCHOOLYEAR]
+            except KeyError:
+                raise PupilError(_NO_SCHOOLYEAR.format(year = SCHOOLYEAR,
+                        filepath = filepath))
+            if sy != self.schoolyear:
                 raise PupilError(_SCHOOLYEAR_MISMATCH.format(
-                        filepath = self.filepath))
-            self._modified = data.get('__MODIFIED__')
-            for pdata in data['__PUPILS__']:
-                pid = pdata['PID']
+                        filepath = filepath))
+            pupil_list = self._read_source_table(ptable,
+                    tweak_names = not data.get('__KEEP_NAMES__'))
+        else:
+            filepath = year_path(self.schoolyear, self.CLASS_TABLE)
+            data = get_pack(filepath)
+            try:
+                sy = data['SCHOOLYEAR']
+            except KeyError:
+                raise PupilError(_NO_SCHOOLYEAR.format(year = 'SCHOOLYEAR',
+                        filepath = filepath))
+            if sy != self.schoolyear:
+                raise PupilError(_SCHOOLYEAR_MISMATCH.format(
+                        filepath = filepath))
+            pupil_list = data['__PUPILS__']
+        self._modified = data.get('__MODIFIED__') or '–––'
+        return pupil_list
+#
+    def _read_source_table(self, ptable, tweak_names):
+        """Read a pupil-data list from ptable, containing only the pupil
+        fields (in self.FIELDS) which are actually present in the file.
+        If <tweak_names> is true, the names will be analysed for
+        "tussenvoegsel" and re-split accordingly.
+        """
+        # Get column mapping: {field -> column index}
+        # Convert the localized names to uppercase to avoid case problems.
+        # Get the columns for the localized field names
+        colmap = {}
+        col = -1
+        for t in ptable.fieldnames():
+            col += 1
+            colmap[t.upper()] = col
+        # ... then for the internal field names,
+        # collect positions of fields to be collected, if possible
+        field_index = []
+        missing = []    # check that essential fields are present
+        for f, t in self.FIELDS.items():
+            try:
+                field_index.append((f, colmap[t.upper()]))
+            except KeyError:
+                pass
+        plist = []   # collect pupil data
+        for row in ptable:
+            pdata = {}
+            plist.append(pdata)
+            for f, i in field_index:
+                pdata[f] = row[i] or ''
+            if tweak_names:
+                # "Renormalize" the name fields
                 try:
-                    pd0 = self[pid]
+                    firstnames = pdata['FIRSTNAMES']
+                    lastname = pdata['LASTNAME']
                 except KeyError:
-                    pass
-                else:
-                    raise PupilError(_PID_DUPLICATE.format(pid = pid,
-                            p1 = self.name(pd0), c1 = pd0['CLASS'],
-                            p2 = self.name(pdata), c2 = pdata['CLASS']))
-                self[pid] = {f: pdata.get(f) or '' for f in self.FIELDS}
+                    raise PupilError(_NAME_MISSING.format(
+                            row = repr(pdata)))
+                pdata['FIRSTNAMES'], \
+                pdata['LASTNAME'], \
+                pdata['FIRSTNAME'] = tussenvoegsel_filter(
+                        firstnames, lastname,
+                        pdata.get('FIRSTNAME') or firstnames)
+        return plist
+#
+    def set_data(self, pdata_list, all_fields):
+        for pdata in pdata_list:
+            pid = pdata['PID']
+            try:
+                pd0 = self[pid]
+            except KeyError:
+                pass
+            else:
+                raise PupilError(_PID_DUPLICATE.format(pid = pid,
+                        p1 = self.name(pd0), c1 = pd0['CLASS'],
+                        p2 = self.name(pdata), c2 = pdata['CLASS']))
+            if all_fields:
+                self[pid] = {f: pdata.get(f) or NONE for f in self.FIELDS}
+            else:
+                self[pid] = pdata
         self.fill_classes()
 #
     def fill_classes(self):
@@ -135,12 +225,14 @@ class Pupils(PupilsBase):
         """
         self._klasses = {}
         for pid, pdata in self.items():
-            k = pdata['CLASS']
+            klass = pdata.get('CLASS')
+            if not klass:
+                raise PupilError(_CLASS_MISSING.format(row = repr(pdata)))
             try:
-                plist = self._klasses[k]
+                plist = self._klasses[klass]
             except KeyError:
                 plist = _PupilList()
-                self._klasses[k] = plist
+                self._klasses[klass] = plist
             plist.append(pdata)
         for plist in self._klasses.values():
             plist.sortlist()
@@ -173,7 +265,7 @@ class Pupils(PupilsBase):
         items = ['{k}={v}'.format(k = f, v = v) for f, v in pdata.items()]
         return 'Pupil Data: <%s>' % '; '.join(items)
 #
-    def class_pupils(self, klass, group = None, date = None):
+    def class_pupils(self, klass, groups = None, date = None):
         """Read the pupil data for the given school-class (possibly with
         group filter).
         Return a list of mappings {field -> value} (the table rows), the
@@ -182,8 +274,9 @@ class Pupils(PupilsBase):
         to the pupil data.
         If a <date> is supplied, pupils who left the school before that
         date will not be included.
-        If <group> is provided, only pupils in this group are included,
-        otherwise all pupils in the class.
+        If <groups> is provided, only pupils in one of these groups are
+        included, otherwise all pupils in the class. <groups> must be a
+        <set> – '*' is not valid here.
         """
         plist = _PupilList()
         for pdata in self._klasses[klass]:
@@ -192,75 +285,12 @@ class Pupils(PupilsBase):
                 exd = pdata.get('EXIT_D')
                 if exd and exd < date:
                     continue
-            if group and group not in pdata.get('GROUPS'):
+            if groups and not (groups & set(pdata.get('GROUPS'))):
                 continue
             plist.append(pdata)
         return plist
 #
-    def read_source_table(self, filepath):
-        """Read in the file containing the "master" pupil data.
-        The file-path can be passed with or without type-extension.
-        If no type-extension is given, the folder will be searched for a
-        suitable file.
-        Alternatively, <filepath> may be an in-memory binary stream
-        (io.BytesIO) with attribute 'filename' (so that the
-        type-extension can be read).
-        """
-        ptable = Spreadsheet(filepath).dbTable()
-        info = {r[0]:r[1] for r in ptable.info}
-        # Get column mapping: {field -> column index}
-        # Convert the localized names to uppercase to avoid case problems.
-        # Get the columns for the localized field names
-        colmap = {}
-        col = -1
-        for t in ptable.fieldnames():
-            col += 1
-            colmap[t.upper()] = col
-        # ... then for the internal field names,
-        # collect positions of fields to be collected, if possible
-        field_index = []
-        for f, t in self.FIELDS.items():
-            try:
-                field_index.append((f, colmap[t.upper()]))
-            except KeyError:
-                pass
-        # Collate rows into classes
-        classes = {}
-        for row in ptable:
-            pdata = {}
-            for f, i in field_index:
-                pdata[f] = row[i] or ''
-            try:
-                klass = pdata['CLASS']
-                if not klass:
-                    raise KeyError
-            except KeyError:
-                raise PupilError(_CLASS_MISSING.format(row = repr(pdata)))
-            try:
-                plist = classes[klass]
-            except KeyError:
-                plist = _PupilList()
-                classes[klass] = plist
-            plist.append(pdata)
-        for klass, plist in classes.items():
-            if not info.get('__KEEP_NAMES__'):
-                # "Renormalize" the name fields
-                for pdata in plist:
-                    try:
-                        firstnames = pdata['FIRSTNAMES']
-                        lastname = pdata['LASTNAME']
-                    except KeyError:
-                        raise PupilError(_NAME_MISSING.format(
-                                row = repr(pdata)))
-                    pdata['FIRSTNAMES'], \
-                    pdata['LASTNAME'], \
-                    pdata['FIRSTNAME'] = tussenvoegsel_filter(
-                            firstnames, lastname,
-                            pdata.get('FIRSTNAME') or firstnames)
-            plist.sortlist()
-        return classes
-#
-    def compare_update(self, newclasses):
+    def compare_update(self, newdata):
         """Compare the new data with the existing data and compile a list
         of changes, grouped according to class. There are three types:
             - new pupil
@@ -274,10 +304,10 @@ class Pupils(PupilsBase):
         changes = {}
         for k in self._klasses:
             changes[k] = []
-        for k in newclasses:
+        for k in newdata._klasses:
             changes[k] = []
         # Search for changes
-        for klass, plist in newclasses.items():
+        for klass, plist in newdata._klasses.items():
             kchanges = changes[klass]
             for pdata in plist:
                 pid = pdata.get('PID')
@@ -323,7 +353,9 @@ class Pupils(PupilsBase):
         The entries are basically those generated by <self.compare_update>,
         but it would be possible to insert a filtering step in between.
         """
+        count = 0
         for klass, change_list in changes.items():
+            count += len(change_list)
             for d in change_list:
                 pdata = d[1]
                 if d[0] == 'NEW':
@@ -337,10 +369,11 @@ class Pupils(PupilsBase):
                     self[pdata['PID']].update(d[2])
                 else:
                     raise Bug("Bad delta key: %s" % d[0])
-        # Regenerate class lists
-        self.fill_classes()
-        # Make changes persistent
-        self.save()
+        if count > 0:
+            # Regenerate class lists
+            self.fill_classes()
+            # Make changes persistent
+            self.save()
 #
     def remove_pupil(self, pid):
         del(self[pid])
@@ -384,9 +417,9 @@ class Pupils(PupilsBase):
 #
     def save(self):
         """Save the pupil data as a compressed json file.
-        The first save of a day causes the current data to be backed up.
+        The first save of a day causes the current data to be backed up,
+        if it exists.
         """
-        # Back up old table, if it exists
         timestamp = Dates.timestamp()
         today = timestamp.split('_', 1)[0]
         pdlist = []
@@ -398,7 +431,7 @@ class Pupils(PupilsBase):
             '__MODIFIED__': timestamp,
             '__PUPILS__': pdlist
         }
-        save_pack(filepath, data, today)
+        save_pack(year_path(self.schoolyear, self.CLASS_TABLE), data, today)
         self._modified = timestamp
 #
     def backup(self, filepath, klass = None):
@@ -409,7 +442,7 @@ class Pupils(PupilsBase):
         If <klass> is supplied, only the data for that class will be saved.
         """
         info = [
-            (self.SCHOOLYEAR, self.schoolyear),
+            (SCHOOLYEAR, self.schoolyear),
             ('__MODIFIED__', self._modified),
             ('__KEEP_NAMES__', '*') # The names don't need "renormalizing"
         ]
@@ -449,60 +482,140 @@ class Pupils(PupilsBase):
         calendar = Dates.get_calendar(self.schoolyear)
         nextyear = str(int(self.schoolyear) + 1)
         day1 = Dates.day1(nextyear) # for filtering out pupils who have left
-        newpupils = {}
+        newpupils = []
         for pid, pdata in self.items():
             # Filter out pupils who have left
             exit_date = pdata['EXIT_D']
             if exit_date and exit_date < day1:
                 continue
             if pid in repeat_pids:
-                newpupils[pid] = pdata.copy()
+                newpupils.append(pdata.copy())
             else:
                 pd = self.year_step(pdata, calendar)
                 if pd:
-                    newpupils[pid] = pd
+                    newpupils.append(pd)
         # Sort into classes and save
-        pupils = Pupils(nextyear, newpupils)
+        pupils = _Pupils(nextyear)
+        pupils.set_data(newpupils, all_fields = True)
         pupils.save()
 #
     def final_year_pupils(self, klass):
-        """Return list of pupils in their final year.
+        """Return list of pupil-data items for pupils in their final year.
         """
-#TODO: streams ...
-        streams = self.leaving_groups(klass)
-        if streams:
-            plist = []
-            if streams == '*':
-                _plist = self.class_pupils(klass)
+        lgroups = self.leaving_groups(klass)
+        if lgroups:
+            if lgroups == '*':
+                plist = self.class_pupils(klass)
             else:
-                _plist = self.class_pupils(klass, *streams)
-            for pdata in _plist:
-                plist.append((pdata['PID'], self.name(pdata)))
-            return plist
+                plist = self.class_pupils(klass, groups = lgroups)
+            return [(pdata['PID'], self.name(pdata)) for pdata in plist]
         else:
             return None
 
 ###
 
-class Pupil_Cache:
-    """A cache for pupil information.
+class _PupilList(list):
+    """Representation for a list of pupil-data mappings.
+    It also maintains a mapping {pid -> pupil-data}.
+    The resulting list should only be modified via the
+    methods provided here.
     """
-    schoolyear = None
-    pupils = None
+    def __init__(self):
+        super().__init__()
+        self._pidmap = {}
 #
-    @classmethod
-    def set_year(cls, year = None):
-        """Load pupil data for the given year. Clear data if no year.
+    def append(self, item):
+        super().append(item)
+        self._pidmap[item['PID']] = item
+#
+    def remove(self, item):
+        super().remove(item)
+        del(self._pidmap[item['PID']])
+#
+    def pid2pdata(self, pid):
+        return self._pidmap[pid]
+#
+    def sortlist(self):
+        """Alphabetical sort.
         """
-        if year == cls.schoolyear:
-            return
-        cls.schoolyear = year
-        cls.pupils = Pupils(year) if year else None
-##
-def PUPILS(year):
-    if Pupil_Cache.schoolyear != year:
-        Pupil_Cache.set_year(year)
-    return Pupil_Cache.pupils
+        self.sort(key = sortkey)
+
+###
+
+####### Name Sorting #######
+# In Dutch there is a word for those little lastname prefixes like "von",
+# "zu", "van" "de": "tussenvoegsel". For sorting purposes these can be a
+# bit annoying because they are often ignored, e.g. "van Gogh" would be
+# sorted under "G".
+
+def tussenvoegsel_filter(firstnames, lastname, firstname):
+    """Given raw firstnames, lastname and short firstname,
+    ensure that any "tussenvoegsel" is at the beginning of the lastname
+    (and not at the end of the first name) and that spaces are normalized.
+    If there is a "tussenvoegsel", it is separated from the rest of the
+    lastname by '|' (without spaces). This makes it easier for a sorting
+    algorithm to remove the prefix to generate a sorting key.
+    """
+    # If there is a '|' in the lastname, replace it by ' '
+    firstnames1, tv, lastname1 = tvSplit(firstnames,
+            lastname.replace('|', ' '))
+    firstname1 = tvSplit(firstname, 'X')[0]
+    if tv:
+        lastname1 = tv + '|' + lastname1
+    return (firstnames1, lastname1, firstname1)
+
+###
+
+def tvSplit(fnames, lname):
+    """Split off a "tussenvoegsel" from the end of the first-names,
+    <fnames>, or the start of the surname, <lname>.
+    These little name parts are identified by having a lower-case
+    first character.
+    Also ensure normalized spacing between names.
+    Return a tuple: (
+            first names without tussenvoegsel,
+            tussenvoegsel or <None>,
+            lastname without tussenvoegsel
+        ).
+    """
+#TODO: Is the identification based on starting with a lower-case
+# character adequate?
+    fn = []
+    tv = fnames.split()
+    while tv[0][0].isupper():
+        fn.append(tv.pop(0))
+        if not len(tv):
+            break
+    if not fn:
+        raise ValueError(_BADNAME.format(name = fnames + ' / ' + lname))
+    ln = lname.split()
+    while ln[0].islower():
+        if len(ln) == 1:
+            break
+        tv.append(ln.pop(0))
+    return (' '.join(fn), ' '.join(tv) or None, ' '.join(ln))
+
+###
+
+def sortkey(pdata):
+    _lastname = pdata['LASTNAME']
+    try:
+        tv, lastname = _lastname.split('|', 1)
+    except ValueError:
+        tv, lastname = None, _lastname
+    return sortingName(pdata['FIRSTNAME'], tv, lastname)
+
+###
+
+def sortingName(firstname, tv, lastname):
+    """Given first name, "tussenvoegsel" and last name, produce an ascii
+    string which can be used for sorting the people alphabetically.
+    """
+    if tv:
+        sortname = lastname + ' ' + tv + ' ' + firstname
+    else:
+        sortname = lastname + ' ' + firstname
+    return asciify(sortname)
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -514,8 +627,8 @@ if __name__ == '__main__':
 #    init(os.path.join(os.path.dirname(os.path.dirname(this)), 'DATA'))
 #    _year = '2021'
 #    pupils = Pupils(_year)
-#    _ptables = pupils.read_source_table(year_path(_year,
-#            'Quelldaten/PUPILS_2021.tsv'))
+#    _ptables = Pupils_File(_year, filepath = year_path(_year,
+#            'Quelldaten/PUPILS_2021.tsv'), all_fields = False)
 #    _delta = pupils.compare_update(_ptables)
 #    for k, dlist in _delta.items():
 #        print("\n --- KLASSE:", k)
@@ -527,30 +640,29 @@ if __name__ == '__main__':
 
     init()
     _year = '2016'
-    pupils = Pupils(_year)
+    pupils = PUPILS(_year)
     print("\nCLASSES:", pupils.classes())
 
-    _ptables = pupils.read_source_table(os.path.join(DATA, 'testing',
-            'PUPILS_2016.tsv')) # original table
+    _ptables = Pupils_File(_year, filepath = os.path.join(DATA, 'testing',
+            'PUPILS_2016.tsv'), all_fields = True) # original table
     _delta = pupils.compare_update(_ptables)
     for k, dlist in _delta.items():
         print("\n --- KLASSE:", k)
         for d in dlist:
             print("  ", d)
     pupils.update_classes(_delta)
-    quit(0)
+    print("\nLEAVING in 12:", pupils.final_year_pupils('12'))
     ### Migrate to next year
     pupils.migrate([])
-    quit(0)
 
     ### Make a back-up table
-    pupils.backup(os.path.join(DATA, 'testing', 'tmp',
-            'PUPILS_%s' % _year))
+    bpath = os.path.join(DATA, 'testing', 'tmp', 'PUPILS_%s' % _year)
+    pupils.backup(bpath)
 #    quit(0)
 
 #************** Read and write **************#
 ### This just does a resorting of the data within the json file
-### (the sorting os done when loading the file), which should
+### (the sorting is done when loading the file), which should
 ### make no difference ...
 #    pupils.save()
 #    quit(0)
@@ -571,8 +683,8 @@ if __name__ == '__main__':
 
     ### Update the pupil data with some changes from a new "master" table
     print("\n§§§ CHECK PUPILS UPDATE §§§")
-    _ptables = pupils.read_source_table(os.path.join(DATA, 'testing',
-            'delta_test_pupils_2016'))  # modified table
+    _ptables = Pupils_File(_year, filepath = os.path.join(DATA, 'testing',
+            'delta_test_pupils_2016'), all_fields = False)  # modified table
     _delta = pupils.compare_update(_ptables)
     for klass, changes in _delta.items():
         print("CLASS %s:" % klass)
@@ -581,8 +693,8 @@ if __name__ == '__main__':
     pupils.update_classes(_delta)
 
     ### Revert the changes by "updating" from a saved table
-    _ptables = pupils.read_source_table(os.path.join(DATA, 'testing',
-            'PUPILS_2016.tsv')) # original table
+    _ptables = Pupils_File(_year, filepath = os.path.join(DATA, 'testing',
+            'PUPILS_2016.tsv'), all_fields = True) # original table
     _delta = pupils.compare_update(_ptables)
     for k, dlist in _delta.items():
         print("\n --- KLASSE:", k)

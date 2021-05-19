@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-05-04
+Last updated:  2021-05-19
 
 General configuration items.
 
@@ -27,6 +27,7 @@ Copyright 2021 Michael Towers
 import platform
 
 if platform.system() == 'Windows':
+    raise NameError("Path to LibreOffice missing")
     LIBREOFFICE = ''
 else:
     LIBREOFFICE = 'libreoffice'
@@ -48,8 +49,6 @@ CALENDAR_FILE = 'Kalender'
 
 USE_XLSX = False
 
-LINEBREAK = '§'    # character used as paragraph separator in text cells
-
 CALENDER_HEADER = \
 """### Ferien und andere Jahresdaten
 ### Version: {date}
@@ -60,15 +59,22 @@ CALENDER_HEADER = \
 
 """
 
-import os, glob, builtins
+import os, glob, builtins, re
 
-from local.grade_config import GradeBase, all_streams
+#???
+from local.grade_config import GradeBase
 
 NONE = ''
 
-###
+### +++++
 
-SCHOOLYEARS = 'SCHULJAHRE'
+SCHOOLYEARS = 'Schuljahre'
+SCHOOLYEAR = 'Schuljahr'
+CLASS = 'Klasse'
+GROUP = 'Gruppe'
+GROUPS = 'Gruppen'
+
+###
 
 def year_path(schoolyear, fpath = None):
     """Return a path within the data folder for a school year.
@@ -127,13 +133,10 @@ class SubjectsBase:
         'SID'       : 'Fach-Kürzel',
         'SUBJECT'   : 'Fach',
         'TIDS'      : 'Lehrer-Kürzel',  # can be multiple, space-separated
-        'GROUP'     : 'Gruppe',
+        'GROUP'     : GROUP,
         'COMPOSITE' : 'Sammelfach',     # can be multiple, space-separated
         'SGROUP'    : 'Fachgruppe'
     }
-#
-    SCHOOLYEAR = 'Schuljahr'    # info-line
-    CLASS = 'Klasse'            # info-line
 #
     # The path to the course data for a school-year:
     COURSE_TABLE = 'Klassen/Kurse'
@@ -167,11 +170,11 @@ class SubjectsBase:
 class PupilsBase(dict):
     TITLE = "Schülerliste"
     FIELDS = {
-        'CLASS'     : 'Klasse',         # This must be the first field!
+        'CLASS'     : CLASS,         # This must be the first field!
         'PID'       : 'ID',
         'FIRSTNAME' : 'Rufname',
         'LASTNAME'  : 'Name',
-        'GROUPS'    : 'Gruppen',        # probably not in imported data
+        'GROUPS'    : GROUPS,        # probably not in imported data
         'FIRSTNAMES': 'Vornamen',
         'DOB_D'     : 'Geburtsdatum',
         'POB'       : 'Geburtsort',
@@ -187,8 +190,6 @@ class PupilsBase(dict):
 #
     SEX = ('m', 'w')    # Permissible values for a field
 #
-    SCHOOLYEAR = 'Schuljahr'
-#
     # The path to the class (pupil) tables.
     CLASS_TABLE = 'Klassen/Schueler'
 #
@@ -199,6 +200,7 @@ class PupilsBase(dict):
         Only those groups relevant for grade reports are acceptable.
         A date may be supplied to filter out pupils who have left.
         """
+#TODO
         klass, streams = GradeBase._group2klass_streams(group)
         return self.class_pupils(klass, *streams, date = date)
 #
@@ -228,12 +230,13 @@ class PupilsBase(dict):
     @classmethod
     def year_step(cls, pdata, calendar):
         klass = pdata['CLASS']
-        stream = pdata['STREAM']
+        groups = set(pdata['GROUPS'].split())
         leavers = cls.leaving_groups(klass)
-        if leavers == '*':
-            return None
-        if leavers and stream in leavers:
-            return None
+        if leavers:
+            if leavers == '*':
+                return None
+            if groups & leavers:
+                return None
         # Progress to next class ...
         kyear = class_year(klass)
         knew = int(kyear) + 1
@@ -241,11 +244,8 @@ class PupilsBase(dict):
         klass = f'{knew:02}{ksuffix}'
         pd = pdata.copy()
         pd['CLASS'] = klass
-        streams = all_streams(klass)
-        if stream not in streams:
-            pd['STREAM'] = streams[0]
         # Handle entry into "Qualifikationsphase"
-        if knew == 12 and stream == 'Gym':
+        if knew == 12 and 'G' in groups:
             try:
                 pd['QUALI_D'] = calendar['~NEXT_FIRST_DAY']
             except KeyError:
@@ -257,14 +257,42 @@ class PupilsBase(dict):
         if klass > '12':
             return '*'
         if klass == '12':
-            return ('RS', 'HS')
+            return {'R'}
         return None
 
 ###
 
-# Ersatz-Zeichen für Dateinamen, die vom Programm erstellt werden, damit nur
-# ASCII-Zeichen verwendet werden. Andere Nicht-ASCII-Zeichen werden durch
-# '^' ersetzt.
+def asciify(string, invalid_re = None):
+    """This converts a utf-8 string to ASCII, e.g. to ensure portable
+    filenames are used when creating files.
+    Also spaces are replaced by underlines.
+    Of course that means that the result might look quite different from
+    the input string!
+    A few explicit character conversions are given in the mapping
+    <ASCII_SUB>.
+    By supplying <invalid_re>, an alternative set of exclusion characters
+    can be used.
+    """
+    # regex for characters which should be substituted:
+    if not invalid_re:
+        invalid_re = r'[^A-Za-z0-9_.~-]'
+    def rsub (m):
+        c = m.group (0)
+        if c == ' ':
+            return '_'
+        try:
+            return lookup [c]
+        except:
+            return '^'
+
+    lookup = ASCII_SUB
+    return re.sub (invalid_re, rsub, string)
+
+###
+
+# Substitute characters used to convert utf-8 strings to ASCII, e.g. for
+# portable filenames, Dateinamen. Non-ASCII characters which don't have
+# entries here will be substituted by '^':
 ASCII_SUB = {
     'ä': 'ae',
     'ö': 'oe',
@@ -280,7 +308,7 @@ ASCII_SUB = {
     'è': 'e',
     # Latin:
     'ë': 'e',
-    # Cyrillic (sieht wie das letzte Zeichen aus, ist aber anders!):
+    # Cyrillic (looks like the previous character, but is actually different).
     'ё': 'e',
     'ñ': 'n'
 }

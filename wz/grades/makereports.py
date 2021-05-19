@@ -61,8 +61,7 @@ _BAD_REPORT_TYPE = "Ungültiger Zeugnistyp: '{rtype}'"
 
 from core.base import Dates
 from core.pupils import PUPILS, sortkey
-from local.base_config import year_path, class_year, \
-        print_schoolyear, LINEBREAK
+from local.base_config import year_path, class_year, print_schoolyear
 from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
         GradeConfigError, NO_SUBJECT, GradeBase
 from local.abitur_config import AbiCalc

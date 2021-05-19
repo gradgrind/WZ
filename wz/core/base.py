@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-03-25
+Last updated:  2021-05-19
 
 Basic configuration and structural stuff.
 
@@ -47,13 +47,14 @@ builtins.Bug = Bug
 from minion import Minion
 builtins.MINION = Minion().parse_file
 
-from keyword import iskeyword
 import local.base_config as CONFIG
 
 ###
 
 class DataError(Exception):
     pass
+
+###
 
 def init(datadir = None):
     appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -64,6 +65,7 @@ def init(datadir = None):
     builtins.RESOURCES = os.path.join(DATA, 'RESOURCES')
     builtins.SCHOOL_DATA = MINION(os.path.join(DATA, _SCHOOL_DATA))
 
+###
 
 def report(mtype, text):
     """The default reporting function prints to stdout.
@@ -71,24 +73,6 @@ def report(mtype, text):
     """
     print('%s: %s' % (mtype, text), flush = True)
 builtins.REPORT = report
-
-#
-
-def read_float(string):
-    # Allow spaces (e.g. as thousands separator)
-    inum = string.replace(' ', '')
-    # Allow ',' as decimal separator
-    return float(inum.replace (',', '.'))
-
-#
-
-def str2list(string, sep = ','):
-    """Convert a string with separator character to a list.
-    Accept also <None> as string input.
-    """
-    if string:
-        return [s.strip() for s in string.split(sep)]
-    return []
 
 ###
 
@@ -265,108 +249,11 @@ class Dates:
         cls.save_calendar(nextyear, text)
         return text
 
-###
-
-####### Name Sorting #######
-# In Dutch there is a word for those little lastname prefixes like "von",
-# "zu", "van" "de": "tussenvoegsel". For sorting purposes these can be a
-# bit annoying because they are often ignored, e.g. "van Gogh" would be
-# sorted under "G".
-
-def tussenvoegsel_filter(firstnames, lastname, firstname):
-    """Given raw firstnames, lastname and short firstname,
-    ensure that any "tussenvoegsel" is at the beginning of the lastname
-    (and not at the end of the first name) and that spaces are normalized.
-    If there is a "tussenvoegsel", it is separated from the rest of the
-    lastname by '|' (without spaces). This makes it easier for a sorting
-    algorithm to remove the prefix to generate a sorting key.
-    """
-    # If there is a '|' in the lastname, replace it by ' '
-    firstnames1, tv, lastname1 = tvSplit(firstnames,
-            lastname.replace('|', ' '))
-    firstname1 = tvSplit(firstname, 'X')[0]
-#    sortname = sortingName(firstname1, tv, lastname1)
-    if tv:
-        lastname1 = tv + '|' + lastname1
-    return (firstnames1, lastname1, firstname1)#, sortname)
-
-###
-
-def sortingName(firstname, tv, lastname):
-    """Given first name, "tussenvoegsel" and last name, produce an ascii
-    string which can be used for sorting the people alphabetically.
-    """
-    if tv:
-        sortname = lastname + ' ' + tv + ' ' + firstname
-    else:
-        sortname = lastname + ' ' + firstname
-    return asciify(sortname)
-
-###
-
-def tvSplit(fnames, lname):
-    """Split off a "tussenvoegsel" from the end of the first-names,
-    <fnames>, or the start of the surname, <lname>.
-    These little name parts are identified by having a lower-case
-    first character.
-    Also ensure normalized spacing between names.
-    Return a tuple: (
-            first names without tussenvoegsel,
-            tussenvoegsel or <None>,
-            lastname without tussenvoegsel
-        ).
-    """
-#TODO: Is the identification based on starting with a lower-case
-# character adequate?
-    fn = []
-    tv = fnames.split()
-    while tv[0][0].isupper():
-        fn.append(tv.pop(0))
-        if not len(tv):
-            break
-    if not fn:
-        raise ValueError(_BADNAME.format(name = fnames + ' / ' + lname))
-    ln = lname.split()
-    while ln[0].islower():
-        if len(ln) == 1:
-            break
-        tv.append(ln.pop(0))
-    return (' '.join(fn), ' '.join(tv) or None, ' '.join(ln))
-
-###
-
-def asciify(string, invalid_re = None):
-    """This converts a utf-8 string to ASCII, e.g. to ensure portable
-    filenames are used when creating files.
-    Also spaces are replaced by underlines.
-    Of course that means that the result might look quite different from
-    the input string!
-    A few explicit character conversions are given in the config module
-    under 'ASCII_SUB'.
-    By supplying <invalid_re>, an alternative set of exclusion characters
-    can be used.
-    """
-    # regex for characters which should be substituted:
-    if not invalid_re:
-        invalid_re = r'[^A-Za-z0-9_.~-]'
-    def rsub (m):
-        c = m.group (0)
-        if c == ' ':
-            return '_'
-        try:
-            return lookup [c]
-        except:
-            return '^'
-
-    lookup = CONFIG.ASCII_SUB
-    return re.sub (invalid_re, rsub, string)
-
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
     init()
-    print(asciify("§Aö.#"))
     print("Current school year:", Dates.get_schoolyear())
     print("DATE:", Dates.print_date('2016-04-25'))
     try:
