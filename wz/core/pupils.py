@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-05-19
+core/pupils.py - last updated 2021-05-20
 
 Manage pupil data.
 
@@ -23,8 +23,8 @@ Copyright 2021 Michael Towers
 
 # Use a single json file to contain all the pupil data, as a list of
 # field-value mappings (one for each pupil).
-# When changes are made, date-timed back-ups are made, but only the
-# first change of a day is backed up.
+# When changes are made, date-time labelled back-ups are made, but only
+# the first change of a day is backed up.
 # Structure of the json file:
 # SCHOOLYEAR: schoolyear
 # TITLE: "Schülerliste"     # not used
@@ -73,14 +73,14 @@ def PUPILS(year):
         _Pupils._set_year(year)
     return _Pupils._pupils
 ##
-def Pupils_File(year, filepath, all_fields = True):
+def Pupils_File(year, filepath, norm_fields = True):
     """Fetch pupil data from the given file as a <_Pupils> instance.
-    If <all_fields> is true, add any missing fields (set to empty),
-    otherwise leave them undefined.
+    <norm_fields> should be false normally only for update files – see
+    the method <_Pupils.set_data>.
     """
     pupils = _Pupils(year)
     plist = pupils.get_data(filepath)
-    pupils.set_data(plist, all_fields)
+    pupils.set_data(plist, norm_fields)
     return pupils
 ##
 class _Pupils(PupilsBase):
@@ -89,11 +89,9 @@ class _Pupils(PupilsBase):
      - the internal database
      - an external file
      - a modified version of the existing data.
-    Normally all fields defined for a pupil (<self.FIELDS>, in module
-    "base_config") will be included, adding empty ones (<NONE>)if
-    necessary. However, by specifying <all_fields = False> to the
-    <set_data> method the addition of fields is prevented, so that only
-    the fields in the source file are present in the result.
+    Normally the fields defined for a pupil (<self.FIELDS>, in module
+    "base_config") will be included, adding empty ones (<NONE>) if
+    necessary. See the method <_Pupils.set_data>.
 
     An instance of this class is a <dict> holding the pupil data as a
     mapping: {pid -> {field: value, ...}}.
@@ -113,7 +111,7 @@ class _Pupils(PupilsBase):
         if year:
             cls._pupils = cls(year)
             plist = cls._pupils.get_data()
-            cls._pupils.set_data(plist, all_fields = True)
+            cls._pupils.set_data(plist, norm_fields = True)
         else:
             cls._pupils = None
 #
@@ -203,7 +201,16 @@ class _Pupils(PupilsBase):
                         pdata.get('FIRSTNAME') or firstnames)
         return plist
 #
-    def set_data(self, pdata_list, all_fields):
+    def set_data(self, pdata_list, norm_fields):
+        """Initialize the pupil-data mapping from a list of pupil-data
+        items. The pupils are also allocated to classes and sorted within
+        these.
+        If <norm_fields> is true (the normal case), the set of fields is
+        normalized to that at <self.FIELDS> (inherited from <PupilsBase>),
+        others being rejected and those not supplied being added with
+        <NONE> as value.
+        If <norm_fields> is false, the fields are left as in the source.
+        """
         for pdata in pdata_list:
             pid = pdata['PID']
             try:
@@ -214,7 +221,7 @@ class _Pupils(PupilsBase):
                 raise PupilError(_PID_DUPLICATE.format(pid = pid,
                         p1 = self.name(pd0), c1 = pd0['CLASS'],
                         p2 = self.name(pdata), c2 = pdata['CLASS']))
-            if all_fields:
+            if norm_fields:
                 self[pid] = {f: pdata.get(f) or NONE for f in self.FIELDS}
             else:
                 self[pid] = pdata
@@ -496,7 +503,7 @@ class _Pupils(PupilsBase):
                     newpupils.append(pd)
         # Sort into classes and save
         pupils = _Pupils(nextyear)
-        pupils.set_data(newpupils, all_fields = True)
+        pupils.set_data(newpupils, norm_fields = True)
         pupils.save()
 #
     def final_year_pupils(self, klass):
@@ -628,7 +635,7 @@ if __name__ == '__main__':
 #    _year = '2021'
 #    pupils = Pupils(_year)
 #    _ptables = Pupils_File(_year, filepath = year_path(_year,
-#            'Quelldaten/PUPILS_2021.tsv'), all_fields = False)
+#            'Quelldaten/PUPILS_2021.tsv'), norm_fields = False)
 #    _delta = pupils.compare_update(_ptables)
 #    for k, dlist in _delta.items():
 #        print("\n --- KLASSE:", k)
@@ -644,7 +651,7 @@ if __name__ == '__main__':
     print("\nCLASSES:", pupils.classes())
 
     _ptables = Pupils_File(_year, filepath = os.path.join(DATA, 'testing',
-            'PUPILS_2016.tsv'), all_fields = True) # original table
+            'PUPILS_2016.tsv'), norm_fields = True) # original table
     _delta = pupils.compare_update(_ptables)
     for k, dlist in _delta.items():
         print("\n --- KLASSE:", k)
@@ -684,7 +691,7 @@ if __name__ == '__main__':
     ### Update the pupil data with some changes from a new "master" table
     print("\n§§§ CHECK PUPILS UPDATE §§§")
     _ptables = Pupils_File(_year, filepath = os.path.join(DATA, 'testing',
-            'delta_test_pupils_2016'), all_fields = False)  # modified table
+            'delta_test_pupils_2016'), norm_fields = False)  # modified table
     _delta = pupils.compare_update(_ptables)
     for klass, changes in _delta.items():
         print("CLASS %s:" % klass)
@@ -694,7 +701,7 @@ if __name__ == '__main__':
 
     ### Revert the changes by "updating" from a saved table
     _ptables = Pupils_File(_year, filepath = os.path.join(DATA, 'testing',
-            'PUPILS_2016.tsv'), all_fields = True) # original table
+            'PUPILS_2016.tsv'), norm_fields = True) # original table
     _delta = pupils.compare_update(_ptables)
     for k, dlist in _delta.items():
         print("\n --- KLASSE:", k)
