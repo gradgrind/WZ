@@ -2,7 +2,7 @@
 """
 ui/tab_pupils.py
 
-Last updated:  2021-04-08
+Last updated:  2021-05-21
 
 Pupil table management.
 
@@ -502,7 +502,7 @@ class ManagePupils(TabPage):
         Expected parameters:
             <fields> is a list of field names:
                 [[field1_internal_name, field1_local_name], ... ]
-            <sex> and <streams> are lists of possible values.
+            <SEX> is a list of possible values.
         """
         self.INFO = params
         #print("INFO: ", self.INFO)

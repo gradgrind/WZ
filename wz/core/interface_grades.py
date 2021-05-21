@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_grades.py - last updated 2021-05-06
+core/interface_grades.py - last updated 2021-05-21
 
 Controller/dispatcher for grade management.
 
@@ -41,9 +41,9 @@ _EXCEL_FILE = "Excel-Datei (*.xlsx)"
 
 import os, glob, datetime
 
-from core.base import Dates, asciify
+from core.base import Dates
 from core.pupils import PUPILS
-from local.base_config import year_path
+from local.base_config import year_path, asciify
 from local.grade_config import GradeBase, UNCHOSEN, GRADE_INFO_FIELDS, \
         GradeConfigError
 from local.abitur_config import AbiCalc

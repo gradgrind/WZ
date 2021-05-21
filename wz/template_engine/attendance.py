@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-template_engine/attendance.py - last updated 2021-03-19
+template_engine/attendance.py - last updated 2021-05-21
 
 Create attendance table for a class.
 
@@ -68,7 +68,7 @@ from openpyxl.styles import Alignment, Border, Side, PatternFill, NamedStyle
 
 from local.base_config import SCHOOLYEAR_MONTH_1
 import local.attendance_config as ATTENDANCE
-from core.pupils import Pupils
+from core.pupils import PUPILS
 from tables.spreadsheet import Spreadsheet
 
 
@@ -332,7 +332,7 @@ class AttendanceTable:
             fml.append (f)
         # Add pupil rows, and remember rows
         self._pupilRows = {}
-        pupilDataList = Pupils(self._year).class_pupils(self._class)
+        pupilDataList = PUPILS(self._year).class_pupils(self._class)
         for pdata in pupilDataList:
             pid = pdata['PID']
             self._pupilRows[pid] = row

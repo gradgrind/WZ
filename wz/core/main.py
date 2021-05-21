@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-04-07
+core/main.py - last updated 2021-05-21
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -69,7 +69,7 @@ class _Main:
 
         2) '*REPORT*' sends messages back to the user. It supports various
         categories of report: 'INFO', 'WARN', 'ERROR' and 'TRAP'
-        (the latter indicating that something went wrong enexpectedly).
+        (the latter indicating that something went wrong unexpectedly).
         There is a shortcut "builtin" for these calls: <REPORT>, taking
         message-type and message as arguments.
 
@@ -81,8 +81,8 @@ class _Main:
         this message is primarily to allow feedback during long-running
         or faulty processes, when it might otherwise be unclear to the
         user what is happening – or, indeed, whether anything is
-        happening. It is directly accessible via the 'OUTPUT' "builtin",
-        which takes a single argument, the message.
+        happening at all. It is directly accessible via the 'OUTPUT'
+        "builtin", which takes a single argument, the message.
 
     Communication is via stdio, using utf-8 encoding.
     """
@@ -234,8 +234,8 @@ FUNCTIONS['TEMPLATE_get_classes'] = get_classes
 
 import core.interface_pupils
 import core.interface_subjects
-import core.interface_calendar
-import core.interface_grades
+#import core.interface_calendar
+#import core.interface_grades
 import core.interface_text_reports
 import core.interface_template_fields
 

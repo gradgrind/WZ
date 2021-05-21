@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-ui/WZ.py
+ui/wz_base.py
 
-Last updated:  2021-05-21
+Last updated:  2021-05-20
 
 Administration interface.
 
@@ -25,39 +25,11 @@ Copyright 2021 Michael Towers
 =-LICENCE========================================
 """
 
-### Labels, etc.
-_TITLE = "WZ – Zeugnisverwaltung"
-_REPORT_TITLE = "WZ – Info"
-
 # Dialog buttons, etc.
 _CANCEL = "Abbrechen"
 _OK = "OK"
 
-_RUN_TITLE = "in Bearbeitung ..."
-_INFO_TITLE = "Information"
-_WARN_TITLE = "Warnung"
-_ERROR_TITLE = "Fehler"
-_UNEXPECTED_TITLE = "Unerwartetes Feedback"
-_TRAP_TITLE = "Kritischer Fehler"
-_INTERRUPT = "Abbrechen"
-_INTERRUPT_QUESTION = "Wenn eine Zeit lang keine Fortschrittszeichen" \
-        " erscheinen,\nkann es sein, dass ein unbekanntes Problem" \
-        " vorliegt.\nIn diesem Fall ist es sinnvoll abzubrechen," \
-        "\nobwohl möglicherweise Daten verloren gehen.\n" \
-        "   Wollen Sie die Operation wirklich abbrechen?"
-_INTERRUPTED = "*** ABGEBROCHEN ***"
-
-INFO_TYPES = {    # message-type -> (message level, displayed type)
-    'OUT': (0, '...'),
-    'INFO': (1, ':::'),
-    'WARN': (2, 'WARNUNG:'),
-    'ERROR': (3, 'FEHLER:'),
-    'UNEXPECTED': (4, '???:'),
-    'TRAP': (5, 'KRITISCHER FEHLER:')
-}
-
-#####################################################
-
+#*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*
 
 import sys, os, builtins, traceback, json
 if __name__ == '__main__':
@@ -80,87 +52,45 @@ from qtpy.QtGui import QMovie, QPixmap, QColor
 from ui.ui_support import QuestionDialog, HLine, TabPage, KeySelect, \
         openDialog, saveDialog
 
-builtins.TABS = []
-builtins.FUNCTIONS = {}
-#TODO: first page ...
-TABS.append(TabPage("Page 1"))
-import ui.tab_subjects
-import ui.tab_pupils
-#import ui.tab_grade_editor
-import ui.tab_text_reports
-#import ui.tab_calendar
-TABS.append(0)
-import ui.tab_template_fields
-TAB0 = 0 # Initially selected tab
 
 ####+++++++++++++++++++++++++++++++++++++++
 
 sys.stdin.reconfigure(encoding='utf-8') # requires Python 3.7+
-backend_instance = None
-class _Backend(QDialog):
-    """Manage communication with the "back-end". Provide a pop-up (modal
-    dialog) to provide visual feedback to the user concerning the progress
-    and success of the commands.
-    This is a "singleton" class, i.e. only one instance may exist.
 
-    For details of the communication protocol, see the description of
-    class "_Main" in the "main" module of the back-end.
-
-    All communication is via 'utf-8' streams.
+class RunLong(QWidget):
+    """Interface component dealing with a long-running process (one which
+    would normally freeze the user interface). It can be used as a popup
+    dialog or an overlay window.
+    Long-running procedures need to be in a separate thread or a separate
+    process, so that the user interface can remain responsive (within
+    bounds – the only reasonable action might well be to wait for
+    completion or to abort the procedure).
+    If the procedure can be designed accordingly, it should be possible
+    to display progress feedback.
     """
-    headers = [
-        # index 0 should never be used:
-        None,
-        _INFO_TITLE,
-        _WARN_TITLE,
-        _ERROR_TITLE,
-        _UNEXPECTED_TITLE,
-        _TRAP_TITLE
-    ]
-#
     def __init__(self):
-        if backend_instance:
-            SHOW_ERROR("BIG PROBLEM: <_Backend> instance exists already")
-            self.terminate()
-            quit(1)
-        self.backend_queue = []
         super().__init__()
-        self.process = None
-        ### Set up the dialog window
-        self.resize(600, 400)
-        self.setWindowTitle(_REPORT_TITLE)
-        #self.setWindowFlag(Qt.FramelessWindowHint)
         vbox = QVBoxLayout(self)
         ## Header
         hbox = QHBoxLayout()
         vbox.addLayout(hbox)
-        self._pixmap = QLabel()
-        hbox.addWidget(self._pixmap)
-        self._title_label = QLabel()
-        #self._title_label.setFrameStyle(QFrame.Panel | QFrame.Sunken)
-        self._title_label.setAlignment(Qt.AlignCenter)
-        hbox.addWidget(self._title_label, 1)
-        ## Text display widget
-        self.text = QTextEdit()
-        self.text.setReadOnly(True)
-        vbox.addWidget(self.text)
-        ## Button area
-        vbox.addWidget(HLine())
-        bbox = QHBoxLayout()
-        vbox.addLayout(bbox)
-        bbox.addStretch(1)
-        self._cancel = QPushButton(_CANCEL)
-        self._cancel.clicked.connect(self.reject)
-        bbox.addWidget(self._cancel)
-        self._ok = QPushButton(_OK)
-        self._ok.setDefault(True)
-        self._ok.clicked.connect(self.accept)
-        bbox.addWidget(self._ok)
-        ## Icon area
-        self._busy = QMovie(os.path.join('icons', 'busy.gif'))
-        # index 0 should never be used:
-        self._pixmaps = [
-            None, #QPixmap(os.path.join('icons', 'other.png')),
+        self.title = QLabel('Hintergrund-Prozess')
+        #self.title.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self.title.setAlignment(Qt.AlignCenter)
+        hbox.addWidget(self.title, 1)
+        #++++++++ Icon area ++++++++
+        self.icon_busy = QMovie(os.path.join('icons', 'busy.gif'))
+        self.pixmap = QLabel()
+        self.pixmap.setMovie(self.icon_busy)
+        self.icon_busy.start()
+# ...
+        self.icon_busy.stop()
+        hbox.addWidget(self.pixmap)
+# or:
+        self.pixmaps = [
+            None,
+            QPixmap(os.path.join('icons', 'ok.png')),
+            #QPixmap(os.path.join('icons', 'other.png')),
             QPixmap(os.path.join('icons', 'info.png')),
             QPixmap(os.path.join('icons', 'warning.png')),
             QPixmap(os.path.join('icons', 'error.png')),
@@ -170,7 +100,37 @@ class _Backend(QDialog):
         self.colours = [QColor('#dd79c2'),
                 QColor('#005900'), QColor('#ff8000'),
                 QColor('#c90000'), QColor('#0019ff'), QColor('#8f00cc')]
+        self.pixmap.setPixmap(self.pixmaps[1])
+        #++++++++ end Icon area ++++++++
+        ## Text display widget
+        self.text = QTextEdit()
+        self.text.setReadOnly(True)
+        vbox.addWidget(self.text)
+        ## Button area
+        vbox.addWidget(HLine())
+        bbox = QHBoxLayout()
+        vbox.addLayout(bbox)
+        bbox.addStretch(1)
+        self.pb_cancel = QPushButton(_CANCEL)
+        self.pb_cancel.clicked.connect(self.cancel)
+        bbox.addWidget(self.pb_cancel)
+        self.pb_ok = QPushButton(_OK)
+        self.pb_ok.setDefault(True)
+        self.pb_ok.clicked.connect(self.ok)
+        bbox.addWidget(self.pb_ok)
 #
+    def ok(self):
+        print("OK")
+#
+    def cancel(self):
+        print("CANCEL")
+#
+
+#TODO
+# ...
+
+
+
     def error_in(self):
         data = self.process.readAllStandardError()
         line = bytes(data).decode("utf8").rstrip()
@@ -395,16 +355,6 @@ class _Backend(QDialog):
         fpath = saveDialog(filetype, filename)
         if fpath:
             self.command(callback, filepath = fpath)
-###
-
-backend_instance = _Backend()
-builtins.BACKEND = backend_instance.command
-FUNCTIONS['*DONE*'] = backend_instance.task_done
-FUNCTIONS['*REPORT*'] = backend_instance.report
-# For other message pop-ups, see <SHOW_INFO>, <SHOW_WARNING> and
-# <SHOW_ERROR> in module "ui_support".
-FUNCTIONS['*READ_FILE*'] = backend_instance.read_dialog
-FUNCTIONS['*SAVE_FILE*'] = backend_instance.save_dialog
 
 ####---------------------------------------
 
@@ -511,8 +461,9 @@ class Admin(QWidget):
         # ---------- Title Box ---------- #
         titlebox = QHBoxLayout()
         topbox.addLayout(titlebox)
-        self.year_term = QLabel()
-        titlebox.addWidget(self.year_term)
+        self.year_select = KeySelect(changed_callback = self.year_changed)
+        self.year_select.setMinimumWidth(150)
+        titlebox.addWidget(self.year_select)
         titlebox.addStretch(1)
         tab_title = QLabel()
         titlebox.addWidget(tab_title)
@@ -541,9 +492,11 @@ class Admin(QWidget):
 #TODO ---
         print('SCHOOL_DATA', self.school_data, flush = True)
 #
-#TODO
     def SET_YEARS(self, years, current):
-        self.year_term.setText("<strong>2015 – 2016; 1. Halbjahr</strong>")
+        self.year_select.set_items(years)
+        chosenyear = self.year_select.selected()
+        if chosenyear != current:
+            self.year_select.reset(current)
         self.tab_widget.select(TAB0)   # Enter default tab
 #
     def year_changed(self, schoolyear):
@@ -564,10 +517,7 @@ class Admin(QWidget):
 #        self.year_select.reset(year)
 #        self.year_select.trigger()
 
-builtins.ADMIN = Admin()
-FUNCTIONS['base_SET_YEARS'] = ADMIN.SET_YEARS
-FUNCTIONS['base_SET_SCHOOL_DATA'] = ADMIN.SET_SCHOOL_DATA
-FUNCTIONS['base_YEAR_CHANGED'] = ADMIN.YEAR_CHANGED
+#builtins.ADMIN = Admin()
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
@@ -597,11 +547,16 @@ if __name__ == '__main__':
     app.installTranslator(qtr)
 
     app.setWindowIcon(QIcon(os.path.join('icons', 'WZ1.png')))
-    # Run this when the event loop has been entered:
-    QTimer.singleShot(10, ADMIN.init)
+#    # Run this when the event loop has been entered:
+#    QTimer.singleShot(10, ADMIN.init)
     screen = app.primaryScreen()
     screensize = screen.availableSize()
-    ADMIN.resize(screensize.width()*0.8, screensize.height()*0.8)
-    ADMIN.show()
+    print("screensize:", screensize)
+#    ADMIN.resize(screensize.width()*0.8, screensize.height()*0.8)
+#    ADMIN.show()
+
+    window = RunLong()
+#    window.resize(screensize.width()*0.8, screensize.height()*0.8)
+    window.show()
     sys.exit(app.exec_())
 

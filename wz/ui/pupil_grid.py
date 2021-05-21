@@ -2,7 +2,7 @@
 """
 ui/pupil_grid.py
 
-Last updated:  2021-04-08
+Last updated:  2021-05-21
 
 Manage the grid for the pupil-data editor.
 
@@ -48,9 +48,8 @@ class PupilGrid(Grid):
         super().__init__(pupil_view, _ROWS, COLUMNS)
         self.styles()
 
-        ### Pop-up editor for SEX and STREAM fields
+        ### Pop-up editor for SEX field
         self.addSelect('SEX', info['SEX'])
-        self.addSelect('STREAM', list(info['STREAMS']))
         ### Non-editable fields
         noneditable = {'PID'}
         ### Title area

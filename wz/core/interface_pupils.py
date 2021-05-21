@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-04-04
+core/interface_pupils.py - last updated 2021-05-21
 
 Controller/dispatcher for pupil management.
 
@@ -32,9 +32,8 @@ _UPDATED_SOME = "Die gewählten Änderungen wurden übernommen.\n" \
 _UPDATED_ALL = "Alle Änderungen wurden übernommen"
 
 from core.base import Dates
-from core.pupils import PUPILS, Pupils
-from core.courses import Subjects
-from local.base_config import year_path, SubjectsBase
+from core.pupils import PUPILS, Pupils_File, PupilError
+from local.base_config import year_path, SubjectsBase, PupilsBase
 from local.grade_config import STREAMS
 NONE = ''     # Use only strings in messages to front-end
 
@@ -50,13 +49,15 @@ class Pupils_Update:
     def start(cls, filepath):
         pupils = PUPILS(SCHOOLYEAR)
         try:
-            cls.ptables = pupils.read_source_table(filepath)
-        except:
+            cls.ptables = Pupils_File(SCHOOLYEAR, filepath,
+                    norm_fields = False)
+        except PupilError:
             REPORT('ERROR', _BAD_PUPIL_TABLE.format(path = filepath))
             return False
         if Pupil_Editor.klass:
-            if (len(cls.ptables) != 1) \
-                    or (Pupil_Editor.klass not in cls.ptables):
+            clist = cls.ptables.classes()
+            if (len(clist) != 1) \
+                    or (Pupil_Editor.klass not in clist):
                 REPORT('ERROR', _BAD_CLASS_TABLE.format(
                         klass = Pupil_Editor.klass, path = filepath))
                 return False
@@ -144,7 +145,7 @@ class Pupil_Editor:
             cls.klass = klass
             for pd in pupils.class_pupils(klass):
                 pid = pd['PID']
-                plist.append((pid, Pupils.name(pd)))
+                plist.append((pid, pupils.name(pd)))
                 cls.pdata_map[pid] = pd
                 if pid == _pid:
                     cls.pid = pid
@@ -171,7 +172,7 @@ class Pupil_Editor:
             cls.pid = pid
             # Display pupil data
             CALLBACK('pupils_SET_PUPIL_VIEW', pdata = pdata,
-                    name = Pupils.name(pdata))
+                    name = PupilsBase.name(pdata))
         return True
 #
     @classmethod
@@ -266,9 +267,8 @@ def migrate(repeat_pids):
 
 def get_info():
     CALLBACK('pupils_SET_INFO',
-            fields = [(f, t) for f, t in Pupils.FIELDS.items()],
-            SEX = Pupils.SEX,
-            STREAMS = STREAMS)
+            fields = [(f, t) for f, t in PupilsBase.FIELDS.items()],
+            SEX = PupilsBase.SEX)
     return True
 
 FUNCTIONS['PUPILS_get_info'] = get_info

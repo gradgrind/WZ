@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-05-20
+core/pupils.py - last updated 2021-05-21
 
 Manage pupil data.
 
@@ -43,7 +43,6 @@ if __name__ == '__main__':
 ### Messages
 _SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filepath}"
 _NO_SCHOOLYEAR = "Kein '{year}' angegeben in Schülertabelle:\n {filepath}"
-_NAME_MISSING = "Eingabezeile fehlerhaft, Name unvollständig:\n  {row}"
 _PID_DUPLICATE = "Schülerkennung {pid} mehrfach vorhanden:\n" \
         "  Klasse {c1} – {p1}\n  Klasse {c2} – {p2}"
 _MISSING_FIELDS = "Diese Felder dürfen nicht leer sein:\n  {fields}"
@@ -52,7 +51,7 @@ _FULL_BACKUP_FILE = "Alle Schülerdaten gespeichert als:\n  {path}"
 
 import datetime
 
-from local.base_config import asciify, year_path, PupilsBase, USE_XLSX, \
+from local.base_config import year_path, PupilsBase, sortkey, USE_XLSX, \
         SCHOOLYEAR, NONE
 from core.base import Dates
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
@@ -157,50 +156,6 @@ class _Pupils(PupilsBase):
         self._modified = data.get('__MODIFIED__') or '–––'
         return pupil_list
 #
-    def _read_source_table(self, ptable, tweak_names):
-        """Read a pupil-data list from ptable, containing only the pupil
-        fields (in self.FIELDS) which are actually present in the file.
-        If <tweak_names> is true, the names will be analysed for
-        "tussenvoegsel" and re-split accordingly.
-        """
-        # Get column mapping: {field -> column index}
-        # Convert the localized names to uppercase to avoid case problems.
-        # Get the columns for the localized field names
-        colmap = {}
-        col = -1
-        for t in ptable.fieldnames():
-            col += 1
-            colmap[t.upper()] = col
-        # ... then for the internal field names,
-        # collect positions of fields to be collected, if possible
-        field_index = []
-        missing = []    # check that essential fields are present
-        for f, t in self.FIELDS.items():
-            try:
-                field_index.append((f, colmap[t.upper()]))
-            except KeyError:
-                pass
-        plist = []   # collect pupil data
-        for row in ptable:
-            pdata = {}
-            plist.append(pdata)
-            for f, i in field_index:
-                pdata[f] = row[i] or ''
-            if tweak_names:
-                # "Renormalize" the name fields
-                try:
-                    firstnames = pdata['FIRSTNAMES']
-                    lastname = pdata['LASTNAME']
-                except KeyError:
-                    raise PupilError(_NAME_MISSING.format(
-                            row = repr(pdata)))
-                pdata['FIRSTNAMES'], \
-                pdata['LASTNAME'], \
-                pdata['FIRSTNAME'] = tussenvoegsel_filter(
-                        firstnames, lastname,
-                        pdata.get('FIRSTNAME') or firstnames)
-        return plist
-#
     def set_data(self, pdata_list, norm_fields):
         """Initialize the pupil-data mapping from a list of pupil-data
         items. The pupils are also allocated to classes and sorted within
@@ -248,22 +203,6 @@ class _Pupils(PupilsBase):
         """Return a sorted list of class names.
         """
         return sorted(self._klasses)
-#
-    def sorting_name(self, pid):
-        return sortkey(self[pid])
-#
-    @classmethod
-    def name(cls, pdata):
-        """Return the pupil's "short" name.
-        """
-        return pdata['FIRSTNAME'] + ' ' + cls.lastname(pdata)
-#
-    @staticmethod
-    def lastname(pdata):
-        """Return the pupil's lastname. This method is provided in order
-        to "decode" the name, which could have a "tussenvoegsel" separator.
-        """
-        return pdata['LASTNAME'].replace('|', ' ')
 #
     @staticmethod
     def pstring(pdata):
@@ -546,83 +485,6 @@ class _PupilList(list):
         """Alphabetical sort.
         """
         self.sort(key = sortkey)
-
-###
-
-####### Name Sorting #######
-# In Dutch there is a word for those little lastname prefixes like "von",
-# "zu", "van" "de": "tussenvoegsel". For sorting purposes these can be a
-# bit annoying because they are often ignored, e.g. "van Gogh" would be
-# sorted under "G".
-
-def tussenvoegsel_filter(firstnames, lastname, firstname):
-    """Given raw firstnames, lastname and short firstname,
-    ensure that any "tussenvoegsel" is at the beginning of the lastname
-    (and not at the end of the first name) and that spaces are normalized.
-    If there is a "tussenvoegsel", it is separated from the rest of the
-    lastname by '|' (without spaces). This makes it easier for a sorting
-    algorithm to remove the prefix to generate a sorting key.
-    """
-    # If there is a '|' in the lastname, replace it by ' '
-    firstnames1, tv, lastname1 = tvSplit(firstnames,
-            lastname.replace('|', ' '))
-    firstname1 = tvSplit(firstname, 'X')[0]
-    if tv:
-        lastname1 = tv + '|' + lastname1
-    return (firstnames1, lastname1, firstname1)
-
-###
-
-def tvSplit(fnames, lname):
-    """Split off a "tussenvoegsel" from the end of the first-names,
-    <fnames>, or the start of the surname, <lname>.
-    These little name parts are identified by having a lower-case
-    first character.
-    Also ensure normalized spacing between names.
-    Return a tuple: (
-            first names without tussenvoegsel,
-            tussenvoegsel or <None>,
-            lastname without tussenvoegsel
-        ).
-    """
-#TODO: Is the identification based on starting with a lower-case
-# character adequate?
-    fn = []
-    tv = fnames.split()
-    while tv[0][0].isupper():
-        fn.append(tv.pop(0))
-        if not len(tv):
-            break
-    if not fn:
-        raise ValueError(_BADNAME.format(name = fnames + ' / ' + lname))
-    ln = lname.split()
-    while ln[0].islower():
-        if len(ln) == 1:
-            break
-        tv.append(ln.pop(0))
-    return (' '.join(fn), ' '.join(tv) or None, ' '.join(ln))
-
-###
-
-def sortkey(pdata):
-    _lastname = pdata['LASTNAME']
-    try:
-        tv, lastname = _lastname.split('|', 1)
-    except ValueError:
-        tv, lastname = None, _lastname
-    return sortingName(pdata['FIRSTNAME'], tv, lastname)
-
-###
-
-def sortingName(firstname, tv, lastname):
-    """Given first name, "tussenvoegsel" and last name, produce an ascii
-    string which can be used for sorting the people alphabetically.
-    """
-    if tv:
-        sortname = lastname + ' ' + tv + ' ' + firstname
-    else:
-        sortname = lastname + ' ' + firstname
-    return asciify(sortname)
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
