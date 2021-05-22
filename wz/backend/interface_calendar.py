@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_calendar.py - last updated 2021-03-20
+backend/interface_calendar.py - last updated 2021-05-22
 
 Controller/dispatcher for management of calendar-related data.
 
@@ -27,8 +27,8 @@ Copyright 2021 Michael Towers
 import os
 
 import core.base as CORE
-from core.interface_pupils import PUPILS
-from local.base_config import year_path, CALENDAR_FILE, CALENDER_HEADER
+from backend.interface_pupils import PUPILS
+#from local.base_config import year_path, CALENDAR_FILE, CALENDER_HEADER
 from template_engine.attendance import AttendanceTable, AttendanceError
 
 def read_calendar():
@@ -39,16 +39,12 @@ def read_calendar():
     CALLBACK('attendance_SET_CLASSES', classes = classes)
     return True
 
-FUNCTIONS['CALENDAR_get_calendar'] = read_calendar
-
 ###
 
 def save_calendar(text):
     text = CORE.Dates.save_calendar(SCHOOLYEAR, text)
     CALLBACK('calendar_SET_TEXT', text = text)
     return True
-
-FUNCTIONS['CALENDAR_save_calendar'] = save_calendar
 
 ###
 
@@ -64,8 +60,6 @@ def make_attendance_table(klass, filepath):
             REPORT('INFO', '--> ' + filepath)
             return True
     return False
-
-FUNCTIONS['ATTENDANCE_make_table'] = make_attendance_table
 
 ###
 
@@ -84,4 +78,9 @@ def update_attendance_table(klass, filepath):
             return True
     return False
 
-FUNCTIONS['ATTENDANCE_update_table'] = update_attendance_table
+########################################################################
+def init():
+    FUNCTIONS['CALENDAR_get_calendar'] = read_calendar
+    FUNCTIONS['CALENDAR_save_calendar'] = save_calendar
+    FUNCTIONS['ATTENDANCE_make_table'] = make_attendance_table
+    FUNCTIONS['ATTENDANCE_update_table'] = update_attendance_table

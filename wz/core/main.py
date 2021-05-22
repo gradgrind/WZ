@@ -144,7 +144,7 @@ class _Main:
 ###
 
 def start():
-    logdir = os.path.join(ZEUGSDIR, 'logs')
+    logdir = WZPATH('logs')
     if not os.path.isdir(logdir):
         os.makedirs(logdir)
     with open(os.path.join(logdir, 'debug'), 'w',

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-05-17
+core/courses.py - last updated 2021-05-22
 
 Manage course/subject data.
 
@@ -80,11 +80,12 @@ from collections import namedtuple
 
 from core.base import Dates
 from core.pupils import PUPILS
-from local.base_config import SubjectsBase, year_path, klass_group
+from local.base_config import SubjectsBase, klass_group
 from local.grade_config import NOT_GRADED, UNCHOSEN
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from tables.matrix import KlassMatrix
 from tables.datapack import get_pack, save_pack
+# year_path !
 
 class CourseError(Exception):
     pass

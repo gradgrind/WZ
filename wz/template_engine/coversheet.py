@@ -3,7 +3,7 @@
 """
 template_engine/coversheet.py
 
-Last updated:  2021-04-06
+Last updated:  2021-05-22
 
 Build the outer sheets (cover sheets) for the text reports.
 User fields in template files are replaced by the report information.
@@ -40,7 +40,8 @@ from core.base import Dates
 
 from core.pupils import PUPILS, sortkey
 from template_engine.template_sub import Template
-from local.base_config import print_schoolyear, print_class, year_path
+#from local.base_config import print_schoolyear, year_path
+from local.base_config import sortkey, print_class
 from local.text_config import cover_template, COVER_NAME, COVER_DIR
 
 

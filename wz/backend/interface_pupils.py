@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_pupils.py - last updated 2021-05-21
+backend/interface_pupils.py - last updated 2021-05-22
 
 Controller/dispatcher for pupil management.
 
@@ -33,10 +33,9 @@ _UPDATED_ALL = "Alle Änderungen wurden übernommen"
 
 from core.base import Dates
 from core.pupils import PUPILS, Pupils_File, PupilError
-from local.base_config import year_path, SubjectsBase, PupilsBase
-from local.grade_config import STREAMS
-NONE = ''     # Use only strings in messages to front-end
-
+from local.base_config import SubjectsBase, PupilsBase
+#from local.grade_config import STREAMS
+# year_path ... !
 ###
 
 class Pupils_Update:
@@ -98,11 +97,6 @@ class Pupils_Update:
     def update(cls):
         PUPILS(SCHOOLYEAR).update_classes(cls._changes)
         return cls.compare(rerun = True)
-
-FUNCTIONS['PUPILS_table_delta'] = Pupils_Update.start
-FUNCTIONS['PUPILS_table_delta2'] = Pupils_Update.compare
-FUNCTIONS['PUPILS_class_update'] = Pupils_Update.class_delta
-FUNCTIONS['PUPILS_table_update'] = Pupils_Update.update
 
 ###
 
@@ -271,14 +265,21 @@ def get_info():
             SEX = PupilsBase.SEX)
     return True
 
-FUNCTIONS['PUPILS_get_info'] = get_info
-FUNCTIONS['PUPILS_get_classes'] = Pupil_Editor.get_classes
-FUNCTIONS['PUPILS_set_class'] = Pupil_Editor.set_class
-FUNCTIONS['PUPILS_set_pupil'] = Pupil_Editor.set_pupil
-FUNCTIONS['PUPILS_new_pupil'] = Pupil_Editor.new_pupil
-FUNCTIONS['PUPILS_new_data'] = Pupil_Editor.new_data
-FUNCTIONS['PUPILS_new_table_data'] = Pupil_Editor.new_table_data
-FUNCTIONS['PUPILS_remove'] = Pupil_Editor.remove
-FUNCTIONS['PUPILS_export_data'] = Pupil_Editor.export_data
-FUNCTIONS['PUPILS_get_leavers'] = get_leavers
-FUNCTIONS['PUPILS_migrate'] = migrate
+########################################################################
+def init():
+    FUNCTIONS['PUPILS_table_delta'] = Pupils_Update.start
+    FUNCTIONS['PUPILS_table_delta2'] = Pupils_Update.compare
+    FUNCTIONS['PUPILS_class_update'] = Pupils_Update.class_delta
+    FUNCTIONS['PUPILS_table_update'] = Pupils_Update.update
+
+    FUNCTIONS['PUPILS_get_info'] = get_info
+    FUNCTIONS['PUPILS_get_classes'] = Pupil_Editor.get_classes
+    FUNCTIONS['PUPILS_set_class'] = Pupil_Editor.set_class
+    FUNCTIONS['PUPILS_set_pupil'] = Pupil_Editor.set_pupil
+    FUNCTIONS['PUPILS_new_pupil'] = Pupil_Editor.new_pupil
+    FUNCTIONS['PUPILS_new_data'] = Pupil_Editor.new_data
+    FUNCTIONS['PUPILS_new_table_data'] = Pupil_Editor.new_table_data
+    FUNCTIONS['PUPILS_remove'] = Pupil_Editor.remove
+    FUNCTIONS['PUPILS_export_data'] = Pupil_Editor.export_data
+    FUNCTIONS['PUPILS_get_leavers'] = get_leavers
+    FUNCTIONS['PUPILS_migrate'] = migrate

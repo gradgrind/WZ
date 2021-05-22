@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_template_fields.py - last updated 2021-04-28
+backend/interface_template_fields.py - last updated 2021-05-22
 
 Controller/dispatcher for the template-filler module.
 
@@ -38,8 +38,6 @@ from local.field_handlers import FieldMap, FieldHandlerError, \
 from template_engine.template_sub import Template, TemplateError
 
 ### +++++
-
-NONE = ''
 
 class Template_Filler:
     template = None
@@ -233,12 +231,14 @@ class Template_Filler:
         return True
 
 
-FUNCTIONS['TEMPLATE_get_classes'] = Template_Filler.get_classes
-FUNCTIONS['TEMPLATE_set_class'] = Template_Filler.set_class
-FUNCTIONS['TEMPLATE_get_template_dir'] = Template_Filler.get_template_dir
-FUNCTIONS['TEMPLATE_force_template'] = Template_Filler.force_template
-FUNCTIONS['TEMPLATE_set_template'] = Template_Filler.set_template
-FUNCTIONS['TEMPLATE_renew'] = Template_Filler.renew
-FUNCTIONS['TEMPLATE_gen_doc'] = Template_Filler.gen_doc
-FUNCTIONS['TEMPLATE_show'] = Template_Filler.show
-FUNCTIONS['TEMPLATE_value_changed'] = Template_Filler.value_changed
+########################################################################
+def init():
+    FUNCTIONS['TEMPLATE_get_classes'] = Template_Filler.get_classes
+    FUNCTIONS['TEMPLATE_set_class'] = Template_Filler.set_class
+    FUNCTIONS['TEMPLATE_get_template_dir'] = Template_Filler.get_template_dir
+    FUNCTIONS['TEMPLATE_force_template'] = Template_Filler.force_template
+    FUNCTIONS['TEMPLATE_set_template'] = Template_Filler.set_template
+    FUNCTIONS['TEMPLATE_renew'] = Template_Filler.renew
+    FUNCTIONS['TEMPLATE_gen_doc'] = Template_Filler.gen_doc
+    FUNCTIONS['TEMPLATE_show'] = Template_Filler.show
+    FUNCTIONS['TEMPLATE_value_changed'] = Template_Filler.value_changed

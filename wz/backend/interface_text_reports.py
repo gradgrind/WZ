@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_text_reports.py - last updated 2021-04-06
+backend/interface_text_reports.py - last updated 2021-05-22
 
 Controller/dispatcher for text-report management.
 
@@ -35,8 +35,6 @@ from core.pupils import PUPILS
 from template_engine.coversheet import CoverSheets
 
 ###
-
-NONE = ''
 
 def get_calendar():
     CALLBACK('text_SET_CALENDAR', calendar = Dates.get_calendar(SCHOOLYEAR))
@@ -77,8 +75,10 @@ def make_one_cover(pid, date, filepath):
     return True
 
 
-FUNCTIONS['TEXT_get_calendar'] = get_calendar
-FUNCTIONS['TEXT_set_class'] = set_class
-FUNCTIONS['TEXT_make_covers'] = make_covers
-FUNCTIONS['TEXT_covername'] = covername
-FUNCTIONS['TEXT_make_one_cover'] = make_one_cover
+########################################################################
+def init():
+    FUNCTIONS['TEXT_get_calendar'] = get_calendar
+    FUNCTIONS['TEXT_set_class'] = set_class
+    FUNCTIONS['TEXT_make_covers'] = make_covers
+    FUNCTIONS['TEXT_covername'] = covername
+    FUNCTIONS['TEXT_make_one_cover'] = make_one_cover

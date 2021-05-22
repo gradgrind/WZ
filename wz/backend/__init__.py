@@ -1,6 +1,12 @@
-import . interface_pupils
-import . interface_subjects
-import . interface_calendar
-#import . interface_grades
-import . interface_text_reports
-import . interface_template_fields
+from .interface_pupils import init
+init()
+from .interface_subjects import init
+init()
+from .interface_calendar import init
+init()
+#from .interface_grades import init
+#init()
+from .interface_text_reports import init
+init()
+from .interface_template_fields import init
+init()

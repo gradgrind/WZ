@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/interface_subjects.py - last updated 2021-05-04
+backend/interface_subjects.py - last updated 2021-05-22
 
 Controller/dispatcher for subjects management.
 
@@ -108,11 +108,13 @@ def update_choice_table(filepath):
     return True
 
 
-FUNCTIONS['SUBJECT_get_classes'] = get_classes
-FUNCTIONS['SUBJECT_table_update'] = update_subjects
-FUNCTIONS['SUBJECT_edit_choices'] = edit_choices
-FUNCTIONS['SUBJECT_save_choices'] = save_choices
+########################################################################
+def init():
+    FUNCTIONS['SUBJECT_get_classes'] = get_classes
+    FUNCTIONS['SUBJECT_table_update'] = update_subjects
+    FUNCTIONS['SUBJECT_edit_choices'] = edit_choices
+    FUNCTIONS['SUBJECT_save_choices'] = save_choices
 
-#FUNCTIONS['SUBJECT_select_choice_class'] = select_choice_class
-FUNCTIONS['SUBJECT_make_choice_table'] = make_choice_table
-FUNCTIONS['SUBJECT_update_choice_table'] = update_choice_table
+    #FUNCTIONS['SUBJECT_select_choice_class'] = select_choice_class
+    FUNCTIONS['SUBJECT_make_choice_table'] = make_choice_table
+    FUNCTIONS['SUBJECT_update_choice_table'] = update_choice_table

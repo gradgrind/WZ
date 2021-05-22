@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-template_engine/attendance.py - last updated 2021-05-21
+template_engine/attendance.py - last updated 2021-05-22
 
 Create attendance table for a class.
 
@@ -66,7 +66,7 @@ from openpyxl.worksheet.properties import WorksheetProperties, PageSetupProperti
 from openpyxl.utils import get_column_letter, column_index_from_string
 from openpyxl.styles import Alignment, Border, Side, PatternFill, NamedStyle
 
-from local.base_config import SCHOOLYEAR_MONTH_1
+#from local.base_config import SCHOOLYEAR_MONTH_1
 import local.attendance_config as ATTENDANCE
 from core.pupils import PUPILS
 from tables.spreadsheet import Spreadsheet
