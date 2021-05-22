@@ -1,9 +1,10 @@
 # ************** Fachliste (Kürzel: Name) **************
-# Letzte Änderung: 2021-05-02
+# Letzte Änderung: 2021-05-13
 
 # „Normale“ Fächer
 
 Awt:    Arbeit-Wirtschaft-Technik
+Bv:     Berufsvorbereitung
 Bio:    Biologie
 Bb:     Buchbinden
 Ch:     Chemie
@@ -16,10 +17,12 @@ Eu:     Eurythmie
 Fl:     Flöten
 Fr:     Französisch
 Gb:     Gartenbau
+Ghw:    Gartenbau-Handarbeit-Werken
 Geo:    Geographie
 Ges:    Geschichte
 Ha:     Handarbeit
 Hw:     Hauswirtschaft
+Hwk:    Hauswirtschaft/Kochen
 Ku:     Kunst
 $Ku:    Kunst
 Kbe:    Kunstbetrachtung
@@ -32,6 +35,8 @@ Ma:     Mathematik
 Mk:     Medienkunde
 Mu:     Musik
 Or:     Orchester
+Oc:     Orchester/Chor
+Ocw:    Orchester/Chor/Werkstatt
 Orf:    Orchester/Flöten
 Ors:    Orchester/Streicherstunde
 Pd:     Pädagogik
@@ -46,12 +51,13 @@ Spt:    Spielturnen
 Sp:     Sport
 Sth:    Steinhauen
 Str:    Streicherstunde
-TG:     Textiles Gestalten
+Tg:     Textiles Gestalten
 Tln:    Tischlern
 Th:     Theater
 Tz:     Technisches Zeichnen
 Web:    Weben
 Wrk:    Werken
+Ws:     Werkstatt
 Zn:     Zeichnen
 
 # Praktika
@@ -93,6 +99,6 @@ Fr.m:   Französisch | mdl
 Ges.m:  Geschichte | mdl
 Bio.m:  Biologie | mdl
 
-Mu.m:   Musik | mdl
-Ku.m:   Kunst | mdl
-Sp.m:   Sport | mdl
+Mu.n:   Musik | HjN
+Ku.n:   Kunst | HjN
+Sp.n:   Sport | HjN

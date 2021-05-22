@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-05-21
+core/pupils.py - last updated 2021-05-22
 
 Manage pupil data.
 
@@ -39,6 +39,8 @@ if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
+    from core.base import start
+    start.setup()
 
 ### Messages
 _SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filepath}"
@@ -51,10 +53,10 @@ _FULL_BACKUP_FILE = "Alle Schülerdaten gespeichert als:\n  {path}"
 
 import datetime
 
-from local.base_config import year_path, PupilsBase, sortkey, USE_XLSX, \
-        SCHOOLYEAR, NONE
+from local.base_config import PupilsBase, sortkey
 from core.base import Dates
-from tables.spreadsheet import Spreadsheet, TableError, make_db_table
+from tables.spreadsheet import Spreadsheet, TableError, \
+        make_db_table, make_db_table_filetypes
 from tables.datapack import get_pack, save_pack
 
 ### -----
@@ -64,20 +66,27 @@ class PupilError(Exception):
 
 ###
 
-def PUPILS(year):
-    """Fetch pupil data for the given year as a <_Pupils> instance,
-    using a cache for the last year used (normally the current one).
+def PUPILS():
+    """Fetch pupil data for the current year as a <_Pupils> instance,
+    using a cache.
     """
-    if _Pupils._schoolyear != year:
-        _Pupils._set_year(year)
-    return _Pupils._pupils
+    pupils = _Pupils._pupils
+    if pupils and pupils.schoolyear == SCHOOLYEAR:
+        return pupils
+    # Load pupil data for the given year, from the standard (internal)
+    # location:
+    pupils = _Pupils(SCHOOLYEAR)
+    plist = pupils.get_data()
+    pupils.set_data(plist, norm_fields = True)
+    _Pupils._pupils = pupils
+    return pupils
 ##
-def Pupils_File(year, filepath, norm_fields = True):
+def Pupils_File(filepath, norm_fields = True):
     """Fetch pupil data from the given file as a <_Pupils> instance.
     <norm_fields> should be false normally only for update files – see
     the method <_Pupils.set_data>.
     """
-    pupils = _Pupils(year)
+    pupils = _Pupils(SCHOOLYEAR)
     plist = pupils.get_data(filepath)
     pupils.set_data(plist, norm_fields)
     return pupils
@@ -97,22 +106,12 @@ class _Pupils(PupilsBase):
     The data is also sorted (alphabetically) into classes, the results
     being available through the method <class_pupils>.
     """
-    _schoolyear = None
     _pupils = None
     @classmethod
-    def _set_year(cls, year = None):
-        """Load pupil data for the given year, from the standard (internal)
-        location. Clear data if no year is given.
+    def uncache(cls):
+        """Clear the cache. This can be used to signal a change in the data.
         """
-        if year == cls._schoolyear:
-            return
-        cls._schoolyear = year
-        if year:
-            cls._pupils = cls(year)
-            plist = cls._pupils.get_data()
-            cls._pupils.set_data(plist, norm_fields = True)
-        else:
-            cls._pupils = None
+        cls._pupils = None
 #
     def __init__(self, schoolyear):
         self.schoolyear = schoolyear
@@ -132,9 +131,10 @@ class _Pupils(PupilsBase):
             ptable = Spreadsheet(filepath).dbTable()
             data = {r[0]:r[1] for r in ptable.info}
             try:
-                sy = data[SCHOOLYEAR]
+                sy = data[CONFIG['T_SCHOOLYEAR']]
             except KeyError:
-                raise PupilError(_NO_SCHOOLYEAR.format(year = SCHOOLYEAR,
+                raise PupilError(_NO_SCHOOLYEAR.format(
+                        year = CONFIG['T_SCHOOLYEAR'],
                         filepath = filepath))
             if sy != self.schoolyear:
                 raise PupilError(_SCHOOLYEAR_MISMATCH.format(
@@ -142,12 +142,13 @@ class _Pupils(PupilsBase):
             pupil_list = self._read_source_table(ptable,
                     tweak_names = not data.get('__KEEP_NAMES__'))
         else:
-            filepath = year_path(self.schoolyear, self.CLASS_TABLE)
+            filepath = DATAPATH(CONFIG['CLASS_TABLE'])
             data = get_pack(filepath)
             try:
                 sy = data['SCHOOLYEAR']
             except KeyError:
-                raise PupilError(_NO_SCHOOLYEAR.format(year = 'SCHOOLYEAR',
+                raise PupilError(_NO_SCHOOLYEAR.format(
+                        year = 'SCHOOLYEAR',
                         filepath = filepath))
             if sy != self.schoolyear:
                 raise PupilError(_SCHOOLYEAR_MISMATCH.format(
@@ -377,7 +378,7 @@ class _Pupils(PupilsBase):
             '__MODIFIED__': timestamp,
             '__PUPILS__': pdlist
         }
-        save_pack(year_path(self.schoolyear, self.CLASS_TABLE), data, today)
+        save_pack(DATAPATH(CONFIG['CLASS_TABLE']), data, today)
         self._modified = timestamp
 #
     def backup(self, filepath, klass = None):
@@ -388,7 +389,7 @@ class _Pupils(PupilsBase):
         If <klass> is supplied, only the data for that class will be saved.
         """
         info = [
-            (SCHOOLYEAR, self.schoolyear),
+            (CONFIG['T_SCHOOLYEAR'], self.schoolyear),
             ('__MODIFIED__', self._modified),
             ('__KEEP_NAMES__', '*') # The names don't need "renormalizing"
         ]
@@ -402,24 +403,22 @@ class _Pupils(PupilsBase):
             pdlist.append({})
             for pd in self.class_pupils(k):
                 pdlist.append(pd)
-        if filepath.endswith('.tsv'):
-            xlsx = False
-        elif filepath.endswith('.xlsx'):
-            xlsx = True
-        elif USE_XLSX:
-            filepath += '.xlsx'
-            xlsx = True
-        else:
-            filepath += '.tsv'
-            xlsx = False
+        try:
+            filetype = filepath.rsplit('.', 1)[1]
+            if filetype not in make_db_table_filetypes:
+                raise IndexError
+        except IndexError:
+            filetype = CONFIG.get('TABLE_FORMAT') or 'tsv'
+            filepath += '.' + filetype
         bstream = make_db_table(self.TITLE, self.FIELDS,
-                pdlist, info = info, xlsx = xlsx)
+                pdlist, info = info, filetype = filetype)
         with open(filepath, 'wb') as fh:
             fh.write(bstream)
         REPORT('INFO', _BACKUP_FILE.format(klass = klass,
                 path = filepath) if klass
                 else _FULL_BACKUP_FILE.format(path = filepath))
 #
+#TODO ...
     def migrate(self, repeat_pids):
         """Create a pupil-data structure for the following year.
         """
@@ -490,12 +489,14 @@ class _PupilList(list):
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    from core.base import init
 
 #************** Start new year from raw data **************#
+#TODO
 #    init(os.path.join(os.path.dirname(os.path.dirname(this)), 'DATA'))
-#    _year = '2021'
-#    pupils = Pupils(_year)
+##   year = '2021'
+#    pupils = PUPILS()
+
+#TODO: year_path ?
 #    _ptables = Pupils_File(_year, filepath = year_path(_year,
 #            'Quelldaten/PUPILS_2021.tsv'), norm_fields = False)
 #    _delta = pupils.compare_update(_ptables)
@@ -507,27 +508,25 @@ if __name__ == '__main__':
 #    quit(0)
 #----------------------------------------------------------#
 
-    init()
-    _year = '2016'
-    pupils = PUPILS(_year)
+    pupils = PUPILS()
     print("\nCLASSES:", pupils.classes())
 
-    _ptables = Pupils_File(_year, filepath = os.path.join(DATA, 'testing',
-            'PUPILS_2016.tsv'), norm_fields = True) # original table
+    _ptables = Pupils_File(filepath = DATAPATH('testing/PUPILS_2016.tsv'),
+            norm_fields = True) # original table
     _delta = pupils.compare_update(_ptables)
     for k, dlist in _delta.items():
         print("\n --- KLASSE:", k)
         for d in dlist:
             print("  ", d)
+
     pupils.update_classes(_delta)
     print("\nLEAVING in 12:", pupils.final_year_pupils('12'))
     ### Migrate to next year
-    pupils.migrate([])
+#    pupils.migrate([])
 
     ### Make a back-up table
-    bpath = os.path.join(DATA, 'testing', 'tmp', 'PUPILS_%s' % _year)
+    bpath = DATAPATH('testing/tmp/PUPILS_%s' % pupils.schoolyear)
     pupils.backup(bpath)
-#    quit(0)
 
 #************** Read and write **************#
 ### This just does a resorting of the data within the json file
@@ -552,8 +551,9 @@ if __name__ == '__main__':
 
     ### Update the pupil data with some changes from a new "master" table
     print("\n§§§ CHECK PUPILS UPDATE §§§")
-    _ptables = Pupils_File(_year, filepath = os.path.join(DATA, 'testing',
-            'delta_test_pupils_2016'), norm_fields = False)  # modified table
+    _ptables = Pupils_File(
+            filepath = DATAPATH('testing/delta_test_pupils_2016'),
+            norm_fields = False)  # modified table
     _delta = pupils.compare_update(_ptables)
     for klass, changes in _delta.items():
         print("CLASS %s:" % klass)
@@ -562,8 +562,8 @@ if __name__ == '__main__':
     pupils.update_classes(_delta)
 
     ### Revert the changes by "updating" from a saved table
-    _ptables = Pupils_File(_year, filepath = os.path.join(DATA, 'testing',
-            'PUPILS_2016.tsv'), norm_fields = True) # original table
+    _ptables = Pupils_File(filepath = DATAPATH('testing/PUPILS_2016.tsv'),
+            norm_fields = True) # original table
     _delta = pupils.compare_update(_ptables)
     for k, dlist in _delta.items():
         print("\n --- KLASSE:", k)

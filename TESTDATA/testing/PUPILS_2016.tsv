@@ -44,8 +44,8 @@ Klasse	ID	Rufname	Name	Gruppen	Vornamen	Geburtsdatum	Geburtsort	Geschlecht	Ort	E
 12	200888	Rudolf	Rändier	R	Rudolf Serädnös	1998-04-01	Lappland	m	Nordpol	2012-12-24		
 12	200853	Stefan	von|Stelzingen	G	Augustus Balthasar Friedhelm Stefan	1997-11-06	Göttingen	m	Hannover	2008-05-01		2015-09-03
 												
-13	200301	Stefan	Böllermann	G	Stefan	1997-04-07	Hannover	m	Hannover	2003-08-01		2014-09-11
-13	200302	Lucie	Lieblich	G	Lucie Marie	1997-01-16	Gehrden	w	Hannover	2003-08-01		2014-09-11
-13	200305	Martin	Musterschüler	G	Martin	1996-11-05	Rothenburg ob der Tauber	m	Hannover	2003-08-01		2014-09-11
-13	200854	Lara	Riemann	G	Lara	1997-03-18	Stuttgart	w	Hannover	2008-12-11		2014-09-11
-13	200307	Olivia	van der|Veldt	G	Olivia Persephone	1996-08-27	Hannover	w	Hannover	2003-08-01		2014-09-11
+13	200301	Stefan	Böllermann	e k m	Stefan	1997-04-07	Hannover	m	Hannover	2003-08-01		2014-09-11
+13	200302	Lucie	Lieblich	b k m	Lucie Marie	1997-01-16	Gehrden	w	Hannover	2003-08-01		2014-09-11
+13	200305	Martin	Musterschüler	e k s	Martin	1996-11-05	Rothenburg ob der Tauber	m	Hannover	2003-08-01		2014-09-11
+13	200854	Lara	Riemann	e m s	Lara	1997-03-18	Stuttgart	w	Hannover	2008-12-11		2014-09-11
+13	200307	Olivia	van der|Veldt	b k s	Olivia Persephone	1996-08-27	Hannover	w	Hannover	2003-08-01		2014-09-11

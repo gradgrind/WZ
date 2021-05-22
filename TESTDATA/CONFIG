@@ -1,0 +1,41 @@
+#*** MINION 1.0 ***#
+# ************** Allgemeine Konfiguration **************
+# Letzte Änderung: 2021-05-22
+
+# Dezimal-Trennzeichen:
+DECIMAL_SEP: ,
+
+# Erster Monat des Schuljahres (Jan. -> 1, Dez. -> 12):
+SCHOOLYEAR_MONTH_1: 8
+
+# Wie ein gedrucktes Datum formatiert werden soll.
+# Hier wird es für <datetime.datetime.strftime> in Python angegeben:
+DATEFORMAT: %d.%m.%Y    # TT.MM.JJJJ
+
+CALENDER_HEADER: <<<#*** MINION 1.0 ***#\n
+<<<### Ferien und andere Jahresdaten\n
+<<<### Version: {date}\n
+<<<############################################################\n
+<<<# Diese Kopfzeilen sollten nicht geändert werden, das Datum\n
+<<<# wird beim Speichern automatisch aktualisiert.\n
+<<<#-----------------------------------------------------------\n
+<<<\n>>>
+
+TABLE_FORMAT: tsv  # ("tab-separated-value") oder xlsx
+
+###########################################################
+### Übersetzungen
+T_SCHOOLYEARS:  Schuljahre
+T_SCHOOLYEAR:   Schuljahr
+T_CLASS:        Klasse
+T_GROUP:        Gruppe
+T_GROUPS:       Gruppen
+
+
+###########################################################
+### Ordner- und Dateipfade (innerhalb des Datenordners) ###
+## Pfad-Trennzeichen ist '/', z.B. 'Unterordner1/DateiX'.
+
+SCHOOL_DATA: Schuldaten
+CALENDAR_FILE: Kalender
+CLASS_TABLE: Klassen/Schueler

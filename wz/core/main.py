@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-05-21
+core/main.py - last updated 2021-05-22
 
 Text-stream based controller/dispatcher for all functions.
 
@@ -30,12 +30,12 @@ if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
-    from core.base import init
+    from core.base import start
     try:
         datadir = sys.argv[1]
     except:
         datadir = None
-    init(datadir)
+    start.setup(datadir)
 
 sys.stdin.reconfigure(encoding='utf-8') # requires Python 3.7+
 
@@ -232,13 +232,7 @@ FUNCTIONS['TEMPLATE_get_classes'] = get_classes
 
 ######################################################################
 
-import core.interface_pupils
-import core.interface_subjects
-#import core.interface_calendar
-#import core.interface_grades
-import core.interface_text_reports
-import core.interface_template_fields
-
+import backend
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 

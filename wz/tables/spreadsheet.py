@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-04-03
+Last updated:  2021-05-22
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -417,13 +417,14 @@ class DBtable:
 
 ###
 
-def make_db_table(title, fields, items, info = None, xlsx = False):
+make_db_table_filetypes = ('tsv', 'xlsx')
+def make_db_table(title, fields, items, info = None, filetype = None):
     """Build a table with title, info lines, header line and records.
     The records are mappings {field: value}.
     If <fields> is a mapping, the names of the columns are taken from
     the values rather than the keys.
     """
-    table = NewSpreadsheet() if xlsx else NewTable()
+    table = NewSpreadsheet() if filetype == 'xlsx' else NewTable()
     table.add_row(('#', title))
     table.add_row(None)
     if info:

@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-05-21
+Last updated:  2021-05-22
 
 Administration interface.
 
@@ -40,10 +40,10 @@ _ERROR_TITLE = "Fehler"
 _UNEXPECTED_TITLE = "Unerwartetes Feedback"
 _TRAP_TITLE = "Kritischer Fehler"
 _INTERRUPT = "Abbrechen"
-_INTERRUPT_QUESTION = "Wenn eine Zeit lang keine Fortschrittszeichen" \
-        " erscheinen,\nkann es sein, dass ein unbekanntes Problem" \
+_INTERRUPT_QUESTION = "Wenn eine Zeit lang kein Fortschritt angezeigt" \
+        " wird,\ndann kann es sein, dass ein unbekanntes Problem" \
         " vorliegt.\nIn diesem Fall ist es sinnvoll abzubrechen," \
-        "\nobwohl möglicherweise Daten verloren gehen.\n" \
+        "\nobwohl dabei Daten verloren gehen können.\n" \
         "   Wollen Sie die Operation wirklich abbrechen?"
 _INTERRUPTED = "*** ABGEBROCHEN ***"
 

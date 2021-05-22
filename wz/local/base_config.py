@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-05-21
+Last updated:  2021-05-22
 
 General configuration items.
 
@@ -37,28 +37,6 @@ else:
 
 #######################################################################
 
-DECIMAL_SEP = ','
-
-# First month of school year (Jan -> 1, Dec -> 12):
-SCHOOLYEAR_MONTH_1 = 8
-# Format for printed dates (as used by <datetime.datetime.strftime>):
-DATEFORMAT = '%d.%m.%Y'
-NO_DATE = '*'   # an unspecified date
-
-CALENDAR_FILE = 'Kalender'
-
-USE_XLSX = False
-
-CALENDER_HEADER = \
-"""### Ferien und andere Jahresdaten
-### Version: {date}
-############################################################
-# Diese Kopfzeilen sollten nicht geändert werden, das Datum
-# wird beim Speichern automatisch aktualisiert.
-#-----------------------------------------------------------
-
-"""
-
 import os, glob, builtins, re
 
 #???
@@ -68,25 +46,7 @@ NONE = ''
 
 ### +++++
 
-SCHOOLYEARS = 'Schuljahre'
-SCHOOLYEAR = 'Schuljahr'
-CLASS = 'Klasse'
-GROUP = 'Gruppe'
-GROUPS = 'Gruppen'
-
-###
-
-def year_path(schoolyear, fpath = None):
-    """Return a path within the data folder for a school year.
-    <fpath> is a '/' separated path relative to the year folder.
-    """
-    if fpath:
-        return os.path.join(DATA, SCHOOLYEARS, schoolyear,
-                *fpath.split('/'))
-    return os.path.join(DATA, SCHOOLYEARS, schoolyear)
-
-###
-
+#TODO: deprecated? (now in calendar file for current year)
 def print_schoolyear(schoolyear):
     """Convert a school-year (<str>) to the format used for output
     """
@@ -133,11 +93,12 @@ class SubjectsBase:
         'SID'       : 'Fach-Kürzel',
         'SUBJECT'   : 'Fach',
         'TIDS'      : 'Lehrer-Kürzel',  # can be multiple, space-separated
-        'GROUP'     : GROUP,
+        'GROUP'     : CONFIG['T_GROUP'],
         'COMPOSITE' : 'Sammelfach',     # can be multiple, space-separated
         'SGROUP'    : 'Fachgruppe'
     }
 #
+#TODO: to CONFIG?
     # The path to the course data for a school-year:
     COURSE_TABLE = 'Klassen/Kurse'
     # The path to the list of sid: name definitions:
@@ -156,6 +117,7 @@ class SubjectsBase:
             xpath = table.format(klass = klass)
         else:
             xpath = os.path.dirname(table)
+#TODO: year_path ...
         return year_path(self.schoolyear, xpath)
 #
     def group_subjects(self, group):
@@ -170,11 +132,11 @@ class SubjectsBase:
 class PupilsBase(dict):
     TITLE = "Schülerliste"
     FIELDS = {
-        'CLASS'     : CLASS,         # This must be the first field!
+        'CLASS'     : CONFIG['T_CLASS'],  # This must be the first field!
         'PID'       : 'ID',
         'FIRSTNAME' : 'Rufname',
         'LASTNAME'  : 'Name',
-        'GROUPS'    : GROUPS,        # probably not in imported data
+        'GROUPS'    : CONFIG['T_GROUPS'], # probably not in imported data
         'FIRSTNAMES': 'Vornamen',
         'DOB_D'     : 'Geburtsdatum',
         'POB'       : 'Geburtsort',
