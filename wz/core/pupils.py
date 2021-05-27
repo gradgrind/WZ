@@ -66,6 +66,81 @@ class PupilError(Exception):
 
 ###
 
+#TODO
+class Pupils:
+    @classmethod
+    def init_from_bytes(cls, filebytes, filename):
+        """Set up the database from a file passed as <bytes>.
+        The <filename> parameter is necessary to determine the type of
+        data (ods, xlsx or tsv) – on the basis of its ending.
+        Any existing database contents will be deleted.
+        """
+        bstream = io.BytesIO(filebytes)
+        bstream.filename = filename
+        schoolyear = Dates.get_schoolyear()
+
+        ptable = Spreadsheet(filepath).dbTable()
+        data = {r[0]:r[1] for r in ptable.info}
+
+
+        try:
+            sy = data[CONFIG['T_SCHOOLYEAR']]
+        except KeyError:
+# WARN or ERROR?
+            raise PupilError(_NO_SCHOOLYEAR.format(
+                    year = CONFIG['T_SCHOOLYEAR'],
+                    filepath = filepath))
+        if sy != self.schoolyear:
+            raise PupilError(_SCHOOLYEAR_MISMATCH.format(
+                    filepath = filepath))
+        pupil_list = self.read_source_table(ptable,
+                tweak_names = not data.get('__KEEP_NAMES__'))
+
+
+
+        pupils = _Pupils(SCHOOLYEAR)
+        pupils.get_data(
+
+        self._modified = data.get('__MODIFIED__') or '–––'
+
+        pass
+            ptable = Spreadsheet(filepath).dbTable()
+            data = {r[0]:r[1] for r in ptable.info}
+            try:
+                sy = data[CONFIG['T_SCHOOLYEAR']]
+            except KeyError:
+                raise PupilError(_NO_SCHOOLYEAR.format(
+                        year = CONFIG['T_SCHOOLYEAR'],
+                        filepath = filepath))
+            if sy != self.schoolyear:
+                raise PupilError(_SCHOOLYEAR_MISMATCH.format(
+                        filepath = filepath))
+            pupil_list = self.read_source_table(ptable,
+                    tweak_names = not data.get('__KEEP_NAMES__'))
+        self._modified = data.get('__MODIFIED__') or '–––'
+
+
+#
+    def __init__(self, data = None):
+        """If there is no data, look for the internal database. Fail if
+        it is not present.
+        Report selected year (and any warnings associated with that).
+        """
+        pass
+#
+    def classes(self):
+        pass
+# Check data against current school-year. If the data has no date, warn.
+# If there is a date mismatch, also warn.
+# I suppose the program should start with the stored data? If there is
+# none (or if it is dodgy) there can be a question dialog to load from
+# file.
+# What about updating from file, with update selections?
+
+
+
+### :::::
+
 def PUPILS():
     """Fetch pupil data for the current year as a <_Pupils> instance,
     using a cache.
@@ -139,7 +214,7 @@ class _Pupils(PupilsBase):
             if sy != self.schoolyear:
                 raise PupilError(_SCHOOLYEAR_MISMATCH.format(
                         filepath = filepath))
-            pupil_list = self._read_source_table(ptable,
+            pupil_list = self.read_source_table(ptable,
                     tweak_names = not data.get('__KEEP_NAMES__'))
         else:
             filepath = DATAPATH(CONFIG['CLASS_TABLE'])

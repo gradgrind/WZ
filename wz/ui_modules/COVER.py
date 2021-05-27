@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-ui/tab_text_reports.py
+ui_modules/COVER.py
 
-Last updated:  2021-04-06
+Last updated:  2021-05-23
 
-Manage text reports
+Manage (text) report cover sheets
 
 =+LICENCE=============================
 Copyright 2021 Michael Towers
@@ -25,6 +25,8 @@ Copyright 2021 Michael Towers
 """
 
 #TODO: only the cover sheets for a whole class have been implemented
+# Remove any implications of text reports – these should be handled by
+# a separate module.
 
 ### Labels, etc.
 _TEXT_REPORTS = "Waldorf-Zeugnisse"

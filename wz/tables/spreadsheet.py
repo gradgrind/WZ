@@ -2,14 +2,15 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-05-22
+Last updated:  2021-05-27
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
 and Open Document files (.ods) are supported.
 
-Spreadsheet file writer, table contains only strings (and empty cells).
-For writing, only simple tsv files (no quoting, no escapes) are supported.
+Spreadsheet file writers, table contains only strings (and empty cells).
+For writing, only simple unformatted xlsx files and tsv files
+(no quoting, no escapes) are supported.
 
 Dates are read and written as strings in the format 'yyyy-mm-dd'.
 
@@ -40,13 +41,23 @@ _INVALIDSHEETNAME       = "Ungültige Tabellenname: '{name}'"
 _INVALIDCELLNAME        = "Ungültiger Zellenbezeichnung: '{name}'"
 _INVALID_FILE           = "Ungültige oder fehlerhafte Datei"
 _NO_TYPE_EXTENSION      = "Dateityp-Erweiterung fehlt: {fname}"
-_DUPLICATECOLUMNNAME    = "Spaltenname doppelt vorhanden: {name}"
+_DUPLICATE_COLUMN_NAME  = "Spaltenname doppelt vorhanden: {name}"
+_ESSENTIAL_FIELD_MISSING = "Info-Feld '{field}' fehlt in der Tabelle"
+_ESSENTIAL_INFO_MISSING = "Feld (Spalte) '{field}' fehlt in der Tabelle"
+_ESSENTIAL_FIELD_EMPTY  = "Feld (Spalte) '{field}' darf nicht leer sein"
+_INFO_IN_BODY           = "Info-Zeilen müssen vor der Kopfzeile stehen"
+
+########################################################################
 
 import sys, os, datetime, re
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
-    sys.path[0] = os.path.dirname(this)
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+
+### +++++
 
 import io
 
@@ -55,7 +66,9 @@ from openpyxl.utils import get_column_letter
 
 from tables.simple_ods_reader import OdsReader
 
-### +++++
+NONE = ''
+
+### -----
 
 class TsvReader(dict):
     def __init__ (self, filepath):
@@ -124,7 +137,7 @@ class XlsReader(dict):
                         v = v.strftime("%Y-%m-%d")
                     elif type(v) == str:
                         v = v.strip()
-                        if v == '':
+                        if v == NONE:
                              v = None
                     elif v != None:
                         v = str(v)
@@ -184,7 +197,6 @@ class Spreadsheet:
         self._sheetNames = None
         self._table = None
         self.ixHeaderEnd = None
-
         if type(filepath) == str:
             # realfile = True
             self.filename = os.path.basename(filepath)
@@ -212,7 +224,6 @@ class Spreadsheet:
                 if not os.path.isfile(filepath):
                     raise TableError(_TABLENOTFOUND.format(path=filepath))
             self.filepath = filepath
-
         else:
             # realfile = False
             try:
@@ -225,7 +236,6 @@ class Spreadsheet:
                 raise TableError(_NO_TYPE_EXTENSION.format(
                         fname=self.filename))
             self.filepath = None
-
         try:
             handler = self._SUPPORTED_TYPES [ending]
         except:
@@ -235,10 +245,14 @@ class Spreadsheet:
         except:
             raise TableError(_TABLENOTREADABLE.format(
                     path=self.filepath or self.filename))
-
         self._sheetNames = list(self._spreadsheet)
         # Default sheet is the first:
         self._table = self._spreadsheet[self._sheetNames[0]]
+#
+    def table(self):
+        """Return the current table (initially the first sheet).
+        """
+        return self._table
 #
     def rowLen(self, table = None):
         if not table:
@@ -279,12 +293,7 @@ class Spreadsheet:
         else:
             return False
 #
-    def dbTable(self, table = None):
-        """Read the table as a database-like table (<DBtable>).
-        """
-        return DBtable(table or self._table)
-#
-#Is this needed?
+#TODO: Is this needed?
     def getColumnHeaders(self, rowix, table = None):
         """Return a dict of table headers, header -> column index.
         The row containing the headers is passed as argument.
@@ -302,7 +311,7 @@ class Spreadsheet:
                 headers[cellV] = cellix
         return headers
 #
-#Is this needed?
+#TODO: Is this needed?
     def getMergedRanges(self, tablename):
         return self._spreadsheet.mergedRanges(tablename)
 #
@@ -335,110 +344,185 @@ class Spreadsheet:
 
 ###
 
-class DBtable:
-    """A database-like table, prepared from a list of rows, each row
-    being a list of fields.
-    A row with '#' in the first column is regarded as a comment
-    and ignored.
-    The first rows are set aside for group information. Those with
-    '+++' in the first column are "info-lines". They are available as a
-    list of rows – without the first column – as <self.info>.
-    After these, the first non-empty, non-comment row is
-    taken as containing the field names. In this row empty fields
-    should be avoided. If there are any empty ones, these will be
-    allocated numbered tags beginning with '$'.
-    All subsequent non-empty rows are taken as records (unless the
-    first column contains '#').
-    The table is iterable and indexable (returning the rows).
-    Each row is a tuple, the fields are available as the ordered mapping
-    <self.header>: {field -> index}. The method <get> allows access via
-    the field-name to that field of a particular row.
+class DataTable:
+    """Manage a specially structured table designed for storing lines of
+    records (like in a relational database), but also having a header
+    section for key-value entries relevant for the whole table.
+    Lines whose first field (column 0) is empty are ignored.
+    Only string data is supported. Any fields in the input which are not
+    intrinsically strings are converted (this is done by the
+    <Spreadsheet> class, which is used for reading the table).
+
+    The first rows are set aside for group information. This is a list
+    of key-value pairs. The first column contains '+++', the second
+    the key, the third the value. Subsequent columns are ignored.
+    These pairs are available as <self._info>: {key: value, ... }.
+
+    After these, the first row with an entry in the first column is the
+    header row, it contains the field names. Columns with no entry in
+    this line will be excluded from the data (ignored).
+
+    <self._rows> is then a list of all subsequent rows with an entry in
+    the first column (the records). The row contents are presented as
+    mappings: {field: value}. Empty cells are also strings ('').
     """
-    @staticmethod
-    def empty(row):
-        """Test for an empty row.
+    def __init__(self, filepath):
+        """<filepath> is as for <Spreadsheet>, which is used to read
+        the file.
         """
-        for cell in row:
-            if cell:
-                return False
-        return True
-#
-    def __iter__(self):
-        for row in self.rows:
-            yield(row)
-#
-    def __getitem__(self, i):
-        return self.rows[i]
-#
-    def __init__(self, table):
-        self.rows = []
-        self.info = []
-        self.header = None
+        table = Spreadsheet(filepath).table()
+        rows = []
+        info = {}
+        header = []
+        fields = []
         for row in table:
-            if self.empty(row):
-                continue
             c1 = row[0]
-            if c1 == '#':
+            if not c1:
                 continue
-            if self.header:
-                self.rows.append(row)
+            if header:
+                # The header line has already been found.
+                rowmap = {}
+                for f, i in header:
+                    # <Spreadsheet> can return <None> in a cell:
+                    rowmap[f] = row[i] or NONE
+                rows.append(rowmap)
             elif c1 == '+++':
-                self.info.append(row[1:])
-            elif c1:
+                if header:
+                    raise TableError(_INFO_IN_BODY)
+                info[row[1]] = row[2] or NONE
+            else:
                 # The field names
-                i = 0   # for automatic tagging of unnamed columns
-                n = 0   # column indexing
-                self.header = {}
+                i = 0   # column indexing
+                header = []
                 for f in row:
                     if f:
-                        if f in self.header:
-                            raise TableError(_DUPLICATECOLUMNNAME.format(
+                        if f in header:
+                            raise TableError(_DUPLICATE_COLUMN_NAME.format(
                                     name = f))
-                        self.header[f] = n
-                    else:
-                        i += 1
-                        self.header['$%02d' % i] = n
-                    n += 1
+                        header.append((f, i))
+                        fields.append(f)
+                    i += 1
+        self._fields = fields
+        self._info = info
+        self._rows = rows
 #
-    def fieldnames(self):
-        """Return an ordered list of the fields.
+    def mapping(self):
+        """Return the table data as a mapping:
+            {   '__INFO__': {key: value, ... },
+                '__FIELDS__': [field, ... ],
+                '__ROWS__': [{field: value, ... }, ... ]
+            }
         """
-        return list(self.header)
+        return {    '__INFO__': self._info,
+                    '__FIELDS__': self._fields,
+                    '__ROWS__': self._rows
+        }
 #
-    def get(self, row, field):
-        """Return the value of the given (named) field within the row.
+    def filter(self, fieldlist, infolist, extend = True):
+        """Process the table data into mappings based on the two
+        lists, <fields> and <info>, allowing translation of the field/key
+        names to internal versions. Only those fields which are in these
+        lists will be retained.
+        Empty fields are guaranteed to contain ''.
+        If <extend> is true, fields which are in the lists but not in
+        the table will be added (though empty).
+        <fieldlist> and <infolist> are lists of triples:
+            [   internal field-name,
+                external (translated) field-name ( or false, e.g. ''),
+                essential field (true/false)
+            ]
+        If the external field name evaluates "false" (''), the internal
+        and external names are identical.
+        Return a mapping with two entries, '__INFO__' and '__ROWS__'.
+        The former is the info-mapping, the latter a list of row mappings.
         """
-        return row[self.header[field]]
+        tmap = self.mapping()
+        tinfo = tmap['__INFO__']
+        newinfo = {}
+        for f, t, needed in infolist:
+            name = t or f   # null <t> => no translation, use internal name
+            try:
+                val = tinfo[name]
+            except KeyError:
+                if needed:
+                    raise TableError(_ESSENTIAL_INFO_MISSING.format(
+                            field = name))
+                if extend:
+                    val = NONE
+            newinfo[f] = val
+        rowmaps = []
+        for row in tmap['__ROWS__']:
+            rowmap = {}
+            rowmaps.append(rowmap)
+            for f, t, needed in fieldlist:
+                name = t or f
+                try:
+                    val = row[name]
+                    if needed and not val:
+                        raise TableError(_ESSENTIAL_FIELD_EMPTY.format(
+                                field = fname[f]))
+                except KeyError:
+                    if needed:
+                        raise TableError(_ESSENTIAL_FIELD_MISSING.format(
+                                field = name))
+                    if extend:
+                        rowmap[f] = NONE
+                    continue
+                rowmap[f] = val or NONE
+        return {'__INFO__': newinfo, '__ROWS__': rowmaps}
 #
-    def as_dict(self, row):
-        """Return the row as a <dict>.
+    make_table_filetypes = ('tsv', 'xlsx')
+    @staticmethod
+    def make_table(records, info, fieldlist, infolist,
+            title = None, extend = True, filetype = None):
+        """Build a DataTable with optional title, info lines,
+        header line and records.
+        The records are mappings {field: value}.
+        If <fields> is a mapping, the names of the columns are taken from
+        the values rather than the keys.
+        The file is returned as a <bytes> object.
         """
-        return {h: row[i] for h, i in self.header.items()}
+        pass
+#TODO: Update to new structures.
+# Handling input and translations?
+# Also translate info items?
 
-###
+        table = NewSpreadsheet() if filetype == 'xlsx' else NewTable()
+        if title:
+            table.add_row((NONE, title))
+            table.add_row(None)
+        if infolist:
+            for f, t, needed in infolist:
+                name = t or f   # null <t> => no translation, use internal name
+                try:
+                    val = info[name]
+                    table.add_row(('+++', name, val or NONE))
+                except KeyError:
+                    if needed:
+                        raise TableError(_ESSENTIAL_INFO_MISSING.format(
+                                field = name))
+                    if extend:
+                        table.add_row(('+++', name, NONE))
+        else:
+            for key, val in info.items():
+                table.add_row(('+++', key, val))
 
-make_db_table_filetypes = ('tsv', 'xlsx')
-def make_db_table(title, fields, items, info = None, filetype = None):
-    """Build a table with title, info lines, header line and records.
-    The records are mappings {field: value}.
-    If <fields> is a mapping, the names of the columns are taken from
-    the values rather than the keys.
-    """
-    table = NewSpreadsheet() if filetype == 'xlsx' else NewTable()
-    table.add_row(('#', title))
-    table.add_row(None)
-    if info:
-        for key, val in info:
-            table.add_row(('+++', key, val))
-    table.add_row(None)
-    try:
-        fline = fields.values()
-    except AttributeError:
-        fline = fields
-    table.add_row(fline)
-    for line in items:
-        table.add_row([line.get(f) or '' for f in fields])
-    return table.save()
+
+#? Only if info-lines have been added?
+            table.add_row(None)
+
+
+
+
+
+        try:
+            fline = fields.values()
+        except AttributeError:
+            fline = fields
+        table.add_row(fline)
+        for line in items:
+            table.add_row([line.get(f) or NONE for f in fields])
+        return table.save()
 
 ###
 
@@ -450,7 +534,7 @@ class NewTable:
 #
     @staticmethod
     def _filter(text):
-        return re.sub('\t\n\r', '', str(text)) if text else ''
+        return re.sub('\t\n\r', NONE, str(text)) if text else NONE
 #
     def add_row(self, items):
         """Add a row with the values listed in <items>. The values will
@@ -460,7 +544,7 @@ class NewTable:
             self._rowlist.append('\t'.join([self._filter(item)
                     for item in items]))
         else:
-            self._rowlist.append('')
+            self._rowlist.append(NONE)
 #
     def save(self, filepath = None):
         """If <filepath> is given, the resulting table will be written
@@ -493,7 +577,7 @@ class NewSpreadsheet:
         """Set a cell value (string only), using 0-based indexing.
         """
         self._ws.cell(row = row + 1, column = col + 1,
-                value = '' if value == None else str(value))
+                value = NONE if value == None else str(value))
 #
     def add_row(self, items):
         """Add a row with the values listed in <items>. The values will
@@ -526,25 +610,21 @@ class NewSpreadsheet:
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    from core.base import init
-    init()
+    from core.base import start
+    start.setup(os.path.join(basedir, 'TESTDATA'))
 
-    try:
-        f = sys.argv[1]
-    except:
-        pass
-    else:
-        ss = Spreadsheet(f)
-        dbt = ss.dbTable()
-        print("\nINFO:", dbt.info)
-        print("\nFIELDS:", dbt.fieldnames())
-        print("\nCONTENT:")
-        for row in dbt:
-            print(" :::", row)
-        print("\n*** 4th row:", dbt[3])
-        quit(0)
+    for f in sys.argv[1:]:
+        if f[0] != '-':
+            ss = DataTable(f)
+            dbt = ss.mapping()
+            print("\nINFO:", dbt['__INFO__'])
+            print("\nFIELDS:", dbt['__FIELDS__'])
+            print("\nCONTENT:")
+            for row in dbt['__ROWS__']:
+                print(" :::", row)
+            quit(0)
 
-    filepath = os.path.join(DATA, 'testing', 'Test1.tsv')
+    filepath = DATAPATH('testing/Test1.tsv')
     fname = os.path.basename(filepath)
     tsv = TsvReader(filepath)
     print("\nROWS:")
@@ -560,21 +640,39 @@ if __name__ == '__main__':
     for row in tsv['TSV']:
         print(" :::", row)
 
-    ss = Spreadsheet(filepath)
-    dbt = ss.dbTable()
-    print("\nINFO:", dbt.info)
-    print("\nFIELDS:", dbt.fieldnames())
+    ss = DataTable(filepath)
+    dbt = ss.mapping()
+    print("\nINFO:", dbt['__INFO__'])
+    print("\nFIELDS:", dbt['__FIELDS__'])
     print("\nCONTENT:")
-    for row in dbt:
+    for row in dbt['__ROWS__']:
         print(" :::", row)
-    print("\n*** 4th row:", dbt[3])
-#    print("\n*** 20th row:", dbt[19])
 
     print("\nGRADES 10:")
-    ss = Spreadsheet(os.path.join(DATA, 'testing', 'NOTEN', 'NOTEN_2', 'Noten_10_2'))
-    dbt = ss.dbTable()
-    print("\nINFO:", dbt.info)
-    print("\nFIELDS:", dbt.fieldnames())
+    ss = DataTable(DATAPATH('testing/Noten/NOTEN_2/Noten_10_2'))
+    dbt = ss.mapping()
+    print("\nINFO:", dbt['__INFO__'])
+    print("\nFIELDS:", dbt['__FIELDS__'])
     print("\nCONTENT:")
-    for row in dbt:
+    for row in dbt['__ROWS__']:
+        print(" :::", row)
+
+    print("\nPUPILS:")
+    ss = DataTable(DATAPATH('testing/delta_test_pupils_2016'))
+    dbt = ss.filter(SCHOOL_DATA['PUPIL_FIELDS'],
+            [['SCHOOLYEAR', 'Schuljahr', False]],
+            extend = False)
+    print("\nINFO:", dbt['__INFO__'])
+    print("\nCONTENT:")
+    for row in dbt['__ROWS__']:
+        print(" :::", row)
+
+    print("\nPUPILS + extend:")
+    ss = DataTable(DATAPATH('testing/delta_test_pupils_2016'))
+    dbt = ss.filter(SCHOOL_DATA['PUPIL_FIELDS'],
+            [['SCHOOLYEAR', 'Schuljahr', False]],
+            extend = True)
+    print("\nINFO:", dbt['__INFO__'])
+    print("\nCONTENT:")
+    for row in dbt['__ROWS__']:
         print(" :::", row)

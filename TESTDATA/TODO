@@ -1,0 +1,35 @@
+## Configuration files which belong to the new structure:
+
+ - Fachliste. Subjects, (key: full name). Currently NOT MINION, some names
+   have space characters in them.
+
+ - CONFIG. Basic configuration stuff, especially for localization (including
+   the names/paths of other files here!). MINION.
+
+ - Schuldaten. Configuration items specifically for the school. MINION.
+
+ - Kalender. Information about the current school year (primarily dates).
+   MINION.
+
+Of these only Kalender will change from one year to the next.
+
+The other files have not been updated or deleted for the new structure.
+
+## Folders:
+
+ - Klassen. Contains pupil and class-subject data for the current year.
+
+ - RESOURCES. Templates and such-like. Not specific to the current year,
+   but, at least in part, to the school.
+
+ - testing. Only in the test-data. It contains files related to the test
+   code integrated in the source files.
+
+ - logs. This is currently in the base folder of the project, but it
+   might be sensible to move it to the data folder.
+
+ - CURRENT(?). Doesn't exist yet. For the data that arises during the
+   year. NOT stuff that should be archived.
+
+ - SCHOOLYEAR. This is for the results, including grade tables, report
+   texts, etc. This will form the basis of the data that is archived.

@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-05-22
+Last updated:  2021-05-26
 
 General configuration items.
 
@@ -242,7 +242,7 @@ class PupilsBase(dict):
             return {'R'}
         return None
 #
-    def _read_source_table(self, ptable, tweak_names):
+    def read_source_table(self, ptable, tweak_names):
         """Read a pupil-data list from ptable, containing only the pupil
         fields (in self.FIELDS) which are actually present in the file.
         If <tweak_names> is true, the names will be analysed for

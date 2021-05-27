@@ -9,19 +9,9 @@
 #     python3 -m venv venv
 #     venv/bin/pip install --upgrade pip
 
-wheel
-setuptools
+#wheel
+#setuptools
 pikepdf
 xmltodict
 openpyxl
-pyside2
-qtpy
-
-# There might be a problem with the update to PySide2 5.15.2: ...
-#lxml       4.6.1   4.6.3  wheel
-#openpyxl   3.0.6   3.0.7  wheel
-#pikepdf    2.0.0   2.9.2  wheel
-#Pillow     8.0.1   8.1.2  wheel
-#PySide2    5.15.1  5.15.2 wheel !
-#setuptools 40.8.0  54.2.0 wheel
-#shiboken2  5.15.1  5.15.2 wheel !
+pyside6

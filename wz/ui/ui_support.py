@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-04-19
+Last updated:  2021-05-25
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -28,10 +28,15 @@ Copyright 2021 Michael Towers
 ### Messages
 _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
 
-# Dialog buttons, etc.
+### Dialog buttons, etc.
 _CANCEL = "Abbrechen"
 _OK = "OK"
-_INPUT = "Eingabe"
+
+_INPUT_TITLE = "Eingabe"
+_YESORNO_TITLE = "Ja oder Nein?"
+_TEXTAREA_TITLE = "Text eingeben"
+_LOSE_CHANGES_TITLE = "Ungespeicherte Änderungen"
+_LOSE_CHANGES = "Sind Sie damit einverstanden, dass die Änderungen verloren gehen?"
 
 _INFO = "Mitteilung"
 _WARNING = "Warnung"
@@ -41,198 +46,62 @@ _FILEOPEN = "Datei öffnen"
 _DIROPEN = "Ordner öffnen"
 _FILESAVE = "Datei speichern"
 
-_TITLE_LOSE_CHANGES = "Ungespeicherte Änderungen"
-_LOSE_CHANGES = "Sind Sie damit einverstanden, dass die Änderungen verloren gehen?"
-
 #####################################################
 
 import sys, os, builtins, traceback
+from importlib import resources         # Python >= 3.7
 
-from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
+from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
         QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox, \
         QListWidget, QFileDialog, QLineEdit
-from qtpy.QtGui import QMovie, QPixmap
-from qtpy.QtCore import Qt, QObject
+from PySide6.QtGui import QMovie, QPixmap
+from PySide6.QtCore import Qt, QObject, QFile, QIODevice
+from PySide6.QtUiTools import QUiLoader
 
 ### +++++
 
 class GuiError(Exception):
     pass
 
-###
+### -----
 
-class HLine(QFrame):
-    def __init__(self):
-        super().__init__()
-        self.setFrameShape(QFrame.HLine)
-        self.setFrameShadow(QFrame.Sunken)
-
-###
-
-class VLine(QFrame):
-    def __init__(self):
-        super().__init__()
-        self.setFrameShape(QFrame.VLine)
-        self.setFrameShadow(QFrame.Sunken)
-
-###
-
-class BoldLabel(QLabel):
-    def __init__(self, text):
-        super().__init__('<b>' + text + '</b>')
-
-###
-
-class KeySelect(QComboBox):
-    def __init__(self, value_mapping = None, changed_callback = None):
-        """A selection widget for key-description pairs. The key is the
-        actual selection item, but the description is displayed for
-        human consumption.
-        <value_mapping> is a list: ((key, display text), ...)
-        To work with a callback, pass a function with a single parameter
-        (the new key) as <changed_callback>. If this function does not
-        return a true value, the selection will be reset to the last value.
-        """
-        super().__init__()
-        self._selected = None
-        self._cb = changed_callback
-        self.set_items(value_mapping)
-# Qt note: If connecting after adding the items, there seems
-# to be no signal; if before, then the first item is signalled.
-        self.currentIndexChanged.connect(self._new)
-#
-    def selected(self, display = False):
-        try:
-            return self.value_mapping[self.currentIndex()][1 if display else 0]
-        except:
-            return None
-#
-    def _new(self, index):
-        if self.value_mapping and self.changed_callback:
-            key = self.value_mapping[index][0]
-            if self.changed_callback(key):
-                self._selected = index
-            else:
-                self.changed_callback = None
-                self.setCurrentIndex(self._selected)
-                self.changed_callback = self._cb
-#
-    def reset(self, key):
-        self.changed_callback = None        # suppress callback
-        i = 0
-        for k, _ in self.value_mapping:
-            if k == key:
-                self.setCurrentIndex(i)
-                self._selected = i
-                break
-            i += 1
-        else:
-            self.changed_callback = self._cb    # reenable callback
-            raise GuiError(_UNKNOWN_KEY.format(key = key))
-        self.changed_callback = self._cb    # reenable callback
-#
-    def trigger(self):
-        self._new(self.currentIndex())
-#
-    def set_items(self, value_mapping, index = 0):
-        """Set / reset the items.
-        <value_mapping> is a list: ((key, display text), ...)
-        This will not cause a callback.
-        """
-        self.changed_callback = None        # suppress callback
-        self.value_mapping = value_mapping
-        self.clear()
-        if value_mapping:
-            self.addItems([text for _, text in value_mapping])
-            self.setCurrentIndex(index)
-            self._selected = index
-        self.changed_callback = self._cb    # reenable callback
-
-###
-
-def QuestionDialog(title, message):
-    qd = QDialog()
-    qd.setWindowTitle(title)
-    vbox = QVBoxLayout(qd)
-    vbox.addWidget(QLabel(message))
-    vbox.addWidget(HLine())
-    bbox = QHBoxLayout()
-    vbox.addLayout(bbox)
-    bbox.addStretch(1)
-    cancel = QPushButton(_CANCEL)
-    cancel.clicked.connect(qd.reject)
-    bbox.addWidget(cancel)
-    ok = QPushButton(_OK)
-    ok.clicked.connect(qd.accept)
-    bbox.addWidget(ok)
-    cancel.setDefault(True)
-    return qd.exec_() == QDialog.Accepted
-
-###
-
-def LineDialog(message, text = ''):
-    td = QDialog()
-    td.setWindowTitle(_INPUT)
-    vbox = QVBoxLayout(td)
-    vbox.addWidget(QLabel(message))
-    lineedit = QLineEdit(text)
-    vbox.addWidget(lineedit)
-    vbox.addWidget(HLine())
-    bbox = QHBoxLayout()
-    vbox.addLayout(bbox)
-    bbox.addStretch(1)
-    cancel = QPushButton(_CANCEL)
-    cancel.clicked.connect(td.reject)
-    bbox.addWidget(cancel)
-    ok = QPushButton(_OK)
-    ok.clicked.connect(td.accept)
-    bbox.addWidget(ok)
-    cancel.setDefault(True)
-    if td.exec_() == QDialog.Accepted:
-        return lineedit.text().strip()
-    return None
-
-###
-
-def TextDialog(title, text):
-    td = QDialog()
-    td.setWindowTitle(title)
-    vbox = QVBoxLayout(td)
-    textedit = QTextEdit(text)
-    vbox.addWidget(textedit)
-    vbox.addWidget(HLine())
-    bbox = QHBoxLayout()
-    vbox.addLayout(bbox)
-    bbox.addStretch(1)
-    cancel = QPushButton(_CANCEL)
-    cancel.clicked.connect(td.reject)
-    bbox.addWidget(cancel)
-    ok = QPushButton(_OK)
-    ok.clicked.connect(td.accept)
-    bbox.addWidget(ok)
-    cancel.setDefault(True)
-    if td.exec_() == QDialog.Accepted:
-        return textedit.toPlainText().strip()
-    return None
-
-###
-
-class TabPage(QWidget):
-    """Base class for widgets to be used as a tab page in the admin gui.
-    Subclass this to add the required functionality.
+def ui_load(filename):
+    """Load a Qt Designer 'ui'-file.
+    Folder 'ui/designer' must have an '__init__.py' file (which can be empty).
     """
-    def __init__(self, name):
-        super().__init__()
-#        self.setMaximumWidth(800)
-        self.setMinimumWidth(600)
-        self.vbox = QVBoxLayout(self)
-        self.name = name
-#        l = QLabel('<b>%s</b>' % name)
-#        l.setAlignment(Qt.AlignCenter)
-#        self.vbox.addWidget(l)
-#        self.vbox.addWidget(HLine())
-#        self.vbox.addStretch(1)
+    with resources.path('ui.designer', filename) as path:
+        ui_file_name = str(path)
+    ui_file = QFile(ui_file_name)
+    if not ui_file.open(QIODevice.ReadOnly):
+        raise GuiError("BUG: Cannot open {}: {}".format(ui_file_name,
+                ui_file.errorString()))
+    loader = QUiLoader()
+#    loader.clearPluginPaths()
+#    print("§§§", loader.pluginPaths())
+    ui = loader.load(ui_file, None)
+    ui_file.close()
+    if not ui:
+        raise GuiError("BUG: " + loader.errorString())
+    return ui
+
+##Add custom widgets thus?
+#class UiLoader(QtUiTools.QUiLoader):
+#    def createWidget(self, className, parent=None, name=""):
+#        if className == "PlotWidget":
+#            return pg.PlotWidget(parent=parent)
+#        return super().createWidget(className, parent, name)
+
+###
+
+class StackPage:
+    """Base class for the behaviour of the page widgets in the main "stack".
+    Subclass this to add the required functionality.
+    The actual visible widget is referenced by its name.
+    """
+    def __init__(self, widget_name):
+        self.name = widget_name
+        self.widget = getattr(WINDOW, widget_name)
 #
     def enter(self):
         """Called when a tab page is activated (selected) and when there
@@ -252,19 +121,155 @@ class TabPage(QWidget):
         changes), otherwise <False>.
         """
         if self.is_modified():
-            return QuestionDialog(_TITLE_LOSE_CHANGES, _LOSE_CHANGES)
+            return YesOrNoDialog(_LOSE_CHANGES, _LOSE_CHANGES_TITLE)
         return True
 #
     def is_modified(self):
         """Return <True> if there are unsaved changes.
         """
         return False
+
+###
+
+class KeySelector:
+    """Modifies the behaviour of an existing (pristine) QComboBox:
+    A selection widget for key-description pairs. The key is the
+    actual selection item, but the description is displayed for
+    human consumption.
+    <value_mapping> is a list: ((key, display text), ...)
+    To work with a callback, pass a function with a single parameter
+    (the new key) as <changed_callback>. If this function does not
+    return a true value, the selection will be reset to the last value.
+    """
+    def __init__(self, widget_name,
+            value_mapping = None, changed_callback = None):
+        self.name = widget_name
+        self.widget = getattr(WINDOW, widget_name)
+        self._selected = None
+        self._cb = changed_callback
+        self.widget.set_items(value_mapping)
+# Qt note: If connecting after adding the items, there seems
+# to be no signal; if before, then the first item is signalled.
+        self.widget.currentIndexChanged.connect(self._new)
 #
-    def year_change_ok(self):
-        """Called when a change of year is pending. Return <False> to
-        prevent the year-change being carried out.
+    def selected(self, display = False):
+        try:
+            return self.value_mapping[self.widget.currentIndex()][
+                    1 if display else 0]
+        except:
+            return None
+#
+    def _new(self, index):
+        if self.value_mapping and self.changed_callback:
+            key = self.value_mapping[index][0]
+            if self.changed_callback(key):
+                self._selected = index
+            else:
+                self.changed_callback = None
+                self.widget.setCurrentIndex(self._selected)
+                self.changed_callback = self._cb
+#
+    def reset(self, key):
+        self.changed_callback = None        # suppress callback
+        i = 0
+        for k, _ in self.value_mapping:
+            if k == key:
+                self.widget.setCurrentIndex(i)
+                self._selected = i
+                break
+            i += 1
+        else:
+            self.changed_callback = self._cb    # reenable callback
+            raise GuiError(_UNKNOWN_KEY.format(key = key))
+        self.changed_callback = self._cb    # reenable callback
+#
+    def trigger(self):
+        self._new(self.widget.currentIndex())
+#
+    def set_items(self, value_mapping, index = 0):
+        """Set / reset the items.
+        <value_mapping> is a list: ((key, display text), ...)
+        This will not cause a callback.
         """
-        return self.leave_ok()
+        self.changed_callback = None        # suppress callback
+        self.value_mapping = value_mapping
+        self.widget.clear()
+        if value_mapping:
+            self.widget.addItems([text for _, text in value_mapping])
+            self.widget.setCurrentIndex(index)
+            self._selected = index
+        self.changed_callback = self._cb    # reenable callback
+
+###
+
+def YesOrNoDialog(message, title = None):
+    qd = QDialog()
+    qd.setWindowTitle(title or _YESORNO_TITLE)
+    vbox = QVBoxLayout(qd)
+    vbox.addWidget(QLabel(message))
+    vbox.addWidget(HLine())
+    bbox = QHBoxLayout()
+    vbox.addLayout(bbox)
+    bbox.addStretch(1)
+    cancel = QPushButton(_CANCEL)
+    cancel.clicked.connect(qd.reject)
+    bbox.addWidget(cancel)
+    ok = QPushButton(_OK)
+    ok.clicked.connect(qd.accept)
+    bbox.addWidget(ok)
+    cancel.setDefault(True)
+    return qd.exec_() == QDialog.Accepted
+
+###
+
+def LineDialog(message, text = None, title = None):
+    td = QDialog()
+    td.setWindowTitle(title or _INPUT_TITLE)
+    vbox = QVBoxLayout(td)
+    vbox.addWidget(QLabel(message))
+    lineedit = QLineEdit(text or '')
+    vbox.addWidget(lineedit)
+    vbox.addWidget(HLine())
+    bbox = QHBoxLayout()
+    vbox.addLayout(bbox)
+    bbox.addStretch(1)
+    cancel = QPushButton(_CANCEL)
+    cancel.clicked.connect(td.reject)
+    bbox.addWidget(cancel)
+    ok = QPushButton(_OK)
+    ok.clicked.connect(td.accept)
+    bbox.addWidget(ok)
+    cancel.setDefault(True)
+    if td.exec_() == QDialog.Accepted:
+        return lineedit.text().strip()
+    return None
+
+###
+
+def TextAreaDialog(message = None, text = None, title = None):
+    td = QDialog()
+    td.setWindowTitle(title or _TEXTAREA_TITLE)
+    vbox = QVBoxLayout(td)
+    if message:
+        msg = QTextEdit(message)
+        msg.setReadOnly(True)
+        vbox.addWidget(msg)
+    textedit = QTextEdit(text or '')
+    vbox.addWidget(textedit)
+    vbox.addWidget(HLine())
+    bbox = QHBoxLayout()
+    vbox.addLayout(bbox)
+    bbox.addStretch(1)
+    cancel = QPushButton(_CANCEL)
+    cancel.clicked.connect(td.reject)
+    bbox.addWidget(cancel)
+    ok = QPushButton(_OK)
+    ok.clicked.connect(td.accept)
+    bbox.addWidget(ok)
+    cancel.setDefault(True)
+    if td.exec_() == QDialog.Accepted:
+        return textedit.toPlainText().strip()
+    return None
 
 ###
 
@@ -367,6 +372,7 @@ def TreeDialog(title, message, data, button = None):
 
 ###
 
+#TODO: tweak this to make it more readable ... (more spacing?)
 def TreeMultiSelect(title, message, data, checked = False):
     """A simple two-level tree widget as selection dialog.
     Top level items may not be selected, they serve only as categories.
@@ -440,28 +446,28 @@ builtins.SHOW_ERROR = _popupError
 
 ### File/Folder Dialogs
 
-def openDialog(filetype):
-    dir0 = ADMIN._loaddir or os.path.expanduser('~')
-    fpath = QFileDialog.getOpenFileName(ADMIN, _FILEOPEN,
+def openDialog(filetype, title = None):
+    dir0 = SETTINGS.value('LAST_LOAD_DIR') or os.path.expanduser('~')
+    fpath = QFileDialog.getOpenFileName(None, title or _FILEOPEN,
             dir0, filetype)[0]
     if fpath:
-        ADMIN.set_loaddir(os.path.dirname(fpath))
+        SETTINGS.setValue('LAST_LOAD_DIR', os.path.dirname(fpath))
     return fpath
 ##
-def dirDialog():
-    dir0 = ADMIN._loaddir or os.path.expanduser('~')
-    dpath = QFileDialog.getExistingDirectory(ADMIN, _DIROPEN, dir0,
+def dirDialog(title = None):
+    dir0 = SETTINGS.value('LAST_LOAD_DIR') or os.path.expanduser('~')
+    dpath = QFileDialog.getExistingDirectory(None, title or _DIROPEN, dir0,
             QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
     if dpath:
-        ADMIN.set_loaddir(dpath)
+        SETTINGS.setValue('LAST_LOAD_DIR', dpath)
     return dpath
 ##
-def saveDialog(filetype, filename):
-    dir0 = ADMIN._savedir or os.path.expanduser('~')
-    fpath = QFileDialog.getSaveFileName(ADMIN, _FILESAVE,
+def saveDialog(filetype, filename, title = None):
+    dir0 = SETTINGS.value('LAST_SAVE_DIR') or os.path.expanduser('~')
+    fpath = QFileDialog.getSaveFileName(ADMIN, title or _FILESAVE,
             os.path.join(dir0, filename), filetype)[0]
     if fpath:
-        ADMIN.set_savedir(os.path.dirname(fpath))
+        SETTINGS.setValue('LAST_SAVE_DIR', os.path.dirname(fpath))
     return fpath
 
 

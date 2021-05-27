@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-ui/WZ.py
+ui/wz_communicate.py
 
-Last updated:  2021-05-22
+Last updated:  2021-05-25
 
-Administration interface.
+Manage communication with the back-end.
 
 
 =+LICENCE=============================
@@ -24,15 +24,14 @@ Copyright 2021 Michael Towers
 
 =-LICENCE========================================
 """
+# As io is done via Qt this should make no difference:
+#sys.stdin.reconfigure(encoding='utf-8') # requires Python 3.7+
 
-### Labels, etc.
-_TITLE = "WZ – Zeugnisverwaltung"
-_REPORT_TITLE = "WZ – Info"
-
-# Dialog buttons, etc.
+### Dialog buttons, etc.
 _CANCEL = "Abbrechen"
 _OK = "OK"
 
+_REPORT_TITLE = "WZ – Info"
 _RUN_TITLE = "in Bearbeitung ..."
 _INFO_TITLE = "Information"
 _WARN_TITLE = "Warnung"
@@ -58,46 +57,49 @@ INFO_TYPES = {    # message-type -> (message level, displayed type)
 
 #####################################################
 
+# For getting icons (etc.)
+from importlib import resources  # Python >= 3.7
+def icon(filename):
+    """Get the full path for an icon file.
+    'ui.icons' must have an '__init__.py' file (which can be empty).
+    """
+    with resources.path('ui.icons', filename) as path:
+        return str(path)
 
 import sys, os, builtins, traceback, json
-if __name__ == '__main__':
-    # Enable package import if running as module
-    this = sys.path[0]
-    APPDIR = os.path.dirname(this)
-    #print("&&&", APPDIR)
-    sys.path[0] = APPDIR
-    from qtpy.QtWidgets import QApplication#, QStyleFactory
-#    print(QStyleFactory.keys())
-#    QApplication.setStyle('windows')
-    app = QApplication([])
 
-from qtpy.QtWidgets import QWidget, QDialog, QFrame, QStackedWidget, \
-    QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, \
-    QPushButton, QButtonGroup
-from qtpy.QtCore import Qt, QDateTime, QProcess, QTimer
-from qtpy.QtGui import QMovie, QPixmap, QColor
+from PySide6.QtWidgets import QDialog, \
+    QHBoxLayout, QVBoxLayout, \
+    QLabel, QTextEdit, QPushButton#, QFrame
+from PySide6.QtCore import Qt, QDateTime, QProcess
+from PySide6.QtGui import QMovie, QPixmap, QColor
 
-from ui.ui_support import QuestionDialog, HLine, TabPage, KeySelect, \
-        openDialog, saveDialog
+from ui.ui_support import ui_load, GuiError#, QuestionDialog, openDialog, saveDialog
 
-builtins.TABS = []
-builtins.FUNCTIONS = {}
-#TODO: first page ...
-TABS.append(TabPage("Page 1"))
-import ui.tab_subjects
-import ui.tab_pupils
-#import ui.tab_grade_editor
-import ui.tab_text_reports
-#import ui.tab_calendar
-TABS.append(0)
-import ui.tab_template_fields
-TAB0 = 0 # Initially selected tab
+### -----
 
-####+++++++++++++++++++++++++++++++++++++++
 
-sys.stdin.reconfigure(encoding='utf-8') # requires Python 3.7+
-backend_instance = None
-class _Backend(QDialog):
+# The dispatch call can wait for the first response.
+# If everything is done, simply return the result.
+# Otherwise pop up a report dialog.
+# Note that that will also happen if the first response is a message.
+# However, an "optional" message might just be queued or sent to the
+# report without making it appear?
+# There would be a timeout (Timer?) on waiting for the first real message.
+# The pop-up would show when a real message comes or this timeout.
+#
+
+
+
+
+
+# An advantage of a separate process for the back-end is that one can
+# always kill it! On the other hand, a never-ending process can only be
+# the result of a bug, an accidentally triggered long process can quite
+# likely be stopped by polling regularly.
+# Also, starting with a new year is no problem. Without a complete
+# program new-start it would require a clean-up function.
+class Dispatch:
     """Manage communication with the "back-end". Provide a pop-up (modal
     dialog) to provide visual feedback to the user concerning the progress
     and success of the commands.
@@ -108,6 +110,23 @@ class _Backend(QDialog):
 
     All communication is via 'utf-8' streams.
     """
+    __instance = None   # The singleton instance
+#
+    @classmethod
+    def __setup(cls, instance):
+        cls.__instance = instance
+        builtins.BACKEND = cls.__instance.command
+
+
+        """
+        FUNCTIONS['*DONE*'] = cls.__instance.task_done
+        FUNCTIONS['*REPORT*'] = cls.__instance.report
+        # For other message pop-ups, see <SHOW_INFO>, <SHOW_WARNING> and
+        # <SHOW_ERROR> in module "ui_support".
+        FUNCTIONS['*READ_FILE*'] = cls.__instance.read_dialog
+        FUNCTIONS['*SAVE_FILE*'] = cls.__instance.save_dialog
+        """
+#
     headers = [
         # index 0 should never be used:
         None,
@@ -118,14 +137,73 @@ class _Backend(QDialog):
         _TRAP_TITLE
     ]
 #
+    def display(self):
+# This shows access to all parts of the dialog window:
+        b_cancel = self.window.buttons.button(self.window.buttons.Cancel)
+        b_ok = self.window.buttons.button(self.window.buttons.Ok)
+        b_ok.hide()
+        b_cancel.setEnabled(False)
+        self.window.l_title.setText("Back-end Dialog")
+        self.window.l_pixmap.setMovie(self._busy)
+        self._busy.start()
+        self.window.text.setTextColor(self.colours[3])
+        self.window.text.append("A new line.")
+
+        # Pop up the window
+        self.window.exec()
+
     def __init__(self):
-        if backend_instance:
-            SHOW_ERROR("BIG PROBLEM: <_Backend> instance exists already")
-            self.terminate()
-            quit(1)
+        if self.__instance:
+            raise GuiError("BUG: <Dispatch> instance exists already")
+        self.__setup(self)
+        self.window = ui_load('backend.ui')
+        ## Icon area
+        self._busy = QMovie(icon('busy.gif'))
+        # index 0 should never be used:
+        self._pixmaps = [
+            None, #QPixmap(os.path.join('icons', 'other.png')),
+            QPixmap(icon('info.png')),
+            QPixmap(icon('warning.png')),
+            QPixmap(icon('error.png')),
+            QPixmap(icon('unexpected.png')),
+            QPixmap(icon('critical.png')),
+        ]
+        self.colours = [QColor('#dd79c2'),
+                QColor('#005900'), QColor('#ff8000'),
+                QColor('#c90000'), QColor('#0019ff'), QColor('#8f00cc')]
+
+
+
+    def call(module, function, *args, **kargs):
+#TODO
+        message = {'__MODULE__': module, '__FUNCTION__': function,
+                '__ARGS__': args, '__KARGS__': kargs}
+        self.window.text.clear()
+        self.running = True
+
+
+        self.backend.call(message)
+        while True:
+            done = self.backend.wait(0.1)  # wait for response, with timeout
+            for feedback in self.backend.get_all_data():
+                report_this(feedback)
+            if done:
+                break
+
+
+
+        return
+
+
+
+
+
+
         self.backend_queue = []
-        super().__init__()
         self.process = None
+
+
+
         ### Set up the dialog window
         self.resize(600, 400)
         self.setWindowTitle(_REPORT_TITLE)
@@ -185,8 +263,7 @@ class _Backend(QDialog):
             line = bytes(data).decode("utf8").rstrip()
             if not line:
                 return
-#TODO ---
-            print('>>>IN:', line, flush = True)
+            DEBUG('>>>IN:', line, flush = True)
 #TODO: The input lines should be logged?
             self.cb_lines.append(line)
             # A line has been received from the back-end.
@@ -256,23 +333,24 @@ class _Backend(QDialog):
             # Start process
             self.process = QProcess()
             # It is probably better to have separate channels, so that
-            # back-end failures can be reported properly:
+            # back-end failures can be reported properly.
             #self.process.setProcessChannelMode(QProcess.MergedChannels)
             #self.process.readyRead.connect(self.handle_in)
             self.process.readyReadStandardOutput.connect(self.handle_in)
             self.process.readyReadStandardError.connect(self.error_in)
             self.process.finished.connect(self.process_finished)
+#TODO
             exec_params = [os.path.join(APPDIR, 'core', 'main.py')]
             if DATADIR:
                 exec_params.append(DATADIR)
+
             self.process.start(sys.executable, exec_params)
             self._complete = True       # completion set by back-end
             # Flag used to wait for end of previous command:
             self.cmd_running = False
         if self.cmd_running:
             self.backend_queue.append((fn, parms))
-#TODO ---
-            print("$$$queue:",  self.backend_queue)
+            DEBUG("$$$queue:",  self.backend_queue)
             return
         self.cmd_running = True
         while True:
@@ -280,8 +358,7 @@ class _Backend(QDialog):
             self.cb_lines = []  # remember all lines from back-end
             parms['__NAME__'] = fn
             msg = json.dumps(parms, ensure_ascii = False) + '\n'
-#TODO ---
-            print('!!!SEND:', msg, flush = True)
+            DEBUG('!!!SEND:', msg, flush = True)
             self.text.clear()
             end_time = QDateTime.currentMSecsSinceEpoch() + 500
             self.process.write(msg.encode('utf-8'))
@@ -395,262 +472,3 @@ class _Backend(QDialog):
         fpath = saveDialog(filetype, filename)
         if fpath:
             self.command(callback, filepath = fpath)
-###
-
-backend_instance = _Backend()
-builtins.BACKEND = backend_instance.command
-FUNCTIONS['*DONE*'] = backend_instance.task_done
-FUNCTIONS['*REPORT*'] = backend_instance.report
-# For other message pop-ups, see <SHOW_INFO>, <SHOW_WARNING> and
-# <SHOW_ERROR> in module "ui_support".
-FUNCTIONS['*READ_FILE*'] = backend_instance.read_dialog
-FUNCTIONS['*SAVE_FILE*'] = backend_instance.save_dialog
-
-####---------------------------------------
-
-class TabWidget(QWidget):
-    def __init__(self, title_label):
-        self.title_label = title_label
-        super().__init__()
-        tabbox = QHBoxLayout(self)
-        self._lbox = QVBoxLayout()
-        tabbox.addLayout(self._lbox)
-        self._stack = QStackedWidget()
-        self._stack.setFrameStyle(QFrame.Panel | QFrame.Sunken)
-        tabbox.addWidget(self._stack)
-        self.tab_buttons = []
-        self.index = -1
-#
-    def add_page(self, tab):
-        try:
-            i = int(tab)
-        except TypeError:
-            b = TabButton(tab.name, self)
-            self.tab_buttons.append(b)
-            self._lbox.addWidget(b)
-            self._stack.addWidget(tab)
-        else:
-            if i:
-                self._lbox.addSpacing(i)
-            else:
-                self._lbox.addStretch(1)
-#
-    def select(self, index):
-        i0 = self._stack.currentIndex()
-        if i0 == index:
-            # No change
-            self.tab_buttons[i0].setChecked(True)
-            return
-        elif i0 >= 0:
-            # Check that the old tab can be left
-            tab0 = self._stack.widget(i0)
-            if tab0.leave_ok():
-                tab0.leave()
-                # Deselect old button
-                self.tab_buttons[i0].setChecked(False)
-            else:
-                # Deselect new button
-                self.tab_buttons[index].setChecked(False)
-                return
-        # Select new button
-        self.tab_buttons[index].setChecked(True)
-        # Enter new tab
-        self._stack.setCurrentIndex(index)
-        tab = self._stack.widget(index)
-        tab.enter()
-        if self.title_label:
-            self.title_label.setText('<b>%s</b>' % tab.name)
-#
-    def check_unsaved(self):
-        """Called when a "quit program" request is received.
-        Check for unsaved data, asking for confirmation if there is
-        some. Return <True> if it is ok to continue (quit).
-        """
-        w = self._stack.currentWidget()
-        if w:
-            return w.leave_ok()
-        return True
-#
-    def current_page(self):
-        return self._stack.currentWidget()
-##
-class TabButton(QPushButton):
-    """A custom class to provide special buttons for the tab switches.
-    """
-    _stylesheet = "QPushButton:checked {background-color: #ffd36b;}"
-#
-    def __init__(self, label, tab_widget):
-        super().__init__(label)
-        self.tab_widget = tab_widget
-        self.index = len(tab_widget.tab_buttons)
-        self.setStyleSheet(self._stylesheet)
-        self.setCheckable(True)
-        self.clicked.connect(self._selected)
-#
-    def _selected(self):
-        self.tab_widget.select(self.index)
-
-###
-
-class Admin(QWidget):
-    _savedir = None
-    _loaddir = None
-#
-    @classmethod
-    def set_savedir(cls, path):
-        cls._savedir = path
-#
-    @classmethod
-    def set_loaddir(cls, path):
-        cls._loaddir = path
-#
-    def __init__(self, datadir):
-        """Note that some of the initialization is done after a short
-        delay: <init> is called using a single-shot timer.
-        """
-        self.datadir = datadir
-        super().__init__(
-        self.setWindowTitle(_TITLE)
-        topbox = QVBoxLayout(self)
-        # ---------- Title Box ---------- #
-        titlebox = QHBoxLayout()
-        topbox.addLayout(titlebox)
-        self.year_term = QLabel()
-        titlebox.addWidget(self.year_term)
-        titlebox.addStretch(1)
-        tab_title = QLabel()
-        titlebox.addWidget(tab_title)
-        titlebox.addStretch(1)
-        topbox.addWidget(HLine())
-        # ---------- Tab Box ---------- #
-        self.tab_widget = TabWidget(tab_title)
-        topbox.addWidget(self.tab_widget)
-
-        for tab in TABS:
-            self.tab_widget.add_page(tab)
-
-        # Run this when the event loop has been entered:
-        QTimer.singleShot(10, self.init)
-#
-    def closeEvent(self, e):
-        if self.tab_widget.check_unsaved():
-            backend_instance.terminate()
-            e.accept()
-        else:
-            e.ignore()
-#
-    def init(self):
-        if self.__datadir:
-            BACKEND('BASE_set_datadir', datadir = self.__datadir)
-#TODO: perhaps this needs special handling on failure?
-
-#        BACKEND('BASE_get_school_data')
-#        BACKEND('BASE_get_years')
-#
-    def GET_DATADIR(self):
-        """CALLBACK: No valid data folder is set.
-        Either choose an existing one or start a fresh one.
-        """
-        dpath = dirDialog()
-        if not dpath:
-#TODO ...
-            pass
-        # Get calendar file
-#CONFIG isn't there yet!
-        cpath = os.path.join(dpath, CONFIG)
-        # Load in editor. If missing, load migrated test file.
-#
-    def SET_SCHOOL_DATA(self, data):
-        self.school_data = data
-#TODO ---
-        print('SCHOOL_DATA', self.school_data, flush = True)
-#
-#TODO
-    def SET_YEARS(self, years, current):
-        self.year_term.setText("<strong>2015 – 2016; 1. Halbjahr</strong>")
-        self.tab_widget.select(TAB0)   # Enter default tab
-#
-    def year_changed(self, schoolyear):
-        tabpage = self.tab_widget.current_page()
-        if tabpage.year_change_ok():
-            BACKEND('BASE_set_year', year = schoolyear) # ... -> YEAR_CHANGED
-            return True
-        return False
-#
-    def YEAR_CHANGED(self):
-        tabpage = self.tab_widget.current_page()
-        tabpage.enter()
-#
-    def current_year(self):
-        return self.year_select.selected()
-#
-#    def set_year(self, year):
-#        self.year_select.reset(year)
-#        self.year_select.trigger()
-
-    @classmethod
-    def setup(datadir):
-        """Call this once to start the application.
-        <datadir> is the full path to the data folder. If it is empty or
-        otherwise invalid, a dialog window will deal with setting it up.
-        """
-        builtins.ADMIN = cls(datadir)
-        FUNCTIONS['base_SET_YEAR'] = ADMIN.SET_YEAR
-#        FUNCTIONS['base_SET_YEARS'] = ADMIN.SET_YEARS
-        FUNCTIONS['base_SET_SCHOOL_DATA'] = ADMIN.SET_SCHOOL_DATA
-#        FUNCTIONS['base_YEAR_CHANGED'] = ADMIN.YEAR_CHANGED
-
-#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
-
-if __name__ == '__main__':
-# To change initial tab
-#    TAB0 = 6
-    from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
-    from qtpy.QtGui import QIcon
-
-    # Persistent Settings:
-    builtins.SETTINGS = QSettings(
-            QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
-#TODO: pass datadir to back-end, perhaps as command-line parameter!
-# It might be possible to change the datadir from the gui.
-# Could use SETTINGS...
-
-    __basedir = os.path.dirname(APPDIR)
-#    print("§§§", sys.argv)
-#    SETTINGS.setValue('DATA', os.path.join(__basedir, 'DATA'))
-#    print("$$$", SETTINGS.value('DATA'), SETTINGS.allKeys())
-#    quit(0)
-
-    if len(sys.argv) == 2:
-        DATADIR = sys.argv[1]
-        if DATADIR == '--test':
-#TODO: This might be disabled or modified in a release version?
-# The test data might be provided in a pristine archive, which can be
-# unpacked to some work folder and registered there in settings?
-            DATADIR = os.path.join(__basedir, 'TESTDATA')
-    else:
-        DATADIR = SETTINGS.value('DATA') or ''
-
-#TODO: If no DATADIR, get it from "settings".
-# If none set, need to select one, or else load the test data, or
-# start from scratch. Starting from scratch one would need to select
-# a folder and immediately edit a calendar – perhaps the one from the
-# test data could be taken as a starting point (changing to current
-# year, as in migrate_year). Also other files can be "borrowed" from
-# the test data. There should be a prompt to add pupils (can one do
-# this manually when there are none present?).
-
-    LOCALE = QLocale(QLocale.German, QLocale.Germany)
-    QLocale.setDefault(LOCALE)
-    qtr = QTranslator()
-    qtr.load("qt_" + LOCALE.name(),
-            QLibraryInfo.location(QLibraryInfo.TranslationsPath))
-    app.installTranslator(qtr)
-
-    app.setWindowIcon(QIcon(os.path.join('icons', 'WZ1.png')))
-    screen = app.primaryScreen()
-    screensize = screen.availableSize()
-    ADMIN.resize(screensize.width()*0.8, screensize.height()*0.8)
-    ADMIN.show()
-    sys.exit(app.exec_())
-

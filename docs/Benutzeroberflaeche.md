@@ -12,12 +12,20 @@ Wenn ein Zeugnissatz fertiggestellt wird (am Ende eines Jahres bzw. Halbjahres),
 
 Vielleicht sollten insbesondere bei abgeschlossenen Zeugnissätzen Änderungen an einzelnen Zeugnissen durchgeführt werden, wenn das irgendwie sinnvoll umzusetzen ist. Die Erstellung einer PDF-Datei für eine ganze Gruppe könnte generell als Zusatzfunktion bereitgestellt werden – primär würden Einzelzeugnisse erstellt werden.
 
-Das ist mir aber noch zu schwammig. Alte
-Zeugnisse sollten auf jeden Fall als PDF-Dateien archiviert werden. Es _könnte_ sinnvoll sein, auch die ODF-Dateien zu archivieren. Für Notenzeugnisse wäre es bestimmt sinnvoll die dazugehörigen Notentabellen in irgendeiner portablen Form (ODS? CSV?) zu behalten. Ein automatischer Zugriff auf alte Tabellen wäre u.U. auch nützlich.
+Alte Zeugnisse sollten auf jeden Fall als PDF-Dateien archiviert werden. Es _könnte_ sinnvoll sein, auch die ODF-Dateien zu archivieren. Für Notenzeugnisse wäre es bestimmt sinnvoll die dazugehörigen Notentabellen in irgendeiner portablen Form (ODS? CSV?) zu behalten. Ein automatischer Zugriff auf alte Tabellen wäre u.U. auch nützlich.
 
-Test-Dateien könnten bereitgestellt werden, damit man verschiedene Bearbeitungsstufen durchlaufen kann.
+Test-Dateien sollten bereitgestellt werden, damit man verschiedene Bearbeitungsstufen durchlaufen kann.
 
-Konkret könnte das heißen, es gibt ein Schuljahr, das nicht direkt zu ändern ist. Es entspricht dem aktuellen Stand der Zeugnisse (für Testzwecke könnte man ein Testdatum künstlich einstellen). Am Ende eines Schuljahres – oder vielleicht eher am Anfang des nächsten – würde man die jetzt fertigen Daten abschließen und archivieren. Dann würde sich das aktive Jahr umstellen. Ähnliches gilt für das Halbjahr, was möglicherweise nur die Notenzeugnisse betrifft. Jedenfalls ein Anzeigefeld könnte z.B. „2015 – 2016; 1. Halbjahr“ angeben. Intern gäbe es dann eine Konfiguration, die angibt, welche Daten abgeschlossen werden sollten, wenn das Halbjahr zu Ende ist. Passend wäre vielleicht eine Terminliste, die allmählich „abgearbeitet“ wird.
+Es gibt ein „aktuelles“ Schuljahr, an dem gearbeitet wird (zu Testzwecken könnte man ein Testdatum künstlich einstellen). Am Ende eines Schuljahres – oder vielleicht eher am Anfang des nächsten – würde man die jetzt fertigen Daten abschließen und archivieren. Dann würde sich das aktive Jahr umstellen. Ähnliches gilt für das Halbjahr, was möglicherweise nur die Notenzeugnisse betrifft. Jedenfalls ein Anzeigefeld könnte z.B. „2015 – 2016; 1. Halbjahr“ angeben. Intern gäbe es dann eine Konfiguration, die angibt, welche Daten abgeschlossen werden sollten, wenn das Halbjahr zu Ende ist. Passend wäre vielleicht eine Terminliste, die allmählich „abgearbeitet“ wird.
+
+Die Daten werden in einem alles umfassenden (aber natürlich durch Unterordner strukturierten) Ordner untergebracht – Konfigurationsdateien, Vorlagen, Schuldaten, Klassen- und Schülerdaten, erstellte Tabellen und Zeugnisse. Es sollte möglich sein, diesen Ordner auszuwechseln, aber normalerweise würde er einfach einmal festgelegt werden.
+
+Beim ersten Start des Programms gibt es den Datenordner wahrscheinlich nicht, er muss zuerst angelegt werden. Dafür braucht man zuerst ein „Kalender“ – eine Konfigurationsdatei, die wichtige Daten für das aktuelle Schuljahr enthält, insbesondere Jahresbezeichnung, -anfang und -ende. Das Kalender aus dem Testordner kann als Vorlage dienen. Bald danach wird man Schüler- und Klassendaten (Fächer, usw.) brauchen. Diese können vielleicht anhand externe Tabellen oder manuell eingefügt werden.
+
+Die Testdateien werden als Archiv mit dem Programm ausgeliefert. Dieses kann man entpacken, um einen Datenordner zum Ausprobieren zu erhalten.
+
+Wenn das Programm ohne einen funktionsfähigen Datensatz startet, muss der Benutzer entweder einen schon existierenden Datenordner auswählen, oder einen neuen, leeren erstellen. Im letzteren Fall wird eine Vorlage für das Kalender in einem Editierfenster angeboten. Diese kann man anpassen und abspeichern.
+
 
 
 

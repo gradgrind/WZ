@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 """
-core/main.py - last updated 2021-05-22
+dispatch.py - last updated 2021-05-24
 
-Text-stream based controller/dispatcher for all functions.
+Dispatcher for call to back-end functions from front-end.
 
 ==============================
 Copyright 2021 Michael Towers
@@ -21,26 +21,43 @@ Copyright 2021 Michael Towers
    limitations under the License.
 """
 
+# This bit isolates front from back-end
+from importlib import import_module
+
+IMPORTS = {}
+
+def BACKEND(module, target, *args, **kargs):
+    """Only pass arguments that can be JSONified.
+    """
+    try:
+        m = IMPORTS[module]
+    except KeyError:
+        m = import_module(module)
+        IMPORTS[module] = m
+    return getattr(m, target)(*args, **kargs)
+# The next step would be callbacks, or coroutines?
+
+from PySide6.QtConcurrent import QtConcurrent
+QtConcurrent.run()
+
+
+
+quit(0)
+##########################
+
 ### Messages
 _CHANGED_YEAR = "Aktuelles Schuljahr ist {year}"
 _FAILED = "{fname} FEHLGESCHLAGEN"
 
 import sys, os, builtins, traceback, json
-sys.stdin.reconfigure(encoding='utf-8') # requires Python 3.7+
+#sys.stdin.reconfigure(encoding='utf-8') # requires Python 3.7+
 
-if __name__ == '__main__':
-    # Enable package import if running module directly
-    this = sys.path[0]
-    appdir = os.path.dirname(this)
-    sys.path[0] = appdir
-    basedir = os.path.dirname(appdir)
-#    appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-#    basedir = os.path.dirname(appdir)
+### -----
 
-    from core.base import start
-    start.setup(basedir)
+#from importlib import import_module
 
-###
+#import_module('ui_modules.' + m)
+
 
 class _Main:
     """Commands from the front-end are passed as json strings (mappings).
@@ -194,6 +211,7 @@ def get_classes():
     pupils = PUPILS(SCHOOLYEAR)
     selects = {
             'SEX': pupils.SEX,
+#TODO?
             'STREAMS': streams
         }
     classes = pupils.classes()
@@ -204,9 +222,21 @@ FUNCTIONS['TEMPLATE_get_classes'] = get_classes
 
 ######################################################################
 
+#TODO: use module list
 import backend
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
+    from core.base import start
+
+#TODO: Actually, before setting up the datadir, the modules would need loading ...
+# Could there be a default module loading from the __modules__ module?
+# An option could be to pass it as a command line list?
+#sys.argv: app, [datadir,] -- module module module ...
+# If datadir is not provided, uses TESTDATA (unpacking testdata.tar.gz
+# if TESTDATA does not exist?)
+
+    start.setup(datadir)
+
     startup()

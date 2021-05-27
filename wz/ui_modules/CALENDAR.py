@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-ui/tab_subjects.py
+ui_modules/CALENDAR.py
 
-Last updated:  2021-04-06
+Last updated:  2021-05-24
 
-Calendar editor. Also handles school-year migration and attendance lists.
+Calendar editor. Also handles school-year migration.
+
+#TODO: attendance lists -> other module
 
 
 =+LICENCE=============================
@@ -27,8 +29,7 @@ Copyright 2021 Michael Towers
 
 ### Labels, etc.
 _CLASS = "Klasse"
-_EDIT_CALENDAR = "Kalender bearbeiten"
-_SAVE = "Änderungen speichern"
+
 _ATTENDANCE = "Anwesenheit"
 _GET_ATTENDANCE = "Tabelle erstellen"
 _UPDATE_TABLE = "Tabelle aktualisieren"
@@ -47,30 +48,19 @@ _EXCEL_FILE = "Excel-Tabelle (*.xlsx)"
 #####################################################
 
 import os
-from qtpy.QtWidgets import QLabel, QTextEdit, QPushButton, \
+from PySide6.QtWidgets import QLabel, QTextEdit, QPushButton, \
         QHBoxLayout, QVBoxLayout
-from ui.ui_support import TabPage, VLine, HLine, KeySelect, \
-        TreeMultiSelect, QuestionDialog, openDialog, saveDialog
+from ui.ui_support import StackPage, KeySelector, \
+        TreeMultiSelect, YesOrNoDialog, openDialog, saveDialog
 
-class Calendar(TabPage):
+class Calendar(StackPage):
     """Editor for the calendar file.
     """
     def __init__(self):
-        super().__init__(_EDIT_CALENDAR)
-        topbox = QHBoxLayout()
-        self.vbox.addLayout(topbox)
+        super().__init__('tab_calendar')
+        self.widget.textChanged.connect(self.text_changed)
 
-        #*********** The "main" widget ***********
-        self.edit = QTextEdit()
-        self.edit.textChanged.connect(self.text_changed)
-        self.edit.setLineWrapMode(self.edit.NoWrap)
-        self.edit.setAcceptRichText(False)
-        self.edit.setUndoRedoEnabled(True)
-        topbox.addWidget(self.edit)
-        topbox.addWidget(VLine())
 
-        cbox = QVBoxLayout()
-        topbox.addLayout(cbox)
 
         self.save_button = QPushButton(_SAVE)
         cbox.addWidget(self.save_button)

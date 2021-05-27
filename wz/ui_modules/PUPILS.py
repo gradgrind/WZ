@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-ui/tab_pupils.py
+ui_modules/PUPILS.py
 
-Last updated:  2021-05-21
+Last updated:  2021-05-23
 
 Pupil table management.
 

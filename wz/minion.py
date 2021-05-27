@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-minion.py - last updated 2021-04-19
+minion.py - last updated 2021-05-27
 
 Read MINION-formatted configuration data.
 
@@ -300,8 +300,11 @@ class Minion:
                     try:
                         lx.append(self.toplevel[sym])
                     except KeyError:
-                        self.report(_BAD_MACRO, line = self.line_number,
-                                val = sym)
+                        try:
+                            lx.append(MACRO_BUILTINS[sym])
+                        except KeyError:
+                            self.report(_BAD_MACRO, line = self.line_number,
+                                    val = sym)
                 else:
                     lx.append(sym)
             if not sep:

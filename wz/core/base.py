@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-05-22
+Last updated:  2021-05-27
 
 Basic configuration and structural stuff.
 
@@ -33,11 +33,20 @@ _BAD_CONFIG_LINE = "In Konfigurationsdatei {cfile}:\n  ungültige Zeile: {line}"
 _DOUBLE_CONFIG_TAG = "In Konfigurationsdatei {cfile}:\n" \
         "  mehrfacher Eintrag: {tag} = ..."
 
+NO_DATE = '*'   # an unspecified date
+
+########################################################################
+
 import sys, os, re, builtins, datetime
 if __name__ == '__main__':
-    # Enable package import if running as module
+    # Enable package import if running module directly
     this = sys.path[0]
-    sys.path[0] = os.path.dirname(this)
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+#    appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+#    basedir = os.path.dirname(appdir)
+
 
 class Bug(Exception):
     pass
@@ -47,9 +56,7 @@ from minion import Minion
 __Minion = Minion()
 builtins.MINION = __Minion.parse_file
 
-NO_DATE = '*'   # an unspecified date
-
-###
+### -----
 
 class DataError(Exception):
     pass
@@ -61,38 +68,20 @@ class DataError(Exception):
 # Soon afterwards there would need to be pupil data and subject data.
 
 
+
 class start:
-    __WZDIR = None      # Base folder for WZ code and data/resources
     __DATA = None       # Base folder for school data
 #
     @classmethod
-    def setup(cls, datadir = None):
-        appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-        cls.__WZDIR = os.path.join(os.path.dirname(appdir))
-        builtins.WZPATH = cls.__wzdir
-        if datadir:
-            cls.__DATA = datadir
-        else:
-            cls.__DATA = os.path.join(cls.__WZDIR, 'TESTDATA')
+    def setup(cls, datadir):
+        cls.__DATA = datadir
         builtins.DATAPATH = cls.__datadir
         builtins.RESOURCEPATH = cls.__resourcedir
         builtins.CONFIG = MINION(DATAPATH('CONFIG'))
         builtins.SCHOOL_DATA = MINION(DATAPATH(CONFIG['SCHOOL_DATA']))
-        builtins.NONE = ''
-        cls.set_year()
-#
-    @classmethod
-    def set_year(cls):
         builtins.CALENDAR = Dates.get_calendar(DATAPATH(
                 CONFIG['CALENDAR_FILE']))
         builtins.SCHOOLYEAR = CALENDAR['SCHOOLYEAR']
-#
-    @classmethod
-    def __wzdir(cls, path):
-        """Return a path within the application base folder.
-        <path> is a '/'-separated path relative to this folder.
-        """
-        return os.path.join(cls.__WZDIR, *path.split('/'))
 #
     @classmethod
     def __datadir(cls, path):
@@ -265,6 +254,8 @@ class Dates:
             raise DataError(_BAD_DATE.format(line = '%s: %s' % (k, v)))
         return calendar
 #
+#TODO: Modify this so that it can also be used to adjust a template file
+# for any year to be (sort of) suitable for a given year.
     @classmethod
     def migrate_calendar(cls):
         """Generate a "starter" calendar for the next schoolyear.
@@ -289,11 +280,42 @@ class Dates:
         return text
 
 
+
+###
+
+#TODO:
+import tarfile
+# tarfile doesn't have the encoding problems some
+# filenames have with zipfile.
+def archive_testdata():
+# The filter is perhaps a nice idea, but I suspect it is not really of
+# much practical use. If an archive is unpacked by a normal user, its
+# contents will be owned by that user anyway.
+    def owner(tf0):
+        tf0.uid = 0
+        tf0.gid = 0
+        tf0.uname = 'root'
+        tf0.gname = 'root'
+        return tf0
+    with tarfile.open('testdata.tar.gz', 'w:gz') as tf:
+        for root, directories, files in os.walk('TESTDATA'):
+            if os.path.basename(root) == 'tmp': continue
+            for filename in files:
+#                tf.add(os.path.join(root, filename), filter = owner)
+                tf.add(os.path.join(root, filename))
+
+# To read just one file
+#tx = tf.extractfile('TESTDATA/CONFIG')
+#tx.read() -> <bytes>
+
+
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    start.setup()
+    start.setup(os.path.join(basedir, 'TESTDATA'))
+    print("Today (possibly faked):", Dates.today())
     print("Current school year:", Dates.get_schoolyear())
+    print("School year of data:", SCHOOLYEAR)
     print("DATE:", Dates.print_date('2016-04-25'))
     try:
         print("BAD Date:", Dates.print_date('2016-02-30'))

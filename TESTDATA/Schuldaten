@@ -7,3 +7,21 @@ TODAY: 2016-06-03
 
 SCHOOL_NAME: <<<Freie Michaelschule>>>
 FONT: <<<Droid Sans>>>
+
+### Felder der Schüler-Datenbank
+PUPIL_FIELDS: [
+# Warum muss CLASS zuerst sein???!!!
+    [CLASS      Klasse   Pflichtfeld]  # Dies muss das erste Feld sein.
+    [PID        ID       Pflichtfeld]
+    [FIRSTNAME  Rufname  Pflichtfeld]
+    [LASTNAME   Name     Pflichtfeld]
+    [GROUPS     Gruppen  &]            # wahrscheinlich nicht in importierten Tabellen
+    [FIRSTNAMES Vornamen     Pflichtfeld]
+    [DOB_D      Geburtsdatum Pflichtfeld]
+    [POB        Geburtsort   Pflichtfeld]
+    [SEX        Geschlecht   Pflichtfeld]
+    [HOME       Ort          Pflichtfeld]
+    [ENTRY_D    Eintrittsdatum Pflichtfeld]
+    [EXIT_D     Schulaustritt  &]
+    [QUALI_D    Eintritt-SekII &]      # nicht in importierten Tabellen
+]
