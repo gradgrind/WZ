@@ -44,7 +44,10 @@ from local.grade_config import GradeBase
 
 NONE = ''
 
-### +++++
+class PupilError(Exception):
+    pass
+
+### -----
 
 #TODO: deprecated? (now in calendar file for current year)
 def print_schoolyear(schoolyear):
@@ -225,20 +228,23 @@ class PupilsBase:
         In this version there is an analysis for "tussenvoegsel" and a
         re-splitting of name fields accordingly.
         """
+        translate = {f: t or f
+            for f, t, *x in SCHOOL_DATA['PUPIL_FIELDS']
+        }
+        nn = translate['FIRSTNAMES']
+        n = translate['FIRSTNAME']
+        l = translate['LASTNAME']
         if not ptable['__INFO__'].get('__KEEP_NAMES__'):
             for pdata in ptable['__ROWS__']:
                 # "Renormalize" the name fields
                 try:
-                    firstnames = pdata['FIRSTNAMES']
-                    lastname = pdata['LASTNAME']
+                    firstnames = pdata[nn]
+                    lastname = pdata[l]
                 except KeyError:
                     raise PupilError(_NAME_MISSING.format(
                             row = repr(pdata)))
-                pdata['FIRSTNAMES'], \
-                pdata['LASTNAME'], \
-                pdata['FIRSTNAME'] = tussenvoegsel_filter(
-                        firstnames, lastname,
-                        pdata.get('FIRSTNAME') or firstnames)
+                pdata[nn], pdata[l], pdata[n] = tussenvoegsel_filter(
+                        firstnames, lastname, pdata.get(n) or firstnames)
 
 
 ####### Name Handling #######

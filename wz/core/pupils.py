@@ -57,18 +57,16 @@ _FULL_BACKUP_FILE = "Alle Schülerdaten gespeichert als:\n  {path}"
 
 import datetime, io
 
-from local.base_config import PupilsBase, sortkey
+from local.base_config import PupilError, PupilsBase, sortkey
 from core.base import Dates
-from tables.spreadsheet import Spreadsheet, TableError, DataTable
-#        make_db_table, make_db_table_filetypes
+from tables.spreadsheet import Spreadsheet, TableError, \
+        read_DataTable, filter_DataTable, make_DataTable, \
+        make_DataTable_filetypes
 from tables.datapack import get_pack, save_pack
 
 ### -----
 
-class PupilError(Exception):
-    pass
-
-###
+#TODO: Consider adding data types (incl. selection lists) to field/info-lists.
 
 #TODO: I suppose the program should start with the stored data? If there is
 # none (or if it is dodgy) there can be a question dialog to load from
@@ -98,6 +96,9 @@ class Pupils(dict):
     #+
     @classmethod
     def fetch(cls):
+        """This is the main method for fetching the current data, which
+        is then cached in memory.
+        """
         if not cls.__pupils:
             cls.__pupils = cls()
         return cls.__pupils
@@ -119,21 +120,22 @@ class Pupils(dict):
         bstream = io.BytesIO(filebytes)
         bstream.filename = filename
         T_SCHOOLYEAR = CONFIG['T_SCHOOLYEAR']
-        ptable = DataTable(bstream).filter(
+        ptable = read_DataTable(bstream)
+        PupilsBase.process_source_table(ptable)
+        ptable = filter_DataTable(ptable,
                 SCHOOL_DATA['PUPIL_FIELDS'],
-#TODO: Currently the <filter> method expects an infolist.
-                infolist = None,
+                infolist = [['SCHOOLYEAR', T_SCHOOLYEAR, False]],
                 extend = extend)
         info = ptable['__INFO__']
-        try:
-            if info['SCHOOLYEAR'] != SCHOOLYEAR:
+        sy = info.get('SCHOOLYEAR')
+        if sy:
+            if sy != SCHOOLYEAR:
                 raise PupilError(_SCHOOLYEAR_MISMATCH.format(
                         filename = filename))
-        except KeyError:
+        else:
             REPORT('WARN', _NO_SCHOOLYEAR.format(
                     year = CONFIG['T_SCHOOLYEAR'],
                     filename = filename))
-        PupilsBase.process_source_table(ptable)
         return cls(ptable)
 #
     def __init__(self, ptable = None):
@@ -144,14 +146,14 @@ class Pupils(dict):
         if not ptable:
             filepath = DATAPATH(CONFIG['CLASS_TABLE'])
             ptable = get_pack(filepath)
-            self.__fields = ptable['__FIELDS__']
-            self.__info = ptable['__INFO__']
             try:
-                if self.__info['SCHOOLYEAR'] != SCHOOLYEAR:
+                if ptable['__INFO__']['SCHOOLYEAR'] != SCHOOLYEAR:
                     raise PupilError(_SCHOOLYEAR_MISMATCH_DB)
             except KeyError:
                 raise PupilError(_NO_SCHOOLYEAR_DB)
-        self.set_data(ptable['__PUPILS__'])
+        self.__fields = ptable['__FIELDS__']
+        self.__info = ptable['__INFO__']
+        self.set_data(ptable['__ROWS__'])
 #
     def set_data(self, pdata_list):
         """Initialize the pupil-data mapping from the given pupil-data.
@@ -172,7 +174,7 @@ class Pupils(dict):
             try:
                 plist = self.__classes[klass]
             except KeyError:
-                plist = __PupilList()
+                plist = _PupilList()
                 self.__classes[klass] = plist
             self[pid] = pdata
             plist.append(pdata)
@@ -194,7 +196,11 @@ class Pupils(dict):
             'SCHOOLYEAR': SCHOOLYEAR,
             '__MODIFIED__': timestamp,
         }
-        data = DataTable.encapsulate(pdlist, self.__fields, self.__info)
+        data = {
+            '__INFO__': self.__info,
+            '__FIELDS__': self.__fields,
+            '__ROWS__': pdlist
+        }
         save_pack(DATAPATH(CONFIG['CLASS_TABLE']), data, today)
         if self != self.__pupils:
             # Make this the cached pupil-data
@@ -252,12 +258,12 @@ class Pupils(dict):
         pidset = set(self)      # to register removed pupils
         # Initialize empty lists for all classes, covering old and new data
         changes = {}
-        for k in self._klasses:
+        for k in self.__classes:
             changes[k] = []
-        for k in newdata._klasses:
+        for k in newdata.__classes:
             changes[k] = []
         # Search for changes
-        for klass, plist in newdata._klasses.items():
+        for klass, plist in newdata.__classes.items():
             kchanges = changes[klass]
             for pdata in plist:
                 pid = pdata.get('PID')
@@ -428,6 +434,7 @@ class Pupils(dict):
         pupils.set_data(newpupils, norm_fields = True)
         pupils.save()
 #
+#TODO
     def final_year_pupils(self, klass):
         """Return list of pupil-data items for pupils in their final year.
         """
@@ -443,7 +450,7 @@ class Pupils(dict):
 
 ###
 
-class __PupilList(list):
+class _PupilList(list):
     """Representation for a list of pupil-data mappings.
     It also maintains a mapping {pid -> pupil-data}.
     The resulting list should only be modified via the
@@ -492,14 +499,19 @@ if __name__ == '__main__':
 #    quit(0)
 #----------------------------------------------------------#
 
-#    pupils = PUPILS()
-#    print("\nCLASSES:", pupils.classes())
+    _ptables = Pupil_File(DATAPATH('testing/PUPILS_2016.tsv')) # original table
+    print("\nCLASSES (file):", _ptables.classes())
 
-    pupils = Pupil_File(DATAPATH('testing/PUPILS_2016.tsv')) # original table
-    print("\nCLASSES:", pupils.classes())
+# This overwrites the current database.
+#    _ptables.save()
 
+    print("\nLEAVING in 12:", _ptables.final_year_pupils('12'))
 
-    quit()
+    pupils = Pupils.fetch()
+    print("\nCLASSES (db):", pupils.classes())
+
+    _ptables = Pupil_File(DATAPATH('testing/delta_test_pupils_2016.ods'),
+            extend = False)
 
     _delta = pupils.compare_update(_ptables)
     for k, dlist in _delta.items():
@@ -507,8 +519,11 @@ if __name__ == '__main__':
         for d in dlist:
             print("  ", d)
 
+
+#TODO ...
+    quit()
+
     pupils.update_classes(_delta)
-    print("\nLEAVING in 12:", pupils.final_year_pupils('12'))
     ### Migrate to next year
 #    pupils.migrate([])
 
