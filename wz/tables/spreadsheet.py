@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-05-27
+Last updated:  2021-05-29
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -33,7 +33,7 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
-_UNSUPPORTED_FILETYPE   = "Nicht unterstützer Dateityp ({ending}):\n   {path}"
+_UNSUPPORTED_FILETYPE   = "Nicht unterstützer Dateityp ({ending})"
 _TABLENOTFOUND          = "Tabellendatei existiert nicht:\n   {path}"
 _MULTIPLEMATCHINGFILES  = "Mehrere passende Dateien:\n   {path}"
 _TABLENOTREADABLE       = "Tabellendatei konnte nicht eingelesen werden:\n   {path}"
@@ -42,9 +42,10 @@ _INVALIDCELLNAME        = "Ungültiger Zellenbezeichnung: '{name}'"
 _INVALID_FILE           = "Ungültige oder fehlerhafte Datei"
 _NO_TYPE_EXTENSION      = "Dateityp-Erweiterung fehlt: {fname}"
 _DUPLICATE_COLUMN_NAME  = "Spaltenname doppelt vorhanden: {name}"
-_ESSENTIAL_FIELD_MISSING = "Info-Feld '{field}' fehlt in der Tabelle"
-_ESSENTIAL_INFO_MISSING = "Feld (Spalte) '{field}' fehlt in der Tabelle"
+_ESSENTIAL_FIELD_MISSING = "Feld (Spalte) '{field}' fehlt in der Tabelle"
 _ESSENTIAL_FIELD_EMPTY  = "Feld (Spalte) '{field}' darf nicht leer sein"
+_ESSENTIAL_INFO_MISSING = "Info-Feld '{field}' fehlt in der Tabelle"
+_ESSENTIAL_INFO_EMPTY   = "Info-Feld '{field}' darf nicht leer sein"
 _INFO_IN_BODY           = "Info-Zeilen müssen vor der Kopfzeile stehen"
 
 ########################################################################
@@ -356,13 +357,14 @@ class DataTable:
     The first rows are set aside for group information. This is a list
     of key-value pairs. The first column contains '+++', the second
     the key, the third the value. Subsequent columns are ignored.
-    These pairs are available as <self._info>: {key: value, ... }.
+    These pairs are available as <self.__info>: {key: value, ... }.
 
     After these, the first row with an entry in the first column is the
     header row, it contains the field names. Columns with no entry in
-    this line will be excluded from the data (ignored).
+    this line will be excluded from the data (ignored). A list of field
+    names is available as <self.__fields>.
 
-    <self._rows> is then a list of all subsequent rows with an entry in
+    <self.__rows> is then a list of all subsequent rows with an entry in
     the first column (the records). The row contents are presented as
     mappings: {field: value}. Empty cells are also strings ('').
     """
@@ -402,9 +404,9 @@ class DataTable:
                         header.append((f, i))
                         fields.append(f)
                     i += 1
-        self._fields = fields
-        self._info = info
-        self._rows = rows
+        self.__fields = fields
+        self.__info = info
+        self.__rows = rows
 #
     def mapping(self):
         """Return the table data as a mapping:
@@ -413,9 +415,9 @@ class DataTable:
                 '__ROWS__': [{field: value, ... }, ... ]
             }
         """
-        return {    '__INFO__': self._info,
-                    '__FIELDS__': self._fields,
-                    '__ROWS__': self._rows
+        return {    '__INFO__': self.__info,
+                    '__FIELDS__': self.__fields,
+                    '__ROWS__': self.__rows
         }
 #
     def filter(self, fieldlist, infolist, extend = True):
@@ -433,16 +435,19 @@ class DataTable:
             ]
         If the external field name evaluates "false" (''), the internal
         and external names are identical.
-        Return a mapping with two entries, '__INFO__' and '__ROWS__'.
-        The former is the info-mapping, the latter a list of row mappings.
+        Return a mapping with the entries, '__INFO__' (the info-mapping),
+        '__FIELDS__' (the list of internal field names) and '__ROWS__'
+        (the list of row mappings).
         """
-        tmap = self.mapping()
-        tinfo = tmap['__INFO__']
+        tinfo = self.__info
         newinfo = {}
         for f, t, needed in infolist:
             name = t or f   # null <t> => no translation, use internal name
             try:
                 val = tinfo[name]
+                if needed and not val:
+                    raise TableError(_ESSENTIAL_INFO_EMPTY.format(
+                            field = fname[f]))
             except KeyError:
                 if needed:
                     raise TableError(_ESSENTIAL_INFO_MISSING.format(
@@ -450,84 +455,129 @@ class DataTable:
                 if extend:
                     val = NONE
             newinfo[f] = val
+        # Check available fields against desired fields
+        tfields = set(self.__fields)
+        fieldnames = []
+        flist = []
+        for ftn in fieldlist:
+            name = ftn[1] or ftn[0]   # null <t> => no translation, ...
+            if name in tfields:
+                flist.append(ftn)
+                fieldnames.append(ftn[0])
+            elif needed:
+                raise TableError(_ESSENTIAL_FIELD_MISSING.format(
+                                field = name))
+            elif extend:
+                flist.append(ftn)
+                fieldnames.append(ftn[0])
+        # Add the data rows
         rowmaps = []
-        for row in tmap['__ROWS__']:
+        for row in self.__rows:
             rowmap = {}
             rowmaps.append(rowmap)
-            for f, t, needed in fieldlist:
-                name = t or f
-                try:
-                    val = row[name]
-                    if needed and not val:
-                        raise TableError(_ESSENTIAL_FIELD_EMPTY.format(
-                                field = fname[f]))
-                except KeyError:
-                    if needed:
-                        raise TableError(_ESSENTIAL_FIELD_MISSING.format(
-                                field = name))
-                    if extend:
-                        rowmap[f] = NONE
-                    continue
+            for f, t, needed in flist:
+                name = t or f # null <t> => no translation, use internal name
+                val = row.get(name)
+                if needed and not val:
+                    raise TableError(_ESSENTIAL_FIELD_EMPTY.format(
+                            field = fname[f]))
                 rowmap[f] = val or NONE
-        return {'__INFO__': newinfo, '__ROWS__': rowmaps}
+        return {    '__INFO__': newinfo,
+                    '__FIELDS__': fieldnames,
+                    '__ROWS__': rowmaps
+        }
 #
     make_table_filetypes = ('tsv', 'xlsx')
-    @staticmethod
-    def make_table(records, info, fieldlist, infolist,
-            title = None, extend = True, filetype = None):
-        """Build a DataTable with optional title, info lines,
-        header line and records.
-        The records are mappings {field: value}.
-        If <fields> is a mapping, the names of the columns are taken from
-        the values rather than the keys.
+    @classmethod
+    def make_table(cls, data, filetype,
+            fieldlist = None, infolist = None, extend = True):
+        """Build a DataTable with info-lines, header-line and records.
+        <data> is a mapping as returned by <self.mapping> or <self.filter>.
+        <filetype> specifies which of the file-types in <make_table_filetypes>
+        is to be generated.
+        <fieldlist> is a list of triples:
+            [[internal-name, external-name, necessary], ... ]
+            "necessary" is true if the field must be present, and not
+            empty in the supplied data.
+        If <fieldlist> is not supplied, use the fields in the provided
+        data.
+        <infolist> is a similar list of triples, but for the info-lines.
+        If <extend> is true, fields in <infolist> or <fieldlist> which
+        are not supplied in the data will be added (does not apply to
+        "necessary" fields, because if one of these is missing the
+        function will fail).
         The file is returned as a <bytes> object.
         """
-        pass
-#TODO: Update to new structures.
-# Handling input and translations?
-# Also translate info items?
-
-        table = NewSpreadsheet() if filetype == 'xlsx' else NewTable()
-        if title:
-            table.add_row((NONE, title))
-            table.add_row(None)
+        if filetype == 'xlsx':
+            table = NewSpreadsheet()
+        elif filetype == 'tsv':
+            table = NewTable()
+        else:
+            raise TableError(_UNSUPPORTED_FILETYPE.format(ending = filetype))
+        hasinfo = 0
+        info = data['__INFO__']
         if infolist:
             for f, t, needed in infolist:
-                name = t or f   # null <t> => no translation, use internal name
                 try:
-                    val = info[name]
-                    table.add_row(('+++', name, val or NONE))
+                    val = info[f]
+                    if needed and not val:
+                        raise TableError(_ESSENTIAL_INFO_EMPTY.format(
+                                field = f))
+                    # null <t> => no translation, use internal name
+                    table.add_row(('+++', t or f, val or None))
+                    hasinfo += 1
                 except KeyError:
                     if needed:
                         raise TableError(_ESSENTIAL_INFO_MISSING.format(
                                 field = name))
                     if extend:
-                        table.add_row(('+++', name, NONE))
+                        # null <t> => no translation, use internal name
+                        table.add_row(('+++', t or f, None))
+                        hasinfo += 1
         else:
             for key, val in info.items():
                 table.add_row(('+++', key, val))
-
-
-#? Only if info-lines have been added?
+                hasinfo += 1
+        if hasinfo:
             table.add_row(None)
-
-
-
-
-
-        try:
-            fline = fields.values()
-        except AttributeError:
-            fline = fields
-        table.add_row(fline)
-        for line in items:
-            table.add_row([line.get(f) or NONE for f in fields])
+        tfields = data['__FIELDS__']
+        if fieldlist:
+            # Check available fields against desired fields
+            fieldnames = []
+            flist = []
+            for f, t, needed in fieldlist:
+                if f in tfields:
+                    flist.append((f, needed))
+                    # null <t> => no translation, use internal name
+                    fieldnames.append(t or f)
+                elif needed:
+                    raise TableError(_ESSENTIAL_FIELD_MISSING.format(
+                                    field = name))
+                elif extend:
+                    flist.append((f, needed))
+                    fieldnames.append(t or f)
+            table.add_row(fieldnames)
+        else:
+            flist = [(f, False) for f in tfields]
+            table.add_row(tfields)
+        # Add the data rows
+        for row in data['__ROWS__']:
+            rowvals = []
+            for f, needed in flist:
+                val = row.get(f)
+                if needed and not val:
+                    raise TableError(_ESSENTIAL_FIELD_EMPTY.format(
+                            field = f))
+                rowvals.append(val or None)
+            table.add_row(rowvals)
         return table.save()
 
 ###
 
 class NewTable:
     """Build a tsv-table.
+    The characters '\t', '\n' and '\r' are filtered out of the input
+    strings.
     """
     def __init__(self):
         self._rowlist = []
@@ -657,6 +707,16 @@ if __name__ == '__main__':
     for row in dbt['__ROWS__']:
         print(" :::", row)
 
+    print("\nPUPILS + extend:")
+    ss = DataTable(DATAPATH('testing/delta_test_pupils_2016'))
+    dbt = ss.filter(SCHOOL_DATA['PUPIL_FIELDS'],
+            [['SCHOOLYEAR', 'Schuljahr', False]],
+            extend = True)
+    print("\nINFO:", dbt['__INFO__'])
+    print("\nCONTENT:")
+    for row in dbt['__ROWS__']:
+        print(" :::", row)
+
     print("\nPUPILS:")
     ss = DataTable(DATAPATH('testing/delta_test_pupils_2016'))
     dbt = ss.filter(SCHOOL_DATA['PUPIL_FIELDS'],
@@ -667,12 +727,20 @@ if __name__ == '__main__':
     for row in dbt['__ROWS__']:
         print(" :::", row)
 
-    print("\nPUPILS + extend:")
-    ss = DataTable(DATAPATH('testing/delta_test_pupils_2016'))
-    dbt = ss.filter(SCHOOL_DATA['PUPIL_FIELDS'],
-            [['SCHOOLYEAR', 'Schuljahr', False]],
+    ftype = 'tsv'
+    fbytes = DataTable.make_table(dbt, ftype,
+            fieldlist = None, infolist = None, extend = False)
+    fpath = DATAPATH('testing/tmp/extended_no') + '.' + ftype
+    with open(fpath, 'wb') as fh:
+        fh.write(fbytes)
+    print("\nSAVED AS:", fpath)
+
+    ftype = 'xlsx'
+    fbytes = DataTable.make_table(dbt, ftype,
+            fieldlist = SCHOOL_DATA['PUPIL_FIELDS'],
+            infolist = [['SCHOOLYEAR', 'Schuljahr', True]],
             extend = True)
-    print("\nINFO:", dbt['__INFO__'])
-    print("\nCONTENT:")
-    for row in dbt['__ROWS__']:
-        print(" :::", row)
+    fpath = DATAPATH('testing/tmp/extended_yes') + '.' + ftype
+    with open(fpath, 'wb') as fh:
+        fh.write(fbytes)
+    print("\nSAVED AS:", fpath)
