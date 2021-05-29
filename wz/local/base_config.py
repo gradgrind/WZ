@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-05-26
+Last updated:  2021-05-29
 
 General configuration items.
 
@@ -129,32 +129,7 @@ class SubjectsBase:
 
 ###
 
-class PupilsBase(dict):
-    TITLE = "Schülerliste"
-    FIELDS = {
-        'CLASS'     : CONFIG['T_CLASS'],  # This must be the first field!
-        'PID'       : 'ID',
-        'FIRSTNAME' : 'Rufname',
-        'LASTNAME'  : 'Name',
-        'GROUPS'    : CONFIG['T_GROUPS'], # probably not in imported data
-        'FIRSTNAMES': 'Vornamen',
-        'DOB_D'     : 'Geburtsdatum',
-        'POB'       : 'Geburtsort',
-        'SEX'       : 'Geschlecht',
-        'HOME'      : 'Ort',
-        'ENTRY_D'   : 'Eintrittsdatum',
-        'EXIT_D'    : 'Schulaustritt',
-        'QUALI_D'   : 'Eintritt-SekII'  # not in imported data
-    }
-#
-    ESSENTIAL_FIELDS = 'CLASS', 'FIRSTNAMES', 'LASTNAME', 'FIRSTNAME', \
-            'POB', 'DOB_D', 'SEX', 'ENTRY_D', 'HOME'
-#
-    SEX = ('m', 'w')    # Permissible values for a field
-#
-
-
-
+class PupilsBase:
     @classmethod
     def name(cls, pdata):
         """Return the pupil's "short" name.
@@ -242,36 +217,16 @@ class PupilsBase(dict):
             return {'R'}
         return None
 #
-    def read_source_table(self, ptable, tweak_names):
-        """Read a pupil-data list from ptable, containing only the pupil
-        fields (in self.FIELDS) which are actually present in the file.
-        If <tweak_names> is true, the names will be analysed for
-        "tussenvoegsel" and re-split accordingly.
+    @staticmethod
+    def process_source_table(ptable):
+        """Given a raw set of pupil-data from a table file, perform any
+        processing necessary to transform it to the internal database
+        form.
+        In this version there is an analysis for "tussenvoegsel" and a
+        re-splitting of name fields accordingly.
         """
-        # Get column mapping: {field -> column index}
-        # Convert the localized names to uppercase to avoid case problems.
-        # Get the columns for the localized field names
-        colmap = {}
-        col = -1
-        for t in ptable.fieldnames():
-            col += 1
-            colmap[t.upper()] = col
-        # ... then for the internal field names,
-        # collect positions of fields to be collected, if possible
-        field_index = []
-        missing = []    # check that essential fields are present
-        for f, t in self.FIELDS.items():
-            try:
-                field_index.append((f, colmap[t.upper()]))
-            except KeyError:
-                pass
-        plist = []   # collect pupil data
-        for row in ptable:
-            pdata = {}
-            plist.append(pdata)
-            for f, i in field_index:
-                pdata[f] = row[i] or ''
-            if tweak_names:
+        if not ptable['__INFO__'].get('__KEEP_NAMES__'):
+            for pdata in ptable['__ROWS__']:
                 # "Renormalize" the name fields
                 try:
                     firstnames = pdata['FIRSTNAMES']
@@ -284,7 +239,6 @@ class PupilsBase(dict):
                 pdata['FIRSTNAME'] = tussenvoegsel_filter(
                         firstnames, lastname,
                         pdata.get('FIRSTNAME') or firstnames)
-        return plist
 
 
 ####### Name Handling #######

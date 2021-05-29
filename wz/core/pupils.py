@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-05-22
+core/pupils.py - last updated 2021-05-29
 
 Manage pupil data.
 
@@ -38,25 +38,29 @@ import sys, os
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
-    sys.path[0] = os.path.dirname(this)
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
     from core.base import start
-    start.setup()
+    start.setup(os.path.join(basedir, 'TESTDATA'))
 
 ### Messages
-_SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filepath}"
-_NO_SCHOOLYEAR = "Kein '{year}' angegeben in Schülertabelle:\n {filepath}"
+_SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filename}"
+_NO_SCHOOLYEAR = "Kein '{year}' angegeben in Schülertabelle:\n  {filename}"
+_SCHOOLYEAR_MISMATCH_DB = "Schüler-Datenbank-Fehler: falsches Jahr"
+_NO_SCHOOLYEAR_DB = "Schüler-Datenbank-Fehler: kein 'SCHOOLYEAR'"
 _PID_DUPLICATE = "Schülerkennung {pid} mehrfach vorhanden:\n" \
         "  Klasse {c1} – {p1}\n  Klasse {c2} – {p2}"
 _MISSING_FIELDS = "Diese Felder dürfen nicht leer sein:\n  {fields}"
 _BACKUP_FILE = "Schülerdaten für Klasse {klass} gespeichert als:\n  {path}"
 _FULL_BACKUP_FILE = "Alle Schülerdaten gespeichert als:\n  {path}"
 
-import datetime
+import datetime, io
 
 from local.base_config import PupilsBase, sortkey
 from core.base import Dates
-from tables.spreadsheet import Spreadsheet, TableError, \
-        make_db_table, make_db_table_filetypes
+from tables.spreadsheet import Spreadsheet, TableError, DataTable
+#        make_db_table, make_db_table_filetypes
 from tables.datapack import get_pack, save_pack
 
 ### -----
@@ -66,219 +70,143 @@ class PupilError(Exception):
 
 ###
 
-#TODO
-class Pupils:
-    @classmethod
-    def init_from_bytes(cls, filebytes, filename):
-        """Set up the database from a file passed as <bytes>.
-        The <filename> parameter is necessary to determine the type of
-        data (ods, xlsx or tsv) – on the basis of its ending.
-        Any existing database contents will be deleted.
-        """
-        bstream = io.BytesIO(filebytes)
-        bstream.filename = filename
-        schoolyear = Dates.get_schoolyear()
-
-        ptable = Spreadsheet(filepath).dbTable()
-        data = {r[0]:r[1] for r in ptable.info}
-
-
-        try:
-            sy = data[CONFIG['T_SCHOOLYEAR']]
-        except KeyError:
-# WARN or ERROR?
-            raise PupilError(_NO_SCHOOLYEAR.format(
-                    year = CONFIG['T_SCHOOLYEAR'],
-                    filepath = filepath))
-        if sy != self.schoolyear:
-            raise PupilError(_SCHOOLYEAR_MISMATCH.format(
-                    filepath = filepath))
-        pupil_list = self.read_source_table(ptable,
-                tweak_names = not data.get('__KEEP_NAMES__'))
-
-
-
-        pupils = _Pupils(SCHOOLYEAR)
-        pupils.get_data(
-
-        self._modified = data.get('__MODIFIED__') or '–––'
-
-        pass
-            ptable = Spreadsheet(filepath).dbTable()
-            data = {r[0]:r[1] for r in ptable.info}
-            try:
-                sy = data[CONFIG['T_SCHOOLYEAR']]
-            except KeyError:
-                raise PupilError(_NO_SCHOOLYEAR.format(
-                        year = CONFIG['T_SCHOOLYEAR'],
-                        filepath = filepath))
-            if sy != self.schoolyear:
-                raise PupilError(_SCHOOLYEAR_MISMATCH.format(
-                        filepath = filepath))
-            pupil_list = self.read_source_table(ptable,
-                    tweak_names = not data.get('__KEEP_NAMES__'))
-        self._modified = data.get('__MODIFIED__') or '–––'
-
-
-#
-    def __init__(self, data = None):
-        """If there is no data, look for the internal database. Fail if
-        it is not present.
-        Report selected year (and any warnings associated with that).
-        """
-        pass
-#
-    def classes(self):
-        pass
-# Check data against current school-year. If the data has no date, warn.
-# If there is a date mismatch, also warn.
-# I suppose the program should start with the stored data? If there is
+#TODO: I suppose the program should start with the stored data? If there is
 # none (or if it is dodgy) there can be a question dialog to load from
 # file.
 # What about updating from file, with update selections?
 
-
-
-### :::::
-
-def PUPILS():
-    """Fetch pupil data for the current year as a <_Pupils> instance,
-    using a cache.
-    """
-    pupils = _Pupils._pupils
-    if pupils and pupils.schoolyear == SCHOOLYEAR:
-        return pupils
-    # Load pupil data for the given year, from the standard (internal)
-    # location:
-    pupils = _Pupils(SCHOOLYEAR)
-    plist = pupils.get_data()
-    pupils.set_data(plist, norm_fields = True)
-    _Pupils._pupils = pupils
-    return pupils
+def Pupil_File(filepath, extend = True):
+    with open(filepath, 'rb') as fh:
+        fbytes = fh.read()
+    return Pupils.init_from_bytes(fbytes, filepath, extend)
 ##
-def Pupils_File(filepath, norm_fields = True):
-    """Fetch pupil data from the given file as a <_Pupils> instance.
-    <norm_fields> should be false normally only for update files – see
-    the method <_Pupils.set_data>.
-    """
-    pupils = _Pupils(SCHOOLYEAR)
-    plist = pupils.get_data(filepath)
-    pupils.set_data(plist, norm_fields)
-    return pupils
-##
-class _Pupils(PupilsBase):
-    """Handler for pupil data. It is initialized with the school-year.
+class Pupils(dict):
+    """Handler for pupil data.
     Pupil-data items (mappings) can be added from various sources:
      - the internal database
      - an external file
-     - a modified version of the existing data.
-    Normally the fields defined for a pupil (<self.FIELDS>, in module
-    "base_config") will be included, adding empty ones (<NONE>) if
-    necessary. See the method <_Pupils.set_data>.
-
+     - an external modified version of the existing data.
+    Normally the fields defined for a pupil (CONFIG['CLASS_TABLE'])
+    will be included, adding empty ones (<NONE>) if necessary. See the
+    method <init_from_bytes>.
     An instance of this class is a <dict> holding the pupil data as a
     mapping: {pid -> {field: value, ...}}.
     The data is also sorted (alphabetically) into classes, the results
     being available through the method <class_pupils>.
     """
-    _pupils = None
+    __pupils = None     # cache for current year
+    #+
     @classmethod
-    def uncache(cls):
-        """Clear the cache. This can be used to signal a change in the data.
+    def fetch(cls):
+        if not cls.__pupils:
+            cls.__pupils = cls()
+        return cls.__pupils
+    #+
+    @classmethod
+    def tocache(cls, pupils = None):
+        """Set or clear the cache.
         """
-        cls._pupils = None
+        cls.__pupils = pupils
 #
-    def __init__(self, schoolyear):
-        self.schoolyear = schoolyear
-        self._modified = '–––'
+    @classmethod
+    def init_from_bytes(cls, filebytes, filename, extend = True):
+        """Make a <Pupils> instance from a file passed as <bytes>.
+        The <filename> parameter is necessary to determine the type of
+        data (ods, xlsx or tsv) – on the basis of its ending.
+        For update tables, <extend> should be false, so that no fields
+        are added to those in the source.
+        """
+        bstream = io.BytesIO(filebytes)
+        bstream.filename = filename
+        T_SCHOOLYEAR = CONFIG['T_SCHOOLYEAR']
+        ptable = DataTable(bstream).filter(
+                SCHOOL_DATA['PUPIL_FIELDS'],
+#TODO: Currently the <filter> method expects an infolist.
+                infolist = None,
+                extend = extend)
+        info = ptable['__INFO__']
+        try:
+            if info['SCHOOLYEAR'] != SCHOOLYEAR:
+                raise PupilError(_SCHOOLYEAR_MISMATCH.format(
+                        filename = filename))
+        except KeyError:
+            REPORT('WARN', _NO_SCHOOLYEAR.format(
+                    year = CONFIG['T_SCHOOLYEAR'],
+                    filename = filename))
+        PupilsBase.process_source_table(ptable)
+        return cls(ptable)
+#
+    def __init__(self, ptable = None):
+        """If there is no data, look for the internal database. Fail if
+        it is not present.
+        """
         super().__init__()
-#
-    def get_data(self, filepath = None):
-        if filepath:
-            """Read in the file containing the "master" pupil data.
-            The file-path can be passed with or without type-extension.
-            If no type-extension is given, the folder will be searched for a
-            suitable file.
-            Alternatively, <filepath> may be an in-memory binary stream
-            (io.BytesIO) with attribute 'filename' (so that the
-            type-extension can be read).
-            """
-            ptable = Spreadsheet(filepath).dbTable()
-            data = {r[0]:r[1] for r in ptable.info}
-            try:
-                sy = data[CONFIG['T_SCHOOLYEAR']]
-            except KeyError:
-                raise PupilError(_NO_SCHOOLYEAR.format(
-                        year = CONFIG['T_SCHOOLYEAR'],
-                        filepath = filepath))
-            if sy != self.schoolyear:
-                raise PupilError(_SCHOOLYEAR_MISMATCH.format(
-                        filepath = filepath))
-            pupil_list = self.read_source_table(ptable,
-                    tweak_names = not data.get('__KEEP_NAMES__'))
-        else:
+        if not ptable:
             filepath = DATAPATH(CONFIG['CLASS_TABLE'])
-            data = get_pack(filepath)
+            ptable = get_pack(filepath)
+            self.__fields = ptable['__FIELDS__']
+            self.__info = ptable['__INFO__']
             try:
-                sy = data['SCHOOLYEAR']
+                if self.__info['SCHOOLYEAR'] != SCHOOLYEAR:
+                    raise PupilError(_SCHOOLYEAR_MISMATCH_DB)
             except KeyError:
-                raise PupilError(_NO_SCHOOLYEAR.format(
-                        year = 'SCHOOLYEAR',
-                        filepath = filepath))
-            if sy != self.schoolyear:
-                raise PupilError(_SCHOOLYEAR_MISMATCH.format(
-                        filepath = filepath))
-            pupil_list = data['__PUPILS__']
-        self._modified = data.get('__MODIFIED__') or '–––'
-        return pupil_list
+                raise PupilError(_NO_SCHOOLYEAR_DB)
+        self.set_data(ptable['__PUPILS__'])
 #
-    def set_data(self, pdata_list, norm_fields):
-        """Initialize the pupil-data mapping from a list of pupil-data
+    def set_data(self, pdata_list):
+        """Initialize the pupil-data mapping from the given pupil-data.
         items. The pupils are also allocated to classes and sorted within
         these.
-        If <norm_fields> is true (the normal case), the set of fields is
-        normalized to that at <self.FIELDS> (inherited from <PupilsBase>),
-        others being rejected and those not supplied being added with
-        <NONE> as value.
-        If <norm_fields> is false, the fields are left as in the source.
         """
+        self.__classes = {}
         for pdata in pdata_list:
             pid = pdata['PID']
-            try:
-                pd0 = self[pid]
-            except KeyError:
-                pass
-            else:
+            pd0 = self.get(pid)
+            if pd0:
                 raise PupilError(_PID_DUPLICATE.format(pid = pid,
                         p1 = self.name(pd0), c1 = pd0['CLASS'],
                         p2 = self.name(pdata), c2 = pdata['CLASS']))
-            if norm_fields:
-                self[pid] = {f: pdata.get(f) or NONE for f in self.FIELDS}
-            else:
-                self[pid] = pdata
-        self.fill_classes()
-#
-    def fill_classes(self):
-        """Prepare class lists, sorted by name.
-        """
-        self._klasses = {}
-        for pid, pdata in self.items():
             klass = pdata.get('CLASS')
             if not klass:
                 raise PupilError(_CLASS_MISSING.format(row = repr(pdata)))
             try:
-                plist = self._klasses[klass]
+                plist = self.__classes[klass]
             except KeyError:
-                plist = _PupilList()
-                self._klasses[klass] = plist
+                plist = __PupilList()
+                self.__classes[klass] = plist
+            self[pid] = pdata
             plist.append(pdata)
-        for plist in self._klasses.values():
+        for plist in self.__classes.values():
             plist.sortlist()
+#
+    def save(self):
+        """Save the pupil data to the pupil-database.
+        The first save of a day causes the current data to be backed up,
+        if it exists.
+        """
+        timestamp = Dates.timestamp()
+        today = timestamp.split('_', 1)[0]
+        pdlist = []
+        for klass in self.classes():
+            pdlist += self.__classes[klass]
+        self.__info = {
+            '__TITLE__': 'Pupil Data',
+            'SCHOOLYEAR': SCHOOLYEAR,
+            '__MODIFIED__': timestamp,
+        }
+        data = DataTable.encapsulate(pdlist, self.__fields, self.__info)
+        save_pack(DATAPATH(CONFIG['CLASS_TABLE']), data, today)
+        if self != self.__pupils:
+            # Make this the cached pupil-data
+            self.tocache(self)
 #
     def classes(self):
         """Return a sorted list of class names.
         """
-        return sorted(self._klasses)
+        return sorted(self.__classes)
+
+
+#TODO: update ...
 #
     @staticmethod
     def pstring(pdata):
@@ -301,7 +229,7 @@ class _Pupils(PupilsBase):
         <set> – '*' is not valid here.
         """
         plist = _PupilList()
-        for pdata in self._klasses[klass]:
+        for pdata in self.__classes[klass]:
             if date:
                 # Check exit date
                 exd = pdata.get('EXIT_D')
@@ -437,25 +365,6 @@ class _Pupils(PupilsBase):
         self.save()
         return True
 #
-    def save(self):
-        """Save the pupil data as a compressed json file.
-        The first save of a day causes the current data to be backed up,
-        if it exists.
-        """
-        timestamp = Dates.timestamp()
-        today = timestamp.split('_', 1)[0]
-        pdlist = []
-        for klass in sorted(self._klasses):
-            pdlist += self._klasses[klass]
-        data = {
-            'TITLE': 'Pupil Data',
-            'SCHOOLYEAR': self.schoolyear,
-            '__MODIFIED__': timestamp,
-            '__PUPILS__': pdlist
-        }
-        save_pack(DATAPATH(CONFIG['CLASS_TABLE']), data, today)
-        self._modified = timestamp
-#
     def backup(self, filepath, klass = None):
         """Save a table with all the pupil data for back-up purposes.
         This can be used as an "update" source to reinstate an earlier
@@ -534,7 +443,7 @@ class _Pupils(PupilsBase):
 
 ###
 
-class _PupilList(list):
+class __PupilList(list):
     """Representation for a list of pupil-data mappings.
     It also maintains a mapping {pid -> pupil-data}.
     The resulting list should only be modified via the
@@ -542,18 +451,18 @@ class _PupilList(list):
     """
     def __init__(self):
         super().__init__()
-        self._pidmap = {}
+        self.__pidmap = {}
 #
     def append(self, item):
         super().append(item)
-        self._pidmap[item['PID']] = item
+        self.__pidmap[item['PID']] = item
 #
     def remove(self, item):
         super().remove(item)
-        del(self._pidmap[item['PID']])
+        del(self.__pidmap[item['PID']])
 #
     def pid2pdata(self, pid):
-        return self._pidmap[pid]
+        return self.__pidmap[pid]
 #
     def sortlist(self):
         """Alphabetical sort.
@@ -583,11 +492,15 @@ if __name__ == '__main__':
 #    quit(0)
 #----------------------------------------------------------#
 
-    pupils = PUPILS()
+#    pupils = PUPILS()
+#    print("\nCLASSES:", pupils.classes())
+
+    pupils = Pupil_File(DATAPATH('testing/PUPILS_2016.tsv')) # original table
     print("\nCLASSES:", pupils.classes())
 
-    _ptables = Pupils_File(filepath = DATAPATH('testing/PUPILS_2016.tsv'),
-            norm_fields = True) # original table
+
+    quit()
+
     _delta = pupils.compare_update(_ptables)
     for k, dlist in _delta.items():
         print("\n --- KLASSE:", k)

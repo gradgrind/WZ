@@ -1,4 +1,6 @@
 #*** MINION 1.0 ***#
+# letzte Änderung: 2021-05-29
+
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # This is just for test purposes!
 # Run the program pretending "today" is some other date.
@@ -10,8 +12,7 @@ FONT: <<<Droid Sans>>>
 
 ### Felder der Schüler-Datenbank
 PUPIL_FIELDS: [
-# Warum muss CLASS zuerst sein???!!!
-    [CLASS      Klasse   Pflichtfeld]  # Dies muss das erste Feld sein.
+    [CLASS      Klasse   Pflichtfeld]
     [PID        ID       Pflichtfeld]
     [FIRSTNAME  Rufname  Pflichtfeld]
     [LASTNAME   Name     Pflichtfeld]
