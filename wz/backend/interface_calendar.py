@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-backend/interface_calendar.py - last updated 2021-05-22
+backend/interface_calendar.py - last updated 2021-05-30
 
 Controller/dispatcher for management of calendar-related data.
 
@@ -28,7 +28,7 @@ import os
 
 import core.base as CORE
 from backend.interface_pupils import PUPILS
-#from local.base_config import year_path, CALENDAR_FILE, CALENDER_HEADER
+#from local.base_config import year_path, CALENDAR_FILE, CALENDAR_HEADER
 from template_engine.attendance import AttendanceTable, AttendanceError
 
 def read_calendar():

@@ -3,11 +3,11 @@
 """
 local/base_config.py
 
-Last updated:  2021-05-29
+Last updated:  2021-06-01
 
 General configuration items.
 
-==============================
+=+LICENCE=================================
 Copyright 2021 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,7 @@ Copyright 2021 Michael Towers
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+=-LICENCE=================================
 """
 ### Messages
 _NAME_MISSING = "Eingabezeile fehlerhaft, Name unvollständig:\n  {row}"
@@ -149,21 +150,6 @@ class PupilsBase:
     def sorting_name(self, pid):
         return sortkey(self[pid])
 #
-#TODO: -> config file?
-    # The path to the class (pupil) tables.
-    CLASS_TABLE = 'Klassen/Schueler'
-#
-    def group2pupils(self, group, date = None):
-        """Return a list of pupil-data items for the pupils in the group.
-
-
-        Only those groups relevant for grade reports are acceptable.
-        A date may be supplied to filter out pupils who have left.
-        """
-#TODO
-        klass, streams = GradeBase._group2klass_streams(group)
-        return self.class_pupils(klass, *streams, date = date)
-#
     @staticmethod
     def check_new_pid_valid(pid):
         """Check that the pid is of the correct form.
@@ -188,15 +174,8 @@ class PupilsBase:
         }
 #
     @classmethod
-    def year_step(cls, pdata, calendar):
+    def next_class(cls, pdata):
         klass = pdata['CLASS']
-        groups = set(pdata['GROUPS'].split())
-        leavers = cls.leaving_groups(klass)
-        if leavers:
-            if leavers == '*':
-                return None
-            if groups & leavers:
-                return None
         # Progress to next class ...
         kyear = class_year(klass)
         knew = int(kyear) + 1
@@ -205,20 +184,12 @@ class PupilsBase:
         pd = pdata.copy()
         pd['CLASS'] = klass
         # Handle entry into "Qualifikationsphase"
-        if knew == 12 and 'G' in groups:
+        if knew == 12 and 'G' in pd['GROUPS'].split():
             try:
-                pd['QUALI_D'] = calendar['~NEXT_FIRST_DAY']
+                pd['QUALI_D'] = CALENDAR['~NEXT_FIRST_DAY']
             except KeyError:
                 pass
         return pd
-#
-    @staticmethod
-    def leaving_groups(klass):
-        if klass > '12':
-            return '*'
-        if klass == '12':
-            return {'R'}
-        return None
 #
     @staticmethod
     def process_source_table(ptable):

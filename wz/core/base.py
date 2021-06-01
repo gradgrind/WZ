@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-05-27
+Last updated:  2021-06-01
 
 Basic configuration and structural stuff.
 
@@ -47,14 +47,15 @@ if __name__ == '__main__':
 #    appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 #    basedir = os.path.dirname(appdir)
 
+builtins.NONE = ''
 
 class Bug(Exception):
     pass
 builtins.Bug = Bug
 
 from minion import Minion
-__Minion = Minion()
-builtins.MINION = __Minion.parse_file
+_Minion = Minion()
+builtins.MINION = _Minion.parse_file
 
 ### -----
 
@@ -67,6 +68,13 @@ class DataError(Exception):
 # For a successful start there must be at least a legal calendar.
 # Soon afterwards there would need to be pupil data and subject data.
 
+#TODO
+#posix: os.path.expanduser('~/.config/WZ')
+#win: os.path.expanduser('~\\AppData\\Local\\Programs\\WZ\\config')
+# Could use the "winpath" package, but it seems unnecessary!
+# Can perhaps also install to the WZ folder on windows?
+# Perhaps there can also be a launcher there (see python)?
+#On Linux install to .local/(bin, lib, share)? or to .bin/WZ?
 
 
 class start:
@@ -124,7 +132,7 @@ class Dates:
                 raise DataError("Ungültiges Datum: '%s'" % date)
         return None
 #
-#TODO: deprecated?
+#TODO: deprecated (because the conversion is done by/for the template)?
     @classmethod
     def convert_dates(cls, mapping):
         """Convert all date values in the given mapping to the format
@@ -143,10 +151,20 @@ class Dates:
 #
     @classmethod
     def today(cls, iso = True):
-        try:
-            # Allow "faking" the current date (at least in some respects ...).
-            today = SCHOOL_DATA['TODAY']
-        except KeyError:
+        """Get the current date, normally in YYYY-MM-DD format.
+        If <iso> is false it will used the format produced by <dateConv>.
+        """
+        today = None
+        # Allow "faking" the current date (at least in some respects ...).
+        fakepath = DATAPATH('__TODAY__')
+        if os.path.isfile(fakepath):
+            with open(fakepath, encoding = 'utf-8') as fh:
+                while True:
+                    l = fh.readline().strip()
+                    if l and l[0] != '#':
+                        today = l
+                        break
+        if not today:
             today = datetime.date.today().isoformat()
         return today if iso else cls.dateConv(today)
 #
@@ -201,8 +219,8 @@ class Dates:
         If no path is supplied, save as the current calendar file.
         Some very minimal checks are made.
         """
-        cls.check_calendar(__Minion.parse(text)) # check the school year
-        header = CONFIG['CALENDER_HEADER'].format(date = cls.today())
+        cls.check_calendar(_Minion.parse(text)) # check the school year
+        header = CONFIG['CALENDAR_HEADER'].format(date = cls.today())
         try:
             text = text.split('#---', 1)[1]
             text = text.lstrip('-')
@@ -254,32 +272,29 @@ class Dates:
             raise DataError(_BAD_DATE.format(line = '%s: %s' % (k, v)))
         return calendar
 #
-#TODO: Modify this so that it can also be used to adjust a template file
-# for any year to be (sort of) suitable for a given year.
     @classmethod
-    def migrate_calendar(cls):
-        """Generate a "starter" calendar for the next schoolyear.
-        It simply takes that from the current year and adds 1 to the
-        year part of each date. Not much, but better than nothing?
-        It of course still needs extensive editing.
+    def migrate_calendar(cls, new_year, calendar_path = None):
+        """Generate a "starter" calendar for the given school-year.
+        It simply takes the given calendar and changes anything that
+        looks like a year to fit the new year. It of course still needs
+        extensive editing, but it should allow the new year to be opened.
+        If no calendar file is supplied, use the currently active one.
         """
         def fn_sub(m):
             y = m.group(1)
-            if y == lastyear:
-                y = SCHOOLYEAR
-            elif y == SCHOOLYEAR:
-                y = nextyear
+            if y == old_lastyear:
+                y = new_lastyear
+            elif y == old_year:
+                y = new_year
             return y
-        fpath = DATAPATH(CONFIG['CALENDAR_FILE'])
-        with open(fpath, 'r', encoding = 'utf-8') as fh:
-            text = fh.read()
-        lastyear = str(int(SCHOOLYEAR) - 1)
-        nextyear = str(int(SCHOOLYEAR) + 1)
+        calfile = calendar_path or DATAPATH(CONFIG['CALENDAR_FILE'])
+        with open(calfile, 'r', encoding = 'utf-8') as fh:
+            caltext = fh.read()
+        old_year = _Minion.parse(caltext)['SCHOOLYEAR']
+        old_lastyear = str(int(old_year) - 1)
+        new_lastyear = str(int(new_year) - 1)
         rematch = r'([0-9]{4})'
-        text = re.sub(rematch, fn_sub, text)
-        return text
-
-
+        return re.sub(rematch, fn_sub, caltext)
 
 ###
 
@@ -312,6 +327,11 @@ def archive_testdata():
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
+    print("§§§", os.name)
+    print("§§§", sys.platform)
+    import platform
+    print("§§§", platform.system())
+
     start.setup(os.path.join(basedir, 'TESTDATA'))
     print("Today (possibly faked):", Dates.today())
     print("Current school year:", Dates.get_schoolyear())
@@ -321,4 +341,4 @@ if __name__ == '__main__':
         print("BAD Date:", Dates.print_date('2016-02-30'))
     except DataError as e:
         print(" ... trapped:", e)
-    print("\n\nCalendar for 2017:\n", Dates.migrate_calendar())
+    print("\n\nCalendar for 2021:\n", Dates.migrate_calendar('2021'))

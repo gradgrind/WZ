@@ -42,6 +42,9 @@ else:
 builtins.DEBUG = __debug
 DEBUG("sys.argv:", sys.argv)
 
+
+#############################################################test
+
 from time import sleep
 from threading import Timer
 from threading import Thread, Event
@@ -54,6 +57,8 @@ if __name__ == '__main__':
     wz_main.main(args, APPDIR)#, modlist)
 
 quit(0)
+
+#############################################################
 
 ### -----
 

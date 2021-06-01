@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-05-29
+Last updated:  2021-06-01
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -421,10 +421,11 @@ def filter_DataTable(data, fieldlist, infolist, extend = True):
     Empty fields are guaranteed to contain ''.
     If <extend> is true, fields which are in the lists but not in
     the table will be added (though empty).
-    <fieldlist> and <infolist> are lists of triples:
+    <fieldlist> and <infolist> are lists of triples (or longer tuples):
         [   internal field-name,
             external (translated) field-name ( or false, e.g. ''),
-            essential field (true/false)
+            essential field (true/false),
+            ... (possible further entries)
         ]
     If the external field name evaluates "false" (''), the internal
     and external names are identical.
@@ -434,7 +435,7 @@ def filter_DataTable(data, fieldlist, infolist, extend = True):
     """
     tinfo = data['__INFO__']
     newinfo = {}
-    for f, t, needed in infolist:
+    for f, t, needed, *x in infolist:
         name = t or f   # null <t> => no translation, use internal name
         try:
             val = tinfo[name]
@@ -468,7 +469,7 @@ def filter_DataTable(data, fieldlist, infolist, extend = True):
     for row in data['__ROWS__']:
         rowmap = {}
         rowmaps.append(rowmap)
-        for f, t, needed in flist:
+        for f, t, needed, *x in flist:
             name = t or f # null <t> => no translation, use internal name
             val = row.get(name)
             if needed and not val:
@@ -490,9 +491,9 @@ def make_DataTable(data, filetype,
     <data> is a mapping as returned by <read_DataTable>.
     <filetype> specifies which of the file-types in
     <make_DataTable_filetypes> is to be generated.
-    <fieldlist> is a list of triples:
-        [[internal-name, external-name, necessary], ... ]
-        "necessary" is true if the field must be present, and not
+    <fieldlist> is a list of triples (or longer tuples):
+        [[internal-name, external-name, necessary, ... ], ... ]
+        "necessary" is true if the field must be present and not
         empty in the supplied data.
     If <fieldlist> is not supplied, use the fields in the provided
     data.
@@ -512,7 +513,7 @@ def make_DataTable(data, filetype,
     hasinfo = 0
     info = data['__INFO__']
     if infolist:
-        for f, t, needed in infolist:
+        for f, t, needed, *x in infolist:
             try:
                 val = info[f]
                 if needed and not val:
@@ -540,7 +541,7 @@ def make_DataTable(data, filetype,
         # Check available fields against desired fields
         fieldnames = []
         flist = []
-        for f, t, needed in fieldlist:
+        for f, t, needed, *x in fieldlist:
             if f in tfields:
                 flist.append((f, needed))
                 # null <t> => no translation, use internal name

@@ -12,7 +12,7 @@ SCHOOLYEAR_MONTH_1: 8
 # Hier wird es für <datetime.datetime.strftime> in Python angegeben:
 DATEFORMAT: %d.%m.%Y    # TT.MM.JJJJ
 
-CALENDER_HEADER: <<<#*** MINION 1.0 ***#\n
+CALENDAR_HEADER: <<<#*** MINION 1.0 ***#\n
 <<<### Ferien und andere Jahresdaten\n
 <<<### Version: {date}\n
 <<<############################################################\n
