@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-05-13
+grades/gradetable.py - last updated 2021-06-02
 
 Access grade data, read and build grade tables.
 
@@ -60,8 +60,7 @@ from core.courses import SUBJECTS
 from tables.spreadsheet import Spreadsheet, TableError, make_db_table
 from tables.matrix import KlassMatrix
 from tables.datapack import get_pack, save_pack
-from local.base_config import DECIMAL_SEP, USE_XLSX, year_path, NO_DATE, \
-        klass_group
+from local.base_config import DECIMAL_SEP, USE_XLSX, year_path, NO_DATE
 from local.grade_config import GradeBase, UNCHOSEN, NO_GRADE, \
         GRADE_INFO_FIELDS, GradeConfigError
 from local.abitur_config import AbiCalc
@@ -104,7 +103,21 @@ class GradeTable:
     def __init__(self, schoolyear, group, term = None):
         self.schoolyear = schoolyear
         self.group = group
-        self.klass, self.grouptag = klass_group(group)
+        # Split group name (e.g. '11.G' into class ('11') and group tag
+        # ('G')).
+        # If there is no '.' in the group name, this is assumed to be
+        # the class, the group is then ''.
+        try:
+            self.klass, self.grouptag = group.split('.')
+        except ValueError:
+            self.klass, self.grouptag = group, NONE
+
+
+
+
+
+
+
         self.term = term
         if term:
             # Try to load existing table

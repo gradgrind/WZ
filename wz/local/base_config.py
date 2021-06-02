@@ -3,7 +3,7 @@
 """
 local/base_config.py
 
-Last updated:  2021-06-01
+Last updated:  2021-06-02
 
 General configuration items.
 
@@ -77,30 +77,9 @@ def class_year(klass):
 
 ###
 
-def klass_group(group):
-    """Split a group name (e.g. '11.G' into class ('11') and group tag ('G').
-    If there is no '.' in the group name, this is assumed to be the class
-    and the group is <NONE>.
-    """
-    try:
-        klass, gtag = group.split('.')
-    except ValueError:
-        klass, gtag = group, NONE
-    return klass, gtag
-
-###
-
 class SubjectsBase:
     TITLE = "Fachliste"
     CHOICE_TITLE = "Fächerwahl"
-    FIELDS = {
-        'SID'       : 'Fach-Kürzel',
-        'SUBJECT'   : 'Fach',
-        'TIDS'      : 'Lehrer-Kürzel',  # can be multiple, space-separated
-        'GROUP'     : CONFIG['T_GROUP'],
-        'COMPOSITE' : 'Sammelfach',     # can be multiple, space-separated
-        'SGROUP'    : 'Fachgruppe'
-    }
 #
 #TODO: to CONFIG?
     # The path to the course data for a school-year:

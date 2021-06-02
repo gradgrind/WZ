@@ -159,6 +159,32 @@ class TableError(Exception):
 
 ###
 
+def spreadsheet_file_complete(filepath):
+    """Determine the file-type extension if it is missing.
+    Check that it is one of the supported table formats.
+    Return the full path including file-type extension.
+    """
+    f_e = filepath.rsplit('.', 1)
+    if len(f_e) == 2:
+        if f_e[1] in Spreadsheet._SUPPORTED_TYPES:
+            if os.path.isfile(filepath):
+                return filepath
+            raise TableError(_TABLENOTFOUND.format(
+                    path = filepath))
+    # No type-extension provided, test valid possibilities
+    found = None
+    for x in Spreadsheet._SUPPORTED_TYPES:
+        fp = f'{filepath}.{x}'
+        if os.path.isfile(fp):
+            if found:
+                raise TableError(_MULTIPLEMATCHINGFILES.format(
+                        path = fpbase))
+            found = fp
+    if found:
+        return found
+    raise TableError(_TABLENOTFOUND.format(
+            path = filepath))
+##
 class Spreadsheet:
     """This class manages a (read-only) representation of a spreadsheet file.
     The individual table/sheet names are available via the method
@@ -200,31 +226,10 @@ class Spreadsheet:
         self.ixHeaderEnd = None
         if type(filepath) == str:
             # realfile = True
+            filepath = spreadsheet_file_complete(filepath)
             self.filename = os.path.basename(filepath)
-            try:
-                ending = self.filename.rsplit('.', 1)[1]
-                if ending not in self._SUPPORTED_TYPES:
-                    raise IndexError
-            except IndexError as e:
-                ending = None
-                # No type-extension provided, test valid possibilities
-                fpbase = filepath
-                for x in self._SUPPORTED_TYPES:
-                    fp = '%s.%s' % (fpbase, x)
-                    if os.path.isfile(fp):
-                        if ending:
-                            raise TableError(_MULTIPLEMATCHINGFILES.format(
-                                    path = fpbase)) # from e
-                        ending = x
-                        filepath = fp
-                if not ending:
-                    raise TableError(_TABLENOTFOUND.format(
-                            path = filepath)) # from e
-            else:
-                # Check that file exists
-                if not os.path.isfile(filepath):
-                    raise TableError(_TABLENOTFOUND.format(path=filepath))
             self.filepath = filepath
+            ending = self.filename.rsplit('.', 1)[1]
         else:
             # realfile = False
             try:

@@ -1,6 +1,10 @@
-#*** MINION 1.0 ***#
-# ************** Allgemeine Konfiguration **************
-# Letzte Änderung: 2021-05-22
+#+++ __TITLE__   : Allgemeine Konfiguration
+#+++ __MINION__  : 1.0
+#+++ __MODIFIED__: 2021-06-02
+#+++###########################################################
+#+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
+#+++# wird beim Speichern (in WZ) automatisch aktualisiert.
+#--------------------------------------------------------------
 
 # Dezimal-Trennzeichen:
 DECIMAL_SEP: ,
@@ -25,17 +29,39 @@ TABLE_FORMAT: tsv  # ("tab-separated-value") oder xlsx
 
 ###########################################################
 ### Übersetzungen
+
 T_SCHOOLYEARS:  Schuljahre
 T_SCHOOLYEAR:   Schuljahr
 T_CLASS:        Klasse
 T_GROUP:        Gruppe
 T_GROUPS:       Gruppen
 
-
 ###########################################################
 ### Ordner- und Dateipfade (innerhalb des Datenordners) ###
 ## Pfad-Trennzeichen ist '/', z.B. 'Unterordner1/DateiX'.
 
 SCHOOL_DATA: Schuldaten
+SUBJECT_LIST: Fachliste
 CALENDAR_FILE: Kalender
 CLASS_TABLE: Klassen/Schueler
+SUBJECT_TABLE: Klassen/Kurse
+
+###########################################################
+################# Fächer #################
+### Fachnamen
+SUBJECT_NAMES: [
+    [SID       Kürzel    Pflichtfeld]
+    [SUBJECT   Name      Pflichtfeld]
+]
+
+### Felder der Fächer-Datenbank.
+## Die Klassen bilden eine übergeordnete Ebene.
+
+COURSE_FIELDS: [
+    [SID       Fach-Kürzel    Pflichtfeld]
+    [SUBJECT   Fach           Pflichtfeld]
+    [TIDS      Lehrer-Kürzel  &] # darf mehrere sein, durch Leerzeichen getrennt
+    [GROUP     Gruppe         &]
+    [COMPOSITE Sammelfach     &] # darf mehrere sein, durch Leerzeichen getrennt
+    [SGROUP    Fachgruppe     &]
+]

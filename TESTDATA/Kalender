@@ -1,10 +1,10 @@
-#*** MINION 1.0 ***#
-### Ferien und andere Jahresdaten
-### Version: 2016-06-03
-############################################################
-# Diese Kopfzeilen sollten nicht geändert werden, das Datum
-# wird beim Speichern automatisch aktualisiert.
-#-----------------------------------------------------------
+#+++ __TITLE__   : Ferien und andere Jahresdaten
+#+++ __MINION__  : 1.0
+#+++ __MODIFIED__: 2021-06-02
+#+++###########################################################
+#+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
+#+++# wird beim Speichern (in WZ) automatisch aktualisiert.
+#--------------------------------------------------------------
 
 # Zeilen, die mit '#' beginnen, sind Kommentare.
 # Alle Datumsangaben sind im „iso-Format“ (JJJJ-MM-TT).

@@ -1,5 +1,10 @@
-# ************** Fachliste (Kürzel: Name) **************
-# Letzte Änderung: 2021-05-13
+#+++ __TITLE__   : Fachliste (Kürzel: Name)
+#+++ __MINION__  : 1.0
+#+++ __MODIFIED__: 2021-06-02
+#+++###########################################################
+#+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
+#+++# wird beim Speichern (in WZ) automatisch aktualisiert.
+#--------------------------------------------------------------
 
 # „Normale“ Fächer
 
@@ -24,7 +29,7 @@ Ha:     Handarbeit
 Hw:     Hauswirtschaft
 Hwk:    Hauswirtschaft/Kochen
 Ku:     Kunst
-$Ku:    Kunst
+$Ku:    Kunst            # Notenzeugnisse: „Sammelfach“
 Kbe:    Kunstbetrachtung
 Kge:    Kunstgeschichte
 Ktr:    Kupfertreiben
@@ -43,7 +48,7 @@ Pd:     Pädagogik
 Ph:     Physik
 Pls:    Plastizieren
 Rel:    Religion
-Rle:    Evangelische Religion
+Rle:    Evangelische_Religion
 Snd:    Schneidern
 Snt:    Schnitzen
 Soz:    Sozialkunde
@@ -51,10 +56,10 @@ Spt:    Spielturnen
 Sp:     Sport
 Sth:    Steinhauen
 Str:    Streicherstunde
-Tg:     Textiles Gestalten
+Tg:     Textiles_Gestalten
 Tln:    Tischlern
 Th:     Theater
-Tz:     Technisches Zeichnen
+Tz:     Technisches_Zeichnen
 Web:    Weben
 Wrk:    Werken
 Ws:     Werkstatt
@@ -75,30 +80,30 @@ Hu:     Hauptunterricht
 Ueb:    Übstunde
 Fu:     Förderunterricht
 Ja:     Jahresarbeit
-Ze:     Zweite Epoche
+Ze:     Zweite_Epoche
 Bet:    Betreuerstunde
 
 # Abitur
 
-De.e:   Deutsch | eA
-En.e:   Englisch | eA
-Fr.e:   Französisch | eA
-Ges.e:  Geschichte | eA
-Ma.e:   Mathematik | eA
-Bio.e:  Biologie | eA
-Ph.e:   Physik | eA
+De.e:   Deutsch*eA
+En.e:   Englisch*eA
+Fr.e:   Französisch*eA
+Ges.e:  Geschichte*eA
+Ma.e:   Mathematik*eA
+Bio.e:  Biologie*eA
+Ph.e:   Physik*eA
 
-De.g:   Deutsch | gA
-En.g:   Englisch | gA
-Ges.g:  Geschichte | gA
-Ma.g:   Mathematik | gA
+De.g:   Deutsch*gA
+En.g:   Englisch*gA
+Ges.g:  Geschichte*gA
+Ma.g:   Mathematik*gA
 
-De.m:   Deutsch | mdl
-En.m:   Englisch | mdl
-Fr.m:   Französisch | mdl
-Ges.m:  Geschichte | mdl
-Bio.m:  Biologie | mdl
+De.m:   Deutsch*mdl
+En.m:   Englisch*mdl
+Fr.m:   Französisch*mdl
+Ges.m:  Geschichte*mdl
+Bio.m:  Biologie*mdl
 
-Mu.n:   Musik | HjN
-Ku.n:   Kunst | HjN
-Sp.n:   Sport | HjN
+Mu.n:   Musik*HjN
+Ku.n:   Kunst*HjN
+Sp.n:   Sport*HjN

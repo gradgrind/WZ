@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-06-01
+core/pupils.py - last updated 2021-06-02
 
 Manage pupil data.
 
@@ -32,20 +32,10 @@ is read in and passed around, a mapping:
         '__ROWS__':     [{field: value, ... }, ... ]
     }
 The info keys are, at present:
-    __TITLE__: 'Pupil Data' (not used in code)
+    __TITLE__: 'Pupil Data' (for example, not used in code)
     SCHOOLYEAR: '2016' (year in which the end of the school year falls)
     __MODIFIED__: <date-time> (not used in code)
 """
-
-import sys, os
-if __name__ == '__main__':
-    # Enable package import if running as module
-    this = sys.path[0]
-    appdir = os.path.dirname(this)
-    sys.path[0] = appdir
-    basedir = os.path.dirname(appdir)
-    from core.base import start
-    start.setup(os.path.join(basedir, 'TESTDATA'))
 
 ### Messages
 _SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filename}"
@@ -58,13 +48,28 @@ _MISSING_FIELDS = "Diese Felder dürfen nicht leer sein:\n  {fields}"
 _BACKUP_FILE = "Schülerdaten für Klasse {klass} gespeichert als:\n  {path}"
 _FULL_BACKUP_FILE = "Alle Schülerdaten gespeichert als:\n  {path}"
 
+_TITLE = 'Schülerdaten'
+
+###############################################################
+
+import sys, os
+if __name__ == '__main__':
+    # Enable package import if running as module
+    this = sys.path[0]
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+    from core.base import start
+    start.setup(os.path.join(basedir, 'TESTDATA'))
+
+### +++++
+
 import io
 
 from local.base_config import PupilError, PupilsBase, sortkey
 from core.base import Dates
-from tables.spreadsheet import Spreadsheet, TableError, \
-        read_DataTable, filter_DataTable, make_DataTable, \
-        make_DataTable_filetypes
+from tables.spreadsheet import read_DataTable, filter_DataTable, \
+        make_DataTable, make_DataTable_filetypes
 from tables.datapack import get_pack, save_pack
 
 ### -----
@@ -122,9 +127,9 @@ class Pupils(dict):
         """
         bstream = io.BytesIO(filebytes)
         bstream.filename = filename
-        T_SCHOOLYEAR = CONFIG['T_SCHOOLYEAR']
         ptable = read_DataTable(bstream)
         PupilsBase.process_source_table(ptable)
+        T_SCHOOLYEAR = CONFIG['T_SCHOOLYEAR']
         ptable = filter_DataTable(ptable,
                 SCHOOL_DATA['PUPIL_FIELDS'],
                 infolist = [
@@ -140,7 +145,7 @@ class Pupils(dict):
                         filename = filename))
         else:
             REPORT('WARN', _NO_SCHOOLYEAR.format(
-                    year = CONFIG['T_SCHOOLYEAR'],
+                    year = T_SCHOOLYEAR,
                     filename = filename))
         return cls(ptable)
 #
@@ -203,7 +208,7 @@ class Pupils(dict):
         for klass in self.classes():
             pdlist += self.__classes[klass]
         self.__info = {
-            '__TITLE__': 'Pupil Data',
+            '__TITLE__': _TITLE,
             'SCHOOLYEAR': SCHOOLYEAR,
             '__MODIFIED__': timestamp,
         }

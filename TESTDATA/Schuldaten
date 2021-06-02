@@ -1,28 +1,39 @@
-#*** MINION 1.0 ***#
-# letzte Änderung: 2021-05-29
-
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-# This is just for test purposes!
-# Run the program pretending "today" is some other date.
-TODAY: 2016-06-03
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#+++ __TITLE__   : Konfigurationsdaten, die sich auf die konkrete Schule beziehen
+#+++ __MINION__  : 1.0
+#+++ __MODIFIED__: 2021-06-02
+#+++###########################################################
+#+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
+#+++# wird beim Speichern (in WZ) automatisch aktualisiert.
+#--------------------------------------------------------------
 
 SCHOOL_NAME: <<<Freie Michaelschule>>>
 FONT: <<<Droid Sans>>>
 
-### Felder der Schüler-Datenbank
+### Felder der Schüler-Datenbank.
+### Alle Schüler werden in einer Liste aufbewahrt.
+# Der jeweilige dritte Eintrag in jeder Zeile ist entweder "leer" (&)
+# oder irgendein Text; wenn nicht leer, das Datenfeld muss vorhanden und
+# nicht leer sein.
 PUPIL_FIELDS: [
-    [CLASS      Klasse   Pflichtfeld]
-    [PID        ID       Pflichtfeld]
-    [FIRSTNAME  Rufname  Pflichtfeld]
-    [LASTNAME   Name     Pflichtfeld]
-    [GROUPS     Gruppen  &]            # wahrscheinlich nicht in importierten Tabellen
-    [FIRSTNAMES Vornamen     Pflichtfeld]
-    [DOB_D      Geburtsdatum Pflichtfeld]
-    [POB        Geburtsort   Pflichtfeld]
-    [SEX        Geschlecht   Pflichtfeld]
-    [HOME       Ort          Pflichtfeld]
+    [CLASS      Klasse         Pflichtfeld]
+    [PID        ID             Pflichtfeld]
+    [FIRSTNAME  Rufname        Pflichtfeld]
+    [LASTNAME   Name           Pflichtfeld]
+    [GROUPS     Gruppen        &] # wahrscheinlich nicht in importierten Tabellen
+    [FIRSTNAMES Vornamen       Pflichtfeld]
+    [DOB_D      Geburtsdatum   Pflichtfeld]
+    [POB        Geburtsort     Pflichtfeld]
+    [SEX        Geschlecht     Pflichtfeld]
+    [HOME       Ort            Pflichtfeld]
     [ENTRY_D    Eintrittsdatum Pflichtfeld]
     [EXIT_D     Schulaustritt  &]
     [QUALI_D    Eintritt-SekII &]      # nicht in importierten Tabellen
 ]
+
+### Gruppen, in denen die Schüler (voraussichtlich) am Ende des Jahres
+### die Schule verlassen werden.
+LEAVING_GROUPS: {
+    13: *       # alle Schüler
+    12: [R]     # Liste
+    12K: *      # alle Schüler
+}

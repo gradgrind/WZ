@@ -47,6 +47,8 @@ if __name__ == '__main__':
 #    appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 #    basedir = os.path.dirname(appdir)
 
+### +++++
+
 builtins.NONE = ''
 
 class Bug(Exception):

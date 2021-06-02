@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2021-05-22
+core/courses.py - last updated 2021-06-02
 
 Manage course/subject data.
 
@@ -19,23 +19,23 @@ Copyright 2021 Michael Towers
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
-"""
 
-# Use a single json file to contain all the subject data.
-# It comprises two main areas: class-subjects and pupil-choices.
-# There is general information:
-#   SCHOOLYEAR: schoolyear
-#   TITLE: "Fachdaten"
-#   __MODIFIED__: <date-time>
-# The class-subjects part has the following structure:
-#   __SUBJECTS__: {class: [<sdata>, ...], ... }
-#           <sdata> is a mapping, field -> value
-# The pupil-choices part has the following structure:
-#   __CHOICES__: {pid: [sid, ... ], ... }
-# Only the sids of non-chosen courses are included. Also, only pupils
-# who have non-chosen courses are included.
-#
-# It would probably be good to have a gui-editor for such files, but
+Use a single file to contain all the subject data as a mapping.
+It comprises two main areas: class-subjects and pupil-choices.
+There is also general information, keyed by '__INFO__':
+    __TITLE__: 'Subject Data' (for example, not used in code)
+    SCHOOLYEAR: '2016' (year in which the end of the school year falls)
+    __MODIFIED__: <date-time> (not used in code)
+
+The class-subjects part has the following structure:
+    __SUBJECTS__: {class: [<sdata>, ...], ... }
+           <sdata> is a mapping, {field: value}
+The pupil-choices part has the following structure:
+    __CHOICES__: {pid: [sid, ... ], ... }
+Only the sids of non-chosen courses are included. Also, only pupils
+who have non-chosen courses are included there.
+"""
+#TODO: It would probably be good to have a gui-editor for such files, but
 # the data could be exported as a table (tsv or xlsx).
 # At the moment only the choice tables can be exported (xlsx) for editing.
 # This can be edited with a separate tool and the result read in as an
@@ -47,7 +47,7 @@ Copyright 2021 Michael Towers
 ### Messages
 _BAD_LINE = "Ungültige Zeile:\n  {line}\n  ... in {path}"
 _UNKNOWN_SID = "Unbekanntes Fach-Kürzel: {sid}"
-_SCHOOLYEAR_MISMATCH = "Fachdaten: falsches Jahr in:\n  {filepath}"
+_SCHOOLYEAR_MISMATCH = "Fachdaten: falsches Jahr ({year})"
 _MULTIPLE_SID = "Fach-Kürzel {sid} wird in Klasse {klass} für Gruppe" \
         " {group} mehrfach definiert"
 _MULTIPLE_PID_SID = "Fach-Kürzel {sid} wird für {pname} (Klasse {klass})" \
@@ -74,15 +74,21 @@ import sys, os, datetime
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
-    sys.path[0] = os.path.dirname(this)
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+    from core.base import start
+    start.setup(os.path.join(basedir, 'TESTDATA'))
 
-from collections import namedtuple
+### +++++
 
 from core.base import Dates
-from core.pupils import PUPILS
-from local.base_config import SubjectsBase, klass_group
+from core.pupils import Pupils
+from local.base_config import SubjectsBase
 from local.grade_config import NOT_GRADED, UNCHOSEN
-from tables.spreadsheet import Spreadsheet, TableError, make_db_table
+from tables.spreadsheet import read_DataTable, filter_DataTable, \
+        make_DataTable, make_DataTable_filetypes, \
+        TableError, spreadsheet_file_complete
 from tables.matrix import KlassMatrix
 from tables.datapack import get_pack, save_pack
 # year_path !
@@ -90,155 +96,131 @@ from tables.datapack import get_pack, save_pack
 class CourseError(Exception):
     pass
 
-NONE = ''
 WHOLE_CLASS = '*'
 NULL = 'X'
 
-### +++++
+### -----
 
-def SUBJECTS(schoolyear):
-    return Subjects._set_year(schoolyear)
-##
 class Subjects(SubjectsBase):
     """Manage the course/subject tables.
     """
-    ## Implement a cache for subject/course information.
-    _schoolyear = None
-    _subjects = None
-#
+    __subjects = None       # cache for current year
+    __subject_names = None  # cache for the names
+    #+
     @classmethod
-    def _set_year(cls, year = None):
-        """Load subject/course data for the given year.
-        Clear data if no year.
+    def fetch(cls, reset = False):
+        """This is the main method for fetching the current data, which
+        is then cached in memory.
         """
-        if year != cls._schoolyear:
-            cls._subjects = cls(year) if year else None
-            cls._schoolyear = year
-        return cls._subjects
-
-##
-
-    def __init__(self, schoolyear):
-        self.schoolyear = schoolyear
-        self.filepath = year_path(self.schoolyear, self.COURSE_TABLE)
+        if reset:
+            cls.__subjects = None
+            return None
+        if not cls.__subjects:
+            cls.__subjects = cls()
+        return cls.__subjects
+    #+
+    @classmethod
+    def subject_name(cls, sid = None, reset = False):
+        """If reset is true, clear the cache, return <None>.
+        Otherwise return the subject name for the given subject-id.
+        If the subject-id is not supplied, return the whole subject list
+        as a mapping: {subject-id: subject-name}.
+        """
+        if reset:
+            cls.__subject_names = None
+            return None
+        if not cls.__subject_names:
+            cls.__subject_names = MINION(DATAPATH(CONFIG['SUBJECT_LIST']))
+        if sid:
+            try:
+                return cls.__subject_names[sid]
+            except KeyError as e:
+                raise CourseError(_UNKNOWN_SID.format(sid = sid))
+        return cls.__subject_names
+#
+    def __init__(self):
+        self.filepath = DATAPATH(CONFIG['SUBJECT_TABLE'])
         try:
             data = get_pack(self.filepath)
         except FileNotFoundError:
-            self._modified = '–––'
-            self._optouts = {}
-            self._klasses = {}
+            self.__modified = NONE
+            self.__optouts = {}
+            self.__klasses = {}
         else:
-            if data['SCHOOLYEAR'] != self.schoolyear:
-                raise CourseError(_SCHOOLYEAR_MISMATCH.format(
-                        filepath = self.filepath))
-            self._modified = data.get('__MODIFIED__')
-            self._klasses = data.get('__SUBJECTS__')
-            self._optouts = data.get('__CHOICES__')
+            info = data['__INFO__']
+            year = info['SCHOOLYEAR']
+            if year != SCHOOLYEAR:
+                raise CourseError(_SCHOOLYEAR_MISMATCH.format(year = year))
+            self.__modified = info.get('__MODIFIED__') or NONE
+            self.__klasses = data['__SUBJECTS__']
+            self.__optouts = data['__CHOICES__']
         self._names = None
 #TODO: It is not clear that this method is actually needed!
-        self.chosen(None)   # Initialize chosen-subject cache
-#
-#TODO: Consider whether to integrate the subject names in the json file.
-# There could be methods to read and save it ... also a gui editor ...
-    def subject_name(self, sid):
-        if not self._names:
-            fpath = year_path(self.schoolyear, self.SUBJECT_NAMES)
-            names = {}
-            with open(fpath, 'r', encoding = 'utf-8') as fh:
-                for line in fh:
-                    l = line.lstrip()
-                    if l:
-                        if l[0] == '#':
-                            continue
-                        try:
-                            k, v = l.split(':', 1)
-                        except ValueError:
-                            raise CourseError(_BAD_LINE.format(
-                                    path = fpath, line = line))
-                        name = v.split('#', 1)[0].strip()
-                        names[k.rstrip()] = name
-            self._names = names
-        try:
-            return self._names[sid]
-        except KeyError:
-            raise CourseError(_UNKNOWN_SID.format(sid = sid))
+#        self.chosen(None)   # Initialize chosen-subject cache
 #
     def classes(self):
         """Return a sorted list of class names.
         """
-        return sorted(self._klasses)
+        return sorted(self.__klasses)
 #
 #TODO: May want to provide gui editor ... would then also need an exporter!
-    def import_source_table(self, filepath):
-        """Read in a file containing the course data for a class.
+#TODO: Do I want to check the class before saving???
+    def import_source_table(self, filebytes, filename):
+        """Read in a file containing the course data for a class. The
+        file is supplied as a <bytes> object.
+        The <filename> parameter is necessary to determine the type of
+        data (ods, xlsx or tsv) – on the basis of its ending.
         The field names are "localized".
-        The file-path can be passed with or without type-extension.
-        If no type-extension is given, the folder will be searched for a
-        suitable file.
-        Alternatively, <filepath> may be an in-memory binary stream
-        (io.BytesIO) with attribute 'filename' (so that the
-        type-extension can be read).
+        The data is added to the internal database and the class name
+        is returned.
         """
-        dbtable = Spreadsheet(filepath).dbTable()
-        info = {r[0]:r[1] for r in dbtable.info}
-        try:
-            _year = info[self.SCHOOLYEAR]
-        except KeyError as e:
-            raise TableError(_INFO_MISSING.format(
-                    field = self.SCHOOLYEAR, fpath = filepath)) from e
-        if _year != self.schoolyear:
-            raise TableError(_YEAR_MISMATCH.format(path = filepath))
-        try:
-            klass = info[self.CLASS]
-        except KeyError as e:
-            raise TableError(_INFO_MISSING.format(
-                    field = self.CLASS, fpath = filepath)) from e
-        table = []
-        # Get column mapping: {field -> column index}
-        # Convert the localized names to uppercase to avoid case problems.
-        # Get the columns for the localized field names
-        colmap = {}
-        col = -1
-        for t in dbtable.fieldnames():
-            col += 1
-            colmap[t.upper()] = col
-        # ... then for the internal field names,
-        try:
-            findex = {f: colmap[t.upper()] for f, t in self.FIELDS.items()}
-        except KeyError:
-            raise CourseError(_FIELD_MISSING.format(
-                    fpath = filepath, field = t))
-        # Read the rows
-        for line in dbtable:
-            fdata = {f: line[i] or NONE for f, i in findex.items()}
-            sname = fdata.pop('SUBJECT')
-            sid = fdata['SID']
+        bstream = io.BytesIO(filebytes)
+        bstream.filename = filename
+        classtable = read_DataTable(bstream)
+        T_SCHOOLYEAR = CONFIG['T_SCHOOLYEAR']
+        classtable = filter_DataTable(
+            classtable,
+            CONFIG['COURSE_FIELDS'],
+            infolist = [
+                ['SCHOOLYEAR', T_SCHOOLYEAR, False],
+                ['CLASS', CONFIG['T_CLASS'], True],
+                ['__MODIFIED__', None, False]
+            ]
+        )
+        klass = classtable['__INFO__']['CLASS']
+        table = classtable['__ROWS__']
+        # Remove and check the subject names (the subject names are not
+        # stored in the internal table).
+        for row in table:
+            sname = row.pop('SUBJECT')
+            sid = row['SID']
             sname0 = self.subject_name(sid)
             if sname != sname0:
                 REPORT('WARN', _NAME_MISMATCH.format(sid = sid,
                         name1 = sname0, name2 = sname))
-            table.append(fdata)
-        self._klasses[klass] = table
+        self.__klasses[klass] = table
         self.save()
         return klass
 #
     def save(self):
-        """Save the couse data as a compressed json file.
+        """Save the couse data.
         The first save of a day causes the current data to be backed up.
         """
-        # Back up old table, if it exists
         timestamp = Dates.timestamp()
         today = timestamp.split('_', 1)[0]
         data = {
-            'TITLE': _TITLE,
-            'SCHOOLYEAR': self.schoolyear,
-            '__MODIFIED__': timestamp,
-            '__SUBJECTS__': self._klasses,
-            '__CHOICES__': self._optouts
+            '__INFO__': {
+                '__TITLE__': _TITLE,
+                'SCHOOLYEAR': SCHOOLYEAR,
+                '__MODIFIED__': timestamp,
+            },
+            '__SUBJECTS__': self.__klasses,
+            '__CHOICES__': self.__optouts
         }
         save_pack(self.filepath, data, today)
-        self._modified = timestamp
+        self.__modified = timestamp
 #
+#TODO
     def grade_subjects(self, klass, grouptag = None):
         """Return a mapping {sid -> subject-data} for the given group.
         subject-data is also a mapping ({field -> value}).
@@ -277,36 +259,40 @@ class Subjects(SubjectsBase):
         return table
 #
     def class_subjects(self, klass):
-        """Return a mapping {pid -> {sid: subject-data}} for the given
-        class.
-        Only subjects are included which have an entry in the SGROUPS
+        """Return subject data for the given class:
+            {   '__SUBJECTS__': [ (sid, subject name), ... ],
+                '__PUPILS__': [ (pid, {sid: subject-data, ... }}), ... ]
+            }
+        The __SUBJECTS__ list includes all subjects relevant
+        for the class, but only those which have an entry in the SGROUPS
         field, i.e. those for direct inclusion in reports.
         Note that also "composite" subjects will be included and
         subjects for which no grade is given (but a text report is
         expected).
-        Subjects which are not possible for a pupil because of a group
-        mismatch are not included.
-        A second result is an ordered mapping of all subjects relevant
-        for the class: {sid -> subject name}.
+        In the pupil data, __PUPILS__, only those subjects are included
+        which are relevant for the groups in which the pupil is a member.
         """
-        table = {}
+        table = []
         # Get pupil-data list
-        pupils = PUPILS(self.schoolyear)
+        pupils = Pupils.fetch()
         plist = pupils.class_pupils(klass)
         # Get all subject data
-        sclist = self._klasses.get(klass)
+        sclist = self.__klasses.get(klass)
         sid_name = {}
+        subjects = []
         if sclist and plist:
             for sdata in sclist:
                 if sdata['GROUP'] and sdata['SGROUP']:
                     sid = sdata['SID']
                     if sid not in sid_name:
-                        sid_name[sid] = self.subject_name(sid)
+                        sname = self.subject_name(sid)
+                        sid_name[sid] = sname
+                        subjects.append((sid, sname))
             for pdata in plist:
                 pid = pdata['PID']
                 pgroups = pdata['GROUPS'].split()
                 psids = {}
-                table[pid] = psids
+                table.append((pid, psids))
                 for sdata in sclist:
                     sid = sdata['SID']
                     if sid not in sid_name:
@@ -325,10 +311,14 @@ class Subjects(SubjectsBase):
                                     pname = pupils.name(pdata),
                                     sid = sid,
                                     groups = f'[{g0}, {g}]'))
-        return table, sid_name
+        return {
+           '__SUBJECTS__': subjects,
+            '__PUPILS__': table
+            }
 
 # -------------------------------------------------------
 
+#TODO
     def migrate(self):
         self.schoolyear = str(int(self.schoolyear) + 1)
         self.filepath = year_path(self.schoolyear, self.COURSE_TABLE)
@@ -349,6 +339,7 @@ class Subjects(SubjectsBase):
             return
         if not self._pid_choices:
             self._pid_choices = {}
+#klass???
             pid_sidmap, sid_name = self.class_subjects(klass)
             # Note that this includes "composite" subjects
             pupils = PUPILS(SCHOOLYEAR)
@@ -366,10 +357,11 @@ class Subjects(SubjectsBase):
         """Return a set of subjects which the given pupil has opted out of.
         """
         try:
-            return set(self._optouts[pid])
+            return set(self.__optouts[pid])
         except KeyError:
             return set()
 #
+#TODO
     def save_choices(self, klass, data):
         """Save the choices for the given class.
         Note that the parameter <klass> is not used here, as choices
@@ -380,11 +372,12 @@ class Subjects(SubjectsBase):
         """
         for pid, clist in data:
             if clist:
-                self._optouts[pid] = clist
+                self.__optouts[pid] = clist
             else:
-                self._optouts.pop(pid, None)
+                self.__optouts.pop(pid, None)
         self.save()
 #
+#TODO
     def import_choice_table(self, filepath):
         """Read in the file containing the course choices and save the
         data to the internal representation.
@@ -430,6 +423,7 @@ class Subjects(SubjectsBase):
         self.save()
         return klass
 #
+#TODO
     def make_choice_table(self, klass):
         """Build a basic pupil/subject table for course choices:
 
@@ -495,22 +489,42 @@ class Subjects(SubjectsBase):
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    _year = '2016'
-    from core.base import init
-    init()
+    import io
+    print("SUBJECTS:", Subjects.subject_name())
 
-    _subjects = Subjects(_year)
+    _subjects = Subjects()
     print("INITIAL CLASSES:", _subjects.classes())
 
-    print("\nIMPORT SUBJECT TABLES:")
-    sdir = os.path.join(DATA, 'testing', 'FACHLISTEN')
-    for f in sorted(os.listdir(sdir)):
-        if len(f.split('.')) > 1:
-            print("  ... Reading", f)
-            table = _subjects.import_source_table(os.path.join(sdir, f))
-
+    _klass = '12'
+    path = DATAPATH(f'testing/FACHLISTEN/Fachliste-{_klass}')
+    path = spreadsheet_file_complete(path)
+    with open(path, 'rb') as fh:
+        sbytes = fh.read()
+    _table = _subjects.import_source_table(sbytes, os.path.basename(path))
+    print(f"\nImported for class {_table}")
     print("\nCLASSES:", _subjects.classes())
 
+    clsubjs = _subjects.class_subjects(_klass)
+    print(f"\n Class {_klass}, subjects:", clsubjs['__SUBJECTS__'])
+    print(f"\n Class {_klass}, individual:", clsubjs['__PUPILS__'])
+
+    print("\nIMPORT SUBJECT TABLES:")
+    sdir = DATAPATH('testing/FACHLISTEN')
+    for f in sorted(os.listdir(sdir)):
+        if len(f.split('.')) > 1:
+            fpath = os.path.join(sdir, f)
+            print("  ... Reading", fpath)
+            with open(fpath, 'rb') as fh:
+                sbytes = fh.read()
+            try:
+                _subjects.import_source_table(sbytes, os.path.basename(f))
+            except TableError as e:
+                print("ERROR:", str(e))
+
+    print("\nCLASSES:", _subjects.classes())
+    quit(0)
+
+#TODO
     _k, _g = '12', 'G'
     print("\n**** Subject data for group %s.%s: grading ****" % (_k, _g))
     for sdata in _subjects.grade_subjects(_k, _g).values():
