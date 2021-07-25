@@ -361,10 +361,10 @@ if __name__ == '__main__':
         print("\nLONG TAGS:\n", _teachers.longtag.values())
 
     _rooms = Rooms_aSc()
-    rooms = _rooms.get_rooms()
+    classrooms = _rooms.get_rooms()
     if __TEST:
         print("\nROOMS:")
-        for rdata in rooms:
+        for rdata in classrooms:
             print("   ", rdata)
 
     _subjects = Subjects_aSc()
@@ -483,7 +483,7 @@ if __name__ == '__main__':
             print("   ", card)
 
     xml_aSc = xmltodict.unparse(build_dict(
-            ROOMS = rooms,
+            ROOMS = classrooms,
             PERIODS = periods,
             TEACHERS = teachers,
             SUBJECTS = subjects,
