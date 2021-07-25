@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-06-01
+Last updated:  2021-06-10
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -458,17 +458,19 @@ def filter_DataTable(data, fieldlist, infolist, extend = True):
     tfields = set(data['__FIELDS__'])
     fieldnames = []
     flist = []
+    fname = {}
     for ftn in fieldlist:
         name = ftn[1] or ftn[0]   # null <t> => no translation, ...
         if name in tfields:
             flist.append(ftn)
             fieldnames.append(ftn[0])
-        elif needed:
+        elif ftn[2]:
             raise TableError(_ESSENTIAL_FIELD_MISSING.format(
                             field = name))
         elif extend:
             flist.append(ftn)
             fieldnames.append(ftn[0])
+        fname[ftn[0]] = name
     # Add the data rows
     rowmaps = []
     for row in data['__ROWS__']:

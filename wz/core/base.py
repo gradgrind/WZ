@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-06-01
+Last updated:  2021-07-25
 
 Basic configuration and structural stuff.
 
@@ -25,7 +25,8 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
-_MISSING_SCHOOLYEAR = "Schuljahr-Feld ('SCHOOLYEAR') fehlt im Kalender"
+_NO_SCHOOLYEAR = "Kein Schuljahr"
+_MISSING_LAST_DAY = "Feld „LAST_DAY“ fehlt im Kalender"
 _BAD_DATE = "Ungültiges Datum im Kalender: {line}"
 _INVALID_SCHOOLYEAR = "Ungültiges Schuljahr: {year}"
 _DODGY_SCHOOLYEAR = "[?] Möglicherweise fehlerhaftes Schuljahr: {year}"
@@ -66,11 +67,7 @@ class DataError(Exception):
 
 ###
 
-#TODO: Rather get <datadir> from "settings" (if datadir empty)?
-# For a successful start there must be at least a legal calendar.
-# Soon afterwards there would need to be pupil data and subject data.
-
-#TODO
+#TODO: configuration/settings file?
 #posix: os.path.expanduser('~/.config/WZ')
 #win: os.path.expanduser('~\\AppData\\Local\\Programs\\WZ\\config')
 # Could use the "winpath" package, but it seems unnecessary!
@@ -78,20 +75,46 @@ class DataError(Exception):
 # Perhaps there can also be a launcher there (see python)?
 #On Linux install to .local/(bin, lib, share)? or to .bin/WZ?
 
-
+#TODO: Moving to more year-based data
 class start:
+    """
+    """
     __DATA = None       # Base folder for school data
+    __YEARDATA = None   # Base folder for data for school-years
 #
     @classmethod
     def setup(cls, datadir):
+        """<datadir> is the full path to the folder containing the
+        application data (i.e. the school data).
+        """
         cls.__DATA = datadir
         builtins.DATAPATH = cls.__datadir
         builtins.RESOURCEPATH = cls.__resourcedir
         builtins.CONFIG = MINION(DATAPATH('CONFIG'))
-        builtins.SCHOOL_DATA = MINION(DATAPATH(CONFIG['SCHOOL_DATA']))
-        builtins.CALENDAR = Dates.get_calendar(DATAPATH(
-                CONFIG['CALENDAR_FILE']))
-        builtins.SCHOOLYEAR = CALENDAR['SCHOOLYEAR']
+        cls.__YEARDATA = DATAPATH(CONFIG['YEAR_FOLDER'])
+        builtins.YEARPATH = cls.__yeardir
+        cls.select_year()
+#
+    @classmethod
+    def select_year(cls, year = None):
+        if not year:
+            with open(DATAPATH('SCHOOLYEAR')) as fh:
+                year = fh.read().strip()
+        if not year:
+            raise DataError(_NO_SCHOOLYEAR)
+        cal_path = CONFIG['CALENDAR_FILE']
+# This can raise a <MinionError> (in module minion) or a <DataError>:
+        builtins.CALENDAR = Dates.get_calendar(YEARPATH(cal_path, year))
+        builtins.SCHOOLYEAR = year
+        builtins.SCHOOL_DATA = MINION(YEARPATH(CONFIG['SCHOOL_DATA']))
+#
+    @classmethod
+    def set_current_year(cls):
+        """Set the "current" (default) school-year to <SCHOOLYEAR>, the
+        currently selected year.
+        """
+        with open(DATAPATH('SCHOOLYEAR'), 'w') as fh:
+            fh.write(SCHOOLYEAR)
 #
     @classmethod
     def __datadir(cls, path):
@@ -106,6 +129,15 @@ class start:
         <path> is a '/'-separated path relative to this folder.
         """
         return os.path.join(cls.__DATA, 'RESOURCES', *path.split('/'))
+#
+    @classmethod
+    def __yeardir(cls, path, year = None):
+        """Return a path within the year-data folder.
+        <path> is a '/'-separated path relative to this folder.
+        If no year is supplied, use <SCHOOLYEAR>.
+        """
+        return os.path.join(cls.__YEARDATA, year or SCHOOLYEAR,
+                *path.split('/'))
 
 ###
 
@@ -216,10 +248,12 @@ class Dates:
         return str(y)
 #
     @classmethod
-    def save_calendar(cls, text, fpath = None):
+    def save_calendar(cls, text, fpath = None, save = True):
         """Save the given text as a calendar file to the given path.
         If no path is supplied, save as the current calendar file.
         Some very minimal checks are made.
+        If <save> is false, don't save the file.
+        Return the (modified) text.
         """
         cls.check_calendar(_Minion.parse(text)) # check the school year
         header = CONFIG['CALENDAR_HEADER'].format(date = cls.today())
@@ -230,11 +264,12 @@ class Dates:
         except:
             pass
         text = header + text
-        if not fpath:
-            fpath = DATAPATH(CONFIG['CALENDAR_FILE'])
-        os.makedirs(os.path.dirname(fpath), exist_ok = True)
-        with open(fpath, 'w', encoding = 'utf-8') as fh:
-            fh.write(text)
+        if save:
+            if not fpath:
+                fpath = DATAPATH(CONFIG['CALENDAR_FILE'])
+            os.makedirs(os.path.dirname(fpath), exist_ok = True)
+            with open(fpath, 'w', encoding = 'utf-8') as fh:
+                fh.write(text)
         return text
 #
     @classmethod
@@ -249,10 +284,7 @@ class Dates:
     def check_calendar(cls, calendar):
         """Check the given calendar object.
         """
-        try:
-            schoolyear = calendar['SCHOOLYEAR']
-        except KeyError:
-            raise DataError(_MISSING_SCHOOLYEAR)
+        schoolyear = cls.calendar_year(calendar)
         # Check that the year is reasonable
         y0 = cls.today().split('-', 1)[0]
         try:
@@ -275,6 +307,15 @@ class Dates:
         return calendar
 #
     @classmethod
+    def calendar_year(cls, calendar):
+        """Return the school-year of the given calendar.
+        """
+        try:
+            return calendar['LAST_DAY'].split('-', 1)[0]
+        except KeyError:
+            raise DataError(_MISSING_LAST_DAY)
+#
+    @classmethod
     def migrate_calendar(cls, new_year, calendar_path = None):
         """Generate a "starter" calendar for the given school-year.
         It simply takes the given calendar and changes anything that
@@ -289,14 +330,15 @@ class Dates:
             elif y == old_year:
                 y = new_year
             return y
-        calfile = calendar_path or DATAPATH(CONFIG['CALENDAR_FILE'])
+        calfile = calendar_path or YEARPATH(CONFIG['CALENDAR_FILE'])
         with open(calfile, 'r', encoding = 'utf-8') as fh:
             caltext = fh.read()
-        old_year = _Minion.parse(caltext)['SCHOOLYEAR']
+        old_year = cls.calendar_year(_Minion.parse(caltext))
         old_lastyear = str(int(old_year) - 1)
         new_lastyear = str(int(new_year) - 1)
         rematch = r'([0-9]{4})'
-        return re.sub(rematch, fn_sub, caltext)
+        text = re.sub(rematch, fn_sub, caltext)
+        return cls.save_calendar(text, save = False)
 
 ###
 
@@ -334,7 +376,9 @@ if __name__ == '__main__':
     import platform
     print("§§§", platform.system())
 
-    start.setup(os.path.join(basedir, 'TESTDATA'))
+#TODO: use TESTDATA?
+#    start.setup(os.path.join(basedir, 'TESTDATA'))
+    start.setup(os.path.join(basedir, 'DATA'))
     print("Today (possibly faked):", Dates.today())
     print("Current school year:", Dates.get_schoolyear())
     print("School year of data:", SCHOOLYEAR)
@@ -343,4 +387,6 @@ if __name__ == '__main__':
         print("BAD Date:", Dates.print_date('2016-02-30'))
     except DataError as e:
         print(" ... trapped:", e)
-    print("\n\nCalendar for 2021:\n", Dates.migrate_calendar('2021'))
+    new_year = str(int(SCHOOLYEAR) + 1)
+    print(f"\n\nCalendar for {new_year}:\n" +
+            Dates.migrate_calendar(new_year))

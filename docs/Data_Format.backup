@@ -1,0 +1,23 @@
+# Passing Data Between Front- and Back-end
+
+All data should be passed in a simple text format. JSON is an obvious candidate.
+
+Actually I only really need strings as data format, but it might be worth considering explicit data types.
+
+An item could be structured something like 'type?value'. This would allow type-checking at one or both ends.
+
+A string value would need to be encoded somehow – JSON or base64? A very quick test suggested that base64 could be quite a lot faster in conversion (3 times in Python?). It can also handle binary data much more cleanly. The data produced by JSON *can* be longer if it contains many non-ASCII characters. But if the parameter 'ensure_ascii' is set to false, it should generally be shorter (the conversion time is then *slightly* longer still). Of course it is possible that the transport cost could be the main factor in the end.
+
+Lists: [item,item, ... ]
+
+Dicts: {key:item,key:item, ... }
+
+Items can also be lists or dicts, so a recursive (or other stack-based) parser would be necessary.
+
+As the delimiters used here are not part of base64, they can be used freely and are easily separated from string characters. That is solved in JSON by escape characters in strings.
+
+An advantage of JSON is that it is readable, especially with 'ensure_ascii' set to false. Of course it is not difficult to convert base64 back to readable text.
+
+In principle, it would be possible to have proxy-objects, too. A back-end object could be referenced in the front-end by a name-key. These keys could be automatically generated. This scheme does, however, introduce a complication: memory management. The life-time of these objects needs to be handled somehow. It might be more trouble than it's worth.
+
+Nevertheless, a simple extension of the module + function idea could provide access to back-end objects. An alternative might be a caching approach ...

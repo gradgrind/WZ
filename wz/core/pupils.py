@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-core/pupils.py - last updated 2021-06-02
+core/pupils.py - last updated 2021-06-05
 
 Manage pupil data.
 
@@ -74,6 +74,18 @@ from tables.datapack import get_pack, save_pack
 
 ### -----
 
+#TODO!!! (External) access to functions only via module level functions!!!
+# It should be possible to return only strings, lists, dicts (~JSON)?
+# These DON'T fulfil this criterion!
+
+def Pupil_File(filepath, extend = True):
+    with open(filepath, 'rb') as fh:
+        fbytes = fh.read()
+    return _Pupils.init_from_bytes(fbytes, filepath, extend)
+
+def Pupils():
+    return _Pupils.fetch()
+
 #TODO: Consider adding data types (incl. selection lists) to field/info-lists.
 
 #TODO: I suppose the program should start with the stored data? If there is
@@ -81,12 +93,9 @@ from tables.datapack import get_pack, save_pack
 # file.
 # What about updating from file, with update selections?
 
-def Pupil_File(filepath, extend = True):
-    with open(filepath, 'rb') as fh:
-        fbytes = fh.read()
-    return Pupils.init_from_bytes(fbytes, filepath, extend)
-##
-class Pupils(dict):
+### **************************************************************** ###
+
+class _Pupils(dict):
     """Handler for pupil data.
     Pupil-data items (mappings) can be added from various sources:
      - the internal database
@@ -119,7 +128,7 @@ class Pupils(dict):
 #
     @classmethod
     def init_from_bytes(cls, filebytes, filename, extend = True):
-        """Make a <Pupils> instance from a file passed as <bytes>.
+        """Make a <_Pupils> instance from a file passed as <bytes>.
         The <filename> parameter is necessary to determine the type of
         data (ods, xlsx or tsv) – on the basis of its ending.
         For update tables, <extend> should be false, so that no fields
@@ -485,7 +494,7 @@ class Pupils(dict):
             '__FIELDS__': self.__fields,
             '__ROWS__': newpupils
         }
-        pupils = Pupils(ptable)
+        pupils = _Pupils(ptable)
         pupils.fill_classes()
         # First back-up the existing data.
         self.backup(DATAPATH(f'tmp/pupils_{SCHOOLYEAR}'))
@@ -552,7 +561,7 @@ if __name__ == '__main__':
 #    _ptables = Pupil_File(DATAPATH('testing/PUPILS_2016.tsv')) # original table
 #    _ptables.save()
 
-    pupils = Pupils.fetch()
+    pupils = Pupils()
     print("\nCLASSES (db):", pupils.classes())
     print("\nLEAVING in 12:", pupils.final_year_pupils('12'))
 

@@ -2,9 +2,9 @@
 """
 ui/gridbase.py
 
-Last updated:  2021-04-29
+Last updated:  2021-06-16
 
-Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
+Widget with tiles on grid layout (QGraphicsScene/QGraphicsView).
 
 =+LICENCE=============================
 Copyright 2021 Michael Towers
@@ -48,16 +48,16 @@ _NOTSTRING          = "In <grid::Tile>: Zeichenkette erwartet: {val}"
 
 import sys, os, copy
 
-from qtpy.QtWidgets import QLineEdit, QTextEdit, \
+from PySide6.QtWidgets import QLineEdit, QTextEdit, \
     QGraphicsView, QGraphicsScene, \
     QGraphicsRectItem, QGraphicsSimpleTextItem, QGraphicsLineItem, \
     QGraphicsProxyWidget, \
     QCalendarWidget, QVBoxLayout, QLabel, \
     QFileDialog, QDialog, QDialogButtonBox, \
     QTableWidget, QTableWidgetItem
-from qtpy.QtGui import (QFont, QPen, QColor, QBrush, QTransform,
+from PySide6.QtGui import (QFont, QPen, QColor, QBrush, QTransform,
         QPainter, QPdfWriter, QPageLayout)
-from qtpy.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
+from PySide6.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
         QLocale
 
 class GridError(Exception):
@@ -343,19 +343,21 @@ class CellStyle:
         return font
 #
     @classmethod
-    def getPen(cls, width):
-        """Manage a cache for pens of different width.
+    def getPen(cls, width, colour = None):
+        """Manage a cache for pens of different width and colour.
         """
         if width:
+            wc = (width, colour or BORDER_COLOUR)
             try:
-                return cls._pens[width]
+                return cls._pens[wc]
             except AttributeError:
                 cls._pens = {}
             except KeyError:
-                pen = QPen('#FF' + BORDER_COLOUR)
-                pen.setWidthF(width)
-                cls._pens[width] = pen
-                return pen
+                pass
+            pen = QPen('#FF' + wc[1])
+            pen.setWidthF(wc[0])
+            cls._pens[wc] = pen
+            return pen
         else:
             try:
                 return cls._noPen
@@ -378,7 +380,7 @@ class CellStyle:
         return brush
 #
     def __init__(self, font, size, align = 'c', highlight = None,
-            bg = None, border = 1, mark = None):
+            bg = None, border = 1, border_colour = None, mark = None):
         """
         <font> is the name of the font (<None> => default, not recommended,
             unless the cell is to contain no text).
@@ -393,6 +395,7 @@ class CellStyle:
             0: none
             1: all sides
             2: (thicker) underline
+        <border_colour>: 'RRGGBB', default is <BORDER_COLOUR>.
         <mark> is a colour ('RRGGBB') which can be selected as an
         "alternative" font colour.
         """
@@ -405,6 +408,7 @@ class CellStyle:
         self.bgColour = self.getBrush(bg) if bg else None
         # Border
         self.border = border
+        self.border_colour = border_colour
 #
     def setFont(self, font, size, highlight):
         self._font, self._size, self._highlight = font, size, highlight
@@ -467,14 +471,15 @@ class Tile(QGraphicsRectItem):
         # Border
         if style.border == 1:
             # Set the pen for the rectangle boundary
-            pen0 = CellStyle.getPen(BORDER_WIDTH)
+            pen0 = CellStyle.getPen(BORDER_WIDTH, style.border_colour)
         else:
             # No border for the rectangle
             pen0 = CellStyle.getPen(None)
             if style.border != 0:
                 # Thick underline
                 line = QGraphicsLineItem(self)
-                line.setPen(CellStyle.getPen(UNDERLINE_WIDTH))
+                line.setPen(CellStyle.getPen(UNDERLINE_WIDTH,
+                        style.border_colour))
                 line.setLine(0, h, w, h)
         self.setPen(pen0)
 

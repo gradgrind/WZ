@@ -2,7 +2,7 @@
 """
 ui/grid.py
 
-Last updated:  2021-04-19
+Last updated:  2021-06-16
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -35,10 +35,10 @@ if __name__ == '__main__':
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
 
-from qtpy.QtWidgets import QLineEdit, QTextEdit, \
+from PySide6.QtWidgets import QLineEdit, QTextEdit, \
     QCalendarWidget, QVBoxLayout, QLabel, QDialog, QDialogButtonBox, \
     QTableWidget, QTableWidgetItem
-from qtpy.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
+from PySide6.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
         QLocale
 
 from ui.gridbase import CellStyle, GridView, GridBase
@@ -357,9 +357,9 @@ class PopupLineEdit(QDialog):
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    from qtpy.QtWidgets import QApplication, QHBoxLayout, \
+    from PySide6.QtWidgets import QApplication, QHBoxLayout, \
             QPushButton, QMessageBox
-    from qtpy.QtCore import QTranslator, QLibraryInfo
+    from PySide6.QtCore import QTranslator, QLibraryInfo
 
     def function():
         QMessageBox.information(window, "Message", "Ouch!")
@@ -416,4 +416,4 @@ if __name__ == '__main__':
 
     gview.set_scene(grid)
     window.resize(600, 400)
-    window.exec_()
+    window.exec()

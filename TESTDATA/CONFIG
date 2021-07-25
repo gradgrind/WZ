@@ -1,6 +1,6 @@
 #+++ __TITLE__   : Allgemeine Konfiguration
 #+++ __MINION__  : 1.0
-#+++ __MODIFIED__: 2021-06-02
+#+++ __MODIFIED__: 2021-07-24
 #+++###########################################################
 #+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
 #+++# wird beim Speichern (in WZ) automatisch aktualisiert.
@@ -37,11 +37,12 @@ T_GROUP:        Gruppe
 T_GROUPS:       Gruppen
 
 ###########################################################
-### Ordner- und Dateipfade (innerhalb des Datenordners) ###
-## Pfad-Trennzeichen ist '/', z.B. 'Unterordner1/DateiX'.
+### Ordner- und Dateipfade (innerhalb des Ordners für das Schuljahr)
+### Pfad-Trennzeichen ist '/', z.B. 'Unterordner1/DateiX'.
 
-SCHOOL_DATA: Schuldaten
-SUBJECT_LIST: Fachliste
+SCHOOL_DATA: Schuldaten/Schule
+TEACHER_DATA: Schuldaten/Lehrer
+SUBJECT_DATA: Schuldaten/Fachliste
 CALENDAR_FILE: Kalender
 CLASS_TABLE: Klassen/Schueler
 SUBJECT_TABLE: Klassen/Kurse

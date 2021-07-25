@@ -1,0 +1,79 @@
+#+++ __TITLE__   : Konfiguration für die Stundenplanung
+#+++ __MINION__  : 1.0
+#+++ __MODIFIED__: 2021-07-24
+#+++###########################################################
+#+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
+#+++# wird beim Speichern (in WZ) automatisch aktualisiert.
+#--------------------------------------------------------------
+
+
+# Alle Dateipfade sind relativ zum Datenordner für das Schuljahr
+
+###########################################################
+
+DAY_DATA: Stundenplan/Tage
+DAY_FIELDS: [
+    [short      Kürzel  Pflichtfeld]
+    [name       Name    Pflichtfeld]
+]
+
+################# Unterrichtsstunden #################
+
+PERIOD_DATA: Stundenplan/Tag_Stunden
+PERIOD_FIELDS: [
+    [short      Kürzel  Pflichtfeld]
+    [name       Name    Pflichtfeld]
+    [starttime  Anfang  Pflichtfeld]     # (h)h:mm
+    [endtime    Ende    Pflichtfeld]     # (h)h:mm
+]
+
+CLASS_PERIODS_DATA: Stundenplan/Klassen_Stunden
+CLASS_PERIODS_HEADERS: [
+    [CLASS      Klasse  Pflichtfeld]
+    [DAY        Tag     Pflichtfeld]
+]
+
+#TEACHER_DATA: Schuldaten/Lehrer -> CONFIG
+TEACHER_FIELDS: [
+    [TID        Kürzel     Pflichtfeld]
+    [NAME       Name       Pflichtfeld]
+    [TIMES      verfügbar  &]
+    [TAG        Längel     Pflichtfeld]
+]
+
+ROOM_DATA: Stundenplan/Raumdaten
+ROOM_FIELDS: [
+    [RID       Kürzel  Pflichtfeld]
+    [NAME      Name    Pflichtfeld]
+]
+
+#SUBJECT_DATA: Schuldaten/Fachliste -> CONFIG
+SUBJECT_FIELDS: [
+    [SID       Kürzel       Pflichtfeld]
+    [NAME      Name         Pflichtfeld]
+    [TT        Stundenplan  &]
+]
+
+CLASS_LESSONS: <<<Klassen/Kurse/Fachliste-{klass}>>>
+LESSON_FIELDS: [
+    [SID       Fach-Kürzel    Pflichtfeld]
+    [SNAME     Fach           Pflichtfeld]
+    [TIDS      Lehrer-Kürzel  Pflichtfeld]
+    [GROUP     Gruppe         Pflichtfeld]
+    [LENGTHS   Längen         Pflichtfeld]
+    [BLOCK     Epoche         &]
+    [ROOMS     Räume          &]
+    [TAG       Kennung        &]
+]
+LESSON_INFO: [
+    [CLASS       Klasse        Pflichtfeld]
+    [NAME        Name          &]
+    [GROUPS      Gruppen       &]
+    [CLASSROOMS  Klassenräume  &]
+]
+
+PLACEMENT_DATA: Stundenplan/Feste_Stunden
+PLACEMENT_FIELDS: [
+    [TAG    Kennung     Pflichtfeld]
+    [PLACE  Tag.Stunde  Pflichtfeld]
+]
