@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-07-25
+TT/asc_data.py - last updated 2021-07-27
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -28,10 +28,6 @@ __TEST = False
 # the school data is required, especially the setting of the total number
 # of lesson slots per day, which seems to be preset to 7 in the program
 # and there is no obvious way of changing this via an import.
-
-_WHOLE_CLASS = "alle"    # name for a "group" comprising the whole class
-_TEACHERS = "Lehrkräfte" # error reporting only, refers to the input table
-_ROOMS = "Räume"         # error reporting only, refers to the input table
 
 ### Messages
 
@@ -66,7 +62,7 @@ if __name__ == '__main__':
 import xmltodict
 
 from timetable.tt_data import Classes, Days, Periods, Placements, Rooms, \
-        Subjects, Teachers, TT_Error, get_duration_map
+        Subjects, Teachers, TT_Error, get_duration_map, WHOLE_CLASS
 
 #?
 def idsub(tag):
@@ -114,7 +110,7 @@ class Classes_aSc(Classes):
         for division in self.class_divisions[klass]:
             for g in division:
                 if g == '*':
-                    g = _WHOLE_CLASS
+                    g = WHOLE_CLASS
                 group_list.append(
                     {   '@id': idsub(f'{klass}-{g}'),
                         '@classid': klass,
@@ -148,7 +144,7 @@ class Classes_aSc(Classes):
             classes = ','.join(sorted(data['CLASSES']))
             groups = ','.join([idsub(g) for g in sorted(data['GROUPS'])])
 #TODO: Nasty bodge – think of some better way of doing this!
-            if sid == 'Hu' and classes[:2] >= '09':
+            if sid == 'Hu' and block == '*':
                 tids = ''
             else:
                 tids = ','.join(sorted(data['TIDS']))
@@ -361,10 +357,10 @@ if __name__ == '__main__':
         print("\nLONG TAGS:\n", _teachers.longtag.values())
 
     _rooms = Rooms_aSc()
-    rooms = _rooms.get_rooms()
+    classrooms = _rooms.get_rooms()
     if __TEST:
         print("\nROOMS:")
-        for rdata in rooms:
+        for rdata in classrooms:
             print("   ", rdata)
 
     _subjects = Subjects_aSc()
@@ -483,7 +479,7 @@ if __name__ == '__main__':
             print("   ", card)
 
     xml_aSc = xmltodict.unparse(build_dict(
-            ROOMS = rooms,
+            ROOMS = classrooms,
             PERIODS = periods,
             TEACHERS = teachers,
             SUBJECTS = subjects,

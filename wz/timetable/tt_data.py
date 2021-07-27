@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-07-25
+TT/tt_data.py - last updated 2021-07-27
 
 Read timetable information from the various sources ...
 
@@ -21,7 +21,7 @@ Copyright 2021 Michael Towers
    limitations under the License.
 """
 
-_WHOLE_CLASS = "alle"    # name for a "group" comprising the whole class
+WHOLE_CLASS = "alle"    # name for a "group" comprising the whole class
 _TEACHERS = "Lehrkräfte" # error reporting only, refers to the input table
 _ROOMS = "Räume"         # error reporting only, refers to the input table
 _MAX_DURATION = 4        # maximum length of a lesson
@@ -129,18 +129,20 @@ class Days(dict):
     def __init__(self):
         super().__init__()
         fields = TT_CONFIG['DAY_FIELDS']
-        days = read_DataTable(DATAPATH(TT_CONFIG['DAY_DATA']))
+        days = read_DataTable(YEARPATH(TT_CONFIG['DAY_DATA']))
         days = filter_DataTable(days, fieldlist = fields,
                 infolist = [], extend = False)['__ROWS__']
-        i = 0
+        bitmaps = []
         b = 1
         for day in days:
-            i += 1
-            day['day'] = str(i) # Day-index starts at 1.
-            day['bitmap'] = str(b).zfill(len(days))
+            bitmaps.append(str(b).zfill(len(days)))
             b *= 10
-            key = day['short']
-            self[key] = day
+        i = 0
+        for day in days:
+            i += 1
+            day['day'] = str(i)     # day-index starts at 1
+            day['bitmap'] = bitmaps.pop()
+            self[day['short']] = day
 #
     def get_id(self, key):
         return self[key]['day']
@@ -212,7 +214,6 @@ class Classes:
         self.LESSON_FIELDS = {f: t
                 for f, t, *x in TT_CONFIG['LESSON_FIELDS']}
         self.class_blocks = {}
-#
 
 #++++++++++++++++ Now the stuff dealing with the class-group-lesson data
 
@@ -290,7 +291,7 @@ class Classes:
         "B.G,B.R".
         """
         ### Add a group entry for the whole class.
-        group_map = {'*': {f'{klass}-{_WHOLE_CLASS}'}}
+        group_map = {'*': {f'{klass}-{WHOLE_CLASS}'}}
         ### Add declared class divisions (and their groups).
         divisions = [['*']]
         for glist in raw_groups.split('|'):
@@ -547,49 +548,6 @@ class Classes:
                     'block': block      # or block-tag components
                 }
 #
-    def lessons_aSc(self):
-        """Build list of lessons for aSc-timetables.
-        """
-        lesson_list = []
-        for tag, data in self.lessons.items():
-            block = data['block']
-            if block and block != '*':
-                continue
-            sid = idsub(data['SID'])
-            classes = ','.join(sorted(data['CLASSES']))
-            groups = ','.join([idsub(g) for g in sorted(data['GROUPS'])])
-#TODO: Nasty bodge – think of some better way of doing this!
-            if sid == 'Hu' and classes[:2] >= '09':
-                tids = ''
-            else:
-                tids = ','.join(sorted(data['TIDS']))
-            rooms = ','.join(sorted(data['ROOMS']))
-            durations = data['durations']
-            if durations:
-                _, dmap = get_duration_map(durations)
-                tags = []
-                for d, n in dmap.items():
-                    t = f'{tag}__{d}' if len(dmap) > 1 else tag
-                    tags.append((t, d, n))
-#TODO: check use of tags for placement, etc.!
-                if len(tags) > 1:
-                    print("&&& multitags:", tags)
-                for tag, d, n in tags:
-                    lesson = {
-                        '@id': tag,
-                        '@classids': classes,
-                        '@subjectid': sid,
-                        '@groupids': groups,
-                        '@teacherids': tids,
-                        '@durationperiods': str(d),
-                        # Note that the number of periods in aSc means the
-                        # number of _single_ periods:
-                        '@periodsperweek': str(n * d),
-                        '@classroomids': rooms
-                    }
-                    lesson_list.append(lesson)
-        return lesson_list
-#
     def lessons_teacher_lists(self):
         """Build list of lessons for each teacher.
         """
@@ -611,6 +569,71 @@ class Classes:
         return {tid: lessons
                 for tid, lessons in tid_lessons.items()
                 if lessons}
+#
+    def teacher_check_list(self):
+        """Return a "check-list" of the lessons for each teacher.
+        """
+        lines = []
+        tmap = self.lessons_teacher_lists()
+        for tid, lessons in tmap.items():
+            class_lessons = {}
+            for tag, block, classes, sid, groups, durations, rooms in lessons:
+                if len(classes) > 1:
+                    klass = '+++'
+                else:
+                    klass = list(classes)[0]
+                plist = []
+                bname = ""
+                _rooms = f" [{','.join(rooms)}]" if rooms else ""
+                if block:
+                    if block == '*':
+                        continue
+                    if block[0] == '-':
+                        _block = block.lstrip('- ')
+                        if _block:
+                            bname = f" ({self.SUBJECTS[_block]})"
+                        d = durations[0] if durations else 0
+                        plist.append(f"EXTRA x {d}")
+                        durations = None
+                    else:
+                        # Get main (teaching block) lesson entry
+                        l = self.lessons[block]
+                        bsid = l['SID']
+                        bname = f" ({self.SUBJECTS[bsid]})"
+                        if durations:
+                            d = durations[0]
+                            plist.append(f"EPOCHE x {d} {_rooms}")
+                            durations = None
+                        else:
+                            # Get durations from main lesson entry
+                            durations = l['durations']
+                if durations:
+                    dtotal, dmap = get_duration_map(durations)
+                    for d in sorted(dmap):
+                        n = dmap[d]
+                        length = "Einzel" if d == 1 else "Doppel" \
+                            if d == 2 else str(dur)
+                        plist.append(f" {length} x {n} {_rooms}")
+                if plist:
+                    try:
+                        cl = class_lessons[klass]
+                    except KeyError:
+                        cl = []
+                        class_lessons[klass] = cl
+                    for p in plist:
+#                        cl.append(f" [{tag}]   {self.SUBJECTS[sid]}{bname}"
+#                                f" [{','.join(groups)}]: {p}")
+                        cl.append(f"    {self.SUBJECTS[sid]}{bname}"
+                                f" [{','.join(groups)}]: {p}")
+            if class_lessons:
+                lines.append("")
+                lines.append("")
+                lines.append(f"$$$ {tid} ({self.TEACHERS[tid]})")
+                for klass, clist in class_lessons.items():
+                    lines.append("")
+                    lines.append(f"  Klasse {klass}:")
+                    lines += clist
+        return "\n".join(lines)
 
 ###
 
@@ -625,7 +648,7 @@ class Teachers(dict):
                 yield ch
         #+
         super().__init__()
-        self.longtag = {}   # shortened, ASCII version of name, sortable
+        self.alphatag = {}   # shortened, ASCII version of name, sortable
         fields = TT_CONFIG['TEACHER_FIELDS']
         self.tfield = {f: t or f for f, t, *x in fields}
         teachers = read_DataTable(YEARPATH(CONFIG['TEACHER_DATA']))
@@ -639,7 +662,7 @@ class Teachers(dict):
                         key = self.tfield['TID'], val = tid))
             if not tid.isalnum():
                 raise TT_Error(_TEACHER_INVALID.format(tid = tid))
-            self.longtag[tid] = tdata['TAG']
+            self.alphatag[tid] = tdata['TAG']
             self[tid] = tname
             if times:
                 day_list = [d.strip() for d in times.split(',')]
@@ -760,7 +783,7 @@ def get_groups(group_map, group):
 #
 
 def groups_are_subset(gset, allset):
-    if len(allset) == 1 and list(allset)[0].split('-')[1] == _WHOLE_CLASS:
+    if len(allset) == 1 and list(allset)[0].split('-')[1] == WHOLE_CLASS:
         return True
     return gset <= allset
 
