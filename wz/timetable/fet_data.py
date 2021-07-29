@@ -181,11 +181,6 @@ class Classes_fet(Classes):
         tag_lids = {}       # {tag: [lesson-id (int), ...]}
         lid = 0
         for tag, data in self.lessons.items():
-#TODO: remove this!!!
-            if lid > 1000:
-                continue
-
-
             block = data['block']
             if block and block != '*':
                 continue
@@ -254,7 +249,47 @@ class Teachers_fet(Teachers):
                 'Comments': name
             } for tid, name in self.items()
         ]
-#TODO: Constraint: teacher not available ...
+#
+    def get_all_blocked_periods(self, days, periods):
+        """Return the blocked periods in the form needed by fet.
+        """
+        blocked = []
+        for tid in self:
+            dlist = self.blocked_periods.get(tid)
+            if dlist:
+                if len(dlist) != len(days):
+#TODO:
+                    print(f"ERROR: Teacher {tid} availability has"
+                            " wrong number of days")
+                    continue
+                tlist = []
+                i = 0
+                for d in days:
+                    pblist = dlist[i]
+                    i += 1
+                    if len(pblist) != len(periods):
+#TODO:
+                        print(f"ERROR: Teacher {tid} availability has"
+                                f" wrong number of periods, day {d}")
+                        continue
+                    j = 0
+                    for p in periods:
+                        if pblist[j]:
+                            tlist.append(
+                                {
+                                    'Day': d,
+                                    'Hour': p
+                                }
+                            )
+                        j += 1
+                blocked.append(
+                    {   'Weight_Percentage': '100',
+                        'Teacher': tid,
+                        'Number_of_Not_Available_Times': str(len(tlist)),
+                        'Not_Available_Time': tlist
+                    }
+                )
+        return blocked
 
 ###
 
@@ -288,7 +323,7 @@ class Subjects_fet(Subjects):
 ########################################################################
 
 def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
-        CLASSES, CLASSFREE, LESSONS, CARDS):
+        CLASSES, CLASSFREE, TEACHERFREE, LESSONS, CARDS):
     BASE = {
         'fet': {
                 '@version': f'{FET_VERSION}',
@@ -421,6 +456,8 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
 #                        'Comments': None
 #                    }
 
+                    'ConstraintTeacherNotAvailableTimes': TEACHERFREE,
+
                     'ConstraintActivityPreferredStartingTime': CARDS
 
                 },
@@ -484,7 +521,51 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
 #        }
 #    ]
 #},
-
+"""
+<ConstraintTeacherNotAvailableTimes>
+    <Weight_Percentage>100</Weight_Percentage>
+    <Teacher>MFN</Teacher>
+    <Number_of_Not_Available_Times>9</Number_of_Not_Available_Times>
+    <Not_Available_Time>
+        <Day>Do</Day>
+        <Hour>A</Hour>
+    </Not_Available_Time>
+    <Not_Available_Time>
+        <Day>Do</Day>
+        <Hour>B</Hour>
+    </Not_Available_Time>
+    <Not_Available_Time>
+        <Day>Do</Day>
+        <Hour>1</Hour>
+    </Not_Available_Time>
+    <Not_Available_Time>
+        <Day>Do</Day>
+        <Hour>2</Hour>
+    </Not_Available_Time>
+    <Not_Available_Time>
+        <Day>Do</Day>
+        <Hour>3</Hour>
+    </Not_Available_Time>
+    <Not_Available_Time>
+        <Day>Do</Day>
+        <Hour>4</Hour>
+    </Not_Available_Time>
+    <Not_Available_Time>
+        <Day>Do</Day>
+        <Hour>5</Hour>
+    </Not_Available_Time>
+    <Not_Available_Time>
+        <Day>Do</Day>
+        <Hour>6</Hour>
+    </Not_Available_Time>
+    <Not_Available_Time>
+        <Day>Do</Day>
+        <Hour>7</Hour>
+    </Not_Available_Time>
+    <Active>true</Active>
+    <Comments></Comments>
+</ConstraintTeacherNotAvailableTimes>
+"""
 
 ###
 
@@ -558,9 +639,9 @@ if __name__ == '__main__':
     teachers = _teachers.get_teachers()
     if __TEST:
         print("\nTEACHERS:")
-        #for tid, tname in _teachers.items():
-        #    blocked = _teachers.blocked_periods.get(tid) or '–––'
-        #    print("  ", tid, tname, blocked)
+        for tid, tname in _teachers.items():
+            blocked = _teachers.blocked_periods.get(tid) or '–––'
+            print("  ", tid, tname, blocked)
         for tdata in teachers:
             print("   ", tdata)
 #TODO:
@@ -620,23 +701,29 @@ if __name__ == '__main__':
             print("   ", l)
         print("\n  ======================================================\n")
 
+#TODO: At present the input is 1-based indexes. It might be better to use
+# the ids ...
+    i = 0
+    d2 = {}
+    d2list = []
+    for d in _days:
+        did =_days.get_id(d)
+        d2list.append(did)
+        i += 1
+        d2[str(i)] = did
+    i = 0
+    p2 = {}
+    p2list = []
+    for p in _periods:
+        pid =_periods.get_id(p)
+        p2list.append(pid)
+        i += 1
+        p2[str(i)] = pid
     cards = Placements_fet(_classes.lessons)
     if __TEST:
         print("\n ********* FIXED LESSONS *********\n")
         #for l, data in _classes.lessons.items():
         #    print(f"   {l}:", data)
-#TODO: At present the input is 1-based indexes. It might be better to use
-# the ids ...
-        i = 0
-        d2 = {}
-        for d in _days:
-            i += 1
-            d2[str(i)] = _days.get_id(d)
-        i = 0
-        p2 = {}
-        for p in _periods:
-            i += 1
-            p2[str(i)] = _periods.get_id(p)
         for card in cards.placements(d2, p2, tag_lids):
             print("   ", card)
 
@@ -648,6 +735,7 @@ if __name__ == '__main__':
             SUBJECTS = subjects,
             CLASSES = classes,
             CLASSFREE = _classes.classes_timeoff(),
+            TEACHERFREE = _teachers.get_all_blocked_periods(d2list, p2list),
             LESSONS = lessons,
             CARDS = cards.placements(d2, p2, tag_lids),
         ),
