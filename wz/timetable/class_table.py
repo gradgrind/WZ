@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/class_table.py - last updated 2021-07-27
+TT/class_table.py - last updated 2021-07-28
 
 Manage a grid of lessons for a school-class
 
@@ -21,15 +21,10 @@ Copyright 2021 Michael Towers
    limitations under the License.
 """
 
-#TODO ... starting from the aSc version, read the lessons from the
-# basic data and show a class in a grid.
+#TODO ... read the lessons from the basic data and show a class in a grid.
 
 __TEST = False
 __TEST = True
-
-_WHOLE_CLASS = "alle"    # name for a "group" comprising the whole class
-_TEACHERS = "Lehrkräfte" # error reporting only, refers to the input table
-_ROOMS = "Räume"         # error reporting only, refers to the input table
 
 ### Messages
 
@@ -125,7 +120,15 @@ class Classes_TT(Classes):
             block = data['block']
             if block and block != '*':
                 continue
-            sid = idsub(data['SID'])
+            sid = data['SID']
+#TODO: For each class involved make separate tiles?
+# A big question is, whether it is possible to handle source changes ...
+# I think almost certainly not "dynamically". What might work is restarting
+# from scratch and importing a set of placements. Those that match in
+# classes, groups, subject, duration, teachers and rooms can be
+# accepted.
+# That would require a matching function, maybe a dictionary using keys
+# based on the above info (as tuple or string).
             classes = ','.join(sorted(data['CLASSES']))
             groups = ','.join([idsub(g) for g in sorted(data['GROUPS'])])
 #TODO: Nasty bodge – think of some better way of doing this:
@@ -239,8 +242,15 @@ class Lesson:
 # ... though if only one class is shown at a time, in principle the same
 # tile could be used in various classes ... but that might be confusing,
 # and wouldn't work in a multiclass view.
-    def __init__(self):
-        pass
+    def __init__(self, tag, data):
+        """Manage the tiles, etc., associated with this (group of) lessons.
+
+        """
+        self.tag = tag
+        self.basedata = data
+        self.sublessons = []
+        for d in durations:
+            self.sublessons.append(Sublesson(self, d))
         """
                 self.lessons[tag] = {
                     'CLASSES': {klass},
@@ -252,6 +262,13 @@ class Lesson:
                     'block': block      # or block-tag components
                 }
         """
+
+class Sublesson:
+    """
+    """
+    def __init__(self, lesson, d):
+        pass
+
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
@@ -328,14 +345,12 @@ if __name__ == '__main__':
     os.makedirs(outdir, exist_ok = True)
 
     # Check-lists for teachers
-    outpath = os.path.join(outdir, 'teacher_check.txt')
+    outpath = os.path.join(outdir, 'teacher_check2.txt')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write("STUNDENPLAN 2021/22: Lehrer-Stunden\n"
                 "===================================\n")
-        fh.write(_classes.teacher_check_list())
+        fh.write(_classes.teacher_check_list2())
     print("\nTEACHER CHECK-LIST ->", outpath)
-
-    quit(0)
 
 
 #    classes = []
@@ -348,14 +363,16 @@ if __name__ == '__main__':
 #        print("\n  aSc-CLASSES:", classes)
 #        print("\n  aSc-GROUPS:", groups)
 
-    lessons = _classes.get_lessons()
+#    lessons = _classes.get_lessons()
     if __TEST:
-        print("\n ********* aSc LESSONS *********\n")
-        #for l, data in _classes.lessons.items():
-        #    print(f"   {l}:", data)
-        for l in lessons:
-            print("   ", l)
+        print("\n ********* LESSONS *********\n")
+        for l, data in _classes.lessons.items():
+            print(f"   {l}:", data)
+#        for l in lessons:
+#            print("   ", l)
         print("\n  ======================================================\n")
+
+    quit(0)
 
     cards = Placements_aSc(_classes.lessons)
     if __TEST:

@@ -31,3 +31,14 @@ long_line_column=72
 EX_00_LB=_Execute
 EX_00_CM=%p/venv/bin/python %f
 EX_00_WD=
+
+[files]
+current_page=4
+FILE_NAME_0=6787;Python;0;EUTF-8;0;1;0;%2Fhome%2Fmt%2FWZ%2Fwz%2Ftimetable%2Fclass_table.py;0;4
+FILE_NAME_1=16778;Python;0;EUTF-8;0;1;0;%2Fhome%2Fmt%2FWZ%2Fwz%2Ftimetable%2Fgrid_periods_days.py;0;4
+FILE_NAME_2=9414;Python;0;EUTF-8;0;1;0;%2Fhome%2Fmt%2FWZ%2Fwz%2Ftimetable%2Ftt_data.py;0;4
+FILE_NAME_3=4386;Python;0;EUTF-8;0;1;0;%2Fhome%2Fmt%2FWZ%2Fwz%2Ftimetable%2Fasc_data.py;0;4
+FILE_NAME_4=5408;Python;0;EUTF-8;0;1;0;%2Fhome%2Fmt%2FWZ%2Fwz%2Ftimetable%2Ffet_data.py;0;4
+
+[VTE]
+last_dir=/home/mt

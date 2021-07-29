@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-07-22
+TT/asc_data.py - last updated 2021-07-29
 
 Prepare fet-timetables input from the various sources ...
 
@@ -22,11 +22,11 @@ Copyright 2021 Michael Towers
 """
 
 __TEST = False
-#__TEST = True
+__TEST = True
 
-FET_VERSION = '6.0.4'
+FET_VERSION = '6.1.1'
 
-GROUP_SEPARATOR = '_'
+GROUP_SEPARATOR = '-'
 
 ### Messages
 
@@ -42,9 +42,10 @@ if __name__ == '__main__':
     appdir = os.path.dirname(this)
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
-#TODO: maybe put this back in later?
-#    from core.base import start
+    from core.base import start
+#TODO: Temporary redirection to use real data (there isn't any test data yet!)
 #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    start.setup(os.path.join(basedir, 'DATA'))
 
 #TODO: classrooms
 #TODO: "Epochen": get the teachers from the lines with 'Epoche: Hu.2', etc.
@@ -60,15 +61,7 @@ if __name__ == '__main__':
 import xmltodict
 
 from timetable.tt_data import Classes, Days, Periods, Placements, Rooms, \
-        Subjects, Teachers, TT_Error, DATAPATH, get_duration_map
-
-#?
-def idsub(tag):
-    """In aSc, "id" fields may only contain ASCII alphanumeric characters,
-    '-' and '_'. So this is also used here? Substitute anything else by '_'.
-    """
-    return re.sub('[^-_A-Za-z0-9]', '_', tag)
-#TODO: fet has integer ids for activities
+        Subjects, Teachers, TT_Error, get_duration_map, WHOLE_CLASS
 
 ### -----
 
@@ -77,6 +70,9 @@ class Days_fet(Days):
         """Return an ordered list of fet elements for the days.
         """
         return [{'Name': dkey} for dkey in self]
+#
+    def get_id(self, key):
+        return self[key]['short']
 
 ###
 
@@ -85,6 +81,9 @@ class Periods_fet(Periods):
         """Return an ordered list of fet elements for the periods.
         """
         return [{'Name': pkey} for pkey in self]
+#
+    def get_id(self, key):
+        return self[key]['short']
 
 ###
 
@@ -108,7 +107,7 @@ class Classes_fet(Classes):
                 'Division': glist
             }
             year_entry['Group'] = [
-                {   'Name': '{klass}{GROUP_SEPARATOR}{g}',
+                {   'Name': f'{klass}{GROUP_SEPARATOR}{g}',
                     'Number_of_Students': '0',
                     'Comments': None} for g in glist
             ]
@@ -169,18 +168,28 @@ class Classes_fet(Classes):
             'Not_Available_Time': weektags,
             'Active': 'true', 'Comments': None
         }
-#TODO: Constraint students set not available ...
+#
+    def classes_timeoff(self):
+        """Constraint: students set not available ...
+        """
+        return [self.class_days(klass) for klass in self.class_days_periods]
 #
     def get_lessons(self):
         """Build list of lessons for fet-timetables.
         """
         lesson_list = []
+        tag_lids = {}       # {tag: [lesson-id (int), ...]}
         lid = 0
         for tag, data in self.lessons.items():
+#TODO: remove this!!!
+            if lid > 1000:
+                continue
+
+
             block = data['block']
             if block and block != '*':
                 continue
-            sid = idsub(data['SID'])
+            sid = data['SID']
 #            classes = ','.join(sorted(data['CLASSES']))
             gids = sorted(data['GROUPS'])
             if not gids:
@@ -188,55 +197,51 @@ class Classes_fet(Classes):
                 print(f"!!! LESSON WITHOUT GROUP: classes {classes};"
                         f" sid {sid}")
                 continue
-            if len(gids) == 1:
-                g = gids[0]
-            else:
-                g = gids
+            _gids = []
+            for g in gids:
+#                k, _g = g.split(GROUP_SEPARATOR)
+# In "tt_data.py" I am not (yet) using <GROUP_SEPARATOR>, but there is
+# explicit use of '-' ...
+                k, _g = g.split('-')
+                _gids.append(k if _g == WHOLE_CLASS else g)
+            g = _gids[0] if len(_gids) == 1 else _gids
             tids = sorted(data['TIDS'])
             if not tids:
 #TODO?
                 print(f"!!! LESSON WITHOUT TEACHER: classes {classes};"
                         f" sid {sid}")
                 continue
-            if len(tids) == 1:
+#TODO: Nasty bodge – think of some better way of doing this!
+            if sid == 'Hu' and block == '*':
+                t = None
+            elif len(tids) == 1:
                 t = tids[0]
             else:
                 t = tids
 #TODO: add room constraints
 #            rooms = ','.join(sorted(data['ROOMS']))
-            duration = data['duration']
-            n = data['number']
-            if not n:
-#TODO?
-                print(f"!!! LESSON WITHOUT NUMBER: classes {classes};"
-                        f" sid {sid}")
-                quit(1)
-            if n == 1:
+            durations = data['durations']
+            if durations:
                 aid = '0'
-            else:
-                aid = str(lid + 1)
-            td = str(n * duration)
-#TODO: Switch to repeating entries with Duration == Total_Duration?
-# (no multiple-lesson chips)
-            for i in range(n):
-                lid += 1
-                lesson = {
-                    'Teacher': t,
-                    'Subject': sid,
-                    'Students': g,
-                    'Duration': str(duration),
-                    'Total_Duration': td,
-                    'Id': str(lid),
-                    'Activity_Group_Id': aid,
-                    'Active': 'true',
-                    'Comments': None
-                }
-                lesson_list.append(lesson)
-        return lesson_list
-#TODO: This is not picking up the right groups.
-# 1) '12K-alle', etc.
-# 2) ['09G-B.G', '09G-B.R'], etc.
-
+                _tag_lids = []
+                for d in data['durations']:
+                    lid += 1
+                    _tag_lids.append(lid)
+                    dstr = str(d)
+                    lesson = {'Teacher': t} if t else {}
+                    lesson.update({
+                        'Subject': sid,
+                        'Students': g,
+                        'Duration': dstr,
+                        'Total_Duration': dstr,
+                        'Id': str(lid),
+                        'Activity_Group_Id': aid,
+                        'Active': 'true',
+                        'Comments': None
+                    })
+                    lesson_list.append(lesson)
+                tag_lids[tag] = _tag_lids
+        return lesson_list, tag_lids
 
 ###
 
@@ -276,35 +281,23 @@ class Rooms_fet(Rooms):
 
 class Subjects_fet(Subjects):
     def get_subjects(self):
-        sbj_list = []
-        sbj_tag = {}
-        for sid, name in self.items():
-#TODO: Scrap this transformation?
-            _sid = idsub(sid)
-            try:
-                sid0 = sbj_tag[_sid]
-            except:
-                sbj_tag[_sid] = sid
-                sbj_list.append({'Name': _sid, 'Comments': name})
-            else:
-                raise TT_Error(_DUPLICATE_TAG.format(
-                        tag = _sid, key = self.tfield['SID'],
-                        source1 = sid0, source2 = sid))
-        return sbj_list
+        return [{'Name': sid, 'Comments': name}
+                for sid, name in self.items()
+        ]
 
 ########################################################################
 
 def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
-        CLASSES, GROUPS, LESSONS, CARDS):
+        CLASSES, CLASSFREE, LESSONS, CARDS):
     BASE = {
         'fet': {
-                '@version': '6.0.4',
+                '@version': f'{FET_VERSION}',
                 'Mode': 'Official',
                 'Institution_Name': 'FWS Bothfeld',
                 'Comments': 'Default comments',
 
                 'Days_List': {
-                    'Number_of_Days': f'{len(PERIODS)}',
+                    'Number_of_Days': f'{len(DAYS)}',
                     'Day': DAYS
                 },
 
@@ -314,25 +307,13 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
                 },
 
                 'Subjects_List': {
-                    'Subject': [
-                        {'Name': 'En', 'Comments': 'Englisch'},
-                        {'Name': 'Fr', 'Comments': 'Französisch'},
-                    ]
+                    'Subject': SUBJECTS
                 },
 
                 'Activity_Tags_List': None,
 
                 'Teachers_List': {
-                    'Teacher': [
-                        {'Name': 'JS', 'Target_Number_of_Hours': '0',
-                                'Qualified_Subjects': None,
-                                'Comments': 'Johannes Schüddekopf'
-                        },
-                        {'Name': 'CF', 'Target_Number_of_Hours': '0',
-                                'Qualified_Subjects': None,
-                                'Comments': 'Caroline Franke'
-                        },
-                    ]
+                    'Teacher': TEACHERS
                 },
 
                 'Students_List': {
@@ -341,123 +322,107 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
 
 # Try single activities instead?
                 'Activities_List': {
-                    'Activity': [
-                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
-                            'Duration': '2', 'Total_Duration': '10',
-                            'Id': '1', 'Activity_Group_Id': '1',
-                            'Active': 'true', 'Comments': None
-                        },
-                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
-                            'Duration': '2', 'Total_Duration': '10',
-                            'Id': '2', 'Activity_Group_Id': '1',
-                            'Active': 'true', 'Comments': None
-                        },
-                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
-                            'Duration': '2', 'Total_Duration': '10',
-                            'Id': '3', 'Activity_Group_Id': '1',
-                            'Active': 'true', 'Comments': None
-                        },
-                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
-                            'Duration': '2', 'Total_Duration': '10',
-                            'Id': '4', 'Activity_Group_Id': '1',
-                            'Active': 'true', 'Comments': None
-                        },
-                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
-                            'Duration': '2', 'Total_Duration': '10',
-                            'Id': '5', 'Activity_Group_Id': '1',
-                            'Active': 'true', 'Comments': None
-                        },
-                        {'Teacher': 'CF', 'Subject': 'Hu', 'Students': '01K',
-                            'Duration': '2', 'Total_Duration': '10',
-                            'Id': '6', 'Activity_Group_Id': '6',
-                            'Active': 'true', 'Comments': None
-                        },
+                    'Activity': LESSONS
+
+#                    [
+#                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
+#                            'Duration': '2', 'Total_Duration': '10',
+#                            'Id': '1', 'Activity_Group_Id': '1',
+#                            'Active': 'true', 'Comments': None
+#                        },
+#                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
+#                            'Duration': '2', 'Total_Duration': '10',
+#                            'Id': '2', 'Activity_Group_Id': '1',
+#                            'Active': 'true', 'Comments': None
+#                        },
+#
 # ...
 # To specify more than one student group, use, e.g. ['01G_A', '02G_A'].
 # Also the 'Teacher' field can take multiple entries: ['JS', 'CC']
-                    ]
+#                    ]
                 },
 
                 'Buildings_List': None,
-
+#TODO:
                 'Rooms_List': {
-                    'Room': [
-                        {'Name': 'r1', 'Building': None, 'Capacity': '30000',
-                            'Virtual': 'false', 'Comments': None
-                        },
-                        {'Name': 'r2', 'Building': None, 'Capacity': '30000',
-                            'Virtual': 'false', 'Comments': None
-                        },
-# Virtual room (to get multiple rooms)
-                        {'Name': 'V1', 'Building': None, 'Capacity': '30000',
-                            'Virtual': 'true',
-                            'Number_of_Sets_of_Real_Rooms': '2',
-                            'Set_of_Real_Rooms': [
-                                {'Number_of_Real_Rooms': '1', 'Real_Room': 'r1'},
-                                {'Number_of_Real_Rooms': '1', 'Real_Room': 'r2'}
-                            ], 'Comments': None
-                        }
-                    ]
+                    'Room': ROOMS
+
+#                    [
+#                        {'Name': 'r1', 'Building': None, 'Capacity': '30000',
+#                            'Virtual': 'false', 'Comments': None
+#                        },
+#                        {'Name': 'r2', 'Building': None, 'Capacity': '30000',
+#                            'Virtual': 'false', 'Comments': None
+#                        },
+## Virtual room (to get multiple rooms)
+#                        {'Name': 'V1', 'Building': None, 'Capacity': '30000',
+#                            'Virtual': 'true',
+#                            'Number_of_Sets_of_Real_Rooms': '2',
+#                            'Set_of_Real_Rooms': [
+#                                {'Number_of_Real_Rooms': '1', 'Real_Room': 'r1'},
+#                                {'Number_of_Real_Rooms': '1', 'Real_Room': 'r2'}
+#                            ], 'Comments': None
+#                        }
+#                    ]
                 },
 # To include more than one room in a set:
 #{'Number_of_Real_Rooms': '2', 'Real_Room': ['r2', 'r3']}
-
-
-
-
-
 
                 'Time_Constraints_List': {
                     'ConstraintBasicCompulsoryTime': {
                         'Weight_Percentage': '100', 'Active': 'true', 'Comments': None
                     },
-                    'ConstraintStudentsSetNotAvailableTimes': [
-                        {'Weight_Percentage': '100', 'Students': '01G',
-                            'Number_of_Not_Available_Times': '20',
-                            'Not_Available_Time': [
-                                {'Day': 'Mo', 'Hour': '4'},
-                                {'Day': 'Mo', 'Hour': '5'},
-                                {'Day': 'Mo', 'Hour': '6'},
-                                {'Day': 'Mo', 'Hour': '7'},
-                                {'Day': 'Di', 'Hour': '4'},
-                                {'Day': 'Di', 'Hour': '5'},
+#TODO
+                    'ConstraintStudentsSetNotAvailableTimes': CLASSFREE,
+#                        {'Weight_Percentage': '100', 'Students': '01G',
+#                            'Number_of_Not_Available_Times': '20',
+#                            'Not_Available_Time': [
+#                                {'Day': 'Mo', 'Hour': '4'},
+#                                {'Day': 'Mo', 'Hour': '5'},
+#                                {'Day': 'Mo', 'Hour': '6'},
+#                                {'Day': 'Mo', 'Hour': '7'},
+#                                {'Day': 'Di', 'Hour': '4'},
+#                                {'Day': 'Di', 'Hour': '5'},
 # ...
-                            ],
-                            'Active': 'true', 'Comments': None
-                        },
+#                            ],
+#                            'Active': 'true', 'Comments': None
+#                        },
 #                        {'Weight_Percentage': '100',
 # ...
 #                        },
-                    ],
+#                    ],
 
-                    'ConstraintActivitiesPreferredStartingTimes': {
-                        'Weight_Percentage': '99.9',
-                        'Teacher_Name': None,
-                        'Students_Name': None,
-                        'Subject_Name': 'Hu',
-                        'Activity_Tag_Name': None,
-                        'Duration': None,
-                        'Number_of_Preferred_Starting_Times': '5',
-                        'Preferred_Starting_Time': [
-                            {'Preferred_Starting_Day': 'Mo', 'Preferred_Starting_Hour': 'A'},
-                            {'Preferred_Starting_Day': 'Di', 'Preferred_Starting_Hour': 'A'},
-                            {'Preferred_Starting_Day': 'Mi', 'Preferred_Starting_Hour': 'A'},
-                            {'Preferred_Starting_Day': 'Do', 'Preferred_Starting_Hour': 'A'},
-                            {'Preferred_Starting_Day': 'Fr', 'Preferred_Starting_Hour': 'A'}
-                        ],
-                        'Active': 'true',
-                        'Comments': None
-                    },
+#                    'ConstraintActivitiesPreferredStartingTimes': {
+#                        'Weight_Percentage': '99.9',
+#                        'Teacher_Name': None,
+#                        'Students_Name': None,
+#                        'Subject_Name': 'Hu',
+#                        'Activity_Tag_Name': None,
+#                        'Duration': None,
+#                        'Number_of_Preferred_Starting_Times': '5',
+#                        'Preferred_Starting_Time': [
+#                            {'Preferred_Starting_Day': 'Mo', 'Preferred_Starting_Hour': 'A'},
+#                            {'Preferred_Starting_Day': 'Di', 'Preferred_Starting_Hour': 'A'},
+#                            {'Preferred_Starting_Day': 'Mi', 'Preferred_Starting_Hour': 'A'},
+#                            {'Preferred_Starting_Day': 'Do', 'Preferred_Starting_Hour': 'A'},
+#                            {'Preferred_Starting_Day': 'Fr', 'Preferred_Starting_Hour': 'A'}
+#                        ],
+#                        'Active': 'true',
+#                        'Comments': None
+#                    },
 
-                    'ConstraintActivityPreferredStartingTime': {
-                        'Weight_Percentage': '100',
-                        'Activity_Id': '8',
-                        'Preferred_Day': 'Mi',
-                        'Preferred_Hour': '1',
-                        'Permanently_Locked': 'true',
-                        'Active': 'true',
-                        'Comments': None
-                    }
+#                    'ConstraintActivityPreferredStartingTime': {
+#                        'Weight_Percentage': '100',
+#                        'Activity_Id': '8',
+#                        'Preferred_Day': 'Mi',
+#                        'Preferred_Hour': '1',
+#                        'Permanently_Locked': 'true',
+#                        'Active': 'true',
+#                        'Comments': None
+#                    }
+
+                    'ConstraintActivityPreferredStartingTime': CARDS
+
                 },
 
                 'Space_Constraints_List': {
@@ -521,94 +486,36 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
 #},
 
 
-
-###################
-
-
-#                {   '@options': 'canadd,canremove,canupdate,silent',
-#                    '@columns': 'id,name,short,days',
-#                    'daysdef':
-#                        [   {'@id': 'any', '@name': 'beliebigen Tag', '@short': 'X', '@days': '10000,01000,00100,00010,00001'},
-#                            {'@id': 'every', '@name': 'jeden Tag', '@short': 'A', '@days': '11111'},
-#                            {'@id': '1', '@name': 'Montag', '@short': 'Mo', '@days': '10000'},
-#                            {'@id': '2', '@name': 'Dienstag', '@short': 'Di', '@days': '01000'},
-#                            {'@id': '3', '@name': 'Mittwoch', '@short': 'Mi', '@days': '00100'},
-#                            {'@id': '4', '@name': 'Donnerstag', '@short': 'Do', '@days': '00010'},
-#                            {'@id': '5', '@name': 'Freitag', '@short': 'Fr', '@days': '00001'},
-#                        ]
-#                },
-"""
-            'periods':
-                {   '@options': 'canadd,canremove,canupdate,silent',
-                    '@columns': 'period,name,short,starttime,endtime',
-                    'period': PERIODS
-                },
-
-            'teachers':
-                {   '@options': 'canadd,canremove,canupdate,silent',
-                    '@columns': 'id,short,name,timeoff',
-                    'teacher': TEACHERS
-                },
-
-            'classes':
-                {   '@options': 'canadd,canremove,canupdate,silent',
-                    '@columns': 'id,short,name,classroomids,timeoff',
-                    'class': CLASSES
-                },
-
-            'groups':
-                {   '@options': 'canadd,canremove,canupdate,silent',
-                    '@columns': 'id,classid,name,entireclass,divisiontag',
-                    'group': GROUPS
-                },
-
-            'subjects':
-                {   '@options': 'canadd,canremove,canupdate,silent',
-                    '@columns': 'id,name,short',
-                    'subject': SUBJECTS
-                },
-
-            'classrooms':
-                {   '@options': 'canadd,canremove,canupdate,silent',
-                    '@columns': 'id,name,short',
-                    'classroom': ROOMS
-                },
-
-            'lessons':
-            # Use durationperiods instead of periodspercard (deprecated)
-            # As far as I can see, the only way in aSc to make lessons
-            # parallel is to combine them to a single subject.
-                {   '@options': 'canadd,canremove,canupdate,silent',
-                    '@columns': 'id,classids,groupids,subjectid,durationperiods,periodsperweek,teacherids,classroomids',
-                    'lesson': LESSONS
-                },
-
-            # Initial (fixed?) placements
-            'cards':
-                {   '@options': 'canadd,canremove,canupdate,silent',
-                    '@columns': 'lessonid,period,day,classroomids,locked',
-                    'card': CARDS
-                },
-        }
-    }
-    return BASE
-"""
-
 ###
 
 #TODO
+#    'ConstraintActivityPreferredStartingTime':
 class Placements_fet(Placements):
-    def placements(self):
+    def placements(self, days, periods, tag_lids):
         cards = []
         for tag, places_list in self.predef:
-            rooms = ','.join(sorted(self.lessons[tag]['ROOMS']))
+            try:
+                lids = tag_lids[tag]
+            except KeyError:
+#TODO:
+                print(f"WARNING: No lesson with tag {tag}")
+                continue
+            i = 0
             for d, p in places_list:
+                try:
+                    lid = lids[i]
+                except ValueError:
+#TODO:
+                    print(f"ERROR: too many placements for tag {tag}")
+                i += 1
                 cards.append({
-                        '@lessonid': tag,
-                        '@period': p,
-                        '@day': d,
-                        '@classroomids': rooms,
-                        '@locked': '1'
+                        'Weight_Percentage': '100',
+                        'Activity_Id': str(lid),
+                        'Preferred_Day': days[d],
+                        'Preferred_Hour': periods[p],
+                        'Permanently_Locked': 'true',
+                        'Active': 'true',
+                        'Comments': None
                     }
                 )
         return cards
@@ -656,7 +563,8 @@ if __name__ == '__main__':
         #    print("  ", tid, tname, blocked)
         for tdata in teachers:
             print("   ", tdata)
-        print("\nLONG TAGS:\n", _teachers.longtag.values())
+#TODO:
+#        print("\nLONG TAGS:\n", _teachers.longtag.values())
 
     _rooms = Rooms_fet()
     rooms = _rooms.get_rooms()
@@ -685,68 +593,16 @@ if __name__ == '__main__':
         print("\n  DIVISIONS:", _classes.class_divisions[_klass])
         print("\n  GROUPS:", _classes.class_groups[_klass])
 
+    from timetable.tt_data import TT_CONFIG
+    outdir = YEARPATH(TT_CONFIG['OUTPUT_FOLDER'])
+    os.makedirs(outdir, exist_ok = True)
+
     # Check-lists for teachers
-    outpath = DATAPATH('teacher_check.txt')
+    outpath = os.path.join(outdir, 'teacher_check2.txt')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write("STUNDENPLAN 2021/22: Lehrer-Stunden\n"
                 "===================================\n")
-        tmap = _classes.lessons_teacher_lists()
-        for tid, lessons in tmap.items():
-            class_lessons = {}
-            for tag, block, classes, sid, groups, durations, rooms in lessons:
-                if len(classes) > 1:
-                    klass = '+++'
-                else:
-                    klass = list(classes)[0]
-                plist = []
-                bname = ""
-                _rooms = f" [{','.join(rooms)}]" if rooms else ""
-                if block:
-                    if block == '*':
-                        continue
-                    if block[0] == '-':
-                        _block = block.lstrip('- ')
-                        if _block:
-                            bname = f" ({_subjects[_block]})"
-                        d = durations[0] if durations else 0
-                        plist.append(f"EXTRA x {d}")
-                        durations = None
-                    else:
-                        # Get main (teaching block) lesson entry
-                        l = _classes.lessons[block]
-                        bsid = l['SID']
-                        bname = f" ({_subjects[bsid]})"
-                        if durations:
-                            d = durations[0]
-                            plist.append(f"EPOCHE x {d} {_rooms}")
-                            durations = None
-                        else:
-                            # Get durations from main lesson entry
-                            durations = l['durations']
-                if durations:
-                    dtotal, dmap = get_duration_map(durations)
-                    for d in sorted(dmap):
-                        n = dmap[d]
-                        length = "Einzel" if d == 1 else "Doppel" \
-                            if d == 2 else str(dur)
-                        plist.append(f" {length} x {n} {_rooms}")
-                if plist:
-                    try:
-                        cl = class_lessons[klass]
-                    except KeyError:
-                        cl = []
-                        class_lessons[klass] = cl
-                    for p in plist:
-#                        cl.append(f" [{tag}]   {_subjects[sid]}{bname}"
-#                                f" [{','.join(groups)}]: {p}\n")
-                        cl.append(f"    {_subjects[sid]}{bname}"
-                                f" [{','.join(groups)}]: {p}\n")
-            if class_lessons:
-                fh.write(f"\n\n$$$ {tid} ({_teachers[tid]})\n")
-                for klass, clist in class_lessons.items():
-                    fh.write(f"\n  Klasse {klass}:\n")
-                    for l in clist:
-                        fh.write(l)
+        fh.write(_classes.teacher_check_list2())
     print("\nTEACHER CHECK-LIST ->", outpath)
 
     classes = []
@@ -755,7 +611,7 @@ if __name__ == '__main__':
     for klass in c_list:
         classes.append(_classes.class_data(klass))
 
-    lessons = _classes.get_lessons()
+    lessons, tag_lids = _classes.get_lessons()
     if __TEST:
         print("\n ********* fet LESSONS *********\n")
         #for l, data in _classes.lessons.items():
@@ -764,30 +620,41 @@ if __name__ == '__main__':
             print("   ", l)
         print("\n  ======================================================\n")
 
-    quit(0)
-
-    cards = Placements(_classes.lessons)
+    cards = Placements_fet(_classes.lessons)
     if __TEST:
         print("\n ********* FIXED LESSONS *********\n")
         #for l, data in _classes.lessons.items():
         #    print(f"   {l}:", data)
-        for card in cards.placements_aSc():
+#TODO: At present the input is 1-based indexes. It might be better to use
+# the ids ...
+        i = 0
+        d2 = {}
+        for d in _days:
+            i += 1
+            d2[str(i)] = _days.get_id(d)
+        i = 0
+        p2 = {}
+        for p in _periods:
+            i += 1
+            p2[str(i)] = _periods.get_id(p)
+        for card in cards.placements(d2, p2, tag_lids):
             print("   ", card)
 
-    xml_aSc = xmltodict.unparse(build_dict(
+    xml_fet = xmltodict.unparse(build_dict_fet(
             ROOMS = rooms,
+            DAYS = days,
             PERIODS = periods,
             TEACHERS = teachers,
             SUBJECTS = subjects,
             CLASSES = classes,
-            GROUPS = groups,
+            CLASSFREE = _classes.classes_timeoff(),
             LESSONS = lessons,
-            CARDS = cards.placements_aSc(),
+            CARDS = cards.placements(d2, p2, tag_lids),
         ),
         pretty = True
     )
 
-    outpath = DATAPATH('tt_out.xml')
+    outpath = os.path.join(outdir, 'tt_out.fet')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
-        fh.write(xml_aSc.replace('\t', '   '))
+        fh.write(xml_fet.replace('\t', '   '))
     print("\nTIMETABLE XML ->", outpath)

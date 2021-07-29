@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-07-27
+TT/asc_data.py - last updated 2021-07-29
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -388,67 +388,11 @@ if __name__ == '__main__':
     os.makedirs(outdir, exist_ok = True)
 
     # Check-lists for teachers
-    outpath = os.path.join(outdir, 'teacher_check.txt')
+    outpath = os.path.join(outdir, 'teacher_check2.txt')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write("STUNDENPLAN 2021/22: Lehrer-Stunden\n"
                 "===================================\n")
-        tmap = _classes.lessons_teacher_lists()
-        for tid, lessons in tmap.items():
-            class_lessons = {}
-            for tag, block, classes, sid, groups, durations, rooms in lessons:
-                if len(classes) > 1:
-                    klass = '+++'
-                else:
-                    klass = list(classes)[0]
-                plist = []
-                bname = ""
-                _rooms = f" [{','.join(rooms)}]" if rooms else ""
-                if block:
-                    if block == '*':
-                        continue
-                    if block[0] == '-':
-                        _block = block.lstrip('- ')
-                        if _block:
-                            bname = f" ({_subjects[_block]})"
-                        d = durations[0] if durations else 0
-                        plist.append(f"EXTRA x {d}")
-                        durations = None
-                    else:
-                        # Get main (teaching block) lesson entry
-                        l = _classes.lessons[block]
-                        bsid = l['SID']
-                        bname = f" ({_subjects[bsid]})"
-                        if durations:
-                            d = durations[0]
-                            plist.append(f"EPOCHE x {d} {_rooms}")
-                            durations = None
-                        else:
-                            # Get durations from main lesson entry
-                            durations = l['durations']
-                if durations:
-                    dtotal, dmap = get_duration_map(durations)
-                    for d in sorted(dmap):
-                        n = dmap[d]
-                        length = "Einzel" if d == 1 else "Doppel" \
-                            if d == 2 else str(dur)
-                        plist.append(f" {length} x {n} {_rooms}")
-                if plist:
-                    try:
-                        cl = class_lessons[klass]
-                    except KeyError:
-                        cl = []
-                        class_lessons[klass] = cl
-                    for p in plist:
-#                        cl.append(f" [{tag}]   {_subjects[sid]}{bname}"
-#                                f" [{','.join(groups)}]: {p}\n")
-                        cl.append(f"    {_subjects[sid]}{bname}"
-                                f" [{','.join(groups)}]: {p}\n")
-            if class_lessons:
-                fh.write(f"\n\n$$$ {tid} ({_teachers[tid]})\n")
-                for klass, clist in class_lessons.items():
-                    fh.write(f"\n  Klasse {klass}:\n")
-                    for l in clist:
-                        fh.write(l)
+        fh.write(_classes.teacher_check_list2())
     print("\nTEACHER CHECK-LIST ->", outpath)
 
     classes = []

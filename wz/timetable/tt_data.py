@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-07-27
+TT/tt_data.py - last updated 2021-07-28
 
 Read timetable information from the various sources ...
 
@@ -556,7 +556,7 @@ class Classes:
 #            sid = idsub(data['SID'])
             sid = data['SID']
 #            subject = self.SUBJECTS[sid]
-            classes = data['CLASSES']
+            classes = sorted(data['CLASSES'])
 #            groups = [idsub(g) for g in sorted(data['GROUPS'])]
             groups = sorted(data['GROUPS'])
             tids = data['TIDS']
@@ -581,7 +581,7 @@ class Classes:
                 if len(classes) > 1:
                     klass = '+++'
                 else:
-                    klass = list(classes)[0]
+                    klass = classes[0]
                 plist = []
                 bname = ""
                 _rooms = f" [{','.join(rooms)}]" if rooms else ""
@@ -633,6 +633,94 @@ class Classes:
                     lines.append("")
                     lines.append(f"  Klasse {klass}:")
                     lines += clist
+        return "\n".join(lines)
+#
+    def teacher_check_list2(self):
+        """Return a "check-list" of the lessons for each teacher.
+        """
+        lines = []
+        tmap = self.lessons_teacher_lists()
+        for tid, lessons in tmap.items():
+            class_lessons = {}
+            for tag, block, classes, sid, groups, durations, rooms in lessons:
+                klass = ','.join(classes)
+                try:
+                    class_list, class_blocks = class_lessons[klass]
+                except KeyError:
+                    class_list = []
+                    class_blocks = {}
+                    class_lessons[klass] = [class_list, class_blocks]
+                entry = ""
+                bname = ""
+                _rooms = f" [{','.join(rooms)}]" if rooms else ""
+                sname = self.SUBJECTS[sid]
+                if block:
+                    if block == '*':
+                        continue
+                    if block[0] == '-':
+                        _block = block.lstrip('- ')
+                        if _block:
+                            bname = f" ({self.SUBJECTS[_block]})"
+                        d = durations[0] if durations else 0
+                        entry = f"EXTRA x {d}"
+                        durations = None
+                    else:
+                        # Get main (teaching block) lesson entry
+                        l = self.lessons[block]
+                        bsid = l['SID']
+                        bname = self.SUBJECTS[bsid]
+                        try:
+                            bdata = class_blocks[bname]
+                        except KeyError:
+                            # Get durations from main lesson entry
+                            dtotal, dmap = get_duration_map(l['durations'])
+                            if durations:
+                                # "Epoche"
+                                bdata = [
+                                    f"\"{bname}\": ({dtotal} "
+                                            f" Wochenstunden){_rooms}",
+                                    [f"{sname}: EPOCHE x {durations[0]}"]
+                                ]
+                            else:
+                                # Parallel lessons
+                                ll = ", ".join(lesson_lengths(dmap))
+                                bdata = [
+                                    f"\"{bname}\": {ll}{_rooms}",
+                                    [sname]
+                                ]
+                            class_blocks[bname] = bdata
+                            continue
+                        if durations:
+                            # "Epoche"
+                            bdata[1].append(
+                                    f"{sname}: EPOCHE x {durations[0]}")
+                        else:
+                            # Parallel lessons
+                            bdata[1].append(sname)
+                        continue
+                if durations:
+                    dtotal, dmap = get_duration_map(durations)
+                    ll = ", ".join(lesson_lengths(dmap))
+                    entry = f"{ll}{_rooms}"
+                if entry:
+                    class_list.append(f"    {sname}{bname}"
+                                f" [{','.join(groups)}]: {entry}")
+            if class_lessons:
+                lines.append("")
+                lines.append("")
+                lines.append(f"$$$ {tid} ({self.TEACHERS[tid]})")
+                for klass, clist_bmap in class_lessons.items():
+                    clines = []
+                    clist, bmap = clist_bmap
+                    clines += clist
+                    for bname, blist in bmap.items():
+                        clines.append(f"    {blist[0]}")
+                        for bx in blist[1]:
+                            clines.append(f"      - {bx}")
+                    if clines:
+                        lines.append("")
+                        lines.append(f"  Klasse {klass}:")
+                        lines += clines
         return "\n".join(lines)
 
 ###
@@ -840,4 +928,13 @@ def get_duration_map(durations):
             dmap[d] = 1
     return (dtotal, dmap)
 
+def lesson_lengths(duration_map):
+    ll = []
+    for d in sorted(duration_map):
+        n = duration_map[d]
+        length = "Einzel" if d == 1 \
+            else "Doppel" if d == 2 \
+            else f"({dur})"
+        ll.append(f" {length} x {n}")
+    return ll
 
