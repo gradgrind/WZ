@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ConstraintTeacherNotAvailableTimes>
+	<Weight_Percentage>100</Weight_Percentage>
+	<Teacher>MFN</Teacher>
+	<Number_of_Not_Available_Times>9</Number_of_Not_Available_Times>
+	<Not_Available_Time>
+		<Day>Do</Day>
+		<Hour>A</Hour>
+	</Not_Available_Time>
+	<Not_Available_Time>
+		<Day>Do</Day>
+		<Hour>B</Hour>
+	</Not_Available_Time>
+	<Not_Available_Time>
+		<Day>Do</Day>
+		<Hour>1</Hour>
+	</Not_Available_Time>
+	<Not_Available_Time>
+		<Day>Do</Day>
+		<Hour>2</Hour>
+	</Not_Available_Time>
+	<Not_Available_Time>
+		<Day>Do</Day>
+		<Hour>3</Hour>
+	</Not_Available_Time>
+	<Not_Available_Time>
+		<Day>Do</Day>
+		<Hour>4</Hour>
+	</Not_Available_Time>
+	<Not_Available_Time>
+		<Day>Do</Day>
+		<Hour>5</Hour>
+	</Not_Available_Time>
+	<Not_Available_Time>
+		<Day>Do</Day>
+		<Hour>6</Hour>
+	</Not_Available_Time>
+	<Not_Available_Time>
+		<Day>Do</Day>
+		<Hour>7</Hour>
+	</Not_Available_Time>
+	<Active>true</Active>
+	<Comments></Comments>
+</ConstraintTeacherNotAvailableTimes>
+
+

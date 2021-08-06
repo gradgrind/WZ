@@ -19,6 +19,7 @@ import xmltodict
 ifile = 'data/importXML/import_basicdata+lessongrid.xml'
 ifile = 'data/exportXML/export1.xml'
 ifile = 'data/fwsb_2.fet'
+ifile = 'xmltest.xml'
 with open(ifile, 'rb') as fh:
     xml = fh.read()
 print("XML:")
