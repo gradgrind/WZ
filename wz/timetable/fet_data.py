@@ -266,7 +266,7 @@ class Classes_fet(Classes):
         return lesson_list
 #
     def constraint_no_gaps(self, time_constraints):
-        """Set no gaps in the lower classes.
+        """Set no gaps (in the lower classes?).
         """
 #TODO: specify in config file?
         time_constraints['ConstraintStudentsSetMaxGapsPerWeek'] = [
@@ -276,7 +276,7 @@ class Classes_fet(Classes):
                 'Active': 'true',
                 'Comments': None
             } for klass in self.class_days_periods
-                if klass < '09'
+#                if klass < '09'
         ]
 #
     def lunch_breaks(self, lessons, time_constraints):
@@ -329,7 +329,7 @@ class Classes_fet(Classes):
             time_constraints['ConstraintActivityPreferredStartingTimes'] \
                     = constraints
 #
-    def day_separation(self, placements):
+    def constraint_day_separation(self, placements, time_constraints):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
         <placements> supplies the tags, as list of (tag, positions) pairs,
@@ -337,6 +337,7 @@ class Classes_fet(Classes):
         """
         _placements = {k for k, v in placements}
         sid_group_sets = {}
+        constraints = []
         for sid, sdata in self.sid_groups.items():
             # Get a set of tags for each "atomic" group (for this subject)
             tglist = []
@@ -401,8 +402,24 @@ class Classes_fet(Classes):
                         break
             if tagsets:
                 sid_group_sets[sid] = tagsets
-#TODO: constraints
-
+                # Now add the constraints
+                for tagset in tagsets:
+                    ids = []
+                    for tag in tagset:
+                        ids += self.tag_lids[tag]
+                    constraints.append(
+                        {   'Weight_Percentage': '100',
+                            'Consecutive_If_Same_Day': 'true',
+                            'Number_of_Activities': str(len(ids)),
+                            'Activity_Id': ids,
+                            'MinDays': '1',
+                            'Active': 'true',
+                            'Comments': None
+                        }
+                    )
+        if constraints:
+            time_constraints['ConstraintMinDaysBetweenActivities'] \
+                    = constraints
         return sid_group_sets
 
 #TODO: This is rather a hammer-approach which could perhaps be improved
@@ -907,7 +924,11 @@ if __name__ == '__main__':
 
     _classes.lunch_breaks(lessons, time_constraints)
 
+    sid_group_sets = _classes.constraint_day_separation(cards.predef,
+            time_constraints)
+
     _classes.constraint_no_gaps(time_constraints)
+
     xml_fet = xmltodict.unparse(build_dict_fet(
             ROOMS = rooms,
             DAYS = days,
@@ -926,10 +947,8 @@ if __name__ == '__main__':
         fh.write(xml_fet.replace('\t', '   '))
     print("\nTIMETABLE XML ->", outpath)
 
-#TODO
-    sid_group_sets = _classes.day_separation(cards.predef)
-    for sid, gs in sid_group_sets.items():
-        print(f"\n +++ {sid}:", gs)
+#    for sid, gs in sid_group_sets.items():
+#        print(f"\n +++ {sid}:", gs)
 #    print(f"\n +++ Mal:", sid_group_sets['Mal'])
 #    print("\n???divisions 01K:", _classes.class_divisions['01K'])
 #    print("\n???class_groups 01K:", _classes.class_groups['01K'])
