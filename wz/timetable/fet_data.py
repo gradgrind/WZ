@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-06
+TT/asc_data.py - last updated 2021-08-07
 
 Prepare fet-timetables input from the various sources ...
 
@@ -56,6 +56,8 @@ if __name__ == '__main__':
 # varying durations, the placement could be affected.
 
 ### +++++
+
+from itertools import combinations
 
 import xmltodict
 
@@ -327,10 +329,13 @@ class Classes_fet(Classes):
             time_constraints['ConstraintActivityPreferredStartingTimes'] \
                     = constraints
 #
-    def day_separation(self):
+    def day_separation(self, placements):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
+        <placements> supplies the tags, as list of (tag, positions) pairs,
+        which have fixed positions, and so do not need this constraint.
         """
+        _placements = {k for k, v in placements}
         sid_group_sets = {}
         for sid, sdata in self.sid_groups.items():
             # Get a set of tags for each "atomic" group (for this subject)
@@ -351,52 +356,57 @@ class Classes_fet(Classes):
                 collect = {t for gset, t in tglist if groups & gset}
                 if len(collect) > 1 or len(self.tag_lids[tag]) > 1:
                     tgmap[tag] = collect
-            if tgmap:
-                sid_group_sets[sid] = tgmap
             # Get sets of tags with (group) intersections
-            tagsets = set()
+            kcombis = set()
             for tag, partners in tgmap.items():
-# Don't include the tag itself as a partner?
-                if len(partners) == 1:
-                    _tags0 = {frozenset([tag])}
+                for l in range(len(partners), 0, -1):
+                    for c in combinations(partners, l):
+                        if tag in c:
+                            kcombis.add(frozenset(c))
+            xcombis = []
+            for combi in kcombis:
+                # Check with all components
+#                print("&&&", combi)
+                for p in combi:
+#                    print("%%%", p)
+                    plist = tgmap[p]
+                    for q in combi:
+                        if q not in plist:
+                            break
+                    else:
+                        # ok
+                        continue
+                    break
                 else:
-                    _tags = {}
-                    for t in partners:
-                        if t != tag:
-                            tt = frozenset(tgmap[t] & partners)
-                            l = len(tt)
-                            try:
-                                _tags[l].add(tt)
-                            except KeyError:
-                                _tags[l] = {tt}
-                    # Remove subsets
-#TODO: I am not even sure if there can be any subsets ...
-                    _tags0 = None
-                    for l in sorted(_tags, reverse = True):
-                        ltags = _tags[l]
-                        ltags2 = []
-                        if _tags0:
-                            for lt in ltags:
-                                for t in _tags0:
-                                    if lt < t:
-                                        print("***SUBSET***", tag)
-                                        break
-                                else:
-                                    ltags2.append(lt)
-                            _tags0.update(ltags2)
-                        else:
-                            _tags0 = ltags
-                tagsets.update(_tags0)
-            sid_group_sets[sid] = tagsets
+                    xcombis.append(combi)
+            # Eliminate subsets
+            ycombis = []
+            for c in xcombis:
+                for c2 in xcombis:
+                    if c < c2:
+                        break
+                else:
+                    ycombis.append(c)
+            if tag.startswith('01K_0'):
+                print("§§§1:", xcombis, "\n  ->", ycombis)
+            # Remove tag sets containing only fixed lessons (this
+            # can't cope with tags whose lessons are only partially
+            # placed – they are handled as tags with full placed
+            # lessons).
+            tagsets = set()
+            for tags in ycombis:
+                for tag in tags:
+                    if tag not in _placements:
+                        tagsets.add(tags)
+                        break
+            if tagsets:
+                sid_group_sets[sid] = tagsets
+#TODO: constraints
+
         return sid_group_sets
 
 #TODO: This is rather a hammer-approach which could perhaps be improved
 # by collecting data class-wise?
-
-#TODO: Is it possible to avoid generating constraints for lessons which
-# have fixed placements? Perhaps block constraint if all lesson tags have
-# placements? Because of partial fixing of a group this could
-# be very difficult.
 
 ###
 
@@ -917,6 +927,9 @@ if __name__ == '__main__':
     print("\nTIMETABLE XML ->", outpath)
 
 #TODO
-    sid_group_sets = _classes.day_separation()
+    sid_group_sets = _classes.day_separation(cards.predef)
     for sid, gs in sid_group_sets.items():
         print(f"\n +++ {sid}:", gs)
+#    print(f"\n +++ Mal:", sid_group_sets['Mal'])
+#    print("\n???divisions 01K:", _classes.class_divisions['01K'])
+#    print("\n???class_groups 01K:", _classes.class_groups['01K'])
