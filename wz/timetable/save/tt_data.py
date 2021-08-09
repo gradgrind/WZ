@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-08-08
+TT/tt_data.py - last updated 2021-07-28
 
 Read timetable information from the various sources ...
 
@@ -339,10 +339,10 @@ class Classes:
             # Then for each entry, generate a lesson or a course within
             # a teaching block.
             _durations = read_field('LENGTHS')
+
             try:
                 if not _durations:
                     raise ValueError
-                dmap = {}
                 if _durations == '*':
                     durations = None
                 else:
@@ -353,10 +353,6 @@ class Classes:
                             durations.append(i)
                         else:
                             raise ValueError
-                        try:
-                            dmap[i] += 1
-                        except KeyError:
-                            dmap[i] = 1
             except ValueError:
                 raise TT_Error(_INVALID_ENTRY.format(klass = klass,
                         field = self.LESSON_FIELDS['LENGTHS'],
@@ -471,7 +467,7 @@ class Classes:
                                 klass = klass, sid = sid, tag = tag,
                                 group1 = repr(p_groups)))
                     # Also the actual lessons must match in number and length
-                    if data['lengths'] != dmap:
+                    if data['durations'] != durations:
                         raise TT_Error(_TAG_LESSONS_MISMATCH.format(
                                 klass = klass, tag = tag,
                                 group1 = repr(p_groups)))
@@ -548,7 +544,7 @@ class Classes:
                     'SID': sid,
                     'TIDS': teachers,
                     'ROOMS': rooms,
-                    'lengths': dmap,
+                    'durations': durations,
                     'block': block      # or block-tag components
                 }
 #
@@ -565,11 +561,11 @@ class Classes:
             groups = sorted(data['GROUPS'])
             tids = data['TIDS']
             rooms = sorted(data['ROOMS'])
-            dmap = data['lengths']
+            durations = data['durations']
             block = data['block']
             for tid in tids:
                 tid_lessons[tid].append((tag, block, classes, sid,
-                        groups, dmap, rooms))
+                        groups, durations, rooms))
         return {tid: lessons
                 for tid, lessons in tid_lessons.items()
                 if lessons}
@@ -581,7 +577,7 @@ class Classes:
         tmap = self.lessons_teacher_lists()
         for tid, lessons in tmap.items():
             class_lessons = {}
-            for tag, block, classes, sid, groups, dmap, rooms in lessons:
+            for tag, block, classes, sid, groups, durations, rooms in lessons:
                 if len(classes) > 1:
                     klass = '+++'
                 else:
@@ -596,23 +592,28 @@ class Classes:
                         _block = block.lstrip('- ')
                         if _block:
                             bname = f" ({self.SUBJECTS[_block]})"
-                        d = list(dmap)[0] if dmap else 0
+                        d = durations[0] if durations else 0
                         plist.append(f"EXTRA x {d}")
-                        dmap = None
+                        durations = None
                     else:
                         # Get main (teaching block) lesson entry
                         l = self.lessons[block]
                         bsid = l['SID']
                         bname = f" ({self.SUBJECTS[bsid]})"
-                        if dmap:
-                            d = list(dmap)[0]
+                        if durations:
+                            d = durations[0]
                             plist.append(f"EPOCHE x {d} {_rooms}")
-                            dmap = None
+                            durations = None
                         else:
                             # Get durations from main lesson entry
-                            dmap = l['lengths']
-                if dmap:
-                    plist += lesson_lengths(dmap)
+                            durations = l['durations']
+                if durations:
+                    dtotal, dmap = get_duration_map(durations)
+                    for d in sorted(dmap):
+                        n = dmap[d]
+                        length = "Einzel" if d == 1 else "Doppel" \
+                            if d == 2 else str(dur)
+                        plist.append(f" {length} x {n} {_rooms}")
                 if plist:
                     try:
                         cl = class_lessons[klass]
@@ -641,7 +642,7 @@ class Classes:
         tmap = self.lessons_teacher_lists()
         for tid, lessons in tmap.items():
             class_lessons = {}
-            for tag, block, classes, sid, groups, dmap, rooms in lessons:
+            for tag, block, classes, sid, groups, durations, rooms in lessons:
                 klass = ','.join(classes)
                 try:
                     class_list, class_blocks = class_lessons[klass]
@@ -660,9 +661,9 @@ class Classes:
                         _block = block.lstrip('- ')
                         if _block:
                             bname = f" ({self.SUBJECTS[_block]})"
-                        d = list(dmap)[0] if dmap else 0
+                        d = durations[0] if durations else 0
                         entry = f"EXTRA x {d}"
-                        dmap = None
+                        durations = None
                     else:
                         # Get main (teaching block) lesson entry
                         l = self.lessons[block]
@@ -672,35 +673,33 @@ class Classes:
                             bdata = class_blocks[bname]
                         except KeyError:
                             # Get durations from main lesson entry
-                            dmapl = l['lengths']
-                            if dmap:
+                            dtotal, dmap = get_duration_map(l['durations'])
+                            if durations:
                                 # "Epoche"
-                                dtotal = 0
-                                for d, n in dmapl.items():
-                                    dtotal += d*n
                                 bdata = [
                                     f"\"{bname}\": ({dtotal} "
                                             f" Wochenstunden){_rooms}",
-                                    [f"{sname}: EPOCHE x {list(dmap)[0]}"]
+                                    [f"{sname}: EPOCHE x {durations[0]}"]
                                 ]
                             else:
                                 # Parallel lessons
-                                ll = ", ".join(lesson_lengths(dmapl))
+                                ll = ", ".join(lesson_lengths(dmap))
                                 bdata = [
                                     f"\"{bname}\": {ll}{_rooms}",
                                     [sname]
                                 ]
                             class_blocks[bname] = bdata
                             continue
-                        if dmap:
+                        if durations:
                             # "Epoche"
                             bdata[1].append(
-                                    f"{sname}: EPOCHE x {list(dmap)[0]}")
+                                    f"{sname}: EPOCHE x {durations[0]}")
                         else:
                             # Parallel lessons
                             bdata[1].append(sname)
                         continue
-                if dmap:
+                if durations:
+                    dtotal, dmap = get_duration_map(durations)
                     ll = ", ".join(lesson_lengths(dmap))
                     entry = f"{ll}{_rooms}"
                 if entry:
@@ -903,14 +902,12 @@ class Placements:
             except KeyError:
                 print(_UNKNOWN_TAG.format(tag = tag))
                 continue
-            dmap = ldata['lengths']
-#TODO: Support cases with multiple lengths by doing in order of
-# increaasing length
+            durations = ldata['durations']
+            _, dmap = get_duration_map(durations)
+#TODO: Add support for cases with multiple lengths (somehow ...)?
             if len(dmap) > 1:
                 print(_PLACE_MULTIPLE_LENGTHS.format(data = repr(ldata)))
-            n = 0
-            for d, i in dmap.items():
-                n += i
+            n = len(durations)
             if n != len(places_list):
                 if n > len(places_list):
                     print(_PREPLACE_TOO_FEW.format(tag = tag))
@@ -920,13 +917,24 @@ class Placements:
 
 ###
 
+def get_duration_map(durations):
+    dmap = {}
+    dtotal = 0
+    for d in durations:
+        dtotal += d
+        try:
+            dmap[d] += 1
+        except KeyError:
+            dmap[d] = 1
+    return (dtotal, dmap)
+
 def lesson_lengths(duration_map):
     ll = []
     for d in sorted(duration_map):
         n = duration_map[d]
         length = "Einzel" if d == 1 \
             else "Doppel" if d == 2 \
-            else f"[{d}]"
+            else f"({dur})"
         ll.append(f" {length} x {n}")
     return ll
 

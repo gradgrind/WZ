@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-08
+TT/asc_data.py - last updated 2021-08-07
 
 Prepare fet-timetables input from the various sources ...
 
@@ -62,7 +62,8 @@ from itertools import combinations
 import xmltodict
 
 from timetable.tt_data import Classes, Days, Periods, Placements, Rooms, \
-        Subjects, Teachers, TT_Error, WHOLE_CLASS, groups_are_subset
+        Subjects, Teachers, TT_Error, get_duration_map, WHOLE_CLASS, \
+        groups_are_subset
 
 ### -----
 
@@ -236,33 +237,31 @@ class Classes_fet(Classes):
                 t = tids
 #TODO: add room constraints
 #            rooms = ','.join(sorted(data['ROOMS']))
-            dmap = data['lengths']
-            if dmap:
+            durations = data['durations']
+            if durations:
                 aid = '0'
-                for d in sorted(dmap):
-                    _tag_lids = []
-                    __tag = f'{tag}__{d}' if len(dmap) > 1 else tag
-                    for i in range(dmap[d]):
-                        lid += 1
-                        _tag_lids.append(lid)
-                        dstr = str(d)
-                        lesson = {'Teacher': t} if t else {}
-                        lesson.update({
-                            'Subject': sid,
-                            'Students': g,
-                            'Duration': dstr,
-                            'Total_Duration': dstr,
-                            'Id': str(lid),
-                            'Activity_Group_Id': aid,
-                            'Active': 'true',
-                            'Comments': __tag
-                        })
-                        lesson_list.append(lesson)
-                    self.tag_lids[__tag] = _tag_lids
-                    try:
-                        self.sid_groups[sid].append((groups, __tag))
-                    except KeyError:
-                        self.sid_groups[sid] = [(groups, __tag)]
+                _tag_lids = []
+                for d in data['durations']:
+                    lid += 1
+                    _tag_lids.append(lid)
+                    dstr = str(d)
+                    lesson = {'Teacher': t} if t else {}
+                    lesson.update({
+                        'Subject': sid,
+                        'Students': g,
+                        'Duration': dstr,
+                        'Total_Duration': dstr,
+                        'Id': str(lid),
+                        'Activity_Group_Id': aid,
+                        'Active': 'true',
+                        'Comments': tag
+                    })
+                    lesson_list.append(lesson)
+                self.tag_lids[tag] = _tag_lids
+                try:
+                    self.sid_groups[sid].append((groups, tag))
+                except KeyError:
+                    self.sid_groups[sid] = [(groups, tag)]
         self.last_lesson_id = lid
         return lesson_list
 #
@@ -759,53 +758,6 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
 </ConstraintTeacherNotAvailableTimes>
 """
 
-def constraint_min_lessons_all(min_lessons, time_constraints):
-    time_constraints['ConstraintStudentsMinHoursDaily'] = [
-        {   'Weight_Percentage': '100',
-            'Minimum_Hours_Daily': str(min_lessons),
-            'Allow_Empty_Days': 'false',
-            'Active': 'true',
-            'Comments': None
-        }
-    ]
-
-def constraint_min_lessons(group, min_lessons, time_constraints):
-    item = {
-        'Weight_Percentage': '100',
-        'Minimum_Hours_Daily': str(min_lessons),
-        'Students': group,
-        'Allow_Empty_Days': 'false',
-        'Active': 'true',
-        'Comments': None
-    }
-    try:
-        time_constraints['ConstraintStudentsSetMinHoursDaily'].append(item)
-    except KeyError:
-        time_constraints['ConstraintStudentsSetMinHoursDaily'] = [item]
-
-###
-
-def constraint_teacher_breaks(max_lessons, time_constraints):
-    time_constraints['ConstraintTeachersMaxHoursContinuously'] = [
-#TODO: Percentage?
-        {   'Weight_Percentage': '95',
-            'Maximum_Hours_Continuously': str(max_lessons),
-            'Active': 'true',
-            'Comments': None
-        }
-    ]
-
-"""
-# This one seems to make the generation impossible (it must be 100%):
-<ConstraintTeachersMinHoursDaily>
-    <Weight_Percentage>100</Weight_Percentage>
-    <Minimum_Hours_Daily>2</Minimum_Hours_Daily>
-    <Allow_Empty_Days>true</Allow_Empty_Days>
-    <Active>true</Active>
-    <Comments></Comments>
-</ConstraintTeachersMinHoursDaily>
-"""
-
 ###
 
 class Placements_fet(Placements):
@@ -1001,15 +953,6 @@ if __name__ == '__main__':
             time_constraints)
 
     _classes.constraint_no_gaps(time_constraints)
-
-#?
-    constraint_min_lessons_all(4, time_constraints)
-#?
-    for g in ('01K', '02K', '03K', '04K', '05K', '06K',
-            '07K', '08K', '09K', '10K', '11K', '12K'):
-        constraint_min_lessons(g, 5, time_constraints)
-#?
-    constraint_teacher_breaks(4, time_constraints)
 
     xml_fet = xmltodict.unparse(build_dict_fet(
             ROOMS = rooms,
