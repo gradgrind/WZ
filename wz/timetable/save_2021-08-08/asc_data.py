@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-07
+TT/asc_data.py - last updated 2021-08-08
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -62,7 +62,7 @@ if __name__ == '__main__':
 import xmltodict
 
 from timetable.tt_data import Classes, Days, Periods, Placements, Rooms, \
-        Subjects, Teachers, TT_Error, get_duration_map, WHOLE_CLASS
+        Subjects, Teachers, TT_Error, WHOLE_CLASS
 
 #?
 def idsub(tag):
@@ -149,13 +149,12 @@ class Classes_aSc(Classes):
             else:
                 tids = ','.join(sorted(data['TIDS']))
             rooms = ','.join(sorted(data['ROOMS']))
-            durations = data['durations']
-            if durations:
-                _, dmap = get_duration_map(durations)
+            dmap = data['lengths']
+            if dmap:
                 tags = []
-                for d, n in dmap.items():
+                for d in sorted(dmap):
                     t = f'{tag}__{d}' if len(dmap) > 1 else tag
-                    tags.append((t, d, n))
+                    tags.append((t, d, dmap[d]))
 #TODO: check use of tags for placement, etc.!
                 if len(tags) > 1:
                     print("&&& multitags:", tags)

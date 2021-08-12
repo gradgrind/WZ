@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-12
+TT/asc_data.py - last updated 2021-08-08
 
 Prepare fet-timetables input from the various sources ...
 
@@ -945,7 +945,7 @@ if __name__ == '__main__':
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write("STUNDENPLAN 2021/22: Lehrer-Stunden\n"
                 "===================================\n")
-        fh.write(_classes.teacher_check_list())
+        fh.write(_classes.teacher_check_list2())
     print("\nTEACHER CHECK-LIST ->", outpath)
 
     classes = []

@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-06-10
+Last updated:  2021-08-10
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -446,7 +446,7 @@ def filter_DataTable(data, fieldlist, infolist, extend = True):
             val = tinfo[name]
             if needed and not val:
                 raise TableError(_ESSENTIAL_INFO_EMPTY.format(
-                        field = fname[f]))
+                        field = name))
         except KeyError:
             if needed:
                 raise TableError(_ESSENTIAL_INFO_MISSING.format(

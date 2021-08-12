@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-07-28
+TT/tt_data.py - last updated 2021-08-10
 
 Read timetable information from the various sources ...
 
@@ -24,6 +24,7 @@ Copyright 2021 Michael Towers
 WHOLE_CLASS = "alle"    # name for a "group" comprising the whole class
 _TEACHERS = "Lehrkräfte" # error reporting only, refers to the input table
 _ROOMS = "Räume"         # error reporting only, refers to the input table
+_SUBJECTS = "Fachnamen"  # error reporting only, refers to the input table
 _MAX_DURATION = 4        # maximum length of a lesson
 
 ### Messages
@@ -36,10 +37,16 @@ _UNKNOWN_GROUP = "Klasse {klass}: unbekannte Gruppe – {group}"
 _UNKNOWN_SID = "Klasse {klass}: Fach {sid} ({sname}) ist unbekannt"
 _GROUP_IN_MULTIPLE_SPLITS = "Klasse {klass}: Gruppe {group} in >1 Teilung"
 _INVALID_ENTRY = "Klasse {klass}, Feld_{field}: ungültiger Wert ({val})"
+_SHARED_ENTRY_NO_TAG = "Klasse {klass}, '!'-Fach {sname}: Kennung fehlt"
 _TAG_GROUP_DOUBLE = "Klasse {klass}: Stundenkennung „{tag}“ für Gruppe" \
         " {group} zweimal definiert"
 _TAG_SID_MISMATCH = "Klasse {klass}: Fach {sid} mit Stundenkennung „{tag}“" \
         " ist anders als in Gruppen {group1}"
+_ROOM_NO_LESSON = "Klasse {klass}, Fach {sname}: Raumangabe aber" \
+        " keine Unterrichtsstunden"
+_NOT_ENOUGH_ROOMS = "Klasse {klass}, Fach {sname}: zu wenig Räume zur Wahl"
+_TAG_IN_BLOCK = "Klasse {klass}: Fach {sid} mit Stundenkennung „{tag}“" \
+        " ist in einem Block ({block}), was nicht zulässig ist"
 _TAG_BLOCK_MISMATCH = "Klasse {klass}: Epoche {block} mit Stundenkennung" \
         " „{tag}“ ist anders als in Gruppen {group1}"
 _TAG_LESSONS_MISMATCH = "Klasse {klass}: Stundenkennung „{tag}“ hat" \
@@ -50,7 +57,8 @@ _TEACHER_INVALID = "Lehrerkürzel dürfen nur aus Zahlen und" \
 _TEACHER_NDAYS = "{name} ({tid}), verfügbare Stunden: Daten für genau" \
         " {ndays} Tage sind notwendig"
 _TEACHER_DAYS_INVALID = "{name} ({tid}), verfügbare Stunden: ungültige Daten"
-_UNKNOWN_TEACHER = "Klasse {klass}: unbekannte Lehrkraft ({tid})"
+_BAD_TIDS = "Klasse {klass}: ungültige Lehrkräfte ({tids}) für {sname}"
+_UNKNOWN_TEACHER = "Klasse {klass}: unbekannte Lehrkraft ({tid}) für {sname}"
 _ROOM_INVALID = "Raumkürzel dürfen nur aus Zahlen und" \
         " lateinischen Buchstaben bestehen: {rid} ist ungültig."
 _UNKNOWN_ROOM = "Klasse {klass}: unbekannter Raum ({rid})"
@@ -70,8 +78,9 @@ _PREPLACE_TOO_FEW = "Warnung: zu wenig feste Stunden definiert für" \
 _TABLE_ERROR = "In Klasse {klass}: {e}"
 _SUBJECT_NAME_MISMATCH = "Klasse {klass}, Fach {sname} ({sid}):" \
         " Name weicht von dem in der Fachliste ab ({sname0})."
-_MULTIPLE_BLOCK = "Klasse {klass}: Epoche mit Fach-Kürzel {sid} mehrfach" \
-        " definiert"
+_MULTIPLE_BLOCK = "Klasse {klass}: Block {sname} mehrfach definiert"
+BLOCK_DEF_WITH_BLOCK = "Klasse {klass}: Block {sname} definiert mit" \
+        "\"Epoche\" {block}"
 _BLOCK_TAG_UNDEFINED = "Klasse {klass}: Fach {sname} ({sid}) in" \
         " undefinierter Epoche ({block})"
 _BLOCK_TAG_DEFINED = "Klasse {klass}: „Unechtes“ Fach {sname} ({sid}) in" \
@@ -213,7 +222,6 @@ class Classes:
         self.lessons = {}
         self.LESSON_FIELDS = {f: t
                 for f, t, *x in TT_CONFIG['LESSON_FIELDS']}
-        self.class_blocks = {}
 
 #++++++++++++++++ Now the stuff dealing with the class-group-lesson data
 
@@ -226,7 +234,10 @@ class Classes:
         self.ROOMS = ROOMS
         self.TEACHERS = TEACHERS
         classes = []
-        self.blocks = {}    # collect block lessons
+        # Start with classless data
+        _xx = 'XX'
+        if self.read_class_data(_xx):
+            classes.append(_xx)
         for klass in self.class_days_periods:
             if self.read_class_data(klass):
                 classes.append(klass)
@@ -329,20 +340,41 @@ class Classes:
                 raise TT_Error(_FIELD_MISSING.format(klass = klass,
                         field = self.LESSON_FIELDS[field]))
         #+
+        def add_rooms(ldata):
+            if rooms:
+                if block == '--':
+                    raise TT_Error(_ROOM_NO_LESSON.format(
+                        klass = klass, sname = sname))
+                # Add rooms to lesson, but only if they are
+                # really new
+                try:
+                    n, _rooms = ldata['ROOMS']
+                except ValueError:
+                    ldata['ROOMS'] = rooms
+                else:
+                    l = len(_rooms)
+                    _rooms.update(rooms[1])
+                    l1 = len(_rooms) - l
+                    n1 = rooms[0]
+                    if l1 >= n1:
+                        n += n1
+                    else:
+                        n += l1
+                    ldata['ROOMS'][0] = n
+        #+
         lesson_id = 0
-#TODO: This may be wrong for fet (class-group ...)
         group_map = self.class_groups[klass]
-        blocks = {}      # collect block-sids -> block-tag
-        self.class_blocks[klass] = blocks
+        blocks = {}      # collect {block-sid: block-tag}
         for row in lesson_lines:
             # Make a list of durations.
             # Then for each entry, generate a lesson or a course within
             # a teaching block.
             _durations = read_field('LENGTHS')
-
+            if not _durations:
+                # Line not relevant for timetabling
+                continue
             try:
-                if not _durations:
-                    raise ValueError
+                dmap = {}
                 if _durations == '*':
                     durations = None
                 else:
@@ -353,28 +385,17 @@ class Classes:
                             durations.append(i)
                         else:
                             raise ValueError
+                        try:
+                            dmap[i] += 1
+                        except KeyError:
+                            dmap[i] = 1
             except ValueError:
                 raise TT_Error(_INVALID_ENTRY.format(klass = klass,
                         field = self.LESSON_FIELDS['LENGTHS'],
                         val = _durations))
 
-            ### Teachers
-            tids = read_field('TIDS').split()
-            if tids:
-                teachers = set(tids)
-                for tid in tids:
-                    if tid not in self.TEACHERS:
-                        teachers.remove(tid)
-                        print(_UNKNOWN_TEACHER.format(klass = klass,
-                                tid = tid))
-            else:
-                teachers = set()
-
             ### Subject
             sid = read_field('SID')
-#TODO: This can now happen because I am not filtering out lines with no lessons ...
-# Either pass all subjects for timetable use (don't need special column then)
-# or use some other test for timetable relevance.
             sname = read_field('SNAME')
             try:
                 sname0 = self.SUBJECTS[sid]
@@ -385,56 +406,96 @@ class Classes:
                 print(_SUBJECT_NAME_MISMATCH.format(klass = klass,
                         sname0 = sname0, sname = sname, sid = sid))
 
+            ### Teachers
+            _tids = read_field('TIDS')
+            if not _tids:
+                # Line not relevant for timetabling
+                continue
+            tids = _tids.split()
+            teachers = set()
+            suppress_tids = False
+            # Check for "special" (block definition) lines. Special
+            # lines may not have a subject-id in the BLOCK field (see
+            # block handling, below).
+            if tids[0] == '*':
+                if len(tids) > 1:
+                    raise TT_Error(_BAD_TIDS.format(klass = klass,
+                            sname = sname, tids = _tids))
+            else:
+                if tids[0] == '--':
+                    # Teacher-ids will not be included in lessons.
+                    suppress_tids = True
+                    tids = tids[1:]
+                for tid in tids:
+                    if tid in self.TEACHERS:
+                        teachers.add(tid)
+                    else:
+                        raise TT_Error(_UNKNOWN_TEACHER.format(
+                                klass = klass, sname = sname, tid = tid))
+
             ### Group
             group = read_field('GROUP') # check later
 
             ### Rooms
-            rids = read_field('ROOMS').split()
-            if rids:
-                rooms = set(rids)
-                for rid in rids:
-                    if rid not in self.ROOMS:
-                        rooms.remove(rid)
-                        print(_UNKNOWN_ROOM.format(klass = klass,
-                                rid = rid))
-            else:
-                rooms = set()
+            _ritems = read_field('ROOMS').split()
+            # There is one item per room needed. The items can be a room,
+            # a list of possible rooms ("r1/r2/ ...") or "?" (unspecified
+            # room).
+            # The result is a number of rooms needed and a set of possible
+            # rooms. Only '?' may be added multiple times.
+            n = 0
+            _rooms = set()
+            if _ritems:
+                for _ritem in _ritems:
+                    if _ritem == '?':
+                        n += 1
+                        _rooms.add('?')
+                    else:
+                        _choices = []
+                        for rid in _ritem.split('/'):
+                            if rid in self.ROOMS:
+                                if rid not in _rooms:
+                                    _choices.append(rid)
+                            else:
+                                raise TT_Error(_UNKNOWN_ROOM.format(
+                                        klass = klass, rid = rid))
+                        if _choices:
+                            n += 1
+                            _rooms.update(_choices)
+            rooms = [n, _rooms]
 
 # The BLOCK field can contain:
-#   - nothing:  This is the "normal" case, for typical lesson entries.
-#   - '*':      This means that the lesson is a teaching block covering
-#               several courses, rather than a single course. It may also
-#               be used for non-block parallel courses which each have
-#               their own name for reports.
-#               The LENGTHS field has its normal meaning, the lengths of
-#               the component timetable lessons. However, it can also
-#               specify a number of "payment units" for blocks (of lessons
-#               or something else ...) which do not appear in the
-#               timetable. This is achieved by entries starting with '*'.
-#               After this comes a single number.
-#               The teachers field (TIDS) can take the special value '*'
-#               (~ "empty"), the teachers (or additional teachers) being
-#               supplied by the contained courses.
-#   - '--' [sid]: This specifies a "course" which will not itself appear
-#               directly in the timetable, but specifies a number of
-#               "payment units". Here there is no point in adding rooms
-#               because there are no timetabled lessons.
-#               The LENGTHS field must contain a single number,
-#               representing the payment units (number of blocks).
-#               Here, the optional sid is just used for documentation
-#               purposes, specifying a sort of category for the entry.
-#               sid should probably not be used to specify a lesson entry,
-#               but it must be defined in the subject table.
+#
+#   nothing:    This is the "normal" case.
+#
 #   sid:        Specifies a course within the teaching block with
 #               subject-id sid (which must be previously defined in the
 #               lesson table for the class).
+#               The TIDS field must contain one or more teachers.
 #               The LENGTHS field must contain a single number,
 #               representing the number of course blocks / payment units.
 #               The LENGTHS field can also contain '*', meaning "take
 #               the number from the main ('*') entry" – for permanently
 #               running courses within a teaching block.
+#
+#   '!':        This signals a lesson shared with another class. There
+#               must be an entry in the TAG field to identify the entries
+#               which are to be combined. The other lines thus referenced
+#               must have fully independent groups, the same subject
+#               and the same number and length of lessons.
+#
+#   '--':       This specifies a "course" which will not itself appear
+#               directly in the timetable, but specifies a number of
+#               "payment units". Here there is no point in adding rooms
+#               because there are no timetabled lessons.
+#               The LENGTHS field must contain a single number,
+#               representing the payment units (number of blocks).
+#               If there is a TAG entry, this line will behave otherwise
+#               like with '!' (multiple such lines are effectively just
+#               like a single line).
 
             ### Lesson-id generation
+#
             # If the TAG field is empty the lesson id(s) will
             # be generated automatically.
             # Otherwise the entry should be an ASCII alphanumeric
@@ -442,13 +503,19 @@ class Classes:
             # As a special case, a tag starting with '*-' is permitted:
             # it is intended for specifying positions for lessons within
             # a class, the '*' will be replaced by the class name.
+            # With a "sid" BLOCK field, TAG must be empty.
             block = read_field('BLOCK')
             tag = None
             data = None
             _groups = get_groups(group_map, group)
             _tag = row['TAG']
-            # Check compatibility with previous tagged entries
+#TODO: Various types:
+# - same lesson: ...
+# - same time, if possible ( ... )
+# - the tag may also be used to fix time
+
             if _tag:
+                # Check tag, substitute class if necessary
                 if _tag.isascii():
                     if _tag.startswith('*-'):
                         if _tag[2:].isalnum():
@@ -458,16 +525,17 @@ class Classes:
                 if not tag:
                     raise TT_Error(_INVALID_ENTRY.format(klass = klass,
                             field = self.LESSON_FIELDS['TAG'], val = _tag))
+                if block and block not in ('!', '--'):
+                    # Don't allow both sid-block and tag
+                    raise TT_Error(_TAG_IN_BLOCK.format(
+                                klass = klass, sid = sid, tag = tag,
+                                block = block))
                 data = self.lessons.get(tag)
                 if data:
+                    # Check compatibility with previous tagged entry
                     p_groups = data['GROUPS']
-                    # The subject must be the same
-                    if sid != data['SID']:
-                        raise TT_Error(_TAG_SID_MISMATCH.format(
-                                klass = klass, sid = sid, tag = tag,
-                                group1 = repr(p_groups)))
-                    # Also the actual lessons must match in number and length
-                    if data['durations'] != durations:
+                    # The actual lessons must match in number and length
+                    if data['lengths'] != dmap:
                         raise TT_Error(_TAG_LESSONS_MISMATCH.format(
                                 klass = klass, tag = tag,
                                 group1 = repr(p_groups)))
@@ -477,60 +545,88 @@ class Classes:
                         raise TT_Error(_TAG_GROUP_DOUBLE.format(
                                 klass = klass, tag = tag,
                                 group = repr(_groups)))
-                    p_groups.update(_groups)
-                    data['CLASSES'].add(klass)
-                    # Add teachers and rooms
-                    data['TIDS'].update(teachers)
-                    data['ROOMS'].update(rooms)
+
+                    if block in ('!', '--'):
+                        # The subject must be the same for a shared lesson
+                        if sid != data['SID']:
+                            raise TT_Error(_TAG_SID_MISMATCH.format(
+                                    klass = klass, sid = sid, tag = tag,
+                                    group1 = repr(p_groups)))
+                        p_groups.update(_groups)
+                        data['CLASSES'].add(klass)
+                        # Add teachers
+                        data['TIDS'].update(teachers)
+                        # Add rooms to lesson
+                        if rooms[0]:
+                            add_rooms(data)
             else:
+                if block == '!':
+                    # Shared lesson without tag
+                    raise TT_Error(_SHARED_ENTRY_NO_TAG.format(
+                            klass = klass, sname = sname))
+#                if block == '--':
+# no lesson? But then it wouldn't appear in the teachers list
                 lesson_id += 1
                 tag = f'{klass}_{lesson_id:02}'
-            if block:
-                if block == '*':
-                    # This specifies a block-lesson for the timetable
-                    if sid in blocks:
-                        raise TT_Error(_MULTIPLE_BLOCK.format(klass = klass,
-                                sid = sid))
-                    blocks[sid] = tag
-                else:
-                    if durations:
-                        if len(durations) != 1:
-                            raise TT_Error(_BLOCK_NUMBER.format(
-                                    klass = klass, sid = sid,
-                                    sname = sname, block = block))
-                        n = durations[0]
-                    else:
-                        n = None
-                    if block[0] == '-':
-                        # Block with no lessons
-                        _block = block.lstrip('- ')
-                        if _block in blocks:
-                            raise TT_Error(_BLOCK_TAG_DEFINED.format(
-                                    klass = klass, sid = sid,
-                                    sname = sname, block = block))
-                        if _block and _block not in self.SUBJECTS:
-                            raise TT_Error(_BLOCK_TAG_UNKNOWN.format(
-                                    klass = klass, sid = sid,
-                                    sname = sname, block = _block))
-                    else:
-                        # Epoche (etc.)
-                        try:
-                            btag = blocks[block]
-                        except KeyError:
-                            raise TT_Error(_BLOCK_TAG_UNDEFINED.format(
-                                    klass = klass, sid = sid,
-                                    sname = sname, block = block))
-                        l = self.lessons[btag]  # "main" (real) lesson
-                        # Check group is a subset of group in <data>
-                        if not groups_are_subset(_groups, l['GROUPS']):
-                            raise TT_Error(_GROUP_NOT_SUBSET.format(
-                                    klass = klass, sname = sname,
-                                    sid = sid, block = block, group = group))
-                        # add teachers, rooms to main (*) lesson
+
+
+#TODO
+            if teachers:
+#                if durations:
+#                    if len(durations) != 1:
+#                        raise TT_Error(_BLOCK_NUMBER.format(
+#                                klass = klass, sid = sid,
+#                                sname = sname, block = block))
+#                    n = durations[0]
+#                else:
+#                    n = None
+                if block == '--':
+                    # "EXTRA" item
+#?
+                    pass
+                elif block and block != '!':
+                    # Epoche (etc.)
+                    try:
+                        btag = blocks[block]
+                    except KeyError:
+                        raise TT_Error(_BLOCK_TAG_UNDEFINED.format(
+                                klass = klass, sid = sid,
+                                sname = sname, block = block))
+                    l = self.lessons[btag]  # "main" (real) lesson
+                    # Check group is a subset of group in <data>
+                    if not groups_are_subset(_groups, l['GROUPS']):
+                        raise TT_Error(_GROUP_NOT_SUBSET.format(
+                                klass = klass, sname = sname,
+                                sid = sid, block = block, group = group))
+                    # add teachers, rooms to main (*) lesson
+                    if '--' not in teachers:
                         l['TIDS'].update(teachers)
-                        l['ROOMS'].update(rooms)
-                        # The block must reference the main (*) lesson
-                        block = btag
+                    if rooms[0]:
+                        add_rooms(l)
+                    # The block must reference the main (*) lesson
+                    block = btag
+
+
+
+
+
+            else:
+                # This specifies a block-lesson for the timetable
+                if sid in blocks:
+                    raise TT_Error(_MULTIPLE_BLOCK.format(
+                            klass = klass, sname = sname))
+                blocks[sid] = tag
+                if block == '!':
+#?
+                    pass
+                elif block == '--':
+#?
+                    pass
+                elif block:
+                    raise TT_Error(BLOCK_DEF_WITH_BLOCK.format(
+                            klass = klass, sname = sname, block = block))
+
+
             if data:
                 # The block-field must be the same
                 if block != data['block']:
@@ -544,9 +640,11 @@ class Classes:
                     'SID': sid,
                     'TIDS': teachers,
                     'ROOMS': rooms,
-                    'durations': durations,
+                    'lengths': dmap,
                     'block': block      # or block-tag components
                 }
+                if klass == 'XX':
+                    print("???", self.lessons[tag])
 #
     def lessons_teacher_lists(self):
         """Build list of lessons for each teacher.
@@ -560,80 +658,15 @@ class Classes:
 #            groups = [idsub(g) for g in sorted(data['GROUPS'])]
             groups = sorted(data['GROUPS'])
             tids = data['TIDS']
-            rooms = sorted(data['ROOMS'])
-            durations = data['durations']
+            rooms = data['ROOMS']
+            dmap = data['lengths']
             block = data['block']
             for tid in tids:
                 tid_lessons[tid].append((tag, block, classes, sid,
-                        groups, durations, rooms))
+                        groups, dmap, rooms))
         return {tid: lessons
                 for tid, lessons in tid_lessons.items()
                 if lessons}
-#
-    def teacher_check_list(self):
-        """Return a "check-list" of the lessons for each teacher.
-        """
-        lines = []
-        tmap = self.lessons_teacher_lists()
-        for tid, lessons in tmap.items():
-            class_lessons = {}
-            for tag, block, classes, sid, groups, durations, rooms in lessons:
-                if len(classes) > 1:
-                    klass = '+++'
-                else:
-                    klass = classes[0]
-                plist = []
-                bname = ""
-                _rooms = f" [{','.join(rooms)}]" if rooms else ""
-                if block:
-                    if block == '*':
-                        continue
-                    if block[0] == '-':
-                        _block = block.lstrip('- ')
-                        if _block:
-                            bname = f" ({self.SUBJECTS[_block]})"
-                        d = durations[0] if durations else 0
-                        plist.append(f"EXTRA x {d}")
-                        durations = None
-                    else:
-                        # Get main (teaching block) lesson entry
-                        l = self.lessons[block]
-                        bsid = l['SID']
-                        bname = f" ({self.SUBJECTS[bsid]})"
-                        if durations:
-                            d = durations[0]
-                            plist.append(f"EPOCHE x {d} {_rooms}")
-                            durations = None
-                        else:
-                            # Get durations from main lesson entry
-                            durations = l['durations']
-                if durations:
-                    dtotal, dmap = get_duration_map(durations)
-                    for d in sorted(dmap):
-                        n = dmap[d]
-                        length = "Einzel" if d == 1 else "Doppel" \
-                            if d == 2 else str(dur)
-                        plist.append(f" {length} x {n} {_rooms}")
-                if plist:
-                    try:
-                        cl = class_lessons[klass]
-                    except KeyError:
-                        cl = []
-                        class_lessons[klass] = cl
-                    for p in plist:
-#                        cl.append(f" [{tag}]   {self.SUBJECTS[sid]}{bname}"
-#                                f" [{','.join(groups)}]: {p}")
-                        cl.append(f"    {self.SUBJECTS[sid]}{bname}"
-                                f" [{','.join(groups)}]: {p}")
-            if class_lessons:
-                lines.append("")
-                lines.append("")
-                lines.append(f"$$$ {tid} ({self.TEACHERS[tid]})")
-                for klass, clist in class_lessons.items():
-                    lines.append("")
-                    lines.append(f"  Klasse {klass}:")
-                    lines += clist
-        return "\n".join(lines)
 #
     def teacher_check_list2(self):
         """Return a "check-list" of the lessons for each teacher.
@@ -642,7 +675,7 @@ class Classes:
         tmap = self.lessons_teacher_lists()
         for tid, lessons in tmap.items():
             class_lessons = {}
-            for tag, block, classes, sid, groups, durations, rooms in lessons:
+            for tag, block, classes, sid, groups, dmap, rooms in lessons:
                 klass = ','.join(classes)
                 try:
                     class_list, class_blocks = class_lessons[klass]
@@ -652,18 +685,15 @@ class Classes:
                     class_lessons[klass] = [class_list, class_blocks]
                 entry = ""
                 bname = ""
-                _rooms = f" [{','.join(rooms)}]" if rooms else ""
+                n, _rooms = rooms
+                _rooms = f" [{n}: {','.join(sorted(_rooms))}]" if n else ""
                 sname = self.SUBJECTS[sid]
-                if block:
-                    if block == '*':
-                        continue
-                    if block[0] == '-':
+                if block and block != '!':
+                    if block == '--':
                         _block = block.lstrip('- ')
-                        if _block:
-                            bname = f" ({self.SUBJECTS[_block]})"
-                        d = durations[0] if durations else 0
+                        d = list(dmap)[0] if dmap else 0
                         entry = f"EXTRA x {d}"
-                        durations = None
+                        dmap = None
                     else:
                         # Get main (teaching block) lesson entry
                         l = self.lessons[block]
@@ -673,33 +703,35 @@ class Classes:
                             bdata = class_blocks[bname]
                         except KeyError:
                             # Get durations from main lesson entry
-                            dtotal, dmap = get_duration_map(l['durations'])
-                            if durations:
+                            dmapl = l['lengths']
+                            if dmap:
                                 # "Epoche"
+                                dtotal = 0
+                                for d, n in dmapl.items():
+                                    dtotal += d*n
                                 bdata = [
                                     f"\"{bname}\": ({dtotal} "
                                             f" Wochenstunden){_rooms}",
-                                    [f"{sname}: EPOCHE x {durations[0]}"]
+                                    [f"{sname}: EPOCHE x {list(dmap)[0]}"]
                                 ]
                             else:
                                 # Parallel lessons
-                                ll = ", ".join(lesson_lengths(dmap))
+                                ll = ", ".join(lesson_lengths(dmapl))
                                 bdata = [
                                     f"\"{bname}\": {ll}{_rooms}",
                                     [sname]
                                 ]
                             class_blocks[bname] = bdata
                             continue
-                        if durations:
+                        if dmap:
                             # "Epoche"
                             bdata[1].append(
-                                    f"{sname}: EPOCHE x {durations[0]}")
+                                    f"{sname}: EPOCHE x {list(dmap)[0]}")
                         else:
                             # Parallel lessons
                             bdata[1].append(sname)
                         continue
-                if durations:
-                    dtotal, dmap = get_duration_map(durations)
+                if dmap:
                     ll = ", ".join(lesson_lengths(dmap))
                     entry = f"{ll}{_rooms}"
                 if entry:
@@ -810,8 +842,6 @@ class Subjects(dict):
         sbjs = filter_DataTable(sbjs, fieldlist = fields,
                 infolist = [], extend = False)['__ROWS__']
         for sbj in sbjs:
-            if not sbj['TT']:
-                continue
             sid = sbj['SID']
             if sid in self:
                 raise TT_Error(_DOUBLED_KEY.format(table = _SUBJECTS,
@@ -902,12 +932,14 @@ class Placements:
             except KeyError:
                 print(_UNKNOWN_TAG.format(tag = tag))
                 continue
-            durations = ldata['durations']
-            _, dmap = get_duration_map(durations)
-#TODO: Add support for cases with multiple lengths (somehow ...)?
+            dmap = ldata['lengths']
+#TODO: Support cases with multiple lengths by doing in order of
+# increaasing length
             if len(dmap) > 1:
                 print(_PLACE_MULTIPLE_LENGTHS.format(data = repr(ldata)))
-            n = len(durations)
+            n = 0
+            for d, i in dmap.items():
+                n += i
             if n != len(places_list):
                 if n > len(places_list):
                     print(_PREPLACE_TOO_FEW.format(tag = tag))
@@ -917,24 +949,13 @@ class Placements:
 
 ###
 
-def get_duration_map(durations):
-    dmap = {}
-    dtotal = 0
-    for d in durations:
-        dtotal += d
-        try:
-            dmap[d] += 1
-        except KeyError:
-            dmap[d] = 1
-    return (dtotal, dmap)
-
 def lesson_lengths(duration_map):
     ll = []
     for d in sorted(duration_map):
         n = duration_map[d]
         length = "Einzel" if d == 1 \
             else "Doppel" if d == 2 \
-            else f"({dur})"
+            else f"[{d}]"
         ll.append(f" {length} x {n}")
     return ll
 
