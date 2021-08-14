@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-08
+TT/asc_data.py - last updated 2021-08-14
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -34,6 +34,8 @@ __TEST = False
 _DUPLICATE_TAG = "Fachtabelle, im Feld {key}: Werte „{source1}“ und" \
         " „{source2}“ sind intern nicht unterscheidbar."
 
+WHOLE_CLASS = "alle"    # name for a "group" comprising the whole class
+
 ########################################################################
 
 import sys, os, datetime, re
@@ -62,7 +64,7 @@ if __name__ == '__main__':
 import xmltodict
 
 from timetable.tt_data import Classes, Days, Periods, Placements, Rooms, \
-        Subjects, Teachers, TT_Error, WHOLE_CLASS
+        Subjects, Teachers, TT_Error
 
 #?
 def idsub(tag):
@@ -136,19 +138,50 @@ class Classes_aSc(Classes):
         """Build list of lessons for aSc-timetables.
         """
         lesson_list = []
+#TODO --
+        __count = 0
         for tag, data in self.lessons.items():
             block = data['block']
-            if block and block != '*':
-                continue
+            if block and block not in ('++', '--'):
+                continue    # not a timetabled lesson
+
+#TODO --
+#            __count += 1
+#            if __count > 10:
+#                continue
+
             sid = idsub(data['SID'])
-            classes = ','.join(sorted(data['CLASSES']))
-            groups = ','.join([idsub(g) for g in sorted(data['GROUPS'])])
-#TODO: Nasty bodge – think of some better way of doing this!
-            if sid == 'Hu' and block == '*':
+
+            _classes = set()
+            _groups = []
+            for g in sorted(data['GROUPS']):
+                k, gg = self.split_class_group(g)
+                _classes.add(k)
+                _groups.append(idsub(f"{k}-{gg if gg else WHOLE_CLASS}"))
+            classes = ','.join(sorted(_classes))
+            groups = ','.join(_groups)
+#TODO "Simplify" groups?
+#            print(f"??? {classes} // {groups}")
+
+            _tids = sorted(data['TIDS'])
+            if not _tids:
+#TODO?
+                print(f"!!! LESSON WITHOUT TEACHER: classes {classes};"
+                        f" sid {sid}")
+                continue
+            if '--' in _tids:
                 tids = ''
             else:
-                tids = ','.join(sorted(data['TIDS']))
-            rooms = ','.join(sorted(data['ROOMS']))
+                tids = ','.join(sorted(_tids))
+
+#            print("*** ROOMS:", data['ROOMS'])
+#TODO: Multiple rooms are not (presently) supported in the aSc-XML files.
+# Remove '?' from the set and include the rest as options.
+            _rlist = [r for r in data['ROOMS'][1] if r != '?']
+            _rlist.sort()
+            rooms = ','.join(_rlist)
+#            print("*** ROOMS:", rooms)
+
             dmap = data['lengths']
             if dmap:
                 tags = []
@@ -408,12 +441,13 @@ if __name__ == '__main__':
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write("STUNDENPLAN 2021/22: Lehrer-Stunden\n"
                 "===================================\n")
-        fh.write(_classes.teacher_check_list2())
+        fh.write(_classes.teacher_check_list())
     print("\nTEACHER CHECK-LIST ->", outpath)
 
     classes = []
     groups = []
     for klass in c_list:
+        if klass.startswith('XX'): continue
         classes.append(_classes.class_data(klass))
         groups += _classes.groups(klass)
     if __TEST:
@@ -457,6 +491,7 @@ if __name__ == '__main__':
             GROUPS = groups,
             LESSONS = lessons,
             CARDS = cardlist,
+#            CARDS = [],
         ),
         pretty = True
     )

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-08-12
+TT/tt_data.py - last updated 2021-08-14
 
 Read timetable information from the various sources ...
 
@@ -21,7 +21,6 @@ Copyright 2021 Michael Towers
    limitations under the License.
 """
 
-WHOLE_CLASS = "alle"    # name for a "group" comprising the whole class
 _TEACHERS = "Lehrkräfte" # error reporting only, refers to the input table
 _ROOMS = "Räume"         # error reporting only, refers to the input table
 _SUBJECTS = "Fachnamen"  # error reporting only, refers to the input table
@@ -70,7 +69,9 @@ _LESSON_CLASS_MISMATCH = "In der Tabelle der Unterrichtsstunden für" \
         " Klasse {klass} ist die Klasse falsch angegeben:\n  {path}"
 _UNKNOWN_TAG = "Tabelle der festen Stunden: unbekannte Stundenkennung „{tag}“"
 _INVALID_DAY_PERIOD = "Tabelle der festen Stunden: ungültige" \
-        " Tag.Stunde-Angabe: {d_p}"
+        " Tag.Stunde-Angabe für Kennung {tag}: {d_p}"
+_REPEATED_DAY_PERIOD = "Tabelle der festen Stunden: wiederholte" \
+        " Tag.Stunde-Angabe für Kennung {tag}: {d_p}"
 _PREPLACE_TOO_MANY = "Warnung: zu viele feste Stunden definiert für" \
         " Stundenkennung {tag}"
 _PREPLACE_TOO_FEW = "Warnung: zu wenig feste Stunden definiert für" \
@@ -91,13 +92,10 @@ _COMPONENT_BAD_LENGTH_SID = "Klasse {klass}, Fach {sname}:" \
         " Block-Komponente in {sid}, Länge muss EINE Zahl oder '*' sein"
 _NONLESSON_BAD_LENGTH = "Klasse {klass}, EXTRA-Fach {sname}: ungültige" \
         " Länge ({length})"
-_PARALLEL_TO_NONLESSON = "Kennung „{tag}“ hat sowohl einen EXTRA-Eintrag" \
-        " (Klasse {klass}) als auch normale Stunden in den Klassen:\n"\
-        "    {pclasses}"
+_PARALLEL_TO_NONLESSON = "Kennung „{tag}“ ist ein EXTRA-Eintrag (Klasse" \
+        " {klass}).\n Es gibt parallele Einträge in Klasse(n) {pclasses}"
 _BLOCK_TAG_DEFINED = "Klasse {klass}: Kennung {tag} für Block '{sname}'" \
         "schon definiert"
-_PLACE_MULTIPLE_LENGTHS = "Unterricht mit verschiedenen Längen kann nicht" \
-        " platziert werden: {data}"
 _PLUSTAG_INVALID = "Klasse {klass}, Fach {sname}: Kennung mit '+' ({tag})" \
         " ungültig"
 
@@ -223,6 +221,11 @@ class Classes:
 
         ### Now initialize the lesson-reading structures
         self.class_name = {}
+        self.atomics_lists = {}
+        self.element_groups = {}
+        self.extended_groups = {}
+
+#?
         self.class_divisions = {}
         self.class_groups = {}
         self.groupsets_class = {}
@@ -244,6 +247,7 @@ class Classes:
         self.TEACHERS = TEACHERS
         classes = []
         # Start with classless data
+#TODO: Cater for multiple classless tables?
         _xx = 'XX'
         if self.read_class_data(_xx):
             classes.append(_xx)
@@ -251,50 +255,46 @@ class Classes:
             if self.read_class_data(klass):
                 classes.append(klass)
         # Post-processing of lesson data (tags, etc.)
+        new_parallel = {}
         for tag, subtags in self.parallel_tags.items():
-            # Check for a block with this tag
-            try:
-                blesson = self.lessons[tag]
-            except KeyError:
-                pass
-            else:
-                if blesson['BLOCK'] == '--':
+            if len(subtags) < 2:
+                continue
+            # Check the compatibility of the fields
+            g, t, nl  = None, None, None
+            for _tag in subtags:
+                l = self.lessons[_tag]
+                if l['block'] == '--':
                     raise TT_Error(_PARALLEL_TO_NONLESSON.format(
-                            tag = tag, klass = blesson['CLASS'],
-                            pclasses = ','.join([self.lessons[t]['CLASS']
+                            tag = tag, klass = l['CLASS'],
+                            pclasses = ', '.join([self.lessons[t]['CLASS']
                                 for t in subtags])))
-                subtags.append(tag)
-                # Check the compatibility of the fields
-                g, t, nl  = None, None, None
-                for _tag in subtags:
-                    l = self.lessons[_tag]
-                    # The actual lessons must match in number and length
-                    if nl:
-                        if l['lengths'] != nl:
-                            raise TT_Error(_TAG_LESSONS_MISMATCH.format(
-                                    tag = tag,
-                                    sid0 = s, klass0 = k,
-                                    sid1 = l['SID'], klass1 = l['CLASS']))
-                    else:
-                        nl = l['lengths']
-                        g = l['GROUPS']
-                        t = l['TIDS']
-                        k = l['CLASS']
-                        s = l['SID']
-                        continue
-                    # The teachers must be fully distinct
-                    if t.intersection(l['TIDS']):
-                        raise TT_Error(_TAG_TEACHER_DOUBLE.format(
-                                    tag = tag,
-                                    sid0 = s, klass0 = k,
-                                    sid1 = l['SID'], klass1 = l['CLASS']))
-                    # The groups must be fully distinct
-                    if g.intersection(l['GROUPS']):
-                        raise TT_Error(_TAG_GROUP_DOUBLE.format(
-                                    tag = tag,
-                                    sid0 = s, klass0 = k,
-                                    sid1 = l['SID'], klass1 = l['CLASS']))
-                    # The rooms are probably too complicated to compare ...
+                # The actual lessons must match in number and length
+                if nl:
+                    if l['lengths'] != nl:
+                        raise TT_Error(_TAG_LESSONS_MISMATCH.format(
+                                tag = tag,
+                                sid0 = s, klass0 = k,
+                                sid1 = l['SID'], klass1 = l['CLASS']))
+                else:
+                    nl = l['lengths']
+                    g = l['GROUPS']
+                    t = l['TIDS']
+                    k = l['CLASS']
+                    s = l['SID']
+                    continue
+                # The teachers must be fully distinct
+                if t.intersection(l['TIDS']):
+                    raise TT_Error(_TAG_TEACHER_DOUBLE.format(
+                                tag = tag,
+                                sid0 = s, klass0 = k,
+                                sid1 = l['SID'], klass1 = l['CLASS']))
+                # The groups must be fully distinct
+                if g.intersection(l['GROUPS']):
+                    raise TT_Error(_TAG_GROUP_DOUBLE.format(
+                                tag = tag,
+                                sid0 = s, klass0 = k,
+                                sid1 = l['SID'], klass1 = l['CLASS']))
+                # The rooms are probably too complicated to compare ...
         return classes
 #
     def read_class_data(self, klass):
@@ -344,17 +344,13 @@ class Classes:
         of "atomic" groups (no dot). Neither these atomic groups nor the
         dotted intersections may appear in more than one division.
         A division might be "A.G B.G B.R".
-        <group_map> collects "atomic" groups (no dot) as well as
-        "dotted" groups, e.g. A.G is the dotted group containing those
-        pupils in both group A and group G. The values in this mapping
-        are sets of division-groups, e.g. (for the example division above):
-            group_map['A.G'] -> {'A.G'},
-            group_map['B'] -> {'B.G', 'B.R'}, etc.
         As the class divisions must be given as a set of non-intersecting
         groups, the atomic (undotted) groups may need to be expressed
         (for the timetable) as a combination of dotted groups, e.g. B as
         "B.G,B.R".
         """
+        if klass.startswith('XX'):
+            return
         ### Add declared class divisions (and their groups).
         divisions = [['*']]
         divs = []
@@ -371,31 +367,108 @@ class Classes:
                     all_atoms |= item2
                     ag2.append(item | item2)
             atomic_groups = ag2
-        ### Make a mapping of a single, undotted group to a set of dotted
-        ### atomic groups.
-        gmap = {a: frozenset([f'{klass}-{".".join(sorted(ag))}'
-                    for ag in atomic_groups if a in ag])
-                for a in all_atoms}
-        # Add the dotted groups from the divisions (if any)
-        for division in divs:
-            for item in division:
-                if item not in gmap:
-                    gmap['.'.join(sorted(item))] = frozenset.intersection(
-                            *[gmap[i] for i in item])
         self.class_divisions[klass] = divisions
+        al = ['.'.join(sorted(ag)) for ag in atomic_groups]
+        al.sort()
+        self.atomics_lists[klass] = al  # All (dotted) atomic groups
+#        print(f'$$$ "Atomic" groups in class {klass}:', al)
+        ### Make a mapping of single, undotted groups to sets of dotted
+        ### atomic groups.
+        gmap = {a: frozenset(['.'.join(sorted(ag))
+                        for ag in atomic_groups if a in ag])
+                for a in all_atoms}
+#        print(f'$$$ "Element" groups in class {klass}:', gmap)
+        self.element_groups[klass] = gmap
+#
+#        ### The same for the dotted groups from the divisions (if any)
+#        xmap = {}
+#        for division in divs:
+#            for item in division:
+#                if item not in gmap:
+#                    xmap['.'.join(sorted(item))] = frozenset.intersection(
+#                            *[gmap[i] for i in item])
+#        print(f'$$$ "Extended" groups in class {klass}:', xmap)
+#        self.extended_groups[klass] = xmap
+        self.make_class_groups(klass)
+#
+    def make_class_groups(self, klass):
+        """Build the entry for <self.class_groups> for the given class.
+        Also build the reversed mapping <self.groupsets_class>.
+        This method may need to be overriden in the back-end.
+        """
+        gmap = {}
+#        for _map in self.element_groups[klass], self.extended_groups[klass]:
+#            for k, v in _map.items():
+#                gmap[k] = frozenset([f'{klass}.{ag}' for ag in v])
+        for k, v in self.element_groups[klass].items():
+            gmap[k] = frozenset([f'{klass}.{ag}' for ag in v])
         self.class_groups[klass] = gmap
         # And now a reverse map, avoiding duplicate values (use the
         # first occurrence, which is likely to be simpler)
         reversemap = {}
         for k, v in gmap.items():
             if v not in reversemap:
-                reversemap[v] = f'{klass}-{k}'
+                reversemap[v] = f'{klass}.{k}'
         self.groupsets_class[klass] = reversemap
-        gmap['*'] = frozenset([f'{klass}-{".".join(sorted(ag))}'
-                for ag in atomic_groups] or [f'{klass}-{WHOLE_CLASS}'])
-        reversemap[gmap['*']] = f'{klass}-{WHOLE_CLASS}'
+        # Add "whole class" elements to both mappings
+        _whole_class = klass
+        fs_whole = frozenset([_whole_class])
+        reversemap[fs_whole] = _whole_class
+        all_groups = frozenset([f'{klass}.{ag}'
+                for ag in self.atomics_lists[klass]])
+        if all_groups:
+            gmap['*'] = all_groups
+            reversemap[all_groups] = _whole_class
+        else:
+            gmap['*'] = fs_whole
 #        print("+++", klass, gmap)
 #        print("---", klass, reversemap)
+#
+    def group_classgroups(self, klass, group):
+        """Return the (frozen)set of "full" groups for the given class
+        and group. The group may be dotted. Initially only the "elemental"
+        groups, including the full class, are available, but dotted
+        groups will be added if they are not already present.
+        This method may need to be overridden in the back-end (see
+        <make_class_groups>)
+        """
+        cg = self.class_groups[klass]
+        try:
+            return cg[group]
+        except KeyError:
+            pass
+        gsplit = group.split('.')
+        if len(gsplit) > 1:
+            group = '.'.join(sorted(gsplit))
+            try:
+                return cg[group]
+            except KeyError:
+                pass
+            try:
+                gset = frozenset.intersection(*[cg[g] for g in gsplit])
+            except KeyError:
+                pass
+            else:
+                if gset:
+                    # Add to group mapping
+                    cg[group] = gset
+                    # and to reverse mapping
+                    grev = self.groupsets_class[klass]
+                    if gset not in grev:
+                        # ... if there isn't already an entry
+                        grev[gset] = f'{klass}.{group}'
+                    return gset
+        raise TT_Error(_UNKNOWN_GROUP.format(klass = klass, group = group))
+#
+    @staticmethod
+    def split_class_group(group):
+        """Given a "full" group (with class), return class and group
+        separately.
+        This method may need to be overridden in the back-end (see
+        <make_class_groups>)
+        """
+        k_g = group.split('.', 1)
+        return k_g if len(k_g) == 2 else (group, '')
 #
     def read_lessons(self, klass, lesson_lines):
         def read_field(field):
@@ -428,7 +501,6 @@ class Classes:
                 block_rooms[0] = n
         #+
         lesson_id = 0
-        group_map = self.class_groups[klass]
         blocks = {}      # collect {block-sid: block-tag}
         for row in lesson_lines:
             # Make a list of durations.
@@ -476,19 +548,14 @@ class Classes:
                 continue
             tids = _tids.split()
             teachers = set()
-            suppress_tids = False
             if tids[0] == '*':
                 # No teachers
                 if len(tids) > 1:
                     raise TT_Error(_BAD_TIDS.format(klass = klass,
                             sname = sname, tids = _tids))
             else:
-                if tids[0] == '--':
-                    # Teacher-ids will not be included in lessons.
-                    suppress_tids = True
-                    tids = tids[1:]
                 for tid in tids:
-                    if tid in self.TEACHERS:
+                    if tid == '--' or tid in self.TEACHERS:
                         teachers.add(tid)
                     else:
                         raise TT_Error(_UNKNOWN_TEACHER.format(
@@ -523,8 +590,8 @@ class Classes:
             rooms = [n, _rooms]
 
             ### Group
-            group = read_field('GROUP') # check later
-            _groups = get_groups(group_map, group) if group else set()
+            group = read_field('GROUP')
+            _groups = self.group_classgroups(klass, group) if group else set()
 
             ### Lesson-id generation
 #
@@ -651,21 +718,10 @@ class Classes:
                     except KeyError:
                         raise TT_Error(_BLOCK_TAG_UNDEFINED.format(
                                 klass = klass, sname = sname, tag = tag))
-                    # Use an adapted tag for normal lessons with tag
-                    # (add '--i').
-                    # <self.parallel_tags> maps "normal" entry tags to a
-                    # list of the associated modified tags.
-                    # After reading all the tables, the block tags can
-                    # be added to these lists. Then there needs to be a
-                    # check on parallel entries, that their groups are
-                    # non-intersecting, that their teachers are
-                    # non-intersecting and that they have the same number
-                    # and length of lessons.
                     if durations and len(durations) > 1:
                         raise TT_Error(_COMPONENT_BAD_LENGTH_TAG.format(
                                 klass = klass, sname = sname, tag = tag))
                     block_field = tag
-                    tag = None
                     add_block_component()
                     block = None
                 elif block == '++':
@@ -695,40 +751,51 @@ class Classes:
                             raise TT_Error(_COMPONENT_BAD_LENGTH_SID.format(
                                     klass = klass, sname = sname, sid = block))
                     block_lesson = self.lessons[block_field]
-                    tag = None
                     add_block_component()
                     block = None
                 if block:
-                    # If there is a tag, check that there is no
-                    # previous use of this tag.
-                    if tag and tag in self.lessons:
-                        raise TT_Error(_BLOCK_TAG_DEFINED.format(
-                                klass = klass, tag = tag, sname = sname))
                     # This must be the only definition of a block for
                     # this subject-id in this table.
                     if sid in blocks:
                         raise TT_Error(_MULTIPLE_BLOCK.format(
                                 klass = klass, sname = sname))
+                    if tag:
+                        # Check that there is no previous use of this tag
+                        if tag in self.lessons:
+                            raise TT_Error(_BLOCK_TAG_DEFINED.format(
+                                klass = klass, tag = tag, sname = sname))
+                    else:
+                        lesson_id += 1
+                        tag = f'{klass}_{lesson_id:02}'
+                    blocks[sid] = tag
+                    # Add to parallel-tags mapping
+                    _tag = tag.split('+')[0]
+                    try:
+                        ptags = self.parallel_tags[_tag]
+                    except KeyError:
+                        ptags = []
+                        self.parallel_tags[_tag] = ptags
+                    ptags.append(tag)
+                else:
+                    # Block component - new tag
+                    lesson_id += 1
+                    tag = f'{klass}_{lesson_id:02}'
             else:
                 # A "normal" lesson
+                lesson_id += 1
+                _tag = f'{klass}_{lesson_id:02}'
                 block_field = ''
                 if tag:
                     if '+' in tag:
                         raise TT_Error(_PLUSTAG_INVALID.format(
                                 klass = klass, sname = sname, tag = tag))
-                    # Keep the tag distinct from block tags
                     try:
                         ptags = self.parallel_tags[tag]
                     except KeyError:
                         ptags = []
                         self.parallel_tags[tag] = ptags
-                    tag = tag + f'--{len(ptags) + 1}'
-                    ptags.append(tag)
-            if not tag:
-                lesson_id += 1
-                tag = f'{klass}_{lesson_id:02}'
-            if block:
-                blocks[sid] = tag
+                    ptags.append(_tag)
+                tag = _tag
             self.lessons[tag] = {
                 'CLASS': klass,
                 'GROUPS': set(_groups),
@@ -753,7 +820,7 @@ class Classes:
             _groups = data['GROUPS']
             kgroups = {}
             for g in _groups:
-                k, group = g.split('-')
+                k, group = self.split_class_group(g)
                 try:
                     kgroups[k].append(g)
                 except KeyError:
@@ -771,8 +838,9 @@ class Classes:
             dmap = data['lengths']
             block = data['block']
             for tid in tids:
-                tid_lessons[tid].append((tag, block, klass, sid,
-                        groups, dmap, rooms))
+                if tid != '--':
+                    tid_lessons[tid].append((tag, block, klass, sid,
+                            groups, dmap, rooms))
         return {tid: lessons
                 for tid, lessons in tid_lessons.items()
                 if lessons}
@@ -954,41 +1022,12 @@ class Subjects(dict):
 # for dotted combinations which are not in the basic groups (possible
 # if there are basic groups like A.P.X, with two dots).
 
-def get_groups(group_map, group):
-    """Convert a group from the lesson input table to a set of
-    timetable-groups.
-    """
-    try:
-        return group_map[group]
-    except KeyError:
-        pass
-    gsplit = group.split('.')
-    if len(gsplit) > 1:
-        glist = []
-        for g in gsplit:
-            try:
-                glist.append(group_map[g])
-            except KeyError:
-                break
-        else:
-            gisct = set.intersection(*glist)
-            if gisct:
-                return gisct
-    klass =  list(group_map['*'])[0].split('-')[0]
-    raise TT_Error(_UNKNOWN_GROUP.format(klass = klass, group = group))
-
-#
-
-def groups_are_subset(gset, allset):
-    if len(allset) == 1 and list(allset)[0].split('-')[1] == WHOLE_CLASS:
-        return True
-    return gset <= allset
-
 ###
 
 class Placements:
-    def __init__(self, lessons):
-        self.lessons = lessons
+    def __init__(self, classes_data):
+        lessons = classes_data.lessons
+        parallel_tags = classes_data.parallel_tags
         fields = TT_CONFIG['PLACEMENT_FIELDS']
         try:
             place_data = read_DataTable(YEARPATH(TT_CONFIG['PLACEMENT_DATA']))
@@ -1004,18 +1043,19 @@ class Placements:
                 try:
                     d, p = d_p.strip().split('.')
                 except:
-                    raise TT_Error(_INVALID_DAY_PERIOD.format(d_p = d_p))
-                places_list.append((d, p))
+                    raise TT_Error(_INVALID_DAY_PERIOD.format(tag = tag,
+                            d_p = d_p))
+#TODO: Check the validity of the places
+                dp = (d, p)
+                if dp in places_list:
+                    raise TT_Error(_REPEATED_DAY_PERIOD.format(tag = tag,
+                            d_p = d_p))
+                places_list.append(dp)
             try:
-                ldata = lessons[tag]
+                taglist = parallel_tags[tag]
             except KeyError:
-                print(_UNKNOWN_TAG.format(tag = tag))
-                continue
-            dmap = ldata['lengths']
-#TODO: Support cases with multiple lengths by doing in order of
-# increaasing length
-            if len(dmap) > 1:
-                print(_PLACE_MULTIPLE_LENGTHS.format(data = repr(ldata)))
+                raise TT_Error(_UNKNOWN_TAG.format(tag = tag))
+            dmap = lessons[taglist[0]]['lengths']
             n = 0
             for d, i in dmap.items():
                 n += i
@@ -1023,8 +1063,10 @@ class Placements:
                 if n > len(places_list):
                     print(_PREPLACE_TOO_FEW.format(tag = tag))
                 else:
-                    print(_PREPLACE_TOO_MANY.format(tag = tag))
+                    raise TT_Error(_PREPLACE_TOO_MANY.format(tag = tag))
             self.predef.append((tag, places_list))
+#TODO: Support cases with multiple lengths by doing in order of
+# increaasing length
 
 ###
 

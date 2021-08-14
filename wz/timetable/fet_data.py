@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-12
+TT/asc_data.py - last updated 2021-08-14
 
 Prepare fet-timetables input from the various sources ...
 
@@ -26,7 +26,6 @@ __TEST = False
 
 FET_VERSION = '6.1.1'
 
-GROUP_SEPARATOR = '-'
 LUNCH_BREAK_SID = 'mp'
 
 ### Messages
@@ -62,7 +61,7 @@ from itertools import combinations
 import xmltodict
 
 from timetable.tt_data import Classes, Days, Periods, Placements, Rooms, \
-        Subjects, Teachers, TT_Error, WHOLE_CLASS, groups_are_subset
+        Subjects, Teachers, TT_Error
 
 ### -----
 
@@ -89,84 +88,63 @@ class Periods_fet(Periods):
 ###
 
 class Classes_fet(Classes):
+#?
+    def __init__(self, *args, **kargs):
+        super().__init__(*args, **kargs)
+        self.atomic_groups = {}
+#
     def class_data(self, klass):
         """Return a fet students_list/year entry for the given class.
         """
-        divisions = self.class_divisions[klass]
-        number_of_categories = len(divisions) - 1
+        class_groups = self.class_groups[klass]
+        division = self.atomics_lists[klass]
+# Try with just 0 or 1 category.
+        # The groups are all the "elemental" groups plus any dotted groups
+        # which are used and not "atomic" groups already defined as subgroups.
         year_entry = {
-            'Name': klass, 'Number_of_Students': '0',
+            'Name': klass,
 #TODO: long name?
+            'Number_of_Students': '0',
             'Comments': None, # '1. Großklasse'. etc.?
-            'Number_of_Categories': f'{number_of_categories}',
-            'Separator': GROUP_SEPARATOR
+            'Number_of_Categories': '1' if division else '0',
+            'Separator': '.'
         }
-        # Collect "atomic" groups (the minimal subgroups)
-        atomic_groups = set()
-        try:
-            self.atomic_groups[klass] = atomic_groups
-        except AttributeError:
-            self.atomic_groups = {klass: atomic_groups}
-        if number_of_categories == 1:
-            glist = divisions[1]
-            year_entry['Category'] = {
-                'Number_of_Divisions': f'{len(glist)}',
-                'Division': glist
-            }
+        if division:
             _groups = []
-            for g in glist:
-                gsj = f'{klass}{GROUP_SEPARATOR}{g}'
-                atomic_groups.add(gsj)
-                _groups.append(
-                    {   'Name': gsj,
-                        'Number_of_Students': '0',
-                        'Comments': None
-                    }
-                )
-            if not atomic_groups:
-                atomic_groups.add(klass)
-            year_entry['Group'] = _groups
-        elif number_of_categories > 1:
-            year_entry['Category'] = [
-                {'Number_of_Divisions': f'{len(glist)}',
-                    'Division': glist
-                } for glist in divisions[1:]
-            ]
-            #print("\n$$$", year_entry)
-            groups = []
-            subgroups = [[klass]]
-            for glist in divisions[1:]:
-                nsg = []
-                for g in glist:
-                    groups.append(g)
-                    for s in subgroups:
-                        nsg.append(s + [g])
-                subgroups = nsg
-            #print("\n$$$g", groups)
-            #print("\n$$$s", subgroups)
-            g_sg = {}
-            for g in groups:
-                g_sg[g] = []
-                for sg in subgroups:
-                    if g in sg:
-                        gsj = GROUP_SEPARATOR.join(sg)
-                        atomic_groups.add(gsj)
-                        try:
-                            g_sg[g].append(gsj)
-                        except KeyError:
-                            g_sg[g] = [gsj]
-            year_entry['Group'] = [
-                {   'Name': f'{klass}{GROUP_SEPARATOR}{g}',
-                    'Number_of_Students': '0',
-                    'Comments': None,
-                    'Subgroup': [
-                        {'Name': sg,'Number_of_Students': '0',
-                         'Comments': None
-                        } for sg in sglist
+            _agset = set()
+            for g, sgs in class_groups.items():
+                if g == '*': continue
+                g = f'{klass}.{g}'
+                if g in sgs:
+                    # This group is an atomic group
+                    if g not in _agset:
+                        _agset.add(g)
+                        _groups.append(
+                            {   'Name': g,
+                                'Number_of_Students': '0',
+                                'Comments': None
+                            }
+                        )
+                else:
+                    _agset.update(sgs)
+                    _subgroups = [
+                        {   'Name': sg,
+                            'Number_of_Students': '0',
+                            'Comments': None
+                        } for sg in sgs
                     ]
-                } for g, sglist in g_sg.items()
-            ]
-            #for yeg in year_entry['Group']: print("\n§§§", yeg)
+                    _groups.append(
+                        {   'Name': g,
+                            'Number_of_Students': '0',
+                            'Comments': None,
+                            'Subgroup': _subgroups
+                        }
+                    )
+            year_entry['Category'] = {
+                'Number_of_Divisions': f'{len(division)}',
+                'Division': division
+            }
+            year_entry['Group'] = _groups
         return year_entry
 #
     def class_days(self, klass):
@@ -202,25 +180,33 @@ class Classes_fet(Classes):
         lid = 0
         for tag, data in self.lessons.items():
             block = data['block']
-            if block and block != '*':
-                continue
+            if block and block not in ('++', '--'):
+                continue    # not a timetabled lesson
             sid = data['SID']
-#            classes = ','.join(sorted(data['CLASSES']))
+            klass = data['CLASS']
             groups = data['GROUPS']
             gids = sorted(groups)
-            if not gids:
-#TODO: Is this possible?
-                print(f"!!! LESSON WITHOUT GROUP: classes {classes};"
+            if gids:
+                _kg = {}
+                for g in gids:
+                    k, gg = self.split_class_group(g)
+                    try:
+                        _kg[k].append(g)
+                    except KeyError:
+                        _kg[k] = [g]
+                _gids = []
+                for k, gl in _kg.items():
+                    try:
+                        _gids.append(self.groupsets_class[k][frozenset(gl)])
+                    except KeyError:
+                        _gids += gl
+                g = _gids[0] if len(_gids) == 1 else _gids
+#                print("???", tag, gids, "-->", g)
+            else:
+                print(f"LESSON WITHOUT GROUP: classes {data['CLASS']};"
                         f" sid {sid}")
-                continue
-            _gids = []
-            for g in gids:
-#                k, _g = g.split(GROUP_SEPARATOR)
-# In "tt_data.py" I am not (yet) using <GROUP_SEPARATOR>, but there is
-# explicit use of '-' ...
-                k, _g = g.split('-')
-                _gids.append(k if _g == WHOLE_CLASS else g)
-            g = _gids[0] if len(_gids) == 1 else _gids
+#TODO: ?
+                g = None
             tids = sorted(data['TIDS'])
             if not tids:
 #TODO?
@@ -228,14 +214,20 @@ class Classes_fet(Classes):
                         f" sid {sid}")
                 continue
 #TODO: Nasty bodge – think of some better way of doing this!
-            if sid == 'Hu' and block == '*':
+#            if sid == 'Hu' and block == '++':
+#                t = None
+# Better?:
+            if '--' in tids:
                 t = None
             elif len(tids) == 1:
                 t = tids[0]
             else:
                 t = tids
+
 #TODO: add room constraints
 #            rooms = ','.join(sorted(data['ROOMS']))
+
+
             dmap = data['lengths']
             if dmap:
                 aid = '0'
@@ -247,9 +239,10 @@ class Classes_fet(Classes):
                         _tag_lids.append(lid)
                         dstr = str(d)
                         lesson = {'Teacher': t} if t else {}
+                        if g:
+                            lesson['Students'] = g
                         lesson.update({
                             'Subject': sid,
-                            'Students': g,
                             'Duration': dstr,
                             'Total_Duration': dstr,
                             'Id': str(lid),
@@ -258,12 +251,19 @@ class Classes_fet(Classes):
                             'Comments': __tag
                         })
                         lesson_list.append(lesson)
-                    self.tag_lids[__tag] = _tag_lids
+                    try:
+                        self.tag_lids[__tag] += _tag_lids
+                    except KeyError:
+                        self.tag_lids[__tag] = _tag_lids
                     try:
                         self.sid_groups[sid].append((groups, __tag))
                     except KeyError:
                         self.sid_groups[sid] = [(groups, __tag)]
         self.last_lesson_id = lid
+#TODO--
+#        print("???", self.tag_lids)
+
+
         return lesson_list
 #
     def constraint_no_gaps(self, time_constraints):
@@ -288,7 +288,8 @@ class Classes_fet(Classes):
 # There needs to be a lunch-break lesson for every sub-group of the class!
         constraints = []
         for klass, weekdata in self.class_days_periods.items():
-            atomic_groups = self.atomic_groups[klass]
+            atomic_groups = self.class_groups[klass]['*']
+            groupsets = self.groupsets_class[klass]
             #print(f"??? {klass}", atomic_groups)
             for day, daydata in weekdata.items():
                 if daydata['5']:
@@ -300,7 +301,7 @@ class Classes_fet(Classes):
                         lesson = {
 #                            'Teacher': {},
                             'Subject': LUNCH_BREAK_SID,
-                            'Students': g,
+                            'Students': groupsets.get(frozenset([g])) or g,
                             'Duration': '1',
                             'Total_Duration': '1',
                             'Id': lid,
@@ -345,11 +346,11 @@ class Classes_fet(Classes):
             for groups, tag in sdata:
                 gset = set()
                 for g in groups:
-                    k, x = g.split('-')
-                    if x == WHOLE_CLASS:
-                        gset.update(self.atomic_groups[k])
-                    else:
+                    k, x = self.split_class_group(g)
+                    if x:
                         gset.add(g)
+                    else:
+                        gset.update(self.class_groups[k]['*'])
                 tglist.append((gset, tag))
             tgmap = {}
 #TODO: extract the lesson-ids from the tags?
@@ -809,33 +810,44 @@ def constraint_teacher_breaks(max_lessons, time_constraints):
 ###
 
 class Placements_fet(Placements):
-    def placements(self, days, periods, tag_lids):
+    def placements(self, days, periods, classes):
+        tag_lids = classes.tag_lids
+
+#        print("\n tag_lids::::::::::::::::::")
+#        for k, v in tag_lids.items():
+#            print(f"  {k}:", v)
+
+#        print("\n*** Parallel tags ***")
+#        for k, v in self.parallel_tags.items():
+#            print(f"  {k}:", v)
+
         cards = []
-        for tag, places_list in self.predef:
-            try:
-                lids = tag_lids[tag]
-            except KeyError:
-#TODO:
-                print(f"WARNING: No lesson with tag {tag}")
-                continue
-            i = 0
-            for d, p in places_list:
+        for _tag, places_list in self.predef:
+            for tag in classes.parallel_tags[_tag]:
                 try:
-                    lid = lids[i]
-                except ValueError:
+                    lids = tag_lids[tag]
+                except KeyError:
 #TODO:
-                    print(f"ERROR: too many placements for tag {tag}")
-                i += 1
-                cards.append({
-                        'Weight_Percentage': '100',
-                        'Activity_Id': str(lid),
-                        'Preferred_Day': days[d],
-                        'Preferred_Hour': periods[p],
-                        'Permanently_Locked': 'true',
-                        'Active': 'true',
-                        'Comments': None
-                    }
-                )
+                    print(f"WARNING: No lesson with tag {tag}")
+                    continue
+                i = 0
+                for d, p in places_list:
+                    try:
+                        lid = lids[i]
+                    except ValueError:
+#TODO:
+                        print(f"ERROR: too many placements for tag {tag}")
+                    i += 1
+                    cards.append({
+                            'Weight_Percentage': '100',
+                            'Activity_Id': str(lid),
+                            'Preferred_Day': days[d],
+                            'Preferred_Hour': periods[p],
+                            'Permanently_Locked': 'true',
+                            'Active': 'true',
+                            'Comments': None
+                        }
+                    )
         return cards
 
 ###
@@ -949,10 +961,16 @@ if __name__ == '__main__':
     print("\nTEACHER CHECK-LIST ->", outpath)
 
     classes = []
-    if __TEST:
-        print(f"\nfet-CLASS {_klass}\n",_classes.class_data(_klass))
     for klass in c_list:
-        classes.append(_classes.class_data(klass))
+        if klass.startswith('XX'): continue
+        class_data = _classes.class_data(klass)
+        classes.append(class_data)
+        if __TEST:
+            print(f"\nfet-CLASS {klass}")
+            for g in class_data.get('Group') or []:
+                print("  ---", g['Name'])
+                for sg in g.get('Subgroup') or []:
+                    print("     +", sg['Name'])
 
     lessons = _classes.get_lessons()
     if __TEST:
@@ -981,18 +999,18 @@ if __name__ == '__main__':
         p2list.append(pid)
         i += 1
         p2[str(i)] = pid
-    cards = Placements_fet(_classes.lessons)
+    cards = Placements_fet(_classes)
     if __TEST:
         print("\n ********* FIXED LESSONS *********\n")
         #for l, data in _classes.lessons.items():
         #    print(f"   {l}:", data)
-        for card in cards.placements(d2, p2, _classes.tag_lids):
+        for card in cards.placements(d2, p2, _classes):
             print("   ", card)
 
     time_constraints = build_time_constraints(
             CLASSFREE = _classes.classes_timeoff(),
             TEACHERFREE = _teachers.get_all_blocked_periods(d2list, p2list),
-            CARDS = cards.placements(d2, p2, _classes.tag_lids)
+            CARDS = cards.placements(d2, p2, _classes)
         )
 
     _classes.lunch_breaks(lessons, time_constraints)
