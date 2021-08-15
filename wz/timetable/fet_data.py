@@ -26,7 +26,8 @@ __TEST = False
 
 FET_VERSION = '6.1.1'
 
-LUNCH_BREAK_SID = 'mp'
+LUNCH_BREAK = ('mp', "Mittagspause")
+VIRTUAL_ROOM = ('dummy', "Zusatzraum")
 
 ### Messages
 _NO_JOINT_ROOMS = "Fach {sid} ({tag}), Klassen {classes}:" \
@@ -177,6 +178,7 @@ class Classes_fet(Classes):
         """Build list of lessons for fet-timetables.
         """
         space_constraints = {}  # for room placements
+        time_constraints = {}   # for "virtual" lessons (multiple rooms)
         lesson_list = []
         self.tag_lids = {}      # {tag: [lesson-id (int), ...]}
         # For constraints concerning relative placement of individual
@@ -295,17 +297,49 @@ class Classes_fet(Classes):
                         })
                         lesson_list.append(lesson)
                         if room_constraints:
-#TODO: Multiple rooms
-# At present I am just taking the first one
-                            room_constraint, rc_item = room_constraints[0]
+                            r_c, rc_item = room_constraints[0]
                             try:
-                                rc = space_constraints[room_constraint]
+                                s_c = space_constraints[r_c]
                             except KeyError:
-                                rc = []
-                                space_constraints[room_constraint] = rc
+                                s_c = []
+                                space_constraints[r_c] = s_c
                             rci = rc_item.copy()
                             rci['Activity_Id'] = _lid
-                            rc.append(rci)
+                            s_c.append(rci)
+                            if len(room_constraints) > 1:
+                                # Multiple room: generate "virtual" lessons
+                                _rids = [_lid]
+                                for r_c, rc_item in room_constraints[1:]:
+                                    lid += 1
+                                    _xlid = str(lid)
+                                    _rids.append(_xlid)
+                                    lesson = {
+#                                        'Teacher': {},
+                                        'Subject': VIRTUAL_ROOM[0],
+#                                        'Students': {},
+                                        'Duration': dstr,
+                                        'Total_Duration': dstr,
+                                        'Id': _xlid,
+                                        'Activity_Group_Id': '0',
+                                        'Active': 'true',
+                                        'Comments': f'++{_lid}'
+                                    }
+                                    lesson_list.append(lesson)
+                                # Add start-time constraint
+                                time_constraint = {
+                                    'Weight_Percentage': '100',
+                                    'Number_of_Activities': str(len(_rids)),
+                                    'Activity_Id': _rids,
+                                    'Active': 'true',
+                                    'Comments': None
+                                }
+                                tc_tag = 'ConstraintActivitiesSameStartingTime'
+                                try:
+                                    t_c = time_constraints[tc_tag]
+                                except KeyError:
+                                    t_c = []
+                                    time_constraints[tc_tag] = t_c
+                                t_c.append(time_constraint)
                     try:
                         self.tag_lids[__tag] += _tag_lids
                     except KeyError:
@@ -319,7 +353,7 @@ class Classes_fet(Classes):
 #        print("???", self.tag_lids)
 
 
-        return lesson_list, space_constraints
+        return lesson_list, space_constraints, time_constraints
 #
     def constraint_no_gaps(self, time_constraints):
         """Set no gaps (in the lower classes?).
@@ -355,7 +389,7 @@ class Classes_fet(Classes):
                         lid = str(self.last_lesson_id)
                         lesson = {
 #                            'Teacher': {},
-                            'Subject': LUNCH_BREAK_SID,
+                            'Subject': LUNCH_BREAK[0],
                             'Students': groupsets.get(frozenset([g])) or g,
                             'Duration': '1',
                             'Total_Duration': '1',
@@ -396,6 +430,9 @@ class Classes_fet(Classes):
         sid_group_sets = {}
         constraints = []
         for sid, sdata in self.sid_groups.items():
+            if sid == VIRTUAL_ROOM[0]:
+                continue
+
             # Get a set of tags for each "atomic" group (for this subject)
             tglist = []
             for groups, tag in sdata:
@@ -560,9 +597,12 @@ class Rooms_fet(Rooms):
 
 class Subjects_fet(Subjects):
     def get_subjects(self):
-        return [{'Name': sid, 'Comments': name}
+        sids = [{'Name': sid, 'Comments': name}
                 for sid, name in self.items()
         ]
+        sids.append({'Name': VIRTUAL_ROOM[0], 'Comments': VIRTUAL_ROOM[1]})
+        sids.append({'Name': LUNCH_BREAK[0], 'Comments': LUNCH_BREAK[1]})
+        return sids
 
 ########################################################################
 def build_time_constraints(CLASSFREE, TEACHERFREE, CARDS):
@@ -854,6 +894,16 @@ def constraint_teacher_breaks(max_lessons, time_constraints):
     ]
 
 """
+# Should I have this one?
+<ConstraintStudentsEarlyMaxBeginningsAtSecondHour>
+    <Weight_Percentage>100</Weight_Percentage>
+    <Max_Beginnings_At_Second_Hour>0</Max_Beginnings_At_Second_Hour>
+    <Active>true</Active>
+    <Comments></Comments>
+</ConstraintStudentsEarlyMaxBeginningsAtSecondHour>
+"""
+
+"""
 # This one seems to make the generation impossible (it must be 100%):
 <ConstraintTeachersMinHoursDaily>
     <Weight_Percentage>100</Weight_Percentage>
@@ -1029,7 +1079,7 @@ if __name__ == '__main__':
                 for sg in g.get('Subgroup') or []:
                     print("     +", sg['Name'])
 
-    lessons, space_constraints = _classes.get_lessons(_rooms)
+    lessons, space_constraints, t_constraints = _classes.get_lessons(_rooms)
     if __TEST:
         print("\n ********* fet LESSONS *********\n")
         #for l, data in _classes.lessons.items():
@@ -1085,6 +1135,8 @@ if __name__ == '__main__':
         constraint_min_lessons(g, 5, time_constraints)
 #?
     constraint_teacher_breaks(4, time_constraints)
+
+    time_constraints.update(t_constraints)
 
     xml_fet = xmltodict.unparse(build_dict_fet(
             ROOMS = rooms,
