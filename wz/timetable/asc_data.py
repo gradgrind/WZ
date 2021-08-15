@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-14
+TT/asc_data.py - last updated 2021-08-15
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -33,6 +33,10 @@ __TEST = False
 
 _DUPLICATE_TAG = "Fachtabelle, im Feld {key}: Werte „{source1}“ und" \
         " „{source2}“ sind intern nicht unterscheidbar."
+_NO_JOINT_ROOMS = "Fach {sid} ({tag}), Klassen {classes}:" \
+        " Keine verfügbare Räume (zu '?')"
+_LESSON_NO_GROUP = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Gruppe"
+_LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Lehrer"
 
 WHOLE_CLASS = "alle"    # name for a "group" comprising the whole class
 
@@ -134,30 +138,25 @@ class Classes_aSc(Classes):
             '@timeoff': self.class_days(klass)
         }
 #
-    def get_lessons(self):
+    def get_lessons(self, rooms):
         """Build list of lessons for aSc-timetables.
         """
         lesson_list = []
-#TODO --
-        __count = 0
         for tag, data in self.lessons.items():
             block = data['block']
             if block and block not in ('++', '--'):
                 continue    # not a timetabled lesson
-
-#TODO --
-#            __count += 1
-#            if __count > 10:
-#                continue
-
             sid = idsub(data['SID'])
-
+            klass = data['CLASS']
             _classes = set()
             _groups = []
             for g in sorted(data['GROUPS']):
                 k, gg = self.split_class_group(g)
                 _classes.add(k)
                 _groups.append(idsub(f"{k}-{gg if gg else WHOLE_CLASS}"))
+            if not _groups:
+                REPORT("WARN", _LESSON_NO_GROUP.format(klass = klass,
+                        sid = sid))
             classes = ','.join(sorted(_classes))
             groups = ','.join(_groups)
 #TODO "Simplify" groups?
@@ -165,22 +164,36 @@ class Classes_aSc(Classes):
 
             _tids = sorted(data['TIDS'])
             if not _tids:
-#TODO?
-                print(f"!!! LESSON WITHOUT TEACHER: classes {classes};"
-                        f" sid {sid}")
+                REPORT("WARN", _LESSON_NO_TEACHER.format(klass = klass,
+                        sid = sid))
                 continue
             if '--' in _tids:
                 tids = ''
             else:
                 tids = ','.join(sorted(_tids))
 
-#            print("*** ROOMS:", data['ROOMS'])
 #TODO: Multiple rooms are not (presently) supported in the aSc-XML files.
-# Remove '?' from the set and include the rest as options.
-            _rlist = [r for r in data['ROOMS'][1] if r != '?']
-            _rlist.sort()
-            rooms = ','.join(_rlist)
-#            print("*** ROOMS:", rooms)
+# Make a simple list of all permissible rooms as options.
+            _rset = set()
+            for r in data['ROOMS']:
+                for _r in r.split('/'):
+                    _rset.add(_r)
+            try:
+                _rset.remove('?')
+            except KeyError:
+                pass
+            else:
+                xrooms = set.intersection(*[
+                        set(rooms.rooms_for_class[k])
+                                for k in _classes
+                    ]
+                )
+                if not xrooms:
+                    raise TT_Error(_NO_JOINT_ROOMS.format(
+                            classes = classes, sid = sid, tag = tag))
+                _rset.update(xrooms)
+            myrooms = ','.join(sorted(_rset))
+#            print("*** ROOMS:", myrooms)
 
             dmap = data['lengths']
             if dmap:
@@ -202,7 +215,7 @@ class Classes_aSc(Classes):
                         # Note that the number of periods in aSc means the
                         # number of _single_ periods:
                         '@periodsperweek': str(n * d),
-                        '@classroomids': rooms
+                        '@classroomids': myrooms
                     }
                     lesson_list.append(lesson)
         return lesson_list
@@ -406,10 +419,10 @@ if __name__ == '__main__':
         print("\nLONG TAGS:\n", _teachers.longtag.values())
 
     _rooms = Rooms_aSc()
-    classrooms = _rooms.get_rooms()
+    allrooms = _rooms.get_rooms()
     if __TEST:
         print("\nROOMS:")
-        for rdata in classrooms:
+        for rdata in allrooms:
             print("   ", rdata)
 
     _subjects = Subjects_aSc()
@@ -437,7 +450,7 @@ if __name__ == '__main__':
     os.makedirs(outdir, exist_ok = True)
 
     # Check-lists for teachers
-    outpath = os.path.join(outdir, 'teacher_check2.txt')
+    outpath = os.path.join(outdir, 'teacher_check.txt')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write("STUNDENPLAN 2021/22: Lehrer-Stunden\n"
                 "===================================\n")
@@ -455,7 +468,7 @@ if __name__ == '__main__':
         print("\n  aSc-CLASSES:", classes)
         print("\n  aSc-GROUPS:", groups)
 
-    lessons = _classes.get_lessons()
+    lessons = _classes.get_lessons(_rooms)
     if __TEST:
         print("\n ********* aSc LESSONS *********\n")
         #for l, data in _classes.lessons.items():
@@ -483,7 +496,7 @@ if __name__ == '__main__':
             print("   ", card)
 
     xml_aSc = xmltodict.unparse(build_dict(
-            ROOMS = classrooms,
+            ROOMS = allrooms,
             PERIODS = periods,
             TEACHERS = teachers,
             SUBJECTS = subjects,

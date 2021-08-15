@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-08-14
+TT/tt_data.py - last updated 2021-08-15
 
 Read timetable information from the various sources ...
 
@@ -62,7 +62,10 @@ _BAD_TIDS = "Klasse {klass}: ungültige Lehrkräfte ({tids}) für {sname}"
 _UNKNOWN_TEACHER = "Klasse {klass}: unbekannte Lehrkraft ({tid}) für {sname}"
 _ROOM_INVALID = "Raumkürzel dürfen nur aus Zahlen und" \
         " lateinischen Buchstaben bestehen: {rid} ist ungültig."
-_UNKNOWN_ROOM = "Klasse {klass}: unbekannter Raum ({rid})"
+_UNKNOWN_ROOM = "Klasse {klass}, Fach {sname}: unbekannter Raum ({rid})"
+_DOUBLED_ROOM = "Klasse {klass}, Fach {sname}: Raum ({rid}) zweimal angegeben"
+_ADD_ROOM_DOUBLE = "Klasse {klass}, Fach {sname}: Raum ({rid}) wurde dem" \
+        " Block {block} schon zugefügt"
 _DOUBLED_KEY = "Tabelle der {table}: Feld „{key}“ muss eindeutig sein:" \
         " „{val}“ kommt zweimal vor"
 _LESSON_CLASS_MISMATCH = "In der Tabelle der Unterrichtsstunden für" \
@@ -74,7 +77,7 @@ _REPEATED_DAY_PERIOD = "Tabelle der festen Stunden: wiederholte" \
         " Tag.Stunde-Angabe für Kennung {tag}: {d_p}"
 _PREPLACE_TOO_MANY = "Warnung: zu viele feste Stunden definiert für" \
         " Stundenkennung {tag}"
-_PREPLACE_TOO_FEW = "Warnung: zu wenig feste Stunden definiert für" \
+_PREPLACE_TOO_FEW = "Zu wenig feste Stunden definiert für" \
         " Stundenkennung {tag}"
 _TABLE_ERROR = "In Klasse {klass}: {e}"
 _SUBJECT_NAME_MISMATCH = "Klasse {klass}, Fach {sname} ({sid}):" \
@@ -482,23 +485,22 @@ class Classes:
             if not '--' in teachers:
                 block_lesson['TIDS'].update(teachers)
             block_lesson['GROUPS'].update(_groups)
-            if rooms[0]:
+            if rooms:
                 if block_lesson['block'] == '--':
                     raise TT_Error(_ROOM_NO_LESSON.format(
                         klass = klass, sname = sname))
-                # Add rooms to lesson, but only if they are
-                # really new
+                # Add rooms to lesson, but only if they are really new
                 block_rooms = block_lesson['ROOMS']
-                n, _rooms = block_rooms
-                l = len(_rooms)
-                _rooms.update(rooms[1])
-                l1 = len(_rooms) - l
-                n1 = rooms[0]
-                if l1 >= n1:
-                    n += n1
-                else:
-                    n += l1
-                block_rooms[0] = n
+                for rid in rooms:
+                    if rid in block_rooms:
+                        _block = block_lesson['SID']
+                        if tag:
+                            _block += f"/{tag}"
+                        REPORT("WARN", _ADD_ROOM_DOUBLE.format(
+                                klass = klass, sname = sname,
+                                block = _block, rid = rid))
+                    else:
+                        block_rooms.append(rid)
         #+
         lesson_id = 0
         blocks = {}      # collect {block-sid: block-tag}
@@ -565,29 +567,33 @@ class Classes:
             _ritems = read_field('ROOMS').split()
             # There is one item per room needed. The items can be a room,
             # a list of possible rooms ("r1/r2/ ...") or "?" (unspecified
-            # room).
+            # room for the current class).
             # The result is a number of rooms needed and a set of possible
             # rooms. Only '?' may be added multiple times.
-            n = 0
-            _rooms = set()
+            rooms = []
             if _ritems:
                 for _ritem in _ritems:
-                    if _ritem == '?':
-                        n += 1
-                        _rooms.add('?')
-                    else:
-                        _choices = []
+                    if _ritem != '?':
+                        _choices = set()
                         for rid in _ritem.split('/'):
                             if rid in self.ROOMS:
-                                if rid not in _rooms:
-                                    _choices.append(rid)
+                                if rid in _choices:
+                                    raise TT_Error(_DOUBLED_ROOM.format(
+                                            klass = klass, sname = sname,
+                                            rid = rid))
+                                else:
+                                    _choices.add(rid)
                             else:
                                 raise TT_Error(_UNKNOWN_ROOM.format(
-                                        klass = klass, rid = rid))
-                        if _choices:
-                            n += 1
-                            _rooms.update(_choices)
-            rooms = [n, _rooms]
+                                        klass = klass, sname = sname,
+                                        rid = rid))
+
+                        _ritem = '/'.join(sorted(_choices))
+                        if _ritem in rooms:
+                            raise TT_Error(_DOUBLED_ROOM.format(
+                                        klass = klass, sname = sname,
+                                        rid = _ritem))
+                    rooms.append(_ritem)
 
             ### Group
             group = read_field('GROUP')
@@ -643,6 +649,7 @@ class Classes:
 #                   each other (no intersections).
 #                   The groups of all the items must be independent of
 #                   each other (no intersections).
+#TODO:
 #                   Also, compulsory rooms must be independent of
 #                   each other, but this will be practically impossible
 #                   to test at this stage ...
@@ -684,6 +691,7 @@ class Classes:
 #                   may be repeated).
 #                   The groups will be added to the block entry, they
 #                   need not be independent.
+#TODO:
 #                   The rooms will be added to the block entry. New rooms
 #                   will cause the number of needed rooms to increase
 #                   accordingly, but repeated rooms will cause no increase.
@@ -733,6 +741,9 @@ class Classes:
                         TT_Error(_NONLESSON_BAD_LENGTH.format(
                                 klass = klass, sname = sname,
                                 length = _durations))
+                    if rooms:
+                        raise TT_Error(_ROOM_NO_LESSON.format(
+                                klass = klass, sname = sname))
                     block_field = '--'
                 else:
                     # A block component, <block> = block-sid
@@ -859,8 +870,8 @@ class Classes:
                     class_list = []
                     class_blocks = []
                     class_lessons[klass] = [class_list, class_blocks]
-                n, _rooms = rooms
-                _rooms = f" [{n}: {','.join(sorted(_rooms))}]" if n else ""
+                n = len(rooms)
+                _rooms = f" [{n}: {', '.join(sorted(rooms))}]" if n else ""
                 sname = self.SUBJECTS[sid]
                 if block == '--':
                     d = list(dmap)[0] if dmap else 0
@@ -968,6 +979,9 @@ class Rooms(dict):
         rooms = read_DataTable(YEARPATH(TT_CONFIG['ROOM_DATA']))
         rooms = filter_DataTable(rooms, fieldlist = fields,
                 infolist = [], extend = False)['__ROWS__']
+
+        self.rooms_for_class = {}       # {class: [available rooms]}
+
         for room in rooms:
             rid = room['RID']
             if rid in self:
@@ -976,6 +990,14 @@ class Rooms(dict):
             if not rid.isalnum():
                 raise TT_Error(_ROOM_INVALID.format(rid = rid))
             self[rid] = room['NAME']
+            usage = room['USAGE'].split()
+            if usage:
+                # The classes which can use this room
+                for k in usage:
+                    try:
+                        self.rooms_for_class[k].append(rid)
+                    except KeyError:
+                        self.rooms_for_class[k] = [rid]
 
 ###
 
@@ -1061,7 +1083,7 @@ class Placements:
                 n += i
             if n != len(places_list):
                 if n > len(places_list):
-                    print(_PREPLACE_TOO_FEW.format(tag = tag))
+                    REPORT("WARN", _PREPLACE_TOO_FEW.format(tag = tag))
                 else:
                     raise TT_Error(_PREPLACE_TOO_MANY.format(tag = tag))
             self.predef.append((tag, places_list))

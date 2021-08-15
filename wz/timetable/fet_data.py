@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-14
+TT/asc_data.py - last updated 2021-08-15
 
 Prepare fet-timetables input from the various sources ...
 
@@ -29,6 +29,10 @@ FET_VERSION = '6.1.1'
 LUNCH_BREAK_SID = 'mp'
 
 ### Messages
+_NO_JOINT_ROOMS = "Fach {sid} ({tag}), Klassen {classes}:" \
+        " Keine verfügbare Räume (zu '?')"
+_LESSON_NO_GROUP = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Gruppe"
+_LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Lehrer"
 
 
 ########################################################################
@@ -169,9 +173,10 @@ class Classes_fet(Classes):
         """
         return [self.class_days(klass) for klass in self.class_days_periods]
 #
-    def get_lessons(self):
+    def get_lessons(self, rooms):
         """Build list of lessons for fet-timetables.
         """
+        space_constraints = {}  # for room placements
         lesson_list = []
         self.tag_lids = {}      # {tag: [lesson-id (int), ...]}
         # For constraints concerning relative placement of individual
@@ -187,15 +192,15 @@ class Classes_fet(Classes):
             groups = data['GROUPS']
             gids = sorted(groups)
             if gids:
-                _kg = {}
+                _classes_groups = {}
                 for g in gids:
                     k, gg = self.split_class_group(g)
                     try:
-                        _kg[k].append(g)
+                        _classes_groups[k].append(g)
                     except KeyError:
-                        _kg[k] = [g]
+                        _classes_groups[k] = [g]
                 _gids = []
-                for k, gl in _kg.items():
+                for k, gl in _classes_groups.items():
                     try:
                         _gids.append(self.groupsets_class[k][frozenset(gl)])
                     except KeyError:
@@ -203,20 +208,15 @@ class Classes_fet(Classes):
                 g = _gids[0] if len(_gids) == 1 else _gids
 #                print("???", tag, gids, "-->", g)
             else:
-                print(f"LESSON WITHOUT GROUP: classes {data['CLASS']};"
-                        f" sid {sid}")
-#TODO: ?
+                REPORT("WARN", _LESSON_NO_GROUP.format(klass = klass,
+                        sid = sid))
                 g = None
+            classes = ','.join(sorted(_classes_groups))
             tids = sorted(data['TIDS'])
             if not tids:
-#TODO?
-                print(f"!!! LESSON WITHOUT TEACHER: classes {classes};"
-                        f" sid {sid}")
+                REPORT("WARN", _LESSON_NO_TEACHER.format(klass = klass,
+                        sid = sid))
                 continue
-#TODO: Nasty bodge – think of some better way of doing this!
-#            if sid == 'Hu' and block == '++':
-#                t = None
-# Better?:
             if '--' in tids:
                 t = None
             elif len(tids) == 1:
@@ -225,7 +225,57 @@ class Classes_fet(Classes):
                 t = tids
 
 #TODO: add room constraints
-#            rooms = ','.join(sorted(data['ROOMS']))
+            _roomlist = data['ROOMS']
+            room_constraint = None
+            if len(_roomlist) == 0:
+                pass    # no room constraints
+
+            elif len(_roomlist) == 1:
+                _r = _roomlist[0]
+                if _r == '?':
+                    _rlist = sorted(set.intersection(*[
+                                set(rooms.rooms_for_class[k])
+                                        for k in _classes_groups
+                            ]
+                        )
+                    )
+                    if not _rlist:
+                        raise TT_Error(_NO_JOINT_ROOMS.format(
+                                klass = klass, sid = sid, tag = tag))
+#
+
+                else:
+                    _rlist = _r.split('/')
+                if len(_rlist) == 1:
+                    room_constraint = 'ConstraintActivityPreferredRoom'
+                    rc_item = {
+                        'Weight_Percentage': '100',
+                        'Activity_Id': None,
+                        'Room': _rlist[0],
+                        'Permanently_Locked': 'true',
+                        'Active': 'true',
+                        'Comments': None
+                    }
+                else:
+                    room_constraint = 'ConstraintActivityPreferredRooms'
+                    rc_item = {
+                        'Weight_Percentage': '100',
+                        'Activity_Id': None,
+                        'Number_of_Preferred_Rooms': len(_rlist),
+                        'Preferred_Room': _rlist,
+                        'Active': 'true',
+                        'Comments': None
+                    }
+            else:
+                # Multiple rooms ...
+#TODO
+                pass
+
+#        space_constraints['ConstraintActivityPreferredRoom'] = [rc_list]
+
+
+
+
 
 
             dmap = data['lengths']
@@ -241,16 +291,26 @@ class Classes_fet(Classes):
                         lesson = {'Teacher': t} if t else {}
                         if g:
                             lesson['Students'] = g
+                        _lid = str(lid)
                         lesson.update({
                             'Subject': sid,
                             'Duration': dstr,
                             'Total_Duration': dstr,
-                            'Id': str(lid),
+                            'Id': _lid,
                             'Activity_Group_Id': aid,
                             'Active': 'true',
                             'Comments': __tag
                         })
                         lesson_list.append(lesson)
+                        if room_constraint:
+                            try:
+                                rc = space_constraints[room_constraint]
+                            except KeyError:
+                                rc = []
+                                space_constraints[room_constraint] = rc
+                            rci = rc_item.copy()
+                            rci['Activity_Id'] = _lid
+                            rc.append(rci)
                     try:
                         self.tag_lids[__tag] += _tag_lids
                     except KeyError:
@@ -264,7 +324,7 @@ class Classes_fet(Classes):
 #        print("???", self.tag_lids)
 
 
-        return lesson_list
+        return lesson_list, space_constraints
 #
     def constraint_no_gaps(self, time_constraints):
         """Set no gaps (in the lower classes?).
@@ -512,10 +572,6 @@ class Subjects_fet(Subjects):
 ########################################################################
 def build_time_constraints(CLASSFREE, TEACHERFREE, CARDS):
     return {
-        'ConstraintBasicCompulsoryTime': {
-            'Weight_Percentage': '100', 'Active': 'true', 'Comments': None
-            },
-
         'ConstraintStudentsSetNotAvailableTimes': CLASSFREE,
 #                        {'Weight_Percentage': '100', 'Students': '01G',
 #                            'Number_of_Not_Available_Times': '20',
@@ -573,41 +629,40 @@ def build_time_constraints(CLASSFREE, TEACHERFREE, CARDS):
 ###
 
 def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
-        CLASSES, LESSONS, time_constraints):
-    BASE = {
-        'fet': {
-                '@version': f'{FET_VERSION}',
-                'Mode': 'Official',
-                'Institution_Name': 'FWS Bothfeld',
-                'Comments': 'Default comments',
+        CLASSES, LESSONS, time_constraints, space_constraints):
+    fet_dict = {
+        '@version': f'{FET_VERSION}',
+        'Mode': 'Official',
+        'Institution_Name': 'FWS Bothfeld',
+        'Comments': 'Default comments',
 
-                'Days_List': {
-                    'Number_of_Days': f'{len(DAYS)}',
-                    'Day': DAYS
-                },
+        'Days_List': {
+            'Number_of_Days': f'{len(DAYS)}',
+            'Day': DAYS
+        },
 
-                'Hours_List': {
-                    'Number_of_Hours': f'{len(PERIODS)}',
-                    'Hour': PERIODS
-                },
+        'Hours_List': {
+            'Number_of_Hours': f'{len(PERIODS)}',
+            'Hour': PERIODS
+        },
 
-                'Subjects_List': {
-                    'Subject': SUBJECTS
-                },
+        'Subjects_List': {
+            'Subject': SUBJECTS
+        },
 
-                'Activity_Tags_List': None,
+        'Activity_Tags_List': None,
 
-                'Teachers_List': {
-                    'Teacher': TEACHERS
-                },
+        'Teachers_List': {
+            'Teacher': TEACHERS
+        },
 
-                'Students_List': {
-                    'Year': CLASSES
-                },
+        'Students_List': {
+            'Year': CLASSES
+        },
 
 # Try single activities instead?
-                'Activities_List': {
-                    'Activity': LESSONS
+        'Activities_List': {
+            'Activity': LESSONS
 
 #                    [
 #                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
@@ -625,12 +680,12 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
 # To specify more than one student group, use, e.g. ['01G_A', '02G_A'].
 # Also the 'Teacher' field can take multiple entries: ['JS', 'CC']
 #                    ]
-                },
+        },
 
-                'Buildings_List': None,
+        'Buildings_List': None,
 #TODO:
-                'Rooms_List': {
-                    'Room': ROOMS
+        'Rooms_List': {
+            'Room': ROOMS
 
 #                    [
 #                        {'Name': 'r1', 'Building': None, 'Capacity': '30000',
@@ -649,22 +704,29 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
 #                            ], 'Comments': None
 #                        }
 #                    ]
-                },
+        },
 # To include more than one room in a set:
 #{'Number_of_Real_Rooms': '2', 'Real_Room': ['r2', 'r3']}
-
-                'Time_Constraints_List': time_constraints,
-
-                'Space_Constraints_List': {
-                    'ConstraintBasicCompulsorySpace': {
-                        'Weight_Percentage': '100',
-                        'Active': 'true',
-                        'Comments': None
-                    }
-                }
-            }
     }
-    return BASE
+    tc_dict = {
+        'ConstraintBasicCompulsoryTime': {
+            'Weight_Percentage': '100',
+            'Active': 'true',
+            'Comments': None
+        }
+    }
+    sc_dict = {
+        'ConstraintBasicCompulsorySpace': {
+            'Weight_Percentage': '100',
+            'Active': 'true',
+            'Comments': None
+        }
+    }
+    tc_dict.update(time_constraints)
+    sc_dict.update(space_constraints)
+    fet_dict['Time_Constraints_List'] = tc_dict
+    fet_dict['Space_Constraints_List'] = sc_dict
+    return {'fet': fet_dict}
 
 
 
@@ -953,7 +1015,7 @@ if __name__ == '__main__':
     os.makedirs(outdir, exist_ok = True)
 
     # Check-lists for teachers
-    outpath = os.path.join(outdir, 'teacher_check2.txt')
+    outpath = os.path.join(outdir, 'teacher_check.txt')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write("STUNDENPLAN 2021/22: Lehrer-Stunden\n"
                 "===================================\n")
@@ -972,7 +1034,7 @@ if __name__ == '__main__':
                 for sg in g.get('Subgroup') or []:
                     print("     +", sg['Name'])
 
-    lessons = _classes.get_lessons()
+    lessons, space_constraints = _classes.get_lessons(_rooms)
     if __TEST:
         print("\n ********* fet LESSONS *********\n")
         #for l, data in _classes.lessons.items():
@@ -1037,7 +1099,9 @@ if __name__ == '__main__':
             SUBJECTS = subjects,
             CLASSES = classes,
             LESSONS = lessons,
-            time_constraints = time_constraints
+            time_constraints = time_constraints,
+            space_constraints = space_constraints
+#            space_constraints = {}
         ),
         pretty = True
     )
