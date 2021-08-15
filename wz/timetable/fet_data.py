@@ -185,7 +185,7 @@ class Classes_fet(Classes):
         lid = 0
         for tag, data in self.lessons.items():
             block = data['block']
-            if block and block not in ('++', '--'):
+            if block and block != '++':
                 continue    # not a timetabled lesson
             sid = data['SID']
             klass = data['CLASS']
@@ -224,60 +224,52 @@ class Classes_fet(Classes):
             else:
                 t = tids
 
-#TODO: add room constraints
+            # Add room constraints for lesson
+            room_constraints = []
             _roomlist = data['ROOMS']
-            room_constraint = None
-            if len(_roomlist) == 0:
-                pass    # no room constraints
+            if _roomlist:
+                # Make a list of constraints
+                _rsel = None        # Room list for '?'
+                for _r in _roomlist:
+                    if _r == '?':
+                        if _rsel:
+                            _rlist = _rsel
+                        else:
+                            _rlist = sorted(set.intersection(*[
+                                        set(rooms.rooms_for_class[k])
+                                                for k in _classes_groups
+                                    ]
+                                )
+                            )
+                            if not _rlist:
+                                raise TT_Error(_NO_JOINT_ROOMS.format(
+                                        klass = klass, sid = sid, tag = tag))
+                            _rsel = _rlist
+                    else:
+                        _rlist = _r.split('/')
+                    if len(_rlist) == 1:
+                        room_constraint = 'ConstraintActivityPreferredRoom'
+                        rc_item = {
+                            'Weight_Percentage': '100',
+                            'Activity_Id': None,
+                            'Room': _rlist[0],
+                            'Permanently_Locked': 'true',
+                            'Active': 'true',
+                            'Comments': None
+                        }
+                    else:
+                        room_constraint = 'ConstraintActivityPreferredRooms'
+                        rc_item = {
+                            'Weight_Percentage': '100',
+                            'Activity_Id': None,
+                            'Number_of_Preferred_Rooms': len(_rlist),
+                            'Preferred_Room': _rlist,
+                            'Active': 'true',
+                            'Comments': None
+                        }
+                    room_constraints.append((room_constraint, rc_item))
 
-            elif len(_roomlist) == 1:
-                _r = _roomlist[0]
-                if _r == '?':
-                    _rlist = sorted(set.intersection(*[
-                                set(rooms.rooms_for_class[k])
-                                        for k in _classes_groups
-                            ]
-                        )
-                    )
-                    if not _rlist:
-                        raise TT_Error(_NO_JOINT_ROOMS.format(
-                                klass = klass, sid = sid, tag = tag))
-#
-
-                else:
-                    _rlist = _r.split('/')
-                if len(_rlist) == 1:
-                    room_constraint = 'ConstraintActivityPreferredRoom'
-                    rc_item = {
-                        'Weight_Percentage': '100',
-                        'Activity_Id': None,
-                        'Room': _rlist[0],
-                        'Permanently_Locked': 'true',
-                        'Active': 'true',
-                        'Comments': None
-                    }
-                else:
-                    room_constraint = 'ConstraintActivityPreferredRooms'
-                    rc_item = {
-                        'Weight_Percentage': '100',
-                        'Activity_Id': None,
-                        'Number_of_Preferred_Rooms': len(_rlist),
-                        'Preferred_Room': _rlist,
-                        'Active': 'true',
-                        'Comments': None
-                    }
-            else:
-                # Multiple rooms ...
-#TODO
-                pass
-
-#        space_constraints['ConstraintActivityPreferredRoom'] = [rc_list]
-
-
-
-
-
-
+            # Generate the lesson items
             dmap = data['lengths']
             if dmap:
                 aid = '0'
@@ -302,7 +294,10 @@ class Classes_fet(Classes):
                             'Comments': __tag
                         })
                         lesson_list.append(lesson)
-                        if room_constraint:
+                        if room_constraints:
+#TODO: Multiple rooms
+# At present I am just taking the first one
+                            room_constraint, rc_item = room_constraints[0]
                             try:
                                 rc = space_constraints[room_constraint]
                             except KeyError:
