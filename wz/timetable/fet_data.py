@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-15
+TT/asc_data.py - last updated 2021-08-16
 
 Prepare fet-timetables input from the various sources ...
 
@@ -174,9 +174,59 @@ class Classes_fet(Classes):
         """
         return [self.class_days(klass) for klass in self.class_days_periods]
 #
-    def get_lessons(self, rooms):
+    def get_lessons(self):
         """Build list of lessons for fet-timetables.
         """
+        def make_room_constraints(rlist, percent):
+            rset = set()
+            for r in rlist.split('/'):
+                if r == '?':
+                    if not roomset:
+                        rsel = set.intersection(*[
+                                set(self.ROOMS.rooms_for_class[k])
+                                        for k in _classes_groups
+                            ]
+                        )
+                        if not rsel:
+                            raise TT_Error(_NO_JOINT_ROOMS.format(
+                                    klass = klass, sid = sid,
+                                    tag = tag))
+                        roomset.update(rsel)
+                    rset.update(roomset)
+                else:
+                    rset.add(r)
+            if len(rset) == 1:
+                room_constraint = 'ConstraintActivityPreferredRoom'
+                rc_item = {
+                    'Weight_Percentage': percent,
+                    'Activity_Id': None,
+                    'Room': rset.pop(),
+                    'Permanently_Locked': 'true',
+                    'Active': 'true',
+                    'Comments': None
+                }
+            else:
+                room_constraint = 'ConstraintActivityPreferredRooms'
+                rc_item = {
+                    'Weight_Percentage': percent,
+                    'Activity_Id': None,
+                    'Number_of_Preferred_Rooms': len(rset),
+                    'Preferred_Room': sorted(rset),
+                    'Active': 'true',
+                    'Comments': None
+                }
+            return (room_constraint, rc_item)
+        #+
+        def add_room_constraint(r_c, rc_item, rclid):
+            try:
+                s_c = space_constraints[r_c]
+            except KeyError:
+                s_c = []
+                space_constraints[r_c] = s_c
+            rci = rc_item.copy()
+            rci['Activity_Id'] = rclid
+            s_c.append(rci)
+        #+
         space_constraints = {}  # for room placements
         time_constraints = {}   # for "virtual" lessons (multiple rooms)
         lesson_list = []
@@ -231,45 +281,17 @@ class Classes_fet(Classes):
             _roomlist = data['ROOMS']
             if _roomlist:
                 # Make a list of constraints
-                _rsel = None        # Room list for '?'
+                roomset = set()       # Room set for '?'
                 for _r in _roomlist:
-                    if _r == '?':
-                        if _rsel:
-                            _rlist = _rsel
-                        else:
-                            _rlist = sorted(set.intersection(*[
-                                        set(rooms.rooms_for_class[k])
-                                                for k in _classes_groups
-                                    ]
-                                )
-                            )
-                            if not _rlist:
-                                raise TT_Error(_NO_JOINT_ROOMS.format(
-                                        klass = klass, sid = sid, tag = tag))
-                            _rsel = _rlist
+                    try:
+                        _pref, _all = _r.split('+')
+                    except ValueError:
+                        # No "preferred" rooms
+                        _pc, _all = None, _r
                     else:
-                        _rlist = _r.split('/')
-                    if len(_rlist) == 1:
-                        room_constraint = 'ConstraintActivityPreferredRoom'
-                        rc_item = {
-                            'Weight_Percentage': '100',
-                            'Activity_Id': None,
-                            'Room': _rlist[0],
-                            'Permanently_Locked': 'true',
-                            'Active': 'true',
-                            'Comments': None
-                        }
-                    else:
-                        room_constraint = 'ConstraintActivityPreferredRooms'
-                        rc_item = {
-                            'Weight_Percentage': '100',
-                            'Activity_Id': None,
-                            'Number_of_Preferred_Rooms': len(_rlist),
-                            'Preferred_Room': _rlist,
-                            'Active': 'true',
-                            'Comments': None
-                        }
-                    room_constraints.append((room_constraint, rc_item))
+                        _pc = make_room_constraints(_pref, '90')
+                    _ac = make_room_constraints(_all, '100')
+                    room_constraints.append((_pc, _ac))
 
             # Generate the lesson items
             dmap = data['lengths']
@@ -297,19 +319,15 @@ class Classes_fet(Classes):
                         })
                         lesson_list.append(lesson)
                         if room_constraints:
-                            r_c, rc_item = room_constraints[0]
-                            try:
-                                s_c = space_constraints[r_c]
-                            except KeyError:
-                                s_c = []
-                                space_constraints[r_c] = s_c
-                            rci = rc_item.copy()
-                            rci['Activity_Id'] = _lid
-                            s_c.append(rci)
+                            _pc, _ac = room_constraints[0]
+                            # Add the space constraints
+                            if _pc:
+                                add_room_constraint(_pc[0], _pc[1], _lid)
+                            add_room_constraint(_ac[0], _ac[1], _lid)
                             if len(room_constraints) > 1:
                                 # Multiple room: generate "virtual" lessons
                                 _rids = [_lid]
-                                for r_c, rc_item in room_constraints[1:]:
+                                for _pc, _ac in room_constraints[1:]:
                                     lid += 1
                                     _xlid = str(lid)
                                     _rids.append(_xlid)
@@ -325,6 +343,12 @@ class Classes_fet(Classes):
                                         'Comments': f'++{_lid}'
                                     }
                                     lesson_list.append(lesson)
+                                    # Add the space constraints
+                                    if _pc:
+                                        add_room_constraint(_pc[0], _pc[1],
+                                                _xlid)
+                                    add_room_constraint(_ac[0], _ac[1],
+                                            _xlid)
                                 # Add start-time constraint
                                 time_constraint = {
                                     'Weight_Percentage': '100',
@@ -1079,7 +1103,7 @@ if __name__ == '__main__':
                 for sg in g.get('Subgroup') or []:
                     print("     +", sg['Name'])
 
-    lessons, space_constraints, t_constraints = _classes.get_lessons(_rooms)
+    lessons, space_constraints, t_constraints = _classes.get_lessons()
     if __TEST:
         print("\n ********* fet LESSONS *********\n")
         #for l, data in _classes.lessons.items():

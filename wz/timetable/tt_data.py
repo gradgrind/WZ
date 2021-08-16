@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-08-15
+TT/tt_data.py - last updated 2021-08-16
 
 Read timetable information from the various sources ...
 
@@ -25,6 +25,9 @@ _TEACHERS = "Lehrkräfte" # error reporting only, refers to the input table
 _ROOMS = "Räume"         # error reporting only, refers to the input table
 _SUBJECTS = "Fachnamen"  # error reporting only, refers to the input table
 _MAX_DURATION = 4        # maximum length of a lesson
+
+# "Extra" rooms
+XROOMS = [(f"rX{i}", f"Extra-Raum {i}") for i in range(2)]
 
 ### Messages
 
@@ -63,6 +66,7 @@ _UNKNOWN_TEACHER = "Klasse {klass}: unbekannte Lehrkraft ({tid}) für {sname}"
 _ROOM_INVALID = "Raumkürzel dürfen nur aus Zahlen und" \
         " lateinischen Buchstaben bestehen: {rid} ist ungültig."
 _UNKNOWN_ROOM = "Klasse {klass}, Fach {sname}: unbekannter Raum ({rid})"
+_BAD_ROOM = "Klasse {klass}, Fach {sname}: ungültige Raumangabe ({rid})"
 _DOUBLED_ROOM = "Klasse {klass}, Fach {sname}: Raum ({rid}) zweimal angegeben"
 _ADD_ROOM_DOUBLE = "Klasse {klass}, Fach {sname}: Raum ({rid}) wurde dem" \
         " Block {block} schon zugefügt"
@@ -567,33 +571,83 @@ class Classes:
             _ritems = read_field('ROOMS').split()
             # There is one item per room needed. The items can be a room,
             # a list of possible rooms ("r1/r2/ ...") or "?" (unspecified
-            # room for the current class).
+            # room for the current class). It is also possible to use (just)
+            # one '+' instead of a '/'. In that case the rooms before
+            # the '+' get preference.
             # The result is a number of rooms needed and a set of possible
-            # rooms. Only '?' may be added multiple times.
+            # rooms. If an item (a room or group of rooms) is to be added
+            # repeatedly, it must be prefixed by 'n*', where n is the
+            # number of rooms to be chosen.
+            def read_rooms(item):
+                if not item:
+                    raise TT_Error(_BAD_ROOM.format(klass = klass,
+                            sname = sname, rid = _ritem))
+                __choices = set()
+                ilist = item.split('/')
+                while ilist:
+                    rid = ilist.pop()
+                    if rid in ('$', '?') or rid in self.ROOMS:
+                        if rid in __choices:
+                            raise TT_Error(_DOUBLED_ROOM.format(
+                                    klass = klass, sname = sname,
+                                    rid = rid))
+
+                        __choices.add(rid)
+                    else:
+                        raise TT_Error(_UNKNOWN_ROOM.format(
+                                klass = klass, sname = sname,
+                                rid = rid))
+                try:
+                    __choices.remove('$')
+                except KeyError:
+                    pass
+                else:
+                    __choices.update(self.classrooms[klass])
+                return __choices
+            #+
             rooms = []
             if _ritems:
                 for _ritem in _ritems:
-                    if _ritem != '?':
-                        _choices = set()
-                        for rid in _ritem.split('/'):
-                            if rid in self.ROOMS:
-                                if rid in _choices:
-                                    raise TT_Error(_DOUBLED_ROOM.format(
-                                            klass = klass, sname = sname,
-                                            rid = rid))
-                                else:
-                                    _choices.add(rid)
-                            else:
-                                raise TT_Error(_UNKNOWN_ROOM.format(
-                                        klass = klass, sname = sname,
-                                        rid = rid))
-
-                        _ritem = '/'.join(sorted(_choices))
-                        if _ritem in rooms:
-                            raise TT_Error(_DOUBLED_ROOM.format(
-                                        klass = klass, sname = sname,
-                                        rid = _ritem))
-                    rooms.append(_ritem)
+                    try:
+                        _n, ritem = _ritem.split('*', 1)
+                    except ValueError:
+                        ritem = _ritem
+                        n = 1
+                    else:
+                        try:
+                            n = int(_n)
+                        except ValueError:
+                            raise TT_Error(_BAD_ROOM.format(klass = klass,
+                                    sname = sname, rid = _ritem))
+                    _choices = set()
+                    try:
+                        i1, i2 = ritem.split('+', 1)
+                    except ValueError:
+                        # No "preferred" rooms
+                        i1, i2 = None, ritem
+                    _extra = read_rooms(i2)
+                    if i1:
+                        _preferred = read_rooms(i1)
+                        _ritem1 = '/'.join(sorted(_preferred))
+                        __extra = sorted(_preferred | _extra)
+                        if '?' in ritem:
+                            _ritem = '/'.join(__extra + self.ROOMS.xrooms)
+                        else:
+                            _ritem = '/'.join(__extra)
+                        _ritem = f"{_ritem1}+{_ritem}"
+                    else:
+                        __extra = sorted(_extra)
+                        _ritem = '/'.join(__extra)
+                        if '?' in ritem:
+                            _ritem2 = '/'.join(__extra + self.ROOMS.xrooms)
+                            _ritem = f"{_ritem}+{_ritem2}"
+                    if _ritem in rooms:
+                        raise TT_Error(_DOUBLED_ROOM.format(
+                                    klass = klass, sname = sname,
+                                    rid = _ritem))
+                    for i in range(n):
+                        rooms.append(_ritem)
+#                print("§§§", klass, sid, rooms)
 
             ### Group
             group = read_field('GROUP')
@@ -998,6 +1052,12 @@ class Rooms(dict):
                         self.rooms_for_class[k].append(rid)
                     except KeyError:
                         self.rooms_for_class[k] = [rid]
+#TODO: Bodge to get around missing rooms ...
+        self.xrooms = []
+        for rid, name in XROOMS:
+            self[rid] = name
+            self.xrooms.append(rid)
+
 
 ###
 

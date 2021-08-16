@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-15
+TT/asc_data.py - last updated 2021-08-16
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -144,7 +144,7 @@ class Classes_aSc(Classes):
         lesson_list = []
         for tag, data in self.lessons.items():
             block = data['block']
-            if block and block not in ('++', '--'):
+            if block and block != '++':
                 continue    # not a timetabled lesson
             sid = idsub(data['SID'])
             klass = data['CLASS']
@@ -176,8 +176,9 @@ class Classes_aSc(Classes):
 # Make a simple list of all permissible rooms as options.
             _rset = set()
             for r in data['ROOMS']:
-                for _r in r.split('/'):
-                    _rset.add(_r)
+                for _r0 in r.split('+'):
+                    for _r in _r0.split('/'):
+                        _rset.add(_r)
             try:
                 _rset.remove('?')
             except KeyError:
