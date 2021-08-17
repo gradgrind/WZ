@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-08-16
+TT/tt_data.py - last updated 2021-08-17
 
 Read timetable information from the various sources ...
 
@@ -26,7 +26,9 @@ _ROOMS = "Räume"         # error reporting only, refers to the input table
 _SUBJECTS = "Fachnamen"  # error reporting only, refers to the input table
 _MAX_DURATION = 4        # maximum length of a lesson
 
-# "Extra" rooms
+# "Extra" rooms (a bodge to avoid impossible timetables because of room
+# shortages).
+#XROOMS = []
 XROOMS = [(f"rX{i}", f"Extra-Raum {i}") for i in range(2)]
 
 ### Messages
@@ -986,15 +988,16 @@ class Teachers(dict):
         teachers = filter_DataTable(teachers, fieldlist = fields,
                 infolist = [], extend = False)['__ROWS__']
         self.blocked_periods = {}
+        _teachers = {}   # buffer to allow resorting
         for tdata in teachers:
             tid, tname, times = tdata['TID'], tdata['NAME'], tdata['TIMES']
-            if tid in self:
+            if tid in _teachers:
                 raise TT_Error(_DOUBLED_KEY.format(table = _TEACHERS,
                         key = self.tfield['TID'], val = tid))
             if not tid.isalnum():
                 raise TT_Error(_TEACHER_INVALID.format(tid = tid))
             self.alphatag[tid] = tdata['TAG']
-            self[tid] = tname
+            _teachers[tid] = tname
             if times:
                 day_list = [d.strip() for d in times.split(',')]
                 if len(day_list) != len(days):
@@ -1022,6 +1025,9 @@ class Teachers(dict):
                         pblist.append(val)
                     dlist.append(pblist)
                 self.blocked_periods[tid] = dlist
+        # Sort tags alphabetically (to make finding them easier)
+        for t in sorted(_teachers):
+            self[t] = _teachers[t]
 
 ###
 
@@ -1036,14 +1042,21 @@ class Rooms(dict):
 
         self.rooms_for_class = {}       # {class: [available rooms]}
 
+        # Bodge to get around missing rooms ...
+        self.xrooms = []
+        for rid, name in XROOMS:
+            self[rid] = name
+            self.xrooms.append(rid)
+
+        _rooms = {}   # buffer to allow resorting
         for room in rooms:
             rid = room['RID']
-            if rid in self:
+            if rid in _rooms:
                 raise TT_Error(_DOUBLED_KEY.format(table = _ROOMS,
                         key = self.tfield['RID'], val = rid))
             if not rid.isalnum():
                 raise TT_Error(_ROOM_INVALID.format(rid = rid))
-            self[rid] = room['NAME']
+            _rooms[rid] = room['NAME']
             usage = room['USAGE'].split()
             if usage:
                 # The classes which can use this room
@@ -1052,12 +1065,9 @@ class Rooms(dict):
                         self.rooms_for_class[k].append(rid)
                     except KeyError:
                         self.rooms_for_class[k] = [rid]
-#TODO: Bodge to get around missing rooms ...
-        self.xrooms = []
-        for rid, name in XROOMS:
-            self[rid] = name
-            self.xrooms.append(rid)
-
+        # Sort tags alphabetically (to make finding them easier)
+        for room in sorted(_rooms):
+            self[room] = _rooms[room]
 
 ###
 

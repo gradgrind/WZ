@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-16
+TT/asc_data.py - last updated 2021-08-17
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -42,7 +42,7 @@ WHOLE_CLASS = "alle"    # name for a "group" comprising the whole class
 
 ########################################################################
 
-import sys, os, datetime, re
+import sys, os, datetime, re, json
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
@@ -383,10 +383,81 @@ def placements_extern(tag_data, days, periods):
         )
     return cards
 
+###
+
+def read_placements(working_folder, activities_file, days, periods):
+    with open(activities_file, 'rb') as fh:
+        xml = fh.read()
+    pos_data = xmltodict.parse(xml)
+    pos_list = pos_data['Activities_Timetable']['Activity']
+    lid_data = {}
+    for p in pos_list:
+        lid = p['Id']
+        #print(f"  ++ {lid:4}: {p['Day']}.{p['Hour']} @ {p['Room']}")
+        lid_data[lid] = dict(p)
+    # Get tag_lids from working_folder('tag-lids.json')
+    with open(os.path.join(working_folder, 'tag-lids.json'), 'rb') as fh:
+        tag_lid_data = json.load(fh)
+    tag_lids = tag_lid_data['tag-lids']
+    lid_xlids = tag_lid_data['lid-xlids']
+    # Compile the necessary associations and construct the aSc entries
+    cards = []
+    tag_data = {}
+    for tag, lids in tag_lids.items():
+        data = []
+        for lid in lids:
+            item = lid_data[lid]
+            data.append(item)
+            cards.append({
+                    '@lessonid': tag,
+                    '@period': periods.get_id(item['Hour']),
+                    '@day': days.get_id(item['Day']),
+                    '@classroomids': item['Room'] or '',
+                    '@locked': '1'
+                }
+            )
+            try:
+                xlids = lid_xlids[lid]
+            except KeyError:
+                pass
+            else:
+                item['xrooms'] = [lid_data[xlid]['Room']
+                        for xlid in xlids]
+        tag_data[tag] = data
+    # Save the associations in a general format
+    outpath = os.path.join(working_folder, 'tag-placements.json')
+    with open(outpath, 'w', encoding = 'utf-8') as fh:
+        json.dump(tag_data, fh, indent = 4)
+    print("\nLesson tag placements ->", outpath)
+    return cards
+
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
+    from PySide6.QtWidgets import QApplication, QFileDialog
+    def getActivities(working_folder):
+        app = QApplication.instance()
+        if app is None:
+            # if it does not exist then a QApplication is created
+            app = QApplication()
+        d = QFileDialog(None, "Open fet 'activities' file", "",
+                "XML Files (*.xml)")
+        d.setFileMode(QFileDialog.ExistingFile)
+        d.setOptions(QFileDialog.DontUseNativeDialog)
+        history_file = os.path.join(working_folder, 'activities_history')
+        if os.path.isfile(history_file):
+            with open(history_file, 'r', encoding = 'utf-8') as fh:
+                history = fh.read().split()
+            d.setHistory(history)
+        d.exec()
+        files = d.selectedFiles()
+        if files:
+            with open(history_file, 'w', encoding = 'utf-8') as fh:
+                fh.write('\n'.join(d.history()[-10:]))
+            return files[0]
+        return None
+    #+
     _days = Days()
     _periods = Periods_aSc()
     periods = _periods.get_periods()
@@ -478,14 +549,9 @@ if __name__ == '__main__':
             print("   ", l)
         print("\n  ======================================================\n")
 
-#TODO
-    pos_path = os.path.join(outdir, 'placements.xml')
-    if os.path.isfile(pos_path):
-        with open(pos_path, 'rb') as fh:
-            xml = fh.read()
-        d = xmltodict.parse(xml)
-        cardlist = placements_extern(d['Activities_Positions']['Activity'],
-                _days, _periods)
+    activities_path = getActivities(outdir)
+    if activities_path:
+        cardlist = read_placements(outdir, activities_path, _days, _periods)
     else:
         cards = Placements_aSc(_classes.lessons)
         cardlist = cards.placements()

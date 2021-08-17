@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-16
+TT/asc_data.py - last updated 2021-08-17
 
 Prepare fet-timetables input from the various sources ...
 
@@ -230,7 +230,8 @@ class Classes_fet(Classes):
         space_constraints = {}  # for room placements
         time_constraints = {}   # for "virtual" lessons (multiple rooms)
         lesson_list = []
-        self.tag_lids = {}      # {tag: [lesson-id (int), ...]}
+        self.tag_lids = {}      # {tag: [lesson-id, ...]}
+        self.xlids = []         # [[lid, xlid1, xlid2, ... ], ... ]
         # For constraints concerning relative placement of individual
         # lessons in the various subjects:
         self.sid_groups = {}    # {sid: [(group-set, lesson-tag), ... ]}
@@ -302,12 +303,12 @@ class Classes_fet(Classes):
                     __tag = f'{tag}__{d}' if len(dmap) > 1 else tag
                     for i in range(dmap[d]):
                         lid += 1
-                        _tag_lids.append(lid)
+                        _lid = str(lid)
+                        _tag_lids.append(_lid)
                         dstr = str(d)
                         lesson = {'Teacher': t} if t else {}
                         if g:
                             lesson['Students'] = g
-                        _lid = str(lid)
                         lesson.update({
                             'Subject': sid,
                             'Duration': dstr,
@@ -349,6 +350,8 @@ class Classes_fet(Classes):
                                                 _xlid)
                                     add_room_constraint(_ac[0], _ac[1],
                                             _xlid)
+                                # Note the list of coupled lids
+                                self.xlids.append(_rids)
                                 # Add start-time constraint
                                 time_constraint = {
                                     'Weight_Percentage': '100',
@@ -375,8 +378,6 @@ class Classes_fet(Classes):
         self.last_lesson_id = lid
 #TODO--
 #        print("???", self.tag_lids)
-
-
         return lesson_list, space_constraints, time_constraints
 #
     def constraint_no_gaps(self, time_constraints):
@@ -971,7 +972,7 @@ class Placements_fet(Placements):
                     i += 1
                     cards.append({
                             'Weight_Percentage': '100',
-                            'Activity_Id': str(lid),
+                            'Activity_Id': lid,
                             'Preferred_Day': days[d],
                             'Preferred_Hour': periods[p],
                             'Permanently_Locked': 'true',
@@ -981,31 +982,6 @@ class Placements_fet(Placements):
                     )
         return cards
 
-###
-
-def read_placements(tag_lids, folder):
-    stem = os.path.basename(folder).rsplit('-', 1)[0]
-    pos_file = os.path.join(folder, stem + '_activities.xml')
-    with open(pos_file, 'rb') as fh:
-        xml = fh.read()
-    pos_data = xmltodict.parse(xml)
-    pos_list = pos_data['Activities_Timetable']['Activity']
-    lid_data = {}
-    for p in pos_list:
-        lid = p['Id']
-#        print(f"  ++ {lid:4}: {p['Day']}.{p['Hour']} @ {p['Room']}")
-        lid_data[int(lid)] = dict(p)
-    tag_data = {}
-    for tag, lids in tag_lids.items():
-        d = [lid_data[lid] for lid in lids]
-        tag_data[tag] = d
-#        print(f"  ++ {tag:12}:", d)
-# The other info can be extracted from here, but may not be necessary ...
-#    fet_file = os.path.join(folder, stem + '_data_and_timetable.fet')
-#    with open(fet_file, 'rb') as fh:
-#        xml = fh.read()
-#    fet_data = xmltodict.parse(xml)
-    return tag_data
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
@@ -1188,16 +1164,13 @@ if __name__ == '__main__':
 #    print("\n???divisions 01K:", _classes.class_divisions['01K'])
 #    print("\n???class_groups 01K:", _classes.class_groups['01K'])
 
-    fetoutdir = os.path.expanduser('~/fet-results/timetables/tt_out-single')
-    pos = read_placements(_classes.tag_lids, fetoutdir)
-    plist = []
-    for tag, tlist in pos.items():
-        for tdata in tlist:
-            tdata['Tag'] = tag
-            plist.append(tdata)
-    xml_pos = xmltodict.unparse({'Activities_Positions':
-            { 'Activity': plist}}, pretty = True)
-    outpath = os.path.join(outdir, 'placements.xml')
+    import json
+    outpath = os.path.join(outdir, 'tag-lids.json')
+    # Save association of lesson "tags" with "lids" and "xlids"
+    lid_data = {
+        'tag-lids': _classes.tag_lids,
+        'lid-xlids': {lids[0]: lids[1:] for lids in _classes.xlids}
+    }
     with open(outpath, 'w', encoding = 'utf-8') as fh:
-        fh.write(xml_pos.replace('\t', '   '))
-    print("\nPLACEMENTS XML ->", outpath)
+        json.dump(lid_data, fh, indent = 4)
+    print("\nTag – Lesson associations ->", outpath)
