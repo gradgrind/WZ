@@ -233,7 +233,8 @@ class Classes_fet(Classes):
         self.tag_lids = {}      # {tag: [lesson-id, ...]}
         self.xlids = []         # [[lid, xlid1, xlid2, ... ], ... ]
         # For constraints concerning relative placement of individual
-        # lessons in the various subjects:
+        # lessons in the various subjects, collect the tags and their
+        # pupil groups for each subject:
         self.sid_groups = {}    # {sid: [(group-set, lesson-tag), ... ]}
         lid = 0
         for tag, data in self.lessons.items():
@@ -445,6 +446,61 @@ class Classes_fet(Classes):
             time_constraints['ConstraintActivityPreferredStartingTimes'] \
                     = constraints
 #
+    def __subject_atomic_group_tags(self, tglist):
+        """Given a list of (atomic-group-set, tag) pairs, collect the
+        tags which have common groups {tag: {tag, ... }]. Tags which
+        have no other tags sharing groups will also be included (as
+        tag1: {tag1}) if the tag represents more than one lesson.
+        The result can, of course, be empty.
+        """
+        tgmap = {}
+        for agroups, tag in tglist:
+            collect = {t for gset, t in tglist if agroups & gset}
+            # This includes single tags (because items are also
+            # compared with themselves).
+            if len(collect) > 1 or len(self.tag_lids[tag]) > 1:
+                # Also include tags with multiple lessons!
+                tgmap[tag] = collect
+        return tgmap
+#
+    def __tag_sets_common_groups(self, tgmap):
+        """Given a mapping {tag: {tag, ... } as returned by
+        <__subject_atomic_group_tags>, return a list of tags-sets
+        (with more than one element) with group intersections.
+        Subsets are eliminated.
+        """
+        kcombis = set()
+        for tag, partners in tgmap.items():
+            for l in range(len(partners), 0, -1):
+                for c in combinations(partners, l):
+                    if tag in c:
+                        kcombis.add(frozenset(c))
+        xcombis = []
+        for ycombi in kcombis:
+            # Check with all components
+#                print("&&&", combi)
+            for p in ycombi:
+#                    print("%%%", p)
+                plist = tgmap[p]
+                for q in ycombi:
+                    if q not in plist:
+                        break
+                else:
+                    # ok
+                    continue
+                break
+            else:
+                xcombis.append(ycombi)
+        # Eliminate subsets
+        combis = []
+        for c in xcombis:
+            for c2 in xcombis:
+                if c < c2:
+                    break
+            else:
+                combis.append(c)
+        return combis
+#
     def constraint_day_separation(self, placements, time_constraints):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
@@ -454,67 +510,25 @@ class Classes_fet(Classes):
         _placements = {k for k, v in placements}
         sid_group_sets = {}
         constraints = []
-        for sid, sdata in self.sid_groups.items():
+        for sid, tglist in self.sid_groups.items():
             if sid == VIRTUAL_ROOM[0]:
+                continue    # ignore dummy subject
+            # <tglist> is a list of ({set of "atomic" groups}, tag) pairs
+            # for each tag.
+            # Collect the tags which share groups (for this subject)
+            tgmap = self.__subject_atomic_group_tags(tglist)
+            if not tgmap:
                 continue
 
-            # Get a set of tags for each "atomic" group (for this subject)
-            tglist = []
-            for groups, tag in sdata:
-                gset = set()
-                for g in groups:
-                    k, x = self.split_class_group(g)
-                    if x:
-                        gset.add(g)
-                    else:
-                        gset.update(self.class_groups[k]['*'])
-                tglist.append((gset, tag))
-            tgmap = {}
-#TODO: extract the lesson-ids from the tags?
-            # Collect the tags which share groups (for this subject)
-            for groups, tag in tglist:
-                collect = {t for gset, t in tglist if groups & gset}
-                if len(collect) > 1 or len(self.tag_lids[tag]) > 1:
-                    tgmap[tag] = collect
             # Get sets of tags with (group) intersections
-            kcombis = set()
-            for tag, partners in tgmap.items():
-                for l in range(len(partners), 0, -1):
-                    for c in combinations(partners, l):
-                        if tag in c:
-                            kcombis.add(frozenset(c))
-            xcombis = []
-            for combi in kcombis:
-                # Check with all components
-#                print("&&&", combi)
-                for p in combi:
-#                    print("%%%", p)
-                    plist = tgmap[p]
-                    for q in combi:
-                        if q not in plist:
-                            break
-                    else:
-                        # ok
-                        continue
-                    break
-                else:
-                    xcombis.append(combi)
-            # Eliminate subsets
-            ycombis = []
-            for c in xcombis:
-                for c2 in xcombis:
-                    if c < c2:
-                        break
-                else:
-                    ycombis.append(c)
-            if tag.startswith('01K_0'):
-                print("§§§1:", xcombis, "\n  ->", ycombis)
+            cc = self.__tag_sets_common_groups(tgmap)
+
             # Remove tag sets containing only fixed lessons (this
             # can't cope with tags whose lessons are only partially
             # placed – they are handled as tags with full placed
             # lessons).
             tagsets = set()
-            for tags in ycombis:
+            for tags in cc:
                 for tag in tags:
                     if tag not in _placements:
                         tagsets.add(tags)
