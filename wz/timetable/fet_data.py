@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-17
+TT/asc_data.py - last updated 2021-08-18
 
 Prepare fet-timetables input from the various sources ...
 
@@ -26,6 +26,8 @@ __TEST = False
 
 FET_VERSION = '6.1.1'
 
+WEIGHTS = [None, '50', '67', '80', '88', '93', '95', '97', '98', '99', '100']
+
 LUNCH_BREAK = ('mp', "Mittagspause")
 VIRTUAL_ROOM = ('dummy', "Zusatzraum")
 
@@ -34,6 +36,9 @@ _NO_JOINT_ROOMS = "Fach {sid} ({tag}), Klassen {classes}:" \
         " Keine verfügbare Räume (zu '?')"
 _LESSON_NO_GROUP = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Gruppe"
 _LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Lehrer"
+_LAST_LESSON_TAG_INVALID = "Bedingung „LAST_LESSON“: Die Kennung {tag}" \
+        " wird mehr als einmal benutzt"
+_SUBJECT_PAIR_INVALID = "Ungültiges Fach-Paar ({item}) in:\n  {path}"
 
 
 ########################################################################
@@ -66,7 +71,7 @@ from itertools import combinations
 import xmltodict
 
 from timetable.tt_data import Classes, Days, Periods, Placements, Rooms, \
-        Subjects, Teachers, TT_Error
+        Subjects, Teachers, TT_Error, TT_CONFIG
 
 ### -----
 
@@ -368,10 +373,7 @@ class Classes_fet(Classes):
                                     t_c = []
                                     time_constraints[tc_tag] = t_c
                                 t_c.append(time_constraint)
-                    try:
-                        self.tag_lids[__tag] += _tag_lids
-                    except KeyError:
-                        self.tag_lids[__tag] = _tag_lids
+                    self.tag_lids[__tag] = _tag_lids
                     try:
                         self.sid_groups[sid].append((groups, __tag))
                     except KeyError:
@@ -379,6 +381,8 @@ class Classes_fet(Classes):
         self.last_lesson_id = lid
 #TODO--
 #        print("???", self.tag_lids)
+        self.time_constraints = time_constraints
+        self.space_constraints = space_constraints
         return lesson_list, space_constraints, time_constraints
 #
     def constraint_no_gaps(self, time_constraints):
@@ -501,13 +505,92 @@ class Classes_fet(Classes):
                 combis.append(c)
         return combis
 #
+    def __pairs_common_groups(self, cmap):
+        """For each item (sid1+sid2) get all tag sets with common groups.
+        The result is a mapping. For each item, there is a further mapping,
+        {class: [(tag_sid1, {tag_sid2, ... }), ... ]}.
+        """
+        # First get all subject keys, so that the tag sets need only be
+        # generated once
+        pairs = {}
+        for klass, item_map in cmap.items():
+            for item in item_map:
+                pairs[item] = None
+        for item in pairs:
+            try:
+                sid1, sid2 = item.split('+')
+            except ValueError:
+                raise TT_Error(_SUBJECT_PAIR_INVALID.format(item = item,
+                        path = YEARPATH(TT_CONFIG['CONSTRAINTS'])))
+            tglist1 = self.sid_groups[sid1]
+            tglist2 = self.sid_groups[sid2]
+            # <tglistX> is a list of ({set of "atomic" groups}, tag)
+            # pairs for each tag.
+            # Collect the tags which share groups (for this subject)
+            _tgmap = self.__subject_atomic_group_tags(tglist1 + tglist2)
+            tgmap = {k: v for k, v in _tgmap.items() if len(v) > 1}
+            if not tgmap:
+                continue
+            # Get sets of tags with (group) intersections
+            cc = self.__tag_sets_common_groups(tgmap)
+            # Remove tag sets containing only fixed lessons (this
+            # can't cope with tags whose lessons are only partially
+            # placed – they are handled as tags with full placed
+            # lessons).
+            tagsets = set()
+            for tags in cc:
+                for tag in tags:
+                    if tag not in self.placements:
+                        tagsets.add(tags)
+                        break
+            # For every tag-set containing sid1, collect all tags
+            # with joint groups and sid2
+            tagmap = {}
+            for tset in tagsets:
+                _st = {}
+                for tag in tset:
+                    sid = self.tag_get_sid(tag)
+                    try:
+                        _st[sid].append(tag)
+                    except KeyError:
+                        _st[sid] = [tag]
+                if len(_st) > 1:
+                    for tag in _st[sid1]:
+                        for tag2 in _st[sid2]:
+                            try:
+                                tagmap[tag].add(tag2)
+                            except KeyError:
+                                tagmap[tag] = {tag2}
+            # Divide up the sets into classes
+            class_map = {}
+            for tag, tset in tagmap.items():
+                classes = {self.split_class_group(g)[0]
+                        for g in self.tag_get_groups(tag)}
+                for klass in classes:
+                    tset1 = set()
+                    for t in tset:
+                        for g in self.tag_get_groups(t):
+                            if self.split_class_group(g)[0] == klass:
+                                tset1.add(t)
+                    if tset1:
+                        tag_tset = (tag, tset1)
+                        try:
+                            class_map[klass].append(tag_tset)
+                        except KeyError:
+                            class_map[klass] = [tag_tset]
+            pairs[item] = class_map
+            for k in sorted(class_map):
+                for tset in class_map[k]:
+                    print("+++", k, tset)
+        return pairs
+#
     def constraint_day_separation(self, placements, time_constraints):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
         <placements> supplies the tags, as list of (tag, positions) pairs,
         which have fixed positions, and so do not need this constraint.
         """
-        _placements = {k for k, v in placements}
+        self.placements = {k for k, v in placements}
         sid_group_sets = {}
         constraints = []
         for sid, tglist in self.sid_groups.items():
@@ -530,7 +613,7 @@ class Classes_fet(Classes):
             tagsets = set()
             for tags in cc:
                 for tag in tags:
-                    if tag not in _placements:
+                    if tag not in self.placements:
                         tagsets.add(tags)
                         break
             if tagsets:
@@ -557,6 +640,116 @@ class Classes_fet(Classes):
 
 #TODO: This is rather a hammer-approach which could perhaps be improved
 # by collecting data class-wise?
+
+    ############### FURTHER CONSTRAINTS ###############
+
+    def class_constraint_data(self, data):
+        """Extract info for the various classes, jandling default values.
+        """
+        cmap = {}
+        try:
+            default = data.pop('*')     # WARNING: The entry is now gone!
+        except KeyError:
+            pass
+        else:
+            for klass in _classes.class_days_periods:
+                cmap[klass] = default.copy()
+        for klass, v in data.items():
+            try:
+                cmap[klass].update(v)
+            except KeyError:
+                cmap[klass] = v
+        return cmap
+#
+    def LAST_LESSON(self, data):
+        """The lessons should end the day for the respective classes.
+        """
+        constraints = []
+        for tag in data:
+            _tags = self.parallel_tags[tag]
+            if len(_tags) > 1:
+                REPORT("WARN", _LAST_LESSON_TAG_INVALID.format(tag = tag))
+            for lid in self.tag_lids[_tags[0]]:
+                constraints.append(
+                    {   'Weight_Percentage': '100',
+                        'Activity_Id': lid,
+                        'Active': 'true',
+                        'Comments': None
+                    }
+                )
+        if constraints:
+            self.time_constraints['ConstraintActivityEndsStudentsDay'] \
+                    = constraints
+#
+    def tag_get_sid(self, tag):
+        return self.lessons[tag.split('__', 1)[0]]['SID']
+#
+    def tag_get_groups(self, tag):
+        return self.lessons[tag.split('__', 1)[0]]['GROUPS']
+#
+#TODO: This might be easier using lists of tags and data for each class!
+    def ORDERED_IF_SAME_DAY(self, data):
+        """Two subjects should be in the given order, if on the same day.
+        """
+        constraints = []
+        cmap = self.class_constraint_data(data)
+        pairs = self.__pairs_common_groups(cmap)
+        for klass, item_map in cmap.items():
+            for item, weight in item_map.items():
+                percent = WEIGHTS[int(weight)]
+                if not percent:
+                    continue
+                taglist = pairs[item].get(klass) or []
+                for tag, tagset in taglist:
+                    lids2 = []
+                    for t in tagset:
+                        lids2 += self.tag_lids[t]
+                    for lid1 in self.tag_lids[tag]:
+                        #print("???", klass, item, percent, lid1, lids2)
+                        for lid2 in lids2:
+                            constraints.append(
+                                {   'Weight_Percentage': percent,
+                                    'First_Activity_Id': lid1,
+                                    'Second_Activity_Id': lid2,
+                                    'Active': 'true',
+                                    'Comments': None
+                                }
+                            )
+        if constraints:
+            self.time_constraints['ConstraintTwoActivitiesOrderedIfSameDay'] \
+                    = constraints
+#
+    def PAIR_GAPS(self, data):
+        """Two subjects should have at least one lesson in between.
+        """
+        constraints = []
+        cmap = self.class_constraint_data(data)
+        pairs = self.__pairs_common_groups(cmap)
+        for klass, item_map in cmap.items():
+            for item, weight in item_map.items():
+                percent = WEIGHTS[int(weight)]
+                if not percent:
+                    continue
+                taglist = pairs[item].get(klass) or []
+                for tag, tagset in taglist:
+                    lids2 = []
+                    for t in tagset:
+                        lids2 += self.tag_lids[t]
+                    for lid1 in self.tag_lids[tag]:
+                        print("???", klass, item, percent, lid1, lids2)
+                        for lid2 in lids2:
+                            constraints.append(
+                                {   'Weight_Percentage': percent,
+                                    'Number_of_Activities': '2',
+                                    'Activity_Id': [lid1, lid2],
+                                    'MinGaps': '1',
+                                    'Active': 'true',
+                                    'Comments': None
+                                }
+                            )
+        if constraints:
+            self.time_constraints['ConstraintMinGapsBetweenActivities'] \
+                    = constraints
 
 ###
 
@@ -1134,10 +1327,19 @@ if __name__ == '__main__':
             CARDS = cards.placements(d2, p2, _classes)
         )
 
-    _classes.lunch_breaks(lessons, time_constraints)
-
     sid_group_sets = _classes.constraint_day_separation(cards.predef,
             time_constraints)
+
+    EXTRA_CONSTRAINTS = MINION(YEARPATH(TT_CONFIG['CONSTRAINTS']))
+    for key, value in EXTRA_CONSTRAINTS.items():
+        try:
+            func = getattr(_classes, key)
+        except AttributeError:
+            print(f"CONSTRAINT {key}: Not yet implemented")
+            continue
+        func(value)
+
+    _classes.lunch_breaks(lessons, time_constraints)
 
     _classes.constraint_no_gaps(time_constraints)
 

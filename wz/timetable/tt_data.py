@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-08-17
+TT/tt_data.py - last updated 2021-08-18
 
 Read timetable information from the various sources ...
 
@@ -137,9 +137,10 @@ from tables.spreadsheet import Spreadsheet, \
         make_DataTable, make_DataTable_filetypes, \
         TableError, spreadsheet_file_complete
 
-from minion import Minion
-_Minion = Minion()
-MINION = _Minion.parse_file
+#from minion import Minion
+#_Minion = Minion()
+#MINION = _Minion.parse_file
+
 #TODO: proper path:
 TT_CONFIG = MINION(DATAPATH('CONFIG_timetable'))
 
