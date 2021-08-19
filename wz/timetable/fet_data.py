@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-18
+TT/asc_data.py - last updated 2021-08-19
 
 Prepare fet-timetables input from the various sources ...
 
@@ -39,6 +39,10 @@ _LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Lehrer"
 _LAST_LESSON_TAG_INVALID = "Bedingung „LAST_LESSON“: Die Kennung {tag}" \
         " wird mehr als einmal benutzt"
 _SUBJECT_PAIR_INVALID = "Ungültiges Fach-Paar ({item}) in:\n  {path}"
+_DODGY_GAPS_PER_WEEK = "Bedingung GAPS für Klasse {klass} ist" \
+        " wahrscheinlich fehlerhaft: {gaps}"
+_BAD_GAPS_PER_WEEK = "Bedingung GAPS für Klasse {klass} ist" \
+        " fehlerhaft: {gaps}"
 
 
 ########################################################################
@@ -237,6 +241,7 @@ class Classes_fet(Classes):
         lesson_list = []
         self.tag_lids = {}      # {tag: [lesson-id, ...]}
         self.xlids = []         # [[lid, xlid1, xlid2, ... ], ... ]
+        self.multirooms = []
         # For constraints concerning relative placement of individual
         # lessons in the various subjects, collect the tags and their
         # pupil groups for each subject:
@@ -299,6 +304,17 @@ class Classes_fet(Classes):
                         _pc = make_room_constraints(_pref, '90')
                     _ac = make_room_constraints(_all, '100')
                     room_constraints.append((_pc, _ac))
+
+            # Keep a list of subjects with multiple rooms
+            if len(room_constraints) > 1:
+                self.multirooms.append({
+                        'CLASS': klass,
+                        'GROUPS': groups,
+                        'SID': sid,
+                        'NUMBER': len(room_constraints)
+                    }
+                )
+                #print("???", self.multirooms[-1])
 
             # Generate the lesson items
             dmap = data['lengths']
@@ -384,20 +400,6 @@ class Classes_fet(Classes):
         self.time_constraints = time_constraints
         self.space_constraints = space_constraints
         return lesson_list, space_constraints, time_constraints
-#
-    def constraint_no_gaps(self, time_constraints):
-        """Set no gaps (in the lower classes?).
-        """
-#TODO: specify in config file?
-        time_constraints['ConstraintStudentsSetMaxGapsPerWeek'] = [
-            {   'Weight_Percentage': '100',
-                'Max_Gaps': '0',
-                'Students': klass,
-                'Active': 'true',
-                'Comments': None
-            } for klass in self.class_days_periods
-#                if klass < '09'
-        ]
 #
     def lunch_breaks(self, lessons, time_constraints):
 #TODO: This is very much tied to a concrete situation. Think of a more
@@ -579,9 +581,9 @@ class Classes_fet(Classes):
                         except KeyError:
                             class_map[klass] = [tag_tset]
             pairs[item] = class_map
-            for k in sorted(class_map):
-                for tset in class_map[k]:
-                    print("+++", k, tset)
+#            for k in sorted(class_map):
+#                for tset in class_map[k]:
+#                    print("+++", k, tset)
         return pairs
 #
     def constraint_day_separation(self, placements, time_constraints):
@@ -661,6 +663,44 @@ class Classes_fet(Classes):
                 cmap[klass] = v
         return cmap
 #
+    def GAPS(self, data):
+        """Maximum gaps per week for each specified class.
+        """
+        constraints = []
+        cmap = {}
+        try:
+            default = data.pop('*')     # WARNING: The entry is now gone!
+        except KeyError:
+            pass
+        else:
+            for klass in _classes.class_days_periods:
+                cmap[klass] = default
+        for klass, v in data.items():
+            cmap[klass] = v
+        for klass, gpw in cmap.items():
+            try:
+                _gpw = int(gpw)
+                if _gpw < 0:
+                    raise ValueError
+                if _gpw > 5:
+                    REPORT("WARN", _DODGY_GAPS_PER_WEEK.format(
+                            klass = klass, gaps = gpw))
+                    continue
+            except ValueError:
+                raise TT_Error(_BAD_GAPS_PER_WEEK.format(
+                            klass = klass, gaps = gpw))
+            constraints.append(
+                {   'Weight_Percentage': '100',
+                    'Max_Gaps': _gpw,
+                    'Students': klass,
+                    'Active': 'true',
+                    'Comments': None
+                }
+            )
+        if constraints:
+            self.time_constraints['ConstraintStudentsSetMaxGapsPerWeek'] \
+                    = constraints
+#
     def LAST_LESSON(self, data):
         """The lessons should end the day for the respective classes.
         """
@@ -736,7 +776,7 @@ class Classes_fet(Classes):
                     for t in tagset:
                         lids2 += self.tag_lids[t]
                     for lid1 in self.tag_lids[tag]:
-                        print("???", klass, item, percent, lid1, lids2)
+                        #print("???", klass, item, percent, lid1, lids2)
                         for lid2 in lids2:
                             constraints.append(
                                 {   'Weight_Percentage': percent,
@@ -1341,8 +1381,6 @@ if __name__ == '__main__':
 
     _classes.lunch_breaks(lessons, time_constraints)
 
-    _classes.constraint_no_gaps(time_constraints)
-
 #?
     constraint_min_lessons_all(4, time_constraints)
 #?
@@ -1390,3 +1428,14 @@ if __name__ == '__main__':
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         json.dump(lid_data, fh, indent = 4)
     print("\nTag – Lesson associations ->", outpath)
+
+    outpath = os.path.join(outdir, 'multiple-rooms')
+    with open(outpath, 'w', encoding = 'utf-8') as fh:
+        for mr in _classes.multirooms:
+            groups = ', '.join(mr['GROUPS'])
+            sname = _classes.SUBJECTS[mr['SID']]
+            fh.write(f"\nKlasse {mr['CLASS']} ({groups})"
+                    f" :: {sname}: {mr['NUMBER']}")
+
+    print("\nSubjects with multiple rooms ->", outpath)
+
