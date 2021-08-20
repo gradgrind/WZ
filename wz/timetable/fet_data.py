@@ -43,6 +43,14 @@ _DODGY_GAPS_PER_WEEK = "Bedingung GAPS für Klasse {klass} ist" \
         " wahrscheinlich fehlerhaft: {gaps}"
 _BAD_GAPS_PER_WEEK = "Bedingung GAPS für Klasse {klass} ist" \
         " fehlerhaft: {gaps}"
+_TEACHER_DAYS_WRONG = "Lehrer-Tabelle: {tname} hat die falsche Anzahl" \
+        " an Tagesangaben"
+_TEACHER_PERIODS_WRONG = "Lehrer-Tabelle: {tname} hat die falsche Anzahl" \
+        " an Stunden für {day}"
+_NO_LESSON_WITH_TAG = "Tabelle der festen Stunden: Kennung {tag} hat keine" \
+        " entsprechenden Unterrichtsstunden"
+_TAG_TOO_MANY_TIMES = "Tabelle der festen Stunden: Kennung {tag} gibt" \
+        " mehr Zeiten an, als es dafür Unterrichtsstunden gibt"
 
 
 ########################################################################
@@ -161,27 +169,31 @@ class Classes_fet(Classes):
             year_entry['Group'] = _groups
         return year_entry
 #
-    def class_days(self, klass):
-        """Return a 'ConstraintStudentsSetNotAvailableTimes' for the
-        class.
-        """
-        daymap = self.class_days_periods[klass]
-        weektags = []
-        for day in self.days:
-            dayperiods = daymap[day]
-            for p in self.periods:
-                if not dayperiods[p]:
-                    weektags.append({'Day': day, 'Hour': p})
-        return {'Weight_Percentage': '100', 'Students': klass,
-            'Number_of_Not_Available_Times': f'{len(weektags)}',
-            'Not_Available_Time': weektags,
-            'Active': 'true', 'Comments': None
-        }
-#
-    def classes_timeoff(self):
+    def constraint_blocked_periods(self):
         """Constraint: students set not available ...
         """
-        return [self.class_days(klass) for klass in self.class_days_periods]
+        constraints = []
+        for klass in self.class_days_periods:
+            daymap = self.class_days_periods[klass]
+            weektags = []
+            for day in self.days:
+                dayperiods = daymap[day]
+                for p in self.periods:
+                    if not dayperiods[p]:
+                        weektags.append({'Day': day, 'Hour': p})
+            if weektags:
+                constraints.append(
+                    {   'Weight_Percentage': '100',
+                        'Students': klass,
+                        'Number_of_Not_Available_Times': f'{len(weektags)}',
+                        'Not_Available_Time': weektags,
+                        'Active': 'true',
+                        'Comments': None
+                    }
+                )
+        if constraints:
+            self.time_constraints['ConstraintStudentsSetNotAvailableTimes'] \
+                    = constraints
 #
     def get_lessons(self):
         """Build list of lessons for fet-timetables.
@@ -401,7 +413,7 @@ class Classes_fet(Classes):
         self.space_constraints = space_constraints
         return lesson_list, space_constraints, time_constraints
 #
-    def lunch_breaks(self, lessons, time_constraints):
+    def lunch_breaks(self, lessons):
 #TODO: This is very much tied to a concrete situation. Think of a more
 # general approach.
 # I need a special lesson on the long days AND a constraint to limit it
@@ -449,7 +461,7 @@ class Classes_fet(Classes):
                             }
                         )
         if constraints:
-            time_constraints['ConstraintActivityPreferredStartingTimes'] \
+            self.time_constraints['ConstraintActivityPreferredStartingTimes'] \
                     = constraints
 #
     def __subject_atomic_group_tags(self, tglist):
@@ -586,7 +598,9 @@ class Classes_fet(Classes):
 #                    print("+++", k, tset)
         return pairs
 #
-    def constraint_day_separation(self, placements, time_constraints):
+#TODO: This is rather a hammer-approach which could perhaps be improved
+# by collecting data class-wise?
+    def constraint_day_separation(self, placements):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
         <placements> supplies the tags, as list of (tag, positions) pairs,
@@ -636,12 +650,40 @@ class Classes_fet(Classes):
                         }
                     )
         if constraints:
-            time_constraints['ConstraintMinDaysBetweenActivities'] \
+            self.time_constraints['ConstraintMinDaysBetweenActivities'] \
                     = constraints
         return sid_group_sets
+#
+    def constraint_min_lessons_per_day(self, default, custom_table):
+        constraints = []
+        for klass in self.class_days_periods:
+            try:
+                n = custom_table[klass]
+            except KeyError:
+                n = default
+            if n:
+                constraints.append(
+                    {   'Weight_Percentage': '100',
+                        'Minimum_Hours_Daily': str(n),
+                        'Students': klass,
+                        'Allow_Empty_Days': 'false',
+                        'Active': 'true',
+                        'Comments': None
+                    }
+                )
+        if constraints:
+            self.time_constraints['ConstraintStudentsSetMinHoursDaily'] \
+                    = constraints
 
-#TODO: This is rather a hammer-approach which could perhaps be improved
-# by collecting data class-wise?
+# Version for all classes:
+#    time_constraints['ConstraintStudentsMinHoursDaily'] = [
+#        {   'Weight_Percentage': '100',
+#            'Minimum_Hours_Daily': str(min_lessons),
+#            'Allow_Empty_Days': 'false',
+#            'Active': 'true',
+#            'Comments': None
+#        }
+#    ]
 
     ############### FURTHER CONSTRAINTS ###############
 
@@ -803,7 +845,46 @@ class Teachers_fet(Teachers):
             } for tid, name in self.items()
         ]
 #
-    def get_all_blocked_periods(self, days, periods):
+    def add_constraints(self, days, periods, time_constraints):
+        # Not-available times
+        blocked = self.constraint_blocked_periods(days, periods)
+        if blocked:
+            time_constraints['ConstraintTeacherNotAvailableTimes'] = blocked
+        constraints_g = []
+        constraints_u = []
+        for tid in self:
+            cdata = self.constraints[tid]
+            g = cdata['GAPS']
+            u = cdata['UNBROKEN']
+            # These are <None> or a (number, weight) pair (integers)
+            if g != None:
+                constraints_g.append(
+                    {   'Weight_Percentage': '100', # necessary!
+                        'Teacher_Name': tid,
+                        'Max_Gaps': str(g),
+                        'Active': 'true',
+                        'Comments': None
+                    }
+                )
+            if u:
+                n, w = u
+                if w:
+                    constraints_u.append(
+                        {   'Weight_Percentage': WEIGHTS[w],
+                            'Teacher_Name': tid,
+                            'Maximum_Hours_Continuously': str(n),
+                            'Active': 'true',
+                            'Comments': None
+                        }
+                    )
+        if constraints_g:
+            time_constraints['ConstraintTeacherMaxGapsPerWeek'] \
+                    = constraints_g
+        if constraints_u:
+            time_constraints['ConstraintTeacherMaxHoursContinuously'] \
+                    = constraints_u
+#
+    def constraint_blocked_periods(self, days, periods):
         """Return the blocked periods in the form needed by fet.
         """
         blocked = []
@@ -811,9 +892,8 @@ class Teachers_fet(Teachers):
             dlist = self.blocked_periods.get(tid)
             if dlist:
                 if len(dlist) != len(days):
-#TODO:
-                    print(f"ERROR: Teacher {tid} availability has"
-                            " wrong number of days")
+                    REPORT("ERROR", _TEACHER_DAYS_WRONG.format(
+                            tname = self[tid]))
                     continue
                 tlist = []
                 i = 0
@@ -821,9 +901,8 @@ class Teachers_fet(Teachers):
                     pblist = dlist[i]
                     i += 1
                     if len(pblist) != len(periods):
-#TODO:
-                        print(f"ERROR: Teacher {tid} availability has"
-                                f" wrong number of periods, day {d}")
+                        REPORT("ERROR", _TEACHER_PERIODS_WRONG.format(
+                                tname = self[tid], day = d))
                         continue
                     j = 0
                     for p in periods:
@@ -877,61 +956,55 @@ class Subjects_fet(Subjects):
         return sids
 
 ########################################################################
-def build_time_constraints(CLASSFREE, TEACHERFREE, CARDS):
-    return {
-        'ConstraintStudentsSetNotAvailableTimes': CLASSFREE,
-#                        {'Weight_Percentage': '100', 'Students': '01G',
-#                            'Number_of_Not_Available_Times': '20',
-#                            'Not_Available_Time': [
-#                                {'Day': 'Mo', 'Hour': '4'},
-#                                {'Day': 'Mo', 'Hour': '5'},
-#                                {'Day': 'Mo', 'Hour': '6'},
-#                                {'Day': 'Mo', 'Hour': '7'},
-#                                {'Day': 'Di', 'Hour': '4'},
-#                                {'Day': 'Di', 'Hour': '5'},
-# ...
-#                            ],
-#                            'Active': 'true', 'Comments': None
-#                        },
-#                        {'Weight_Percentage': '100',
-# ...
-#                        },
-#                    ],
 
-#                    'ConstraintActivitiesPreferredStartingTimes': {
-#                        'Weight_Percentage': '99.9',
-#                        'Teacher_Name': None,
-#                        'Students_Name': None,
-#                        'Subject_Name': 'Hu',
-#                        'Activity_Tag_Name': None,
-#                        'Duration': None,
-#                        'Number_of_Preferred_Starting_Times': '5',
-#                        'Preferred_Starting_Time': [
-#                            {'Preferred_Starting_Day': 'Mo', 'Preferred_Starting_Hour': 'A'},
-#                            {'Preferred_Starting_Day': 'Di', 'Preferred_Starting_Hour': 'A'},
-#                            {'Preferred_Starting_Day': 'Mi', 'Preferred_Starting_Hour': 'A'},
-#                            {'Preferred_Starting_Day': 'Do', 'Preferred_Starting_Hour': 'A'},
-#                            {'Preferred_Starting_Day': 'Fr', 'Preferred_Starting_Hour': 'A'}
-#                        ],
-#                        'Active': 'true',
-#                        'Comments': None
-#                    },
+""" 'ConstraintStudentsSetNotAvailableTimes': [
+        {'Weight_Percentage': '100', 'Students': '01G',
+            'Number_of_Not_Available_Times': '20',
+            'Not_Available_Time': [
+                {'Day': 'Mo', 'Hour': '4'},
+                {'Day': 'Mo', 'Hour': '5'},
+                {'Day': 'Mo', 'Hour': '6'},
+                {'Day': 'Mo', 'Hour': '7'},
+                {'Day': 'Di', 'Hour': '4'},
+                {'Day': 'Di', 'Hour': '5'},
+...
+            ],
+            'Active': 'true', 'Comments': None
+        },
+        {'Weight_Percentage': '100',
+...
+        },
+    ],
 
-#                    'ConstraintActivityPreferredStartingTime': {
-#                        'Weight_Percentage': '100',
-#                        'Activity_Id': '8',
-#                        'Preferred_Day': 'Mi',
-#                        'Preferred_Hour': '1',
-#                        'Permanently_Locked': 'true',
-#                        'Active': 'true',
-#                        'Comments': None
-#                    }
+    'ConstraintActivitiesPreferredStartingTimes': {
+        'Weight_Percentage': '99.9',
+        'Teacher_Name': None,
+        'Students_Name': None,
+        'Subject_Name': 'Hu',
+        'Activity_Tag_Name': None,
+        'Duration': None,
+        'Number_of_Preferred_Starting_Times': '5',
+        'Preferred_Starting_Time': [
+            {'Preferred_Starting_Day': 'Mo', 'Preferred_Starting_Hour': 'A'},
+            {'Preferred_Starting_Day': 'Di', 'Preferred_Starting_Hour': 'A'},
+            {'Preferred_Starting_Day': 'Mi', 'Preferred_Starting_Hour': 'A'},
+            {'Preferred_Starting_Day': 'Do', 'Preferred_Starting_Hour': 'A'},
+            {'Preferred_Starting_Day': 'Fr', 'Preferred_Starting_Hour': 'A'}
+        ],
+        'Active': 'true',
+        'Comments': None
+    },
 
-        'ConstraintTeacherNotAvailableTimes': TEACHERFREE,
-
-        'ConstraintActivityPreferredStartingTime': CARDS
-
+    'ConstraintActivityPreferredStartingTime': {
+        'Weight_Percentage': '100',
+        'Activity_Id': '8',
+        'Preferred_Day': 'Mi',
+        'Preferred_Hour': '1',
+        'Permanently_Locked': 'true',
+        'Active': 'true',
+        'Comments': None
     }
+"""
 
 ###
 
@@ -990,7 +1063,7 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
         },
 
         'Buildings_List': None,
-#TODO:
+
         'Rooms_List': {
             'Room': ROOMS
 
@@ -1035,55 +1108,55 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
     fet_dict['Space_Constraints_List'] = sc_dict
     return {'fet': fet_dict}
 
-
-
 ###################
-# Alternative with single activities
-#<Activity>
-#    <Teacher>JS</Teacher>
-#    <Subject>Hu</Subject>
-#    <Students>01G</Students>
-#    <Duration>2</Duration>
-#    <Total_Duration>2</Total_Duration>
-#    <Id>5</Id>
-#    <Activity_Group_Id>0</Activity_Group_Id>
-#    <Active>true</Active>
-#    <Comments></Comments>
-#</Activity>
-
-#...
-
-#<ConstraintActivityPreferredStartingTime>
-#    <Weight_Percentage>100</Weight_Percentage>
-#    <Activity_Id>1</Activity_Id>
-#    <Preferred_Day>Mo</Preferred_Day>
-#    <Preferred_Hour>A</Preferred_Hour>
-#    <Permanently_Locked>true</Permanently_Locked>
-#    <Active>true</Active>
-#    <Comments></Comments>
-#</ConstraintActivityPreferredStartingTime>
-#<ConstraintActivityPreferredStartingTime>
-#    <Weight_Percentage>100</Weight_Percentage>
-#    <Activity_Id>2</Activity_Id>
-#    <Preferred_Day>Di</Preferred_Day>
-#    <Preferred_Hour>A</Preferred_Hour>
-#    <Permanently_Locked>true</Permanently_Locked>
-#    <Active>true</Active>
-#    <Comments></Comments>
-#</ConstraintActivityPreferredStartingTime>
-
-#'ConstraintMinDaysBetweenActivities': [
-#        {'Weight_Percentage': '100', 'Consecutive_If_Same_Day': 'true',
-#            'Number_of_Activities': '2', 'Activity_Id': ['6', '7'],
-#            'MinDays': '1', 'Active': 'true', 'Comments': None
-#        },
-#        {'Weight_Percentage': '100', 'Consecutive_If_Same_Day': 'true',
-#            'Number_of_Activities': '2', 'Activity_Id': ['6', '8'],
-#            'MinDays': '1', 'Active': 'true', 'Comments': None
-#        }
-#    ]
-#},
 """
+ Alternative with single activities
+<Activity>
+    <Teacher>JS</Teacher>
+    <Subject>Hu</Subject>
+    <Students>01G</Students>
+    <Duration>2</Duration>
+    <Total_Duration>2</Total_Duration>
+    <Id>5</Id>
+    <Activity_Group_Id>0</Activity_Group_Id>
+    <Active>true</Active>
+    <Comments></Comments>
+</Activity>
+
+...
+
+<ConstraintActivityPreferredStartingTime>
+    <Weight_Percentage>100</Weight_Percentage>
+    <Activity_Id>1</Activity_Id>
+    <Preferred_Day>Mo</Preferred_Day>
+    <Preferred_Hour>A</Preferred_Hour>
+    <Permanently_Locked>true</Permanently_Locked>
+    <Active>true</Active>
+    <Comments></Comments>
+</ConstraintActivityPreferredStartingTime>
+<ConstraintActivityPreferredStartingTime>
+    <Weight_Percentage>100</Weight_Percentage>
+    <Activity_Id>2</Activity_Id>
+    <Preferred_Day>Di</Preferred_Day>
+    <Preferred_Hour>A</Preferred_Hour>
+    <Permanently_Locked>true</Permanently_Locked>
+    <Active>true</Active>
+    <Comments></Comments>
+</ConstraintActivityPreferredStartingTime>
+
+# As dict entry:
+'ConstraintMinDaysBetweenActivities': [
+        {'Weight_Percentage': '100', 'Consecutive_If_Same_Day': 'true',
+            'Number_of_Activities': '2', 'Activity_Id': ['6', '7'],
+            'MinDays': '1', 'Active': 'true', 'Comments': None
+        },
+        {'Weight_Percentage': '100', 'Consecutive_If_Same_Day': 'true',
+            'Number_of_Activities': '2', 'Activity_Id': ['6', '8'],
+            'MinDays': '1', 'Active': 'true', 'Comments': None
+        }
+    ]
+},
+
 <ConstraintTeacherNotAvailableTimes>
     <Weight_Percentage>100</Weight_Percentage>
     <Teacher>MFN</Teacher>
@@ -1127,43 +1200,31 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
     <Active>true</Active>
     <Comments></Comments>
 </ConstraintTeacherNotAvailableTimes>
+
+<ConstraintTeacherMaxHoursContinuously>
+    <Weight_Percentage>90</Weight_Percentage>
+    <Teacher_Name>AA</Teacher_Name>
+    <Maximum_Hours_Continuously>9</Maximum_Hours_Continuously>
+    <Active>true</Active>
+    <Comments></Comments>
+</ConstraintTeacherMaxHoursContinuously>
+
+<ConstraintTeacherMaxGapsPerDay>
+    <Weight_Percentage>100</Weight_Percentage>
+    <Teacher_Name>AA</Teacher_Name>
+    <Max_Gaps>1</Max_Gaps>
+    <Active>true</Active>
+    <Comments></Comments>
+</ConstraintTeacherMaxGapsPerDay>
+
+<ConstraintTeacherMaxGapsPerWeek>
+    <Weight_Percentage>100</Weight_Percentage>
+    <Teacher_Name>AA</Teacher_Name>
+    <Max_Gaps>3</Max_Gaps>
+    <Active>true</Active>
+    <Comments></Comments>
+</ConstraintTeacherMaxGapsPerWeek>
 """
-
-def constraint_min_lessons_all(min_lessons, time_constraints):
-    time_constraints['ConstraintStudentsMinHoursDaily'] = [
-        {   'Weight_Percentage': '100',
-            'Minimum_Hours_Daily': str(min_lessons),
-            'Allow_Empty_Days': 'false',
-            'Active': 'true',
-            'Comments': None
-        }
-    ]
-
-def constraint_min_lessons(group, min_lessons, time_constraints):
-    item = {
-        'Weight_Percentage': '100',
-        'Minimum_Hours_Daily': str(min_lessons),
-        'Students': group,
-        'Allow_Empty_Days': 'false',
-        'Active': 'true',
-        'Comments': None
-    }
-    try:
-        time_constraints['ConstraintStudentsSetMinHoursDaily'].append(item)
-    except KeyError:
-        time_constraints['ConstraintStudentsSetMinHoursDaily'] = [item]
-
-###
-
-def constraint_teacher_breaks(max_lessons, time_constraints):
-    time_constraints['ConstraintTeachersMaxHoursContinuously'] = [
-#TODO: Percentage?
-        {   'Weight_Percentage': '95',
-            'Maximum_Hours_Continuously': str(max_lessons),
-            'Active': 'true',
-            'Comments': None
-        }
-    ]
 
 """
 # Should I have this one?
@@ -1191,31 +1252,27 @@ def constraint_teacher_breaks(max_lessons, time_constraints):
 class Placements_fet(Placements):
     def placements(self, days, periods, classes):
         tag_lids = classes.tag_lids
-
 #        print("\n tag_lids::::::::::::::::::")
 #        for k, v in tag_lids.items():
 #            print(f"  {k}:", v)
-
 #        print("\n*** Parallel tags ***")
 #        for k, v in self.parallel_tags.items():
 #            print(f"  {k}:", v)
-
         cards = []
         for _tag, places_list in self.predef:
             for tag in classes.parallel_tags[_tag]:
                 try:
                     lids = tag_lids[tag]
                 except KeyError:
-#TODO:
-                    print(f"WARNING: No lesson with tag {tag}")
+                    REPORT("WARN", _NO_LESSON_WITH_TAG.format(tag = tag))
                     continue
                 i = 0
                 for d, p in places_list:
                     try:
                         lid = lids[i]
                     except ValueError:
-#TODO:
-                        print(f"ERROR: too many placements for tag {tag}")
+                        REPORT("ERROR", _TAG_TOO_MANY_TIMES.format(tag = tag))
+                        continue
                     i += 1
                     cards.append({
                             'Weight_Percentage': '100',
@@ -1227,7 +1284,8 @@ class Placements_fet(Placements):
                             'Comments': None
                         }
                     )
-        return cards
+        classes.time_constraints['ConstraintActivityPreferredStartingTime'] \
+                    = cards
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -1256,12 +1314,6 @@ if __name__ == '__main__':
     if _classes.days != list(_days):
         print("\nDAYS MISMATCH:", _classes.days)
         quit(1)
-    if __TEST:
-        print("\n*** CLASS-DAYS ***")
-        for klass in _classes.class_days_periods:
-            _class_periods = _classes.class_days(klass)
-            print(f"   class {klass}:", _class_periods)
-        print("\n  ==================================================")
 
     _teachers = Teachers_fet(_classes.days, _periods)
     teachers = _teachers.get_teachers()
@@ -1326,7 +1378,7 @@ if __name__ == '__main__':
                 for sg in g.get('Subgroup') or []:
                     print("     +", sg['Name'])
 
-    lessons, space_constraints, t_constraints = _classes.get_lessons()
+    lessons, s_constraints, t_constraints = _classes.get_lessons()
     if __TEST:
         print("\n ********* fet LESSONS *********\n")
         #for l, data in _classes.lessons.items():
@@ -1353,22 +1405,25 @@ if __name__ == '__main__':
         p2list.append(pid)
         i += 1
         p2[str(i)] = pid
+
+    # Teachers' constraints
+    _teachers.add_constraints(d2list, p2list, t_constraints)
+
+    # Classes' not-available times
+    _classes.constraint_blocked_periods()
+
+    # Fixed placements for lessons
     cards = Placements_fet(_classes)
-    if __TEST:
-        print("\n ********* FIXED LESSONS *********\n")
-        #for l, data in _classes.lessons.items():
-        #    print(f"   {l}:", data)
-        for card in cards.placements(d2, p2, _classes):
-            print("   ", card)
+    cards.placements(d2, p2, _classes)
 
-    time_constraints = build_time_constraints(
-            CLASSFREE = _classes.classes_timeoff(),
-            TEACHERFREE = _teachers.get_all_blocked_periods(d2list, p2list),
-            CARDS = cards.placements(d2, p2, _classes)
-        )
+    sid_group_sets = _classes.constraint_day_separation(cards.predef)
 
-    sid_group_sets = _classes.constraint_day_separation(cards.predef,
-            time_constraints)
+    # For all classes, and with custom values for some classes:
+    # minimum lessons per day
+#TODO: This one could be table driven?
+    mintable = {k: 5 for k in ('01K', '02K', '03K', '04K', '05K', '06K',
+            '07K', '08K', '09K', '10K', '11K', '12K')}
+    _classes.constraint_min_lessons_per_day(4, mintable)
 
     EXTRA_CONSTRAINTS = MINION(YEARPATH(TT_CONFIG['CONSTRAINTS']))
     for key, value in EXTRA_CONSTRAINTS.items():
@@ -1379,18 +1434,8 @@ if __name__ == '__main__':
             continue
         func(value)
 
-    _classes.lunch_breaks(lessons, time_constraints)
-
-#?
-    constraint_min_lessons_all(4, time_constraints)
-#?
-    for g in ('01K', '02K', '03K', '04K', '05K', '06K',
-            '07K', '08K', '09K', '10K', '11K', '12K'):
-        constraint_min_lessons(g, 5, time_constraints)
-#?
-    constraint_teacher_breaks(4, time_constraints)
-
-    time_constraints.update(t_constraints)
+#TODO: Should this be before the extra constraints?
+    _classes.lunch_breaks(lessons)
 
     xml_fet = xmltodict.unparse(build_dict_fet(
             ROOMS = rooms,
@@ -1400,8 +1445,8 @@ if __name__ == '__main__':
             SUBJECTS = subjects,
             CLASSES = classes,
             LESSONS = lessons,
-            time_constraints = time_constraints,
-            space_constraints = space_constraints
+            time_constraints = t_constraints,
+            space_constraints = s_constraints
 #            space_constraints = {}
         ),
         pretty = True

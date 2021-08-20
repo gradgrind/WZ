@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-08-18
+TT/tt_data.py - last updated 2021-08-20
 
 Read timetable information from the various sources ...
 
@@ -107,6 +107,13 @@ _BLOCK_TAG_DEFINED = "Klasse {klass}: Kennung {tag} für Block '{sname}'" \
         "schon definiert"
 _PLUSTAG_INVALID = "Klasse {klass}, Fach {sname}: Kennung mit '+' ({tag})" \
         " ungültig"
+_INVALID_DEFAULT_GAPS = "Lehrer-Tabelle: ungültige Standard-Lücken-Angabe" \
+        " ({val})"
+_INVALID_DEFAULT_UNBROKEN = "Lehrer-Tabelle: ungültige" \
+        " Standard-Blocklänge-Angabe ({val})"
+_INVALID_GAPS = "Lehrer-Tabelle: ungültige Lücken-Angabe für {teacher} ({val})"
+_INVALID_UNBROKEN = "Lehrer-Tabelle: ungültige Blocklänge-Angabe für" \
+        " {teacher} ({val})"
 
 ########################################################################
 
@@ -981,14 +988,45 @@ class Teachers(dict):
             for ch in period_string:
                 yield ch
         #+
+        def get_lessons_weight(val, message, teacher = None):
+            try:
+                x, w = [int(a) for a in val.split('@')]
+                if x < 0 or x > 10:
+                    raise ValueError
+                if w < 0 or w > 10:
+                    raise ValueError
+            except:
+                raise TT_Error(message.format(val = val, teacher = teacher))
+            return x, w
+        #+
+        def get_gaps(val, message, teacher = None):
+            try:
+                x = int(val)
+                if x < 0 or x > 10:
+                    raise ValueError
+            except:
+                raise TT_Error(message.format(val = val, teacher = teacher))
+            return x
         super().__init__()
         self.alphatag = {}   # shortened, ASCII version of name, sortable
         fields = TT_CONFIG['TEACHER_FIELDS']
         self.tfield = {f: t or f for f, t, *x in fields}
-        teachers = read_DataTable(YEARPATH(CONFIG['TEACHER_DATA']))
-        teachers = filter_DataTable(teachers, fieldlist = fields,
-                infolist = [], extend = False)['__ROWS__']
+        tdata = read_DataTable(YEARPATH(CONFIG['TEACHER_DATA']))
+        tdata = filter_DataTable(tdata, fieldlist = fields,
+                infolist = TT_CONFIG['TEACHER_INFO'], extend = False)
+        teachers = tdata['__ROWS__']
+        info = tdata['__INFO__']
+        default_gaps = None
+        default_unbroken = None
+        _dg = info['GAPS']
+        if _dg:
+            default_gaps = get_gaps(_dg, _INVALID_DEFAULT_GAPS)
+        _du = info['UNBROKEN']
+        if _du:
+            default_unbroken = get_lessons_weight(_du,
+                    _INVALID_DEFAULT_UNBROKEN)
         self.blocked_periods = {}
+        self.constraints = {}
         _teachers = {}   # buffer to allow resorting
         for tdata in teachers:
             tid, tname, times = tdata['TID'], tdata['NAME'], tdata['TIMES']
@@ -1026,6 +1064,26 @@ class Teachers(dict):
                         pblist.append(val)
                     dlist.append(pblist)
                 self.blocked_periods[tid] = dlist
+            _g = tdata['GAPS']
+            if _g:
+                if _g == '*':
+                    g = default_gaps
+                else:
+                    g = get_gaps(_g, _INVALID_GAPS, tname)
+            else:
+                g = None
+            _u = tdata['UNBROKEN']
+            if _u:
+                if _u == '*':
+                    u = default_unbroken
+                else:
+                    u = get_lessons_weight(_u, _INVALID_UNBROKEN, tname)
+            else:
+                u = None
+            self.constraints[tid] = {
+                'GAPS': g,
+                'UNBROKEN': u
+            }
         # Sort tags alphabetically (to make finding them easier)
         for t in sorted(_teachers):
             self[t] = _teachers[t]
