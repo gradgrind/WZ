@@ -114,6 +114,14 @@ _INVALID_DEFAULT_UNBROKEN = "Lehrer-Tabelle: ungültige" \
 _INVALID_GAPS = "Lehrer-Tabelle: ungültige Lücken-Angabe für {teacher} ({val})"
 _INVALID_UNBROKEN = "Lehrer-Tabelle: ungültige Blocklänge-Angabe für" \
         " {teacher} ({val})"
+_INVALID_DEFAULT_MINLESSONS = "Lehrer-Tabelle: ungültige Standard-Angabe" \
+        " für min. Stunden pro Tag ({val})"
+_INVALID_MINLESSONS = "Lehrer-Tabelle, {teacher}: ungültige Angabe" \
+        " für min. Stunden pro Tag ({val})"
+_INVALID_DEFAULT_LUNCH = "Lehrer-Tabelle: ungültige Standard-Angabe" \
+        " für die Mittagsstunden ({val})"
+_INVALID_LUNCH = "Lehrer-Tabelle, {teacher}: ungültige Angabe" \
+        " für die Mittagsstunden ({val})"
 
 ########################################################################
 
@@ -246,6 +254,7 @@ class Classes:
         self.class_divisions = {}
         self.class_groups = {}
         self.groupsets_class = {}
+        self.timetable_teachers = set()
         self.classrooms = {}
         self.lessons = {}
         self.parallel_tags = {} # {tag: [indexed parallel tags]}
@@ -516,6 +525,7 @@ class Classes:
                     else:
                         block_rooms.append(rid)
         #+
+
         lesson_id = 0
         blocks = {}      # collect {block-sid: block-tag}
         for row in lesson_lines:
@@ -571,8 +581,11 @@ class Classes:
                             sname = sname, tids = _tids))
             else:
                 for tid in tids:
-                    if tid == '--' or tid in self.TEACHERS:
+                    if tid == '--':
                         teachers.add(tid)
+                    elif tid in self.TEACHERS:
+                        teachers.add(tid)
+                        self.timetable_teachers.add(tid)
                     else:
                         raise TT_Error(_UNKNOWN_TEACHER.format(
                                 klass = klass, sname = sname, tid = tid))
@@ -664,8 +677,8 @@ class Classes:
                     for i in range(n):
                         rooms.append(_ritem)
                 _rstr = repr(rooms)
-                if '+' in _rstr:
-                    print("§§§", klass, sid, _rstr)
+                #if '+' in _rstr:
+                #    print("§§§", klass, sid, _rstr)
 
             ### Group
             group = read_field('GROUP')
@@ -996,6 +1009,24 @@ class Teachers(dict):
             for ch in period_string:
                 yield ch
         #+
+        def get_minlessons(val, message, teacher = None):
+            try:
+                n = int(val)
+                if n < 0 or n > len(periods):
+                    raise ValueError
+            except ValueError:
+                raise TT_Error(message.format(val = val, teacher = teacher))
+            return n
+        #+
+        def get_lunch_periods(val, message, teacher = None):
+            plist = []
+            for p in val.split():
+                if p in plist or p not in periods:
+                    raise TT_Error(message.format(val = val,
+                            teacher = teacher))
+                plist.append(p)
+            return plist
+        #+
         def get_lessons_weight(val, message, teacher = None):
             try:
                 x, w = [int(a) for a in val.split('@')]
@@ -1024,12 +1055,21 @@ class Teachers(dict):
                 infolist = TT_CONFIG['TEACHER_INFO'], extend = False)
         teachers = tdata['__ROWS__']
         info = tdata['__INFO__']
+        default_minlessons = None
+        _dm = info['MINLESSONS'] # min.lessons per day
+        if _dm:
+            default_minlessons = get_minlessons(_dm,
+                    _INVALID_DEFAULT_MINLESSONS)
+        default_lunch = None
+        _dl = info['LUNCH']    # possible lunch periods
+        if _dl:
+            default_lunch = get_lunch_periods(_dl, _INVALID_DEFAULT_LUNCH)
         default_gaps = None
         default_unbroken = None
-        _dg = info['GAPS']
+        _dg = info['GAPS']      # gaps per week
         if _dg:
             default_gaps = get_gaps(_dg, _INVALID_DEFAULT_GAPS)
-        _du = info['UNBROKEN']
+        _du = info['UNBROKEN']  # max. contiguous lessons
         if _du:
             default_unbroken = get_lessons_weight(_du,
                     _INVALID_DEFAULT_UNBROKEN)
@@ -1088,9 +1128,27 @@ class Teachers(dict):
                     u = get_lessons_weight(_u, _INVALID_UNBROKEN, tname)
             else:
                 u = None
+            _m = tdata['MINLESSONS']
+            if _m:
+                if _m == '*':
+                    m = default_minlessons
+                else:
+                    m = get_minlessons(_m, _INVALID_MINLESSONS, tname)
+            else:
+                m = None
+            _l = tdata['LUNCH']
+            if _l:
+                if _l == '*':
+                    l = default_lunch
+                else:
+                    l = get_lunch_periods(_l, _INVALID_LUNCH, tname)
+            else:
+                l = None
             self.constraints[tid] = {
                 'GAPS': g,
-                'UNBROKEN': u
+                'UNBROKEN': u,
+                'MINLESSONS': m,
+                'LUNCH': l
             }
         # Sort tags alphabetically (to make finding them easier)
         for t in sorted(_teachers):
@@ -1225,7 +1283,7 @@ class Placements:
                     raise TT_Error(_PREPLACE_TOO_MANY.format(tag = tag))
             self.predef.append((tag, places_list))
 #TODO: Support cases with multiple lengths by doing in order of
-# increaasing length
+# increasing length
 
 ###
 

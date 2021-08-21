@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-17
+TT/asc_data.py - last updated 2021-08-21
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -237,13 +237,13 @@ class Teachers_aSc(Teachers):
             week_list.append(''.join(blist))
         return ','.join(week_list)
 #
-    def get_teachers(self):
+    def get_teachers(self, timetable_teachers):
         return [
             {   '@id': tid,
                 '@short': tid,
                 '@name': name,
                 '@timeoff': self.get_blocked_periods(tid)
-            } for tid, name in self.items()
+            } for tid, name in self.items() if tid in timetable_teachers
         ]
 
 ###
@@ -479,17 +479,6 @@ if __name__ == '__main__':
             print(f"   class {klass}:", _class_periods)
         print("\n  ==================================================")
 
-    _teachers = Teachers_aSc(_classes.days, _periods)
-    teachers = _teachers.get_teachers()
-    if __TEST:
-        print("\nTEACHERS:")
-        #for tid, tname in _teachers.items():
-        #    blocked = _teachers.blocked_periods.get(tid) or '–––'
-        #    print("  ", tid, tname, blocked)
-        for tdata in teachers:
-            print("   ", tdata)
-        print("\nLONG TAGS:\n", _teachers.longtag.values())
-
     _rooms = Rooms_aSc()
     allrooms = _rooms.get_rooms()
     if __TEST:
@@ -504,6 +493,8 @@ if __name__ == '__main__':
         for sdata in subjects:
             print("   ", sdata)
 
+    _teachers = Teachers_aSc(_classes.days, _periods)
+
     if __TEST:
         print("\n ********** READ LESSON DATA **********\n")
     c_list = _classes.all_lessons(SUBJECTS = _subjects, ROOMS = _rooms,
@@ -516,6 +507,16 @@ if __name__ == '__main__':
         print("\nCLASS", _klass)
         print("\n  DIVISIONS:", _classes.class_divisions[_klass])
         print("\n  GROUPS:", _classes.class_groups[_klass])
+
+    teachers = _teachers.get_teachers(_classes.timetable_teachers)
+    if __TEST:
+        print("\nTEACHERS:")
+        #for tid, tname in _teachers.items():
+        #    blocked = _teachers.blocked_periods.get(tid) or '–––'
+        #    print("  ", tid, tname, blocked)
+        for tdata in teachers:
+            print("   ", tdata)
+        print("\nLONG TAGS:\n", _teachers.longtag.values())
 
     from timetable.tt_data import TT_CONFIG
     outdir = YEARPATH(TT_CONFIG['OUTPUT_FOLDER'])

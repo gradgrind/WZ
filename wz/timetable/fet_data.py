@@ -823,13 +823,13 @@ class Classes_fet(Classes):
 ###
 
 class Teachers_fet(Teachers):
-    def get_teachers(self):
+    def get_teachers(self, timetable_teachers):
         return [
             {   'Name': tid,
                 'Target_Number_of_Hours': '0',
                 'Qualified_Subjects': None,
                 'Comments': name
-            } for tid, name in self.items()
+            } for tid, name in self.items() if tid in timetable_teachers
         ]
 #
     def add_constraints(self, days, periods, classes):
@@ -875,14 +875,6 @@ class Teachers_fet(Teachers):
             time_constraints['ConstraintTeacherMaxHoursContinuously'] \
                     = constraints_u
 
-#TODO !!!: At the moment this is probably more trouble than it's worth:
-# it adds completely unnecessary lessons, even to teacher kg1!
-        # Lunch breaks
-        #print("§§§ DAYS:", days)
-        #print("§§§ PERIODS:", periods)
-
-#        return
-
         constraints = self.lunch_breaks(days, periods, classes)
         if constraints:
             try:
@@ -893,7 +885,11 @@ class Teachers_fet(Teachers):
                 time_constraints[
                         'ConstraintActivityPreferredStartingTimes'] \
                     = constraints
-#
+
+        constraints = self.min_lessons_daily(classes)
+        if constraints:
+            time_constraints['ConstraintTeacherMinHoursDaily'] = constraints
+
     def constraint_blocked_periods(self, days, periods):
         """Return the blocked periods in the form needed by fet.
         """
@@ -933,23 +929,25 @@ class Teachers_fet(Teachers):
                 )
         return blocked
 #
-#TODO
     def lunch_breaks(self, days, periods, classes):
-#TODO: This is very much tied to a concrete situation. Think of a more
-# general approach (see also lunch breaks for pupils.
-# I need a special lesson on the long days AND a constraint to limit it
-# to periods 3,4 or 5.
+        """Add a special lesson on the long days AND a constraint to
+        limit it to the lunch times.
+        """
         constraints = []
-#        for tid in self:
-        for tid in ('BS', 'ML', 'MW', 'AA', 'WS', 'UO', 'UM', 'TT',
-                    'MYM', 'MFN', 'JW', 'MF', 'BTH', 'ESM', 'BW', 'SN', 'MS'):
+        for tid in classes.timetable_teachers:
+            lbperiods = self.constraints[tid]['LUNCH']
+            if not lbperiods:
+                continue
             bp = self.blocked_periods.get(tid)
-            #print("???", tid, bp)
             for d in range(len(days)):
                 try:
-# Very situation-specific ...
-                    if bp[d][6]:
-                        continue    # No lunch break needed
+                    for p in lbperiods:
+                        i = periods.index(p)
+                        if bp[d][i]:
+                            break    # No lunch break needed
+                    else:
+                        raise ValueError
+                    continue
                 except:
                     # need lunch break
                     pass
@@ -969,22 +967,40 @@ class Teachers_fet(Teachers):
                 classes.lesson_list.append(lesson)
                 # Add constraint
                 day = days[d]
+                plist = [
+                    {   'Preferred_Starting_Day': day,
+                        'Preferred_Starting_Hour': p
+                    } for p in lbperiods
+                ]
                 constraints.append(
                     {   'Weight_Percentage': '100',
                         'Activity_Id': lid,
-                        'Number_of_Preferred_Starting_Times': '3',
-                        'Preferred_Starting_Time': [
-                            {'Preferred_Starting_Day': day,
-                                'Preferred_Starting_Hour': '3'},
-                            {'Preferred_Starting_Day': day,
-                                'Preferred_Starting_Hour': '4'},
-                            {'Preferred_Starting_Day': day,
-                                'Preferred_Starting_Hour': '5'},
-                        ],
+                        'Number_of_Preferred_Starting_Times': str(len(
+                                plist)),
+                        'Preferred_Starting_Time': plist,
                         'Active': 'true',
                         'Comments': None
                     }
                 )
+        return constraints
+#
+    def min_lessons_daily(self, classes):
+        """ConstraintTeacherMinHoursDaily
+        """
+        constraints = []
+        for tid in classes.timetable_teachers:
+            minl = self.constraints[tid]['MINLESSONS']
+            if not minl:
+                continue
+            constraints.append(
+                {   'Weight_Percentage': '100',
+                    'Teacher_Name': tid,
+                    'Minimum_Hours_Daily': str(minl),
+                    'Allow_Empty_Days': 'true',
+                    'Active': 'true',
+                    'Comments': None
+                }
+            )
         return constraints
 
 ###
@@ -1379,18 +1395,6 @@ if __name__ == '__main__':
         print("\nDAYS MISMATCH:", _classes.days)
         quit(1)
 
-    _teachers = Teachers_fet(_classes.days, _periods)
-    teachers = _teachers.get_teachers()
-    if __TEST:
-        print("\nTEACHERS:")
-        for tid, tname in _teachers.items():
-            blocked = _teachers.blocked_periods.get(tid) or '–––'
-            print("  ", tid, tname, blocked)
-        for tdata in teachers:
-            print("   ", tdata)
-#TODO:
-#        print("\nLONG TAGS:\n", _teachers.longtag.values())
-
     _rooms = Rooms_fet()
     rooms = _rooms.get_rooms()
     if __TEST:
@@ -1405,6 +1409,8 @@ if __name__ == '__main__':
         for sdata in subjects:
             print("   ", sdata)
 
+    _teachers = Teachers_fet(_classes.days, _periods)
+
     if __TEST:
         print("\n ********** READ LESSON DATA **********\n")
     c_list = _classes.all_lessons(SUBJECTS = _subjects, ROOMS = _rooms,
@@ -1417,6 +1423,17 @@ if __name__ == '__main__':
         print("\nCLASS", _klass)
         print("\n  DIVISIONS:", _classes.class_divisions[_klass])
         print("\n  GROUPS:", _classes.class_groups[_klass])
+
+    teachers = _teachers.get_teachers(_classes.timetable_teachers)
+    if __TEST:
+        print("\nTEACHERS:")
+        for tid, tname in _teachers.items():
+            blocked = _teachers.blocked_periods.get(tid) or '–––'
+            print("  ", tid, tname, blocked)
+        for tdata in teachers:
+            print("   ", tdata)
+#TODO:
+#        print("\nLONG TAGS:\n", _teachers.longtag.values())
 
     from timetable.tt_data import TT_CONFIG
     outdir = YEARPATH(TT_CONFIG['OUTPUT_FOLDER'])
