@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-19
+TT/asc_data.py - last updated 2021-08-21
 
 Prepare fet-timetables input from the various sources ...
 
@@ -32,8 +32,6 @@ LUNCH_BREAK = ('mp', "Mittagspause")
 VIRTUAL_ROOM = ('dummy', "Zusatzraum")
 
 ### Messages
-_NO_JOINT_ROOMS = "Fach {sid} ({tag}), Klassen {classes}:" \
-        " Keine verfügbare Räume (zu '?')"
 _LESSON_NO_GROUP = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Gruppe"
 _LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Lehrer"
 _LAST_LESSON_TAG_INVALID = "Bedingung „LAST_LESSON“: Die Kennung {tag}" \
@@ -199,29 +197,13 @@ class Classes_fet(Classes):
         """Build list of lessons for fet-timetables.
         """
         def make_room_constraints(rlist, percent):
-            rset = set()
-            for r in rlist.split('/'):
-                if r == '?':
-                    if not roomset:
-                        rsel = set.intersection(*[
-                                set(self.ROOMS.rooms_for_class[k])
-                                        for k in _classes_groups
-                            ]
-                        )
-                        if not rsel:
-                            raise TT_Error(_NO_JOINT_ROOMS.format(
-                                    klass = klass, sid = sid,
-                                    tag = tag))
-                        roomset.update(rsel)
-                    rset.update(roomset)
-                else:
-                    rset.add(r)
-            if len(rset) == 1:
+            _rlist = rlist.split('/')
+            if len(_rlist) == 1:
                 room_constraint = 'ConstraintActivityPreferredRoom'
                 rc_item = {
                     'Weight_Percentage': percent,
                     'Activity_Id': None,
-                    'Room': rset.pop(),
+                    'Room': rlist,
                     'Permanently_Locked': 'true',
                     'Active': 'true',
                     'Comments': None
@@ -231,8 +213,8 @@ class Classes_fet(Classes):
                 rc_item = {
                     'Weight_Percentage': percent,
                     'Activity_Id': None,
-                    'Number_of_Preferred_Rooms': len(rset),
-                    'Preferred_Room': sorted(rset),
+                    'Number_of_Preferred_Rooms': len(_rlist),
+                    'Preferred_Room': _rlist,
                     'Active': 'true',
                     'Comments': None
                 }
@@ -250,7 +232,7 @@ class Classes_fet(Classes):
         #+
         space_constraints = {}  # for room placements
         time_constraints = {}   # for "virtual" lessons (multiple rooms)
-        lesson_list = []
+        self.lesson_list = []
         self.tag_lids = {}      # {tag: [lesson-id, ...]}
         self.xlids = []         # [[lid, xlid1, xlid2, ... ], ... ]
         self.multirooms = []
@@ -287,7 +269,7 @@ class Classes_fet(Classes):
                 REPORT("WARN", _LESSON_NO_GROUP.format(klass = klass,
                         sid = sid))
                 g = None
-            classes = ','.join(sorted(_classes_groups))
+            #classes = ','.join(sorted(_classes_groups))
             tids = sorted(data['TIDS'])
             if not tids:
                 REPORT("WARN", _LESSON_NO_TEACHER.format(klass = klass,
@@ -305,16 +287,16 @@ class Classes_fet(Classes):
             _roomlist = data['ROOMS']
             if _roomlist:
                 # Make a list of constraints
-                roomset = set()       # Room set for '?'
                 for _r in _roomlist:
                     try:
-                        _pref, _all = _r.split('+')
+                        _pref, _x = _r.split('+')
                     except ValueError:
                         # No "preferred" rooms
-                        _pc, _all = None, _r
+                        _pc = None
+                        _ac = make_room_constraints(_r, '100')
                     else:
                         _pc = make_room_constraints(_pref, '90')
-                    _ac = make_room_constraints(_all, '100')
+                        _ac = make_room_constraints(_pref + '/' + _x, '100')
                     room_constraints.append((_pc, _ac))
 
             # Keep a list of subjects with multiple rooms
@@ -352,7 +334,7 @@ class Classes_fet(Classes):
                             'Active': 'true',
                             'Comments': __tag
                         })
-                        lesson_list.append(lesson)
+                        self.lesson_list.append(lesson)
                         if room_constraints:
                             _pc, _ac = room_constraints[0]
                             # Add the space constraints
@@ -377,7 +359,7 @@ class Classes_fet(Classes):
                                         'Active': 'true',
                                         'Comments': f'++{_lid}'
                                     }
-                                    lesson_list.append(lesson)
+                                    self.lesson_list.append(lesson)
                                     # Add the space constraints
                                     if _pc:
                                         add_room_constraint(_pc[0], _pc[1],
@@ -411,7 +393,6 @@ class Classes_fet(Classes):
 #        print("???", self.tag_lids)
         self.time_constraints = time_constraints
         self.space_constraints = space_constraints
-        return lesson_list, space_constraints, time_constraints
 #
     def lunch_breaks(self, lessons):
 #TODO: This is very much tied to a concrete situation. Think of a more
@@ -461,7 +442,13 @@ class Classes_fet(Classes):
                             }
                         )
         if constraints:
-            self.time_constraints['ConstraintActivityPreferredStartingTimes'] \
+            try:
+                self.time_constraints[
+                        'ConstraintActivityPreferredStartingTimes'] \
+                    += constraints
+            except KeyError:
+                self.time_constraints[
+                        'ConstraintActivityPreferredStartingTimes'] \
                     = constraints
 #
     def __subject_atomic_group_tags(self, tglist):
@@ -845,11 +832,15 @@ class Teachers_fet(Teachers):
             } for tid, name in self.items()
         ]
 #
-    def add_constraints(self, days, periods, time_constraints):
+    def add_constraints(self, days, periods, classes):
+#TODO: Passing in <classes> is a nasty bodge! There should be universal
+# access to the days, the periods, the constraints and the lesson data.
+        time_constraints = classes.time_constraints
         # Not-available times
         blocked = self.constraint_blocked_periods(days, periods)
         if blocked:
             time_constraints['ConstraintTeacherNotAvailableTimes'] = blocked
+        # Gaps per week and contiguous lessons
         constraints_g = []
         constraints_u = []
         for tid in self:
@@ -883,6 +874,25 @@ class Teachers_fet(Teachers):
         if constraints_u:
             time_constraints['ConstraintTeacherMaxHoursContinuously'] \
                     = constraints_u
+
+#TODO !!!: At the moment this is probably more trouble than it's worth:
+# it adds completely unnecessary lessons, even to teacher kg1!
+        # Lunch breaks
+        #print("§§§ DAYS:", days)
+        #print("§§§ PERIODS:", periods)
+
+#        return
+
+        constraints = self.lunch_breaks(days, periods, classes)
+        if constraints:
+            try:
+               time_constraints[
+                        'ConstraintActivityPreferredStartingTimes'] \
+                    += constraints
+            except KeyError:
+                time_constraints[
+                        'ConstraintActivityPreferredStartingTimes'] \
+                    = constraints
 #
     def constraint_blocked_periods(self, days, periods):
         """Return the blocked periods in the form needed by fet.
@@ -922,6 +932,60 @@ class Teachers_fet(Teachers):
                     }
                 )
         return blocked
+#
+#TODO
+    def lunch_breaks(self, days, periods, classes):
+#TODO: This is very much tied to a concrete situation. Think of a more
+# general approach (see also lunch breaks for pupils.
+# I need a special lesson on the long days AND a constraint to limit it
+# to periods 3,4 or 5.
+        constraints = []
+#        for tid in self:
+        for tid in ('BS', 'ML', 'MW', 'AA', 'WS', 'UO', 'UM', 'TT',
+                    'MYM', 'MFN', 'JW', 'MF', 'BTH', 'ESM', 'BW', 'SN', 'MS'):
+            bp = self.blocked_periods.get(tid)
+            #print("???", tid, bp)
+            for d in range(len(days)):
+                try:
+# Very situation-specific ...
+                    if bp[d][6]:
+                        continue    # No lunch break needed
+                except:
+                    # need lunch break
+                    pass
+                classes.last_lesson_id += 1
+                lid = str(classes.last_lesson_id)
+                lesson = {
+                    'Teacher': tid,
+                    'Subject': LUNCH_BREAK[0],
+#                    'Students': {},
+                    'Duration': '1',
+                    'Total_Duration': '1',
+                    'Id': lid,
+                    'Activity_Group_Id': '0',
+                    'Active': 'true',
+                    'Comments': None
+                }
+                classes.lesson_list.append(lesson)
+                # Add constraint
+                day = days[d]
+                constraints.append(
+                    {   'Weight_Percentage': '100',
+                        'Activity_Id': lid,
+                        'Number_of_Preferred_Starting_Times': '3',
+                        'Preferred_Starting_Time': [
+                            {'Preferred_Starting_Day': day,
+                                'Preferred_Starting_Hour': '3'},
+                            {'Preferred_Starting_Day': day,
+                                'Preferred_Starting_Hour': '4'},
+                            {'Preferred_Starting_Day': day,
+                                'Preferred_Starting_Hour': '5'},
+                        ],
+                        'Active': 'true',
+                        'Comments': None
+                    }
+                )
+        return constraints
 
 ###
 
@@ -1378,7 +1442,9 @@ if __name__ == '__main__':
                 for sg in g.get('Subgroup') or []:
                     print("     +", sg['Name'])
 
-    lessons, s_constraints, t_constraints = _classes.get_lessons()
+    _classes.get_lessons()
+    lessons, s_constraints, t_constraints = _classes.lesson_list, \
+            _classes.space_constraints, _classes.time_constraints
     if __TEST:
         print("\n ********* fet LESSONS *********\n")
         #for l, data in _classes.lessons.items():
@@ -1407,7 +1473,7 @@ if __name__ == '__main__':
         p2[str(i)] = pid
 
     # Teachers' constraints
-    _teachers.add_constraints(d2list, p2list, t_constraints)
+    _teachers.add_constraints(d2list, p2list, _classes)
 
     # Classes' not-available times
     _classes.constraint_blocked_periods()

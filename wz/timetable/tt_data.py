@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-08-20
+TT/tt_data.py - last updated 2021-08-21
 
 Read timetable information from the various sources ...
 
@@ -29,7 +29,7 @@ _MAX_DURATION = 4        # maximum length of a lesson
 # "Extra" rooms (a bodge to avoid impossible timetables because of room
 # shortages).
 #XROOMS = []
-XROOMS = [(f"rX{i}", f"Extra-Raum {i}") for i in range(2)]
+XROOMS = [(f"rX{i}", f"Extra-Raum {i}") for i in range(1,2)]
 
 ### Messages
 
@@ -583,38 +583,13 @@ class Classes:
             # a list of possible rooms ("r1/r2/ ...") or "?" (unspecified
             # room for the current class). It is also possible to use (just)
             # one '+' instead of a '/'. In that case the rooms before
-            # the '+' get preference.
-            # The result is a number of rooms needed and a set of possible
-            # rooms. If an item (a room or group of rooms) is to be added
-            # repeatedly, it must be prefixed by 'n*', where n is the
-            # number of rooms to be chosen.
-            def read_rooms(item):
-                if not item:
-                    raise TT_Error(_BAD_ROOM.format(klass = klass,
-                            sname = sname, rid = _ritem))
-                __choices = set()
-                ilist = item.split('/')
-                while ilist:
-                    rid = ilist.pop()
-                    if rid in ('$', '?') or rid in self.ROOMS:
-                        if rid in __choices:
-                            raise TT_Error(_DOUBLED_ROOM.format(
-                                    klass = klass, sname = sname,
-                                    rid = rid))
-
-                        __choices.add(rid)
-                    else:
-                        raise TT_Error(_UNKNOWN_ROOM.format(
-                                klass = klass, sname = sname,
-                                rid = rid))
-                try:
-                    __choices.remove('$')
-                except KeyError:
-                    pass
-                else:
-                    __choices.update(self.classrooms[klass])
-                return __choices
-            #+
+            # the '+' get preference, if the algorithm permits this.
+            # The order of the rooms is preserved, in case the algorithm
+            # allows giving preference to rooms which are earlier in the
+            # list (regardless of a '+').
+            # The result is a list of "sanitized" room choices, one item
+            # per necessary room. The validity of the rooms is checked
+            # and '$' and '?' are substituted.
             rooms = []
             if _ritems:
                 for _ritem in _ritems:
@@ -626,38 +601,71 @@ class Classes:
                     else:
                         try:
                             n = int(_n)
+                            if not ritem:
+                                raise ValueError
                         except ValueError:
                             raise TT_Error(_BAD_ROOM.format(klass = klass,
                                     sname = sname, rid = _ritem))
                     _choices = set()
+                    _roomlist = []
                     try:
-                        i1, i2 = ritem.split('+', 1)
+                        _i1, _i2 = ritem.split('+', 1)
+                        if (not _i1) or (not _i2):
+                            raise TT_Error(_BAD_ROOM.format(klass = klass,
+                                    sname = sname, rid = _ritem))
+                        i1, i2 = _i1.split('/'), _i2.split('/')
                     except ValueError:
                         # No "preferred" rooms
-                        i1, i2 = None, ritem
-                    _extra = read_rooms(i2)
-                    if i1:
-                        _preferred = read_rooms(i1)
-                        _ritem1 = '/'.join(sorted(_preferred))
-                        __extra = sorted(_preferred | _extra)
-                        if '?' in ritem:
-                            _ritem = '/'.join(__extra + self.ROOMS.xrooms)
-                        else:
-                            _ritem = '/'.join(__extra)
-                        _ritem = f"{_ritem1}+{_ritem}"
+                        i1, i2 = [], ritem.split('/')
+                    for i in i1, i2:
+                        _rlist = []
+                        # check room, add to list if new
+                        for rid in i:
+                            if rid in _choices:
+                                raise TT_Error(_DOUBLED_ROOM.format(
+                                        klass = klass, sname = sname,
+                                        rid = rid))
+                            _choices.add(rid)
+                            if rid == '$':
+                                for r in self.classrooms[klass]:
+                                    if r not in _choices:
+                                        _choices.add(r)
+                                        _rlist.append(r)
+                            elif rid == '?':
+                                for r in self.ROOMS.rooms_for_class[klass]:
+                                    if r not in _choices:
+                                        _choices.add(r)
+                                        _rlist.append(r)
+                            elif rid in self.ROOMS:
+                                _rlist.append(rid)
+                            else:
+                                raise TT_Error(_UNKNOWN_ROOM.format(
+                                        klass = klass, sname = sname,
+                                        rid = rid))
+                        if _rlist:
+                            _roomlist.append(_rlist)
+
+                    _ritem = '/'.join(_roomlist[0])
+                    if len(_roomlist) == 1:
+                        if self.ROOMS.xrooms and '?' in _choices:
+                            # Add fake rooms
+                            i2 = '/'.join(self.ROOMS.xrooms)
+                            _ritem += '+' + i2
                     else:
-                        __extra = sorted(_extra)
-                        _ritem = '/'.join(__extra)
-                        if '?' in ritem:
-                            _ritem2 = '/'.join(__extra + self.ROOMS.xrooms)
-                            _ritem = f"{_ritem}+{_ritem2}"
+                        if self.ROOMS.xrooms and '?' in _choices:
+                            # Add fake rooms
+                            _roomlist[1] += self.ROOMS.xrooms
+                        i2 = '/'.join(_roomlist[1])
+                        _ritem += '+' + i2
                     if _ritem in rooms:
                         raise TT_Error(_DOUBLED_ROOM.format(
                                     klass = klass, sname = sname,
                                     rid = _ritem))
                     for i in range(n):
                         rooms.append(_ritem)
-#                print("§§§", klass, sid, rooms)
+                _rstr = repr(rooms)
+                if '+' in _rstr:
+                    print("§§§", klass, sid, _rstr)
 
             ### Group
             group = read_field('GROUP')
