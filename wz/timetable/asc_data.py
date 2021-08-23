@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-21
+TT/asc_data.py - last updated 2021-08-23
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -142,6 +142,11 @@ class Classes_aSc(Classes):
         """Build list of lessons for aSc-timetables.
         """
         lesson_list = []
+
+#new
+        valid_groups = {}   # used for "simplifying" groups
+
+
         for tag, data in self.lessons.items():
             block = data['block']
             if block and block != '++':
@@ -149,18 +154,52 @@ class Classes_aSc(Classes):
             sid = idsub(data['SID'])
             klass = data['CLASS']
             _classes = set()
-            _groups = []
-            for g in sorted(data['GROUPS']):
-                k, gg = self.split_class_group(g)
-                _classes.add(k)
-                _groups.append(idsub(f"{k}-{gg if gg else WHOLE_CLASS}"))
-            if not _groups:
+            groups0 = data['GROUPS']
+            gids = sorted(groups0)
+            if gids:
+                _classes_groups = {}
+                for g in gids:
+                    k, gg = self.split_class_group(g)
+                    _classes.add(k)
+                    try:
+                        _classes_groups[k].append(g)
+                    except KeyError:
+                        _classes_groups[k] = [g]
+                # "Simplify" groups. If a combination of groups can be
+                # expressed as the whole class or one of the declared
+                # groups, do it.
+                _gids = []
+                for k, gl in _classes_groups.items():
+                    try:
+                        gx = self.groupsets_class[k][frozenset(gl)]
+                        try:
+                            _gset = valid_groups[k]
+                        except KeyError:
+                            # Initialize with whole class
+                            _gset = {k: idsub(f'{k}-{WHOLE_CLASS}')}
+                            valid_groups[k] = _gset
+                            for d in self.class_divisions[k]:
+                                if len(d) > 1:
+                                    for g in d:
+                                        _gset[g] = idsub(f'{k}-{g}')
+                        try:
+                            _gx = _gset[gx]
+                            _gids.append(_gx)
+                            #print("+++", k, gl, _gx)
+                        except KeyError:
+                            for kg in gl:
+                                _gids.append(idsub(kg.replace('.', '-', 1)))
+                            #print("---", k, gl)
+                    except KeyError:
+                        _gids += gl
+                groups = ','.join(_gids)
+                #print("???", tag, gids, "-->", groups)
+            else:
                 REPORT("WARN", _LESSON_NO_GROUP.format(klass = klass,
                         sid = sid))
+                groups = ''
             classes = ','.join(sorted(_classes))
-            groups = ','.join(_groups)
-#TODO "Simplify" groups?
-#            print(f"??? {classes} // {groups}")
+            #print("???", tag, sid, "-->", groups)
 
             _tids = sorted(data['TIDS'])
             if not _tids:
@@ -352,10 +391,26 @@ def build_dict(ROOMS, PERIODS, TEACHERS, SUBJECTS,
 ###
 
 class Placements_aSc(Placements):
-    def placements(self):
-        cards = []
+    def get_presets(self):
+        plist = []
         for tag, places_list in self.predef:
-            rooms = ','.join(sorted(self.lessons[tag]['ROOMS']))
+            ptags = self.classes_data.parallel_tags[tag]
+            #print(f"??? {tag} X {len(ptags)}")
+            for t in ptags:
+                plist.append((t, places_list))
+                #print("       :::", t, places_list)
+        return plist
+#
+    def placements(self):
+        plist = self.get_presets()
+        cards = []
+        for tag, places_list in plist:
+            l = self.classes_data.lessons[tag]
+            roomset = set()
+            for r in l['ROOMS']:
+                roomset.update(r.replace('+', '/').split('/'))
+            rooms = ','.join(sorted(roomset))
+            #print("?!?!", tag, rooms)
             for d, p in places_list:
                 cards.append({
                         '@lessonid': tag,
@@ -366,25 +421,65 @@ class Placements_aSc(Placements):
                     }
                 )
         return cards
+#
+    def placements_extern(self, working_folder, a_file, days, periods):
+        # Get the preset placements, these should be "locked".
+        tag_places = {}
+        for tag, places_list in self.get_presets():
+            tag_places[tag] = frozenset(places_list) # {(d, p), ... }
+            #print("???", tag, tag_places[tag])
+        # Get the external placements
+        with open(a_file, 'rb') as fh:
+            xml = fh.read()
+        pos_data = xmltodict.parse(xml)
+        pos_list = pos_data['Activities_Timetable']['Activity']
+        lid_data = {}
+        for p in pos_list:
+            lid = p['Id']
+            #print(f"  ++ {lid:4}: {p['Day']}.{p['Hour']} @ {p['Room']}")
+            lid_data[lid] = dict(p)
+        # Get tag_lids from working_folder('tag-lids.json')
+        with open(os.path.join(working_folder, 'tag-lids.json'), 'rb') as fh:
+            tag_lid_data = json.load(fh)
+        tag_lids = tag_lid_data['tag-lids']
+        lid_xlids = tag_lid_data['lid-xlids']
+        # Compile the necessary associations and construct the aSc entries
+        cards = []
+        tag_data = {}
+        for tag, lids in tag_lids.items():
+            presets = tag_places.get(tag) or set()
+            data = []
+            for lid in lids:
+                item = lid_data[lid]
+                data.append(item)
+                d = days.get_id(item['Day'])
+                p = periods.get_id(item['Hour'])
+                #if (d, p) in presets:
+                #    print("$$$", tag, d, p)
+                cards.append({
+                        '@lessonid': tag,
+                        '@period': p,
+                        '@day': d,
+                        '@classroomids': item['Room'] or '',
+                        '@locked': '1' if (d, p) in presets else '0'
+                    }
+                )
+                try:
+                    xlids = lid_xlids[lid]
+                except KeyError:
+                    pass
+                else:
+                    item['xrooms'] = [lid_data[xlid]['Room']
+                            for xlid in xlids]
+            tag_data[tag] = data
+        # Save the associations in a general format
+        outpath = os.path.join(working_folder, 'tag-placements.json')
+        with open(outpath, 'w', encoding = 'utf-8') as fh:
+            json.dump(tag_data, fh, indent = 4)
+        print("\nLesson tag placements ->", outpath)
+        return cards
 
-###
-
-#TODO: ... (rooms) ...
-def placements_extern(tag_data, days, periods):
-    cards = []
-    for item in tag_data:
-        cards.append({
-                '@lessonid': item['Tag'],
-                '@period': periods.get_id(item['Hour']),
-                '@day': days.get_id(item['Day']),
-                '@classroomids': item['Room'] or '',
-                '@locked': '1'
-            }
-        )
-    return cards
-
-###
-
+#TODO -- deprecated
 def read_placements(working_folder, activities_file, days, periods):
     with open(activities_file, 'rb') as fh:
         xml = fh.read()
@@ -550,11 +645,12 @@ if __name__ == '__main__':
             print("   ", l)
         print("\n  ======================================================\n")
 
+    cards = Placements_aSc(_classes)
     activities_path = getActivities(outdir)
     if activities_path:
-        cardlist = read_placements(outdir, activities_path, _days, _periods)
+        cardlist = cards.placements_extern(outdir, activities_path,
+                _days, _periods)
     else:
-        cards = Placements_aSc(_classes.lessons)
         cardlist = cards.placements()
     if __TEST:
         print("\n ********* FIXED LESSONS *********\n")

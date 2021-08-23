@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/tt_data.py - last updated 2021-08-21
+TT/tt_data.py - last updated 2021-08-23
 
 Read timetable information from the various sources ...
 
@@ -55,7 +55,7 @@ _TAG_GROUP_DOUBLE = "Stundenkennung „{tag}“ hat Überschneidungen bei den" \
         "     Fach {sid1}, Klasse {klass1}"
 _TAG_TEACHER_DOUBLE = "Stundenkennung „{tag}“ hat Überschneidungen bei den" \
         " Lehrern in den Stunden mit\n" \
-        "     Fach {sid0}, Klasse {klass0} als in\n" \
+        "     Fach {sid0}, Klasse {klass0}\n" \
         "     Fach {sid1}, Klasse {klass1}"
 _FIELD_MISSING = "Klasse {klass}: Feld {field} fehlt in Fachtabelle"
 _TEACHER_INVALID = "Lehrerkürzel dürfen nur aus Zahlen und" \
@@ -122,6 +122,8 @@ _INVALID_DEFAULT_LUNCH = "Lehrer-Tabelle: ungültige Standard-Angabe" \
         " für die Mittagsstunden ({val})"
 _INVALID_LUNCH = "Lehrer-Tabelle, {teacher}: ungültige Angabe" \
         " für die Mittagsstunden ({val})"
+_UNBROKEN_WITH_LUNCH = "Lehrer-Tabelle: für {tname} ist sowohl Blocklänge" \
+        " wie auch Mittag angegeben"
 
 ########################################################################
 
@@ -394,6 +396,7 @@ class Classes:
                     ag2.append(item | item2)
             atomic_groups = ag2
         self.class_divisions[klass] = divisions
+#        print("§§§ DIVISIONS:", klass, divisions)
         al = ['.'.join(sorted(ag)) for ag in atomic_groups]
         al.sort()
         self.atomics_lists[klass] = al  # All (dotted) atomic groups
@@ -554,6 +557,8 @@ class Classes:
                 raise TT_Error(_INVALID_ENTRY.format(klass = klass,
                         field = self.LESSON_FIELDS['LENGTHS'],
                         val = _durations))
+            # Sort the keys
+            dmap = {d: dmap[d] for d in sorted(dmap)}
 
             ### Subject
             sid = read_field('SID')
@@ -1144,6 +1149,8 @@ class Teachers(dict):
                     l = get_lunch_periods(_l, _INVALID_LUNCH, tname)
             else:
                 l = None
+            if l and u:
+                REPORT("WARN", _UNBROKEN_WITH_LUNCH.format(tname = tname))
             self.constraints[tid] = {
                 'GAPS': g,
                 'UNBROKEN': u,
@@ -1243,6 +1250,7 @@ class Subjects(dict):
 
 class Placements:
     def __init__(self, classes_data):
+        self.classes_data = classes_data
         lessons = classes_data.lessons
         parallel_tags = classes_data.parallel_tags
         fields = TT_CONFIG['PLACEMENT_FIELDS']

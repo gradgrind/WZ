@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-21
+TT/asc_data.py - last updated 2021-08-23
 
 Prepare fet-timetables input from the various sources ...
 
