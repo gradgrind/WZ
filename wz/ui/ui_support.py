@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-05-25
+Last updated:  2021-08-25
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -59,6 +59,9 @@ from PySide6.QtGui import QMovie, QPixmap
 from PySide6.QtCore import Qt, QObject, QFile, QIODevice
 from PySide6.QtUiTools import QUiLoader
 
+import ui.icons_rc
+from ui.xwidgets import GViewResizing
+
 ### +++++
 
 class GuiError(Exception):
@@ -76,7 +79,8 @@ def ui_load(filename):
     if not ui_file.open(QIODevice.ReadOnly):
         raise GuiError("BUG: Cannot open {}: {}".format(ui_file_name,
                 ui_file.errorString()))
-    loader = QUiLoader()
+#    loader = QUiLoader()
+    loader = UiLoader()
 #    loader.clearPluginPaths()
 #    print("§§§", loader.pluginPaths())
     ui = loader.load(ui_file, None)
@@ -86,11 +90,13 @@ def ui_load(filename):
     return ui
 
 ##Add custom widgets thus?
-#class UiLoader(QtUiTools.QUiLoader):
-#    def createWidget(self, className, parent=None, name=""):
-#        if className == "PlotWidget":
-#            return pg.PlotWidget(parent=parent)
-#        return super().createWidget(className, parent, name)
+class UiLoader(QUiLoader):
+    def createWidget(self, className, parent=None, name=""):
+        print("UI:", className, name)
+#        if name == 'table_view':
+        if className == 'GViewResizing':
+            return GViewResizing(parent=parent)
+        return super().createWidget(className, parent, name)
 
 ###
 

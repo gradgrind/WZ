@@ -2,7 +2,7 @@
 """
 ui/wz_main.py
 
-Last updated:  2021-05-23
+Last updated:  2021-08-24
 
 The "main" window.
 
@@ -32,6 +32,8 @@ _TITLE = "WZ – Zeugnisverwaltung"
 
 from importlib import import_module
 import sys, os, builtins
+os.environ['PYSIDE_DESIGNER_PLUGINS'] = '.'
+
 from PySide6.QtWidgets import QApplication#, QStyleFactory
 #print(QStyleFactory.keys())
 #QApplication.setStyle('windows')

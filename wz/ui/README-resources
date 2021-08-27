@@ -1,0 +1,5 @@
+# To make icons available as a "resource", run the following
+# in this directory and import the resulting python module
+
+../../venv/bin/pyside6-rcc icons.qrc -o qrc_icons.py
+

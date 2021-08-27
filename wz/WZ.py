@@ -30,7 +30,8 @@ import sys, os, builtins
 builtins.NONE = ''
 this = sys.path[0]
 APPDIR = os.path.dirname(this)
-args = set(sys.path[1:])
+#??args = set(sys.path[1:])
+args = set(sys.argv[1:])
 try:
     args.remove('--debug')
 except KeyError:

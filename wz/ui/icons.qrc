@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="ui">
+    <file>icons/tt.svg</file>
+    <file>icons/WZ1.svg</file>
+  </qresource>
+</RCC>

@@ -21,9 +21,6 @@ Copyright 2021 Michael Towers
    limitations under the License.
 """
 
-#TODO: This produces a very slightly longer fet file than the old version.
-# It would be comforting to know why!
-
 __TEST = False
 #__TEST = True
 
@@ -36,8 +33,7 @@ VIRTUAL_ROOM = ('dummy', "Zusatzraum")
 
 ### Messages
 _LESSON_NO_GROUP = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Gruppe"
-_LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne" \
-        " Lehrer.\nDieser Unterricht wird NICHT im Stundenplan erscheinen."
+_LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Lehrer"
 _LAST_LESSON_TAG_INVALID = "Bedingung „LAST_LESSON“: Die Kennung {tag}" \
         " wird mehr als einmal benutzt"
 _SUBJECT_PAIR_INVALID = "Ungültiges Fach-Paar ({item}) in:\n  {path}"
@@ -69,6 +65,9 @@ if __name__ == '__main__':
 #    start.setup(os.path.join(basedir, 'TESTDATA'))
     start.setup(os.path.join(basedir, 'DATA'))
 
+#TODO: classrooms
+#TODO: "Epochen": get the teachers from the lines with 'Epoche: Hu.2', etc.
+
 # IMPORTANT: Note that some uses of Python dicts here may assume ordered
 # entries. If the implementation is altered, this should be taken into
 # account. One place is the definition of pre-placed lessons
@@ -81,8 +80,8 @@ from itertools import combinations
 
 import xmltodict
 
-from timetable.manage_data import Classes, Days, Periods, Placements, \
-        Rooms, Subjects, Teachers, TT_Error, TT_CONFIG
+from timetable0.tt_data import Classes, Days, Periods, Placements, Rooms, \
+        Subjects, Teachers, TT_Error, TT_CONFIG
 
 ### -----
 
@@ -113,6 +112,11 @@ class Periods_fet(Periods):
 ###
 
 class Classes_fet(Classes):
+#?
+    def __init__(self, *args, **kargs):
+        super().__init__(*args, **kargs)
+        self.atomic_groups = {}
+#
     def class_data(self, klass):
         """Return a fet students_list/year entry for the given class.
         """
@@ -248,21 +252,39 @@ class Classes_fet(Classes):
             sid = data['SID']
             klass = data['CLASS']
             groups = data['GROUPS']
-            if groups:
-                _gids = sorted(self.combine_atomic_groups(groups))
-                tag_groups = _gids[0] if len(_gids) == 1 else _gids
-#                print("\n???  ", tag, gids, "-->", tag_groups)
+            gids = sorted(groups)
+            if gids:
+                _classes_groups = {}
+                for g in gids:
+                    k, gg = self.split_class_group(g)
+                    try:
+                        _classes_groups[k].append(g)
+                    except KeyError:
+                        _classes_groups[k] = [g]
+                _gids = []
+                for k, gl in _classes_groups.items():
+                    try:
+                        _gids.append(self.groupsets_class[k][frozenset(gl)])
+                    except KeyError:
+                        _gids += gl
+                g = _gids[0] if len(_gids) == 1 else _gids
+#                print("???", tag, gids, "-->", g)
             else:
                 REPORT("WARN", _LESSON_NO_GROUP.format(klass = klass,
                         sid = sid))
-                tag_groups = None
+                g = None
             #classes = ','.join(sorted(_classes_groups))
-
             tids = sorted(data['TIDS'])
-            if (not tids) and (not data['REALTIDS']):
+            if not tids:
                 REPORT("WARN", _LESSON_NO_TEACHER.format(klass = klass,
                         sid = sid))
                 continue
+            if '--' in tids:
+                t = None
+            elif len(tids) == 1:
+                t = tids[0]
+            else:
+                t = tids
 
             # Add room constraints for lesson
             room_constraints = []
@@ -293,20 +315,9 @@ class Classes_fet(Classes):
                 #print("???", self.multirooms[-1])
 
             # Generate the lesson items
-            if tids:
-                if len(tids) == 1:
-                    lesson0 = {'Teacher': tids[0]}
-                else:
-                    lesson0 = {'Teacher': tids}
-            else:
-                lesson0 = {}
-            if tag_groups:
-                lesson0['Students'] = tag_groups
-            lesson0['Subject'] = sid
-            lesson0['Activity_Group_Id'] = '0'
-            lesson0['Active'] = 'true'
             dmap = data['lengths']
             if dmap:
+                aid = '0'
                 for d in sorted(dmap):
                     _tag_lids = []
                     __tag = f'{tag}__{d}' if len(dmap) > 1 else tag
@@ -315,11 +326,16 @@ class Classes_fet(Classes):
                         _lid = str(lid)
                         _tag_lids.append(_lid)
                         dstr = str(d)
-                        lesson = lesson0.copy()
+                        lesson = {'Teacher': t} if t else {}
+                        if g:
+                            lesson['Students'] = g
                         lesson.update({
+                            'Subject': sid,
                             'Duration': dstr,
                             'Total_Duration': dstr,
                             'Id': _lid,
+                            'Activity_Group_Id': aid,
+                            'Active': 'true',
                             'Comments': __tag
                         })
                         self.lesson_list.append(lesson)
@@ -1423,12 +1439,12 @@ if __name__ == '__main__':
 #TODO:
 #        print("\nLONG TAGS:\n", _teachers.longtag.values())
 
-    from timetable.tt_data import TT_CONFIG
+    from timetable0.tt_data import TT_CONFIG
     outdir = YEARPATH(TT_CONFIG['OUTPUT_FOLDER'])
     os.makedirs(outdir, exist_ok = True)
 
     # Check-lists for teachers
-    outpath = os.path.join(outdir, 'teacher_check2.txt')
+    outpath = os.path.join(outdir, 'teacher_check.txt')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write("STUNDENPLAN 2021/22: Lehrer-Stunden\n"
                 "===================================\n")
@@ -1523,7 +1539,7 @@ if __name__ == '__main__':
         pretty = True
     )
 
-    outpath = os.path.join(outdir, 'tt_out2.fet')
+    outpath = os.path.join(outdir, 'tt_out.fet')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write(xml_fet.replace('\t', '   '))
     print("\nTIMETABLE XML ->", outpath)
@@ -1535,7 +1551,7 @@ if __name__ == '__main__':
 #    print("\n???class_groups 01K:", _classes.class_groups['01K'])
 
     import json
-    outpath = os.path.join(outdir, 'tag-lids2.json')
+    outpath = os.path.join(outdir, 'tag-lids.json')
     # Save association of lesson "tags" with "lids" and "xlids"
     lid_data = {
         'tag-lids': _classes.tag_lids,
@@ -1545,7 +1561,7 @@ if __name__ == '__main__':
         json.dump(lid_data, fh, indent = 4)
     print("\nTag – Lesson associations ->", outpath)
 
-    outpath = os.path.join(outdir, 'multiple-rooms2')
+    outpath = os.path.join(outdir, 'multiple-rooms')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         for mr in _classes.multirooms:
             groups = ', '.join(mr['GROUPS'])

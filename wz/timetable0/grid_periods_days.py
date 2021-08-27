@@ -84,7 +84,7 @@ class Window(QWidget):
         self.initUI()
 
     def initUI(self):
-        self.setWindowIcon(QIcon(os.path.join(self.icondir, 'icon.svg')))
+        self.setWindowIcon(QIcon(os.path.join(self.icondir, 'tt.svg')))
         QToolTip.setFont(QFont('SansSerif', 10))
 
 #TODO: need to set this somewhere (class name, etc.)
@@ -133,13 +133,14 @@ class Window(QWidget):
         hbox.addLayout(cvbox)
 
         self.setWindowTitle('Grids')
-        self.resize(1000, 600)
+        self.resize(960, 540)
         self.show()
 
     def setGrid(self, grid):
         self.gv.setScene(grid)
         #self.gv.scale(1.5)
         #self.gv.scale(2)
+        #self.gv.scale(0.8)
 
     def action(self, listItem):
         print("Action", listItem.val())
@@ -273,6 +274,32 @@ class GridPeriodsDays(QGraphicsScene):
         item.setPos(x0 + xshift, y0 + yshift)
         return item
 
+####### Testing mouse presses:
+
+    def mousePressEvent(self, event):
+        point = event.scenePos()
+        print("Scene PRESS:", point, self.items(point))
+        kbdmods = QApplication.keyboardModifiers()
+        if kbdmods & Qt.ShiftModifier:
+            print("SHIFT")
+        if kbdmods & Qt.ControlModifier:
+            print("CTRL")
+
+# May want to wait for the release – and check that it is on the same tile?
+# Then ignore should probably not be called?
+#        event.ignore ()
+#        super ().mousePressEvent (event)
+
+# Release only causes a signal when the grabber is set  (press event accepted),
+# but the mouse may then be somewhere else ...
+#    def mouseReleaseEvent(self, event):
+#        point = event.scenePos()
+#        ipoint = event.pos()
+#        x = ipoint.x()
+#        y = ipoint.y()
+#        print("Released Cell", self.contains(ipoint), point, ipoint)
+
+###
 
 class StyleCache:
     __pens = {}
@@ -374,7 +401,7 @@ class Cell(Box):
             cell.setZValue(20)
             cls.selected = cell
 
-    def __init__(self, x, y, w, h, colh, rowh):
+    def __init__(self, x, y, w, h, rowh, colh):
         super().__init__(x, y, w, h, width=LINEWIDTH)
         self.x0 = x
         self.y0 = y
@@ -391,6 +418,45 @@ class Cell(Box):
 
     def highlight(self, on=True):
         self.setBrush(self.hBrush if on else self.nBrush)
+
+####### Testing mouse presses:
+
+    def mousePressEvent(self, event):
+        print(f"Pressed on: Cell ({self.rowh}, {self.colh})")
+        kbdmods = QApplication.keyboardModifiers()
+        if kbdmods & Qt.ShiftModifier:
+            print("SHIFT")
+        if kbdmods & Qt.ControlModifier:
+            print("CTRL")
+
+# May want to wait for the release – and check that it is on the same tile?
+# Then ignore should probably not be called?
+#        event.ignore ()
+#        super ().mousePressEvent (event)
+
+# Release only causes a signal when the grabber is set  (press event accepted),
+# but the mouse may then be somewhere else ...
+    def mouseReleaseEvent(self, event):
+        point = event.scenePos()
+        ipoint = event.pos()
+        x = ipoint.x()
+        y = ipoint.y()
+        print("Released Cell", self.contains(ipoint), point, ipoint)
+
+# Probably only one graphical layer should handle clicks.
+# If it is the cells, they can check whether any contained tiles are
+# affected and pass the click on.
+# However, this can also be done directly by the scene ...
+# Note that the release check should be done on the item that is being
+# handled, not necessarily the cell. A lesson tile could cover two cells,
+# press on one, release on the other. But presumably that should still
+# count as a click on the tile (but not on the cell!?).
+# The hover events are not entirely suppressed, but while the mouse
+# button is pressed, they will not be generated. After the release a
+# Leave-Enter pair (only one pair, intermediate cells will be skipped)
+# can be generated.
+
+
 
 
 class Tile(QGraphicsRectItem):
@@ -449,6 +515,7 @@ class Tile(QGraphicsRectItem):
             print("SHIFT")
         if kbdmods & Qt.ControlModifier:
             print("CTRL")
+        super().mousePressEvent(event)
 
 # May want to wait for the release – and check that it is on the same tile?
 # Then ignore should probably not be called?
@@ -464,7 +531,7 @@ class Tile(QGraphicsRectItem):
         y = ipoint.y()
 #        print ("Released", self.id_, event.button (), point, ipoint)
         print("Released", self.id_, x, y, point.x(), point.y())
-        event.ignore()
+#        event.ignore()
         if event.button == Qt.MouseButton.LeftButton:
             self.setFocus()
         # button can be Qt.MouseButton.RightButton or Qt.MouseButton.LeftButton
@@ -521,8 +588,8 @@ def gui_setup(argv):
     app = QApplication(argv)
     GridPeriodsDays.setup()
     grid = GridPeriodsDays()
-    window = Window(os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                 'icons'))
+    window = Window(os.path.join(os.path.dirname(os.path.dirname(
+            os.path.realpath(__file__))), 'ui', 'icons'))
     window.setGrid(grid)
     return app, window, grid
 
