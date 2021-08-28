@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/fet_data.py - last updated 2021-08-27
+TT/fet_data.py - last updated 2021-08-28
 
 Prepare fet-timetables input from the various sources ...
 
@@ -20,9 +20,6 @@ Copyright 2021 Michael Towers
    See the License for the specific language governing permissions and
    limitations under the License.
 """
-
-#TODO: This produces a very slightly longer fet file than the old version.
-# It would be comforting to know why!
 
 __TEST = False
 #__TEST = True
@@ -1423,7 +1420,7 @@ if __name__ == '__main__':
 #TODO:
 #        print("\nLONG TAGS:\n", _teachers.longtag.values())
 
-    from timetable.tt_data import TT_CONFIG
+    from timetable.basic_data import TT_CONFIG
     outdir = YEARPATH(TT_CONFIG['OUTPUT_FOLDER'])
     os.makedirs(outdir, exist_ok = True)
 

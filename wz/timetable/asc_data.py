@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/asc_data.py - last updated 2021-08-23
+TT/asc_data.py - last updated 2021-08-28
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -67,8 +67,8 @@ if __name__ == '__main__':
 
 import xmltodict
 
-from timetable.tt_data import Classes, Days, Periods, Placements, Rooms, \
-        Subjects, Teachers, TT_Error
+from timetable.basic_data import Classes, Days, Periods, Placements, \
+        Rooms, Subjects, Teachers, TT_Error
 
 #?
 def idsub(tag):
@@ -202,14 +202,11 @@ class Classes_aSc(Classes):
             #print("???", tag, sid, "-->", groups)
 
             _tids = sorted(data['TIDS'])
-            if not _tids:
+            if (not _tids) and (not data['REALTIDS']):
                 REPORT("WARN", _LESSON_NO_TEACHER.format(klass = klass,
                         sid = sid))
                 continue
-            if '--' in _tids:
-                tids = ''
-            else:
-                tids = ','.join(sorted(_tids))
+            tids = ','.join(sorted(_tids))
 
 #TODO: Multiple rooms are not (presently) supported in the aSc-XML files.
 # Make a simple list of all permissible rooms as options.
@@ -438,8 +435,8 @@ class Placements_aSc(Placements):
             lid = p['Id']
             #print(f"  ++ {lid:4}: {p['Day']}.{p['Hour']} @ {p['Room']}")
             lid_data[lid] = dict(p)
-        # Get tag_lids from working_folder('tag-lids.json')
-        with open(os.path.join(working_folder, 'tag-lids.json'), 'rb') as fh:
+        # Get tag_lids from working_folder('tag-lids2.json')
+        with open(os.path.join(working_folder, 'tag-lids2.json'), 'rb') as fh:
             tag_lid_data = json.load(fh)
         tag_lids = tag_lid_data['tag-lids']
         lid_xlids = tag_lid_data['lid-xlids']
@@ -613,7 +610,7 @@ if __name__ == '__main__':
             print("   ", tdata)
         print("\nLONG TAGS:\n", _teachers.longtag.values())
 
-    from timetable.tt_data import TT_CONFIG
+    from timetable.basic_data import TT_CONFIG
     outdir = YEARPATH(TT_CONFIG['OUTPUT_FOLDER'])
     os.makedirs(outdir, exist_ok = True)
 

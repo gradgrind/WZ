@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/basic_data.py - last updated 2021-08-27
+TT/basic_data.py - last updated 2021-08-28
 
 Read timetable information from the various sources ...
 
@@ -36,6 +36,7 @@ XROOMS = [(f"rX{i}", f"Extra-Raum {i}") for i in range(1,2)]
 
 _BAD_COURSE_FILE = "Klasse {klass}: Kursdaten konnten nicht eingelesen" \
         " werden\n       ({path})\n --> {report}"
+_TAG_INVALID = "Klasse {klass}, Fach {sname}: Kennung '{tag}' ist ungültig"
 _CLASS_INVALID = "Klassenbezeichnungen dürfen nur aus Zahlen und" \
         " lateinischen Buchstaben bestehen: {klass} ist ungültig."
 _CLASS_TABLE_DAY_DOUBLE = "In der Klassen-Tage-Tabelle: Für Klasse {klass}" \
@@ -43,7 +44,10 @@ _CLASS_TABLE_DAY_DOUBLE = "In der Klassen-Tage-Tabelle: Für Klasse {klass}" \
 _UNKNOWN_GROUP = "Klasse {klass}: unbekannte Gruppe – '{group}'"
 _UNKNOWN_SID = "Klasse {klass}: Fach {sid} ({sname}) ist unbekannt"
 _GROUP_IN_MULTIPLE_SPLITS = "Klasse {klass}: Gruppe {group} in >1 Teilung"
-_INVALID_ENTRY = "Klasse {klass}, Feld_{field}: ungültiger Wert ({val})"
+_INVALID_ENTRY = "Klasse {klass}, Fach {sname}, Feld_{field}:"\
+        " ungültiger Wert ({val})"
+_TAGGED_NO_LESSON = "Klasse {klass}, Fach {sname}: keine Kennung bei" \
+        " „Extra-Einträge“ erwartet (gegeben: {tag})"
 _ROOM_NO_LESSON = "Klasse {klass}, Fach {sname}: Raumangabe aber" \
         " keine Unterrichtsstunden"
 _TAGGED_COMPONENT = "Klasse {klass}, Fach {sname} – Komponente von Block" \
@@ -92,22 +96,14 @@ _TABLE_ERROR = "In Klasse {klass}: {e}"
 _SUBJECT_NAME_MISMATCH = "Klasse {klass}, Fach {sname} ({sid}):" \
         " Name weicht von dem in der Fachliste ab ({sname0})."
 _MULTIPLE_BLOCK = "Klasse {klass}: Block {sname} mehrfach definiert"
-_BLOCK_REF_NO_TAG = "Klasse {klass}: Fach {sname} (Epoche = '*') hat" \
-        " keine Block-Kennung"
-_BLOCK_TAG_UNDEFINED = "Klasse {klass}: Fach {sname} (Epoche = '*') hat" \
-        " undefinierter Block-Kennung '{tag}'"
 _BLOCK_SID_NOT_BLOCK = "Klasse {klass}, Fach {sname}:" \
         "Block-Fach (Epoche = {sid}) ist kein Block"
-_COMPONENT_BAD_LENGTH_TAG = "Klasse {klass}, Fach {sname}:" \
-        " Block-Komponente, Kennung{tag} – Länge muss EINE Zahl oder '*' sein"
 _COMPONENT_BAD_LENGTH_SID = "Klasse {klass}, Fach {sname}:" \
         " Block-Komponente in {sid}, Länge muss EINE Zahl oder '*' sein"
 _NONLESSON_BAD_LENGTH = "Klasse {klass}, EXTRA-Fach {sname}: ungültige" \
         " Länge ({length})"
 _PARALLEL_TO_NONLESSON = "Kennung „{tag}“ ist ein EXTRA-Eintrag (Klasse" \
         " {klass}).\n Es gibt parallele Einträge in Klasse(n) {pclasses}"
-_BLOCK_TAG_DEFINED = "Klasse {klass}: Kennung {tag} für Block '{sname}'" \
-        "schon definiert"
 _PLUSTAG_INVALID = "Klasse {klass}, Fach {sname}: Kennung mit '+' ({tag})" \
         " ungültig"
 _INVALID_DEFAULT_GAPS = "Lehrer-Tabelle: ungültige Standard-Lücken-Angabe" \
@@ -251,7 +247,7 @@ class Classes:
         self.class_name = {}
         self.atomics_lists = {}
         self.element_groups = {}
-        self.extended_groups = {}
+#        self.extended_groups = {}
 
 #?
         self.class_divisions = {}
@@ -262,7 +258,7 @@ class Classes:
         self.class_tags = {}            # [class -> [lesson-tag, ... ]}
         self.classrooms = {}
         self.lessons = {}
-        self.parallel_tags = {} # {tag: [indexed parallel tags]}
+        self.parallel_tags = {} # {tag: [indexed parallel lesson-tags]}
         self.LESSON_FIELDS = {f: t
                 for f, t, *x in TT_CONFIG['LESSON_FIELDS']}
 
@@ -277,6 +273,7 @@ class Classes:
         self.ROOMS = ROOMS
         self.TEACHERS = TEACHERS
         classes = []
+        self.__global_blocks = {}
         # Start with classless data
 #TODO: Cater for multiple classless tables?
         _xx = 'XX'
@@ -344,7 +341,7 @@ class Classes:
         try:
             lesson_data = read_DataTable(filepath)
         except TableError as e:
-            raise TT_Error(_BAD_COURSE_FILE.format(, klass = klass,
+            raise TT_Error(_BAD_COURSE_FILE.format(klass = klass,
                     path = filepath, report = str(e)))
         try:
             lesson_data = filter_DataTable(lesson_data,
@@ -517,33 +514,24 @@ class Classes:
                 raise TT_Error(_FIELD_MISSING.format(klass = klass,
                         field = self.LESSON_FIELDS[field]))
         #+
-        def add_block_component():
-            block_lesson['REALTIDS'].update(real_teachers)
-            if not '--' in teachers:
-                block_lesson['TIDS'].update(teachers)
-            block_lesson['GROUPS'].update(_groups)
-            if rooms:
-                if block_lesson['block'] == '--':
-                    raise TT_Error(_ROOM_NO_LESSON.format(
-                        klass = klass, sname = sname))
-                # Add rooms to lesson, but only if they are really new
-                block_rooms = block_lesson['ROOMS']
-                for rid in rooms:
-                    if rid in block_rooms:
-                        _block = block_lesson['SID']
-                        if tag:
-                            _block += f"/{tag}"
-                        REPORT("WARN", _ADD_ROOM_DOUBLE.format(
-                                klass = klass, sname = sname,
-                                block = _block, rid = rid))
-                    else:
-                        block_rooms.append(rid)
-        #+
         lesson_id = 0
-        blocks = {}      # collect {block-sid: block-tag}
-        class_tags = []  # collect all lesson-tags for this class
+        class_blocks = {}   # collect {block-sid: block-lesson-tag}
+        class_tags = []     # collect all lesson-tags for this class
         self.class_tags[klass] = class_tags
         for row in lesson_lines:
+            ### Subject
+            sid = read_field('SID')
+            sname = read_field('SNAME')
+            sidx = sid.rsplit('+', 1)
+            try:
+                sname0 = self.SUBJECTS[sidx[0]]
+            except KeyError:
+                raise TT_Error(_UNKNOWN_SID.format(klass = klass,
+                        sname = sname, sid = sid))
+            if sname != sname0:
+                print(_SUBJECT_NAME_MISMATCH.format(klass = klass,
+                        sname0 = sname0, sname = sname, sid = sid))
+
             # Make a list of durations.
             # Then for each entry, generate a lesson or a course within
             # a teaching block.
@@ -568,21 +556,9 @@ class Classes:
             except ValueError:
                 raise TT_Error(_INVALID_ENTRY.format(klass = klass,
                         field = self.LESSON_FIELDS['LENGTHS'],
-                        val = _durations))
+                        sname = sname, val = _durations))
             # Sort the keys
             dmap = {d: dmap[d] for d in sorted(dmap)}
-
-            ### Subject
-            sid = read_field('SID')
-            sname = read_field('SNAME')
-            try:
-                sname0 = self.SUBJECTS[sid.split('+', 1)[0]]
-            except KeyError:
-                raise TT_Error(_UNKNOWN_SID.format(klass = klass,
-                        sname = sname, sid = sid))
-            if sname != sname0:
-                print(_SUBJECT_NAME_MISMATCH.format(klass = klass,
-                        sname0 = sname0, sname = sname, sid = sid))
 
             ### Teachers
             _tids = read_field('TIDS')
@@ -725,35 +701,17 @@ class Classes:
             # can appear in both) and is removed in the SID  field of the
             # generated data. This subject tag can not be used for
             # placements – though the same tag could be used here.
+#TODO: Note that '+tag' can also be used in normal class files to
+# disambiguate blocks – in case the subject id is used more than once?
+# Or perhaps this is superfluous, as there may be only one block among
+# several sid usages?
             block = read_field('BLOCK')
-
-            _tag = row['TAG']
-            if _tag:
-                # Check tag, substitute class if necessary
-                try:
-                    if not _tag.isascii():
-                        raise TT_Error
-                    try:
-                        _ts0, _ts1 = _tag.split('+', 1)
-                    except ValueError:
-                        _ts0 = _tag
-                    else:
-                        if not _ts1.isalnum():
-                            raise TT_Error
-                    if _ts0.startswith('*-'):
-                        if _ts0[2:].isalnum():
-                            tag = _tag.replace('*', klass)
-                        else:
-                            raise TT_Error
-                    elif _ts0.isalnum():
-                        tag = _tag
-                    else:
-                        raise TT_Error
-                except TT_Error:
-                    raise TT_Error(_INVALID_ENTRY.format(klass = klass,
-                            field = self.LESSON_FIELDS['TAG'], val = _tag))
-            else:
-                tag = None
+            tag = row['TAG']
+            # Check tag
+            if tag and not (tag.isascii() and tag.isalnum()):
+                raise TT_Error(_INVALID_ENTRY.format(klass = klass,
+                        field = self.LESSON_FIELDS['TAG'],
+                        sname = sname, val = tag))
 
 # BLOCK = empty     Normal lesson, may be tagged. Lessons with the same
 #                   tag will be placed in the same slot, if possible. If
@@ -778,37 +736,45 @@ class Classes:
 #                   checking.
 #
 #                   The subject-id must be unique within this table.
-#                   However, by adding a suffix ('+' + alphanumeric),
-#                   this limitation can be overcome (note that this
-#                   feature is only really useful in classless tables).
+#                   However, by adding a suffix ('+' + ASCII-alphanumeric),
+#                   this limitation can be overcome. The suffix is also
+#                   accessible to components in other classes, instead
+#                   of the subject id in their BLOCK field.
+#?
 #                   The suffix will be stripped except in the class-local
 #                   <blocks> mapping.
-#
-#                   With a tag, this block must be the only one using the
-#                   tag. To avoid this limitation when specifying
-#                   parallel entries, a suffix ('+' + alphanumeric) can
-#                   be added. The suffix will be stripped for the
-#                   <parallel_tags> key.
 #
 # BLOCK = '--'      "Non-lesson", not placed in timetable (for "EXTRA"
 #                   entries). This is handled like a timetabled block
 #                   (see above), except that the LENGTHS field specifies
 #                   the "total lessons" (~ payment units) – a single
 #                   number. Trying to specify a placement for such an
-#                   entry makes no sense, so specifying parallel entries
-#                   is also pointless.
+#                   entry makes no sense, so the TAG field should be empty.
 #
-# BLOCK = '*'       A "component". There must be a tag and this tag must
-#                   be that of a block or a non-lesson. This entry does
-#                   not appear in the timetable.
+# BLOCK = '+tag'    A "component". The tag must be the subject suffix
+#                   of a block or a non-lesson.
+#
+# BLOCK = sid       A block "component". <sid> is the subject-id
+#                   (potentially with '+tag' suffix). With '+tag' the
+#                   block entry may be in another file – presumably the
+#                   non-class file. The block entry must be previously
+#                   defined and globally unique (only the non-class file
+#                   is guaranteed to be read in before another table.
+#                   Without such a suffix the block entry must be unique
+#                   and previously defined within the same table.
+#
+#                   This entry does not appear in the timetable.
+#
 #                   The teachers will be added to the block entry (they
 #                   may be repeated).
+#
 #                   The groups will be added to the block entry, they
 #                   need not be independent.
-#TODO:
+#
 #                   The rooms will be added to the block entry. New rooms
 #                   will cause the number of needed rooms to increase
 #                   accordingly, but repeated rooms will cause no increase.
+#
 #                   The LENGTHS field can be '*', which means the value
 #                   will be taken from the block entry. As far as payment
 #                   units are concerned this is counted only once per tag
@@ -816,37 +782,17 @@ class Classes:
 #                   For a block this means effectively that the lesson
 #                   is taught throughout the year, but parallel to other
 #                   components.
+#
 #                   The LENGTHS field can also be a number. This indicates
 #                   a time-limited subject-block within the block
 #                   ("Epoche"). Each entry counts separately as far as
 #                   payment units are concerned.
-#
-# BLOCK = sid       A block "component". <sid> is the subject-id of a
-#                   block (not non-lesson) within the same table. This
-#                   <sid> must be unique and previously defined within
-#                   the table. It is an alternative for blocks whose
-#                   components are all in the same table. There may also
-#                   be a tag, normally for placement.
 
             block_field = None
+            lesson_id += 1
+            lesson_tag = f'{klass}_{lesson_id:02}'
             if block:
-                if block == '*':
-                    # A block component, <tag> = block-tag
-                    if not tag:
-                        raise TT_Error(_BLOCK_REF_NO_TAG.format(
-                                klass = klass, sname = sname))
-                    try:
-                        block_lesson = self.lessons[tag]
-                    except KeyError:
-                        raise TT_Error(_BLOCK_TAG_UNDEFINED.format(
-                                klass = klass, sname = sname, tag = tag))
-                    if durations and len(durations) > 1:
-                        raise TT_Error(_COMPONENT_BAD_LENGTH_TAG.format(
-                                klass = klass, sname = sname, tag = tag))
-                    block_field = tag
-                    add_block_component()
-                    block = None
-                elif block == '++':
+                if block == '++':
                     # A "block" entry.
                     block_field = '++'
                 elif block == '--':
@@ -855,6 +801,9 @@ class Classes:
                         TT_Error(_NONLESSON_BAD_LENGTH.format(
                                 klass = klass, sname = sname,
                                 length = _durations))
+                    if tag:
+                        raise TT_Error(_TAGGED_NO_LESSON.format(
+                                klass = klass, sname = sname, tag = tag))
                     if rooms:
                         raise TT_Error(_ROOM_NO_LESSON.format(
                                 klass = klass, sname = sname))
@@ -862,11 +811,15 @@ class Classes:
                 else:
                     # A block component, <block> = block-sid
                     try:
-                        block_field = blocks[block]     # block-tag
+                        # First check within this table
+                        block_field = class_blocks[block]
                     except KeyError:
-                        raise TT_Error(_BLOCK_SID_NOT_BLOCK.format(
-                                klass = klass, sname = sname, sid = block))
-                    # Don't allow a tag in a sid-block-component
+                        try:
+                            block_field = self.__global_blocks[block]
+                        except KeyError:
+                            raise TT_Error(_BLOCK_SID_NOT_BLOCK.format(
+                                    klass = klass, sname = sname, sid = block))
+                    # Don't allow a tag in a block-component
                     if tag:
                         raise TT_Error(_TAGGED_COMPONENT.format(
                                 klass = klass, sname = sname,
@@ -876,55 +829,61 @@ class Classes:
                             raise TT_Error(_COMPONENT_BAD_LENGTH_SID.format(
                                     klass = klass, sname = sname, sid = block))
                     block_lesson = self.lessons[block_field]
-                    add_block_component()
+#? Rather use <real_teachers>?
+                    block_lesson['REALTIDS'].update(teachers)
+                    block_lesson['GROUPS'].update(_groups)
+                    if rooms:
+                        if block_lesson['block'] == '--':
+                            raise TT_Error(_ROOM_NO_LESSON.format(
+                                klass = klass, sname = sname))
+                        # Add rooms to lesson, but only if they are really new
+                        block_rooms = block_lesson['ROOMS']
+                        block_roomlists = block_lesson['ROOMLISTS']
+                        i = 0
+                        for rid in rooms:
+                            if rid in block_rooms:
+                                REPORT("WARN", _ADD_ROOM_DOUBLE.format(
+                                        klass = klass, sname = sname,
+                                        block = block_lesson['SID'],
+                                        rid = rid))
+                            else:
+                                block_rooms.append(rid)
+                                block_roomlists.append(roomlists[i])
+                            i += 1
                     block = None
-                if block:
+            #else:
+                # A "normal" lesson
+            if block:
+                # This must be the only definition of a block for
+                # this subject-id in this table.
+                if sid in class_blocks:
+                    raise TT_Error(_MULTIPLE_BLOCK.format(
+                            klass = klass, sname = sname))
+                class_blocks[sid] = lesson_tag
+                if len(sidx) > 1:
                     # This must be the only definition of a block for
-                    # this subject-id in this table.
-                    if sid in blocks:
+                    # this subject-id in any table.
+                    if sid in self.__global_blocks:
                         raise TT_Error(_MULTIPLE_BLOCK.format(
                                 klass = klass, sname = sname))
-                    if tag:
-                        # Check that there is no previous use of this tag
-                        if tag in self.lessons:
-                            raise TT_Error(_BLOCK_TAG_DEFINED.format(
-                                klass = klass, tag = tag, sname = sname))
-                    else:
-                        lesson_id += 1
-                        tag = f'{klass}_{lesson_id:02}'
-                    blocks[sid] = tag
-                    # Add to parallel-tags mapping
-                    _tag = tag.split('+')[0]
-                    try:
-                        ptags = self.parallel_tags[_tag]
-                    except KeyError:
-                        ptags = []
-                        self.parallel_tags[_tag] = ptags
-                    ptags.append(tag)
-                else:
-                    # Block component - new tag
-                    lesson_id += 1
-                    tag = f'{klass}_{lesson_id:02}'
+                    self.__global_blocks[sid] = lesson_tag
+                self.__pending_teachers.append(lesson_tag)
             else:
-                # A "normal" lesson
-                lesson_id += 1
-                _tag = f'{klass}_{lesson_id:02}'
-                block_field = ''
-                if tag:
-                    if '+' in tag:
-                        raise TT_Error(_PLUSTAG_INVALID.format(
-                                klass = klass, sname = sname, tag = tag))
+                for tid in real_teachers:
                     try:
-                        ptags = self.parallel_tags[tag]
+                        self.timetable_teachers[tid].append(lesson_tag)
                     except KeyError:
-                        ptags = []
-                        self.parallel_tags[tag] = ptags
-                    ptags.append(_tag)
-                tag = _tag
-            self.lessons[tag] = {
+                        self.timetable_teachers[tid] = [lesson_tag]
+            if tag:
+                try:
+                    self.parallel_tags[tag].append(lesson_tag)
+                except KeyError:
+                    self.parallel_tags[tag] = [lesson_tag]
+            class_tags.append(lesson_tag)
+            self.lessons[lesson_tag] = {
                 'CLASS': klass,
                 'GROUPS': set(_groups),
-                'SID': sid.split('+', 1)[0],
+                'SID': sidx[0],
                 'TIDS': teachers,       # for timetable-clash checking,
                 # tid '--' makes it empty even if there are teachers
                 'REALTIDS': real_teachers, # all associated teachers
@@ -933,15 +892,6 @@ class Classes:
                 'lengths': dmap,
                 'block': block_field
             }
-            if block_field in ('++', '--'):
-                self.__pending_teachers.append(tag)
-            else:
-                for tid in real_teachers:
-                    try:
-                        self.timetable_teachers[tid].append(tag)
-                    except KeyError:
-                        self.timetable_teachers[tid] = [tag]
-            class_tags.append(tag)
 #            if klass == 'XX':
 #                print("???", tag, self.lessons[tag])
 #
