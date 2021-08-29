@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/manage_data.py - last updated 2021-08-26
+TT/manage_data.py - last updated 2021-08-28
 
 Coordinate and process the timetable data
 
@@ -193,6 +193,7 @@ class Classes_gui(Classes):
 #                # tid '--' makes it empty even if there are teachers
 #                'REALTIDS': real_teachers, # all associated teachers
 #                'ROOMS': rooms,
+#                'ROOMLISTS': roomlists,
 #                'lengths': dmap,
 #                'block': block_field
 #            }
@@ -1051,7 +1052,7 @@ if __name__ == '__main__':
 #TODO:
 #        print("\nLONG TAGS:\n", _teachers.longtag.values())
 
-    from timetable.tt_data import TT_CONFIG
+    from timetable.basic_data import TT_CONFIG
     outdir = YEARPATH(TT_CONFIG['OUTPUT_FOLDER'])
     os.makedirs(outdir, exist_ok = True)
 
