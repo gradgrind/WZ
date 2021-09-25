@@ -2,7 +2,7 @@
 """
 ui/WZ.py
 
-Last updated:  2021-05-22
+Last updated:  2021-09-25
 
 Administration interface.
 
@@ -66,18 +66,18 @@ if __name__ == '__main__':
     APPDIR = os.path.dirname(this)
     #print("&&&", APPDIR)
     sys.path[0] = APPDIR
-    from qtpy.QtWidgets import QApplication#, QStyleFactory
+    from PySide6.QtWidgets import QApplication#, QStyleFactory
 #    print(QStyleFactory.keys())
 #    QApplication.setStyle('windows')
     app = QApplication([])
 
-from qtpy.QtWidgets import QWidget, QDialog, QFrame, QStackedWidget, \
+from PySide6.QtWidgets import QWidget, QDialog, QFrame, QStackedWidget, \
     QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, \
     QPushButton, QButtonGroup
-from qtpy.QtCore import Qt, QDateTime, QProcess, QTimer
-from qtpy.QtGui import QMovie, QPixmap, QColor
+from PySide6.QtCore import Qt, QDateTime, QProcess, QTimer
+from PySide6.QtGui import QMovie, QPixmap, QColor
 
-from ui.ui_support import QuestionDialog, HLine, TabPage, KeySelect, \
+from ui.ui_support import YesOrNoDialog, HLine, TabPage, KeySelect, \
         openDialog, saveDialog
 
 builtins.TABS = []
@@ -238,7 +238,7 @@ class _Backend(QDialog):
     def reject(self):
         if self._complete:
             super().reject()
-        elif QuestionDialog(_INTERRUPT, _INTERRUPT_QUESTION):
+        elif YesOrNoDialog(_INTERRUPT, _INTERRUPT_QUESTION):
             self.terminate()
 #
     def command(self, fn, **parms):
@@ -509,7 +509,7 @@ class Admin(QWidget):
         delay: <init> is called using a single-shot timer.
         """
         self.datadir = datadir
-        super().__init__(
+        super().__init__()
         self.setWindowTitle(_TITLE)
         topbox = QVBoxLayout(self)
         # ---------- Title Box ---------- #
@@ -605,8 +605,8 @@ class Admin(QWidget):
 if __name__ == '__main__':
 # To change initial tab
 #    TAB0 = 6
-    from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
-    from qtpy.QtGui import QIcon
+    from PySide6.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
+    from PySide6.QtGui import QIcon
 
     # Persistent Settings:
     builtins.SETTINGS = QSettings(

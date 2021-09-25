@@ -549,7 +549,7 @@ class Classes_gui(Classes):
     ############### FURTHER CONSTRAINTS ###############
 
     def class_constraint_data(self, data):
-        """Extract info for the various classes, jandling default values.
+        """Extract info for the various classes, handling default values.
         """
         cmap = {}
         try:
