@@ -152,6 +152,7 @@ class PupilsBase:
             'ENTRY_D': '2016-11-11', 'HOME': 'Hannover'
         }
 #
+#TODO: mostly in migrate_pupils.py ...
     @classmethod
     def next_class(cls, pdata):
         klass = pdata['CLASS']

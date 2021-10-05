@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-07-25
+Last updated:  2021-10-03
 
 Basic configuration and structural stuff.
 
@@ -73,14 +73,12 @@ class DataError(Exception):
 # Could use the "winpath" package, but it seems unnecessary!
 # Can perhaps also install to the WZ folder on windows?
 # Perhaps there can also be a launcher there (see python)?
-#On Linux install to .local/(bin, lib, share)? or to .bin/WZ?
+#On Linux install to .local/(bin, lib, share)? or to ~/bin/WZ?
 
-#TODO: Moving to more year-based data
 class start:
     """
     """
     __DATA = None       # Base folder for school data
-    __YEARDATA = None   # Base folder for data for school-years
 #
     @classmethod
     def setup(cls, datadir):
@@ -91,37 +89,18 @@ class start:
         builtins.DATAPATH = cls.__datadir
         builtins.RESOURCEPATH = cls.__resourcedir
         builtins.CONFIG = MINION(DATAPATH('CONFIG'))
-        cls.__YEARDATA = DATAPATH(CONFIG['YEAR_FOLDER'])
-        builtins.YEARPATH = cls.__yeardir
-        cls.select_year()
+        builtins.CALENDAR = Dates.get_calendar(
+                DATAPATH(CONFIG['CALENDAR_FILE']))
+        builtins.SCHOOLYEAR = Dates.calendar_year(CALENDAR)
 #
     @classmethod
-    def select_year(cls, year = None):
-        if not year:
-            with open(DATAPATH('SCHOOLYEAR')) as fh:
-                year = fh.read().strip()
-        if not year:
-            raise DataError(_NO_SCHOOLYEAR)
-        cal_path = CONFIG['CALENDAR_FILE']
-# This can raise a <MinionError> (in module minion) or a <DataError>:
-        builtins.CALENDAR = Dates.get_calendar(YEARPATH(cal_path, year))
-        builtins.SCHOOLYEAR = year
-        builtins.SCHOOL_DATA = MINION(YEARPATH(CONFIG['SCHOOL_DATA']))
-#
-    @classmethod
-    def set_current_year(cls):
-        """Set the "current" (default) school-year to <SCHOOLYEAR>, the
-        currently selected year.
-        """
-        with open(DATAPATH('SCHOOLYEAR'), 'w') as fh:
-            fh.write(SCHOOLYEAR)
-#
-    @classmethod
-    def __datadir(cls, path):
+    def __datadir(cls, path, base = ''):
         """Return a path within the school-data folder.
         <path> is a '/'-separated path relative to this folder.
+        <base> is an optional alternative, '/'-separated base folder
+        within the data folder.
         """
-        return os.path.join(cls.__DATA, *path.split('/'))
+        return os.path.join(cls.__DATA, *base.split('/'), *path.split('/'))
 #
     @classmethod
     def __resourcedir(cls, path):
@@ -129,15 +108,6 @@ class start:
         <path> is a '/'-separated path relative to this folder.
         """
         return os.path.join(cls.__DATA, 'RESOURCES', *path.split('/'))
-#
-    @classmethod
-    def __yeardir(cls, path, year = None):
-        """Return a path within the year-data folder.
-        <path> is a '/'-separated path relative to this folder.
-        If no year is supplied, use <SCHOOLYEAR>.
-        """
-        return os.path.join(cls.__YEARDATA, year or SCHOOLYEAR,
-                *path.split('/'))
 
 ###
 
@@ -306,8 +276,8 @@ class Dates:
             raise DataError(_BAD_DATE.format(line = '%s: %s' % (k, v)))
         return calendar
 #
-    @classmethod
-    def calendar_year(cls, calendar):
+    @staticmethod
+    def calendar_year(calendar):
         """Return the school-year of the given calendar.
         """
         try:
@@ -330,7 +300,7 @@ class Dates:
             elif y == old_year:
                 y = new_year
             return y
-        calfile = calendar_path or YEARPATH(CONFIG['CALENDAR_FILE'])
+        calfile = calendar_path or DATAPATH(CONFIG['CALENDAR_FILE'])
         with open(calfile, 'r', encoding = 'utf-8') as fh:
             caltext = fh.read()
         old_year = cls.calendar_year(_Minion.parse(caltext))

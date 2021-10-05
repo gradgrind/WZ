@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-08-10
+Last updated:  2021-10-03
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -493,7 +493,8 @@ def filter_DataTable(data, fieldlist, infolist, extend = True):
 make_DataTable_filetypes = ('tsv', 'xlsx')
 #+
 def make_DataTable(data, filetype,
-        fieldlist = None, infolist = None, extend = True):
+        fieldlist = None, infolist = None,
+        extend = True):
     """Build a DataTable with info-lines, header-line and records.
     <data> is a mapping as returned by <read_DataTable>.
     <filetype> specifies which of the file-types in

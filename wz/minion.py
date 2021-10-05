@@ -191,7 +191,7 @@ class Minion:
             (pre-break-item, None, None).
         """
         try:
-            line = line.strip()
+            line = line.replace('\t', ' ').strip()
             sym, sep, rest = re.split(_REGEX, line, 1)
         except:
             return line, None, None

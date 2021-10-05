@@ -90,7 +90,8 @@ def read_groups(klass, raw_groups):
     #print(f'$$$ "Extended" groups in class {klass}:', xmap)
     EXTENDED_GROUPS[klass] = xmap
     make_class_groups(klass)
-#
+
+
 def make_class_groups(klass):
     """Build the entry for <CLASS_GROUPS> for the given class.
     Also build the reversed mapping <GROUPSETS_CLASS>.
@@ -121,7 +122,8 @@ def make_class_groups(klass):
         gmap['*'] = fs_whole
 #    print("+++", klass, gmap)
 #    print("---", klass, reversemap)
-#
+
+
 def group_classgroups(klass, group):
     """Return the (frozen)set of "full" groups for the given class
     and group. The group may be dotted. Initially only the "elemental"
@@ -157,7 +159,8 @@ def group_classgroups(klass, group):
                     grev[gset] = f'{klass}.{group}'
                 return gset
     raise TT_Error(_UNKNOWN_GROUP.format(klass = klass, group = group))
-#
+
+
 def split_class_group(group):
     """Given a "full" group (with class), return class and group
     separately.
@@ -179,8 +182,6 @@ if __name__ == '__main__':
             print(f"  {repr(k)}: {repr(v)}")
     __class = "12G"
     read_groups(__class, "A.G B.G B.R | I II III")
-#TODO: The group "B.G" is not available in CLASS_GROUPS and GROUPSETS_CLASS
-# (A.G is the same as A and B.R is the same as R – these are present)
     lprint("CLASS_DIVISIONS", CLASS_DIVISIONS[__class])
     lprint("ATOMIC_LISTS", ATOMIC_LISTS[__class])
     dprint("ELEMENT_GROUPS", ELEMENT_GROUPS[__class])
