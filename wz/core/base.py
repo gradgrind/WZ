@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-10-03
+Last updated:  2021-10-06
 
 Basic configuration and structural stuff.
 
@@ -88,7 +88,7 @@ class start:
         cls.__DATA = datadir
         builtins.DATAPATH = cls.__datadir
         builtins.RESOURCEPATH = cls.__resourcedir
-        builtins.CONFIG = MINION(DATAPATH('CONFIG'))
+        builtins.CONFIG = MINION(DATAPATH('CONFIG/BASE'))
         builtins.CALENDAR = Dates.get_calendar(
                 DATAPATH(CONFIG['CALENDAR_FILE']))
         builtins.SCHOOLYEAR = Dates.calendar_year(CALENDAR)
