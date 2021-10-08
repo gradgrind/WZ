@@ -2,7 +2,7 @@
 """
 ui/ui_support.py
 
-Last updated:  2021-08-25
+Last updated:  2021-10-08
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -96,6 +96,9 @@ class UiLoader(QUiLoader):
 #        if name == 'table_view':
         if className == 'GViewResizing':
             return GViewResizing(parent=parent)
+        if className == 'TableWidget':
+            from ui.table import TableWidget
+            return TableWidget(parent=parent)
         return super().createWidget(className, parent, name)
 
 ###
@@ -470,7 +473,7 @@ def dirDialog(title = None):
 ##
 def saveDialog(filetype, filename, title = None):
     dir0 = SETTINGS.value('LAST_SAVE_DIR') or os.path.expanduser('~')
-    fpath = QFileDialog.getSaveFileName(ADMIN, title or _FILESAVE,
+    fpath = QFileDialog.getSaveFileName(None, title or _FILESAVE,
             os.path.join(dir0, filename), filetype)[0]
     if fpath:
         SETTINGS.setValue('LAST_SAVE_DIR', os.path.dirname(fpath))

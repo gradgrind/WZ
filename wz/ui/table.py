@@ -3,7 +3,7 @@
 """
 gui/table.py
 
-Last updated:  2021-03-21
+Last updated:  2021-10-07
 
 A slight modification of "TableWidget.py" from the "silx" project
 (www.silx.org), thanks to P. Knobel.
@@ -22,6 +22,8 @@ Modifications Copyright (c) 2021 Michael Towers
 
 Original Licence below.
 """
+
+#TODO: Are non-text cells at all possible???!!!
 
 # /*##########################################################################
 #
@@ -118,22 +120,19 @@ _DELETEROWS = "Zeilen löschen"
 _TTDELETEROWS = "Selektierte Zeilen löschen"
 #_INSERT1 = "A single row must be selected to insert a new one"
 _DELETE1 = "Um Zeilen zu löschen, müssen sie eindeutig selektiert sein"
-
+_NONCONTIGUOUS = "Selektierte Zellen sind nicht zusammenhängend"
 
 import sys
-from qtpy.QtWidgets import QApplication, \
-        QAction, QTableView, QTableWidget, QMessageBox#, QMenu
-from qtpy.QtCore import Qt
-from qtpy.QtGui import QKeySequence
+from PySide6.QtWidgets import QApplication, \
+        QTableView, QTableWidget, QMessageBox#, QMenu
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QKeySequence
+
+row_separator = '\n'
+col_separator = '\t'
 
 
-if sys.platform.startswith("win"):
-    row_separator = "\r\n"
-else:
-    row_separator = "\n"
-
-col_separator = "\t"
-
+#TODO: Disallow multiple selections?
 
 class InsertRowAction(QAction):
     """QAction to insert a row of cells.
@@ -147,6 +146,7 @@ class InsertRowAction(QAction):
         super().__init__(table)
         self.setText(_INSERTROW)
         self.setToolTip(_TTINSERTROW)
+# The tooltip is not shown in a popup menu ...
         self.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_I))
         self.setShortcutContext(Qt.WidgetShortcut)
         self.triggered.connect(self.insert_row)
@@ -157,15 +157,17 @@ class InsertRowAction(QAction):
         """
         selected = self.table.selectedRanges()
         if len(selected) == 1:
+            # Just one selected block
             selrange = selected[0]
             i = selrange.bottomRow()
             if i == selrange.topRow():
+                # Just one selected row (can be more than on cell)
                 data_model = self.table.model()
                 self.table.insertRow(i + 1)
                 return True
         msgBox = QMessageBox(parent=self.table)
         msgBox.setText(_INSERT1)
-        msgBox.exec_()
+        msgBox.exec()
         return False
 
 
@@ -193,7 +195,7 @@ class DeleteRowsAction(QAction):
         if len(selected) != 1:
             msgBox = QMessageBox(parent=self.table)
             msgBox.setText(_DELETE1)
-            msgBox.exec_()
+            msgBox.exec()
             return False
         data_model = self.table.model()
         selrange = selected[0]
@@ -216,7 +218,7 @@ class CopySelectedCellsAction(QAction):
     If the cells are sparsely selected, the structure is preserved by
     representing the unselected cells as empty strings in between two
     tabulation characters.
-    Beware of pasting this data in another table widget, because depending
+    Beware of pasting this data because, depending
     on how the paste is implemented, the empty cells may cause data in the
     target table to be deleted, even though you didn't necessarily select the
     corresponding cell in the origin table.
@@ -242,20 +244,31 @@ class CopySelectedCellsAction(QAction):
         """Concatenate the text content of all selected cells into a string
         using tabulations and newlines to keep the table structure.
         Put this text into the clipboard.
+        If the cells are not contiguous, fail.
         """
         selected_idx = self.table.selectedIndexes()
         if not selected_idx:
             return False
+        #print("SELECTED:", selected_idx)
         selected_idx_tuples = [(idx.row(), idx.column()) for idx in selected_idx]
 
         selected_rows = [idx[0] for idx in selected_idx_tuples]
+        row0, row1 = min(selected_rows), max(selected_rows)
         selected_columns = [idx[1] for idx in selected_idx_tuples]
+        col0, col1 = min(selected_columns), max(selected_columns)
+        nselblock = (row1 - row0 + 1) * (col1 - col0 + 1)
+        if nselblock > len(selected_idx_tuples):
+            # Selection not contiguous
+            msgBox = QMessageBox(parent=self.table)
+            msgBox.setText(_NONCONTIGUOUS)
+            msgBox.exec()
+            return False
 
         data_model = self.table.model()
 
         copied_text = ""
-        for row in range(min(selected_rows), max(selected_rows) + 1):
-            for col in range(min(selected_columns), max(selected_columns) + 1):
+        for row in range(row0, row1 + 1):
+            for col in range(col0, col1 + 1):
                 index = data_model.index(row, col)
                 cell_text = data_model.data(index)
                 flags = data_model.flags(index)
@@ -267,7 +280,7 @@ class CopySelectedCellsAction(QAction):
                         # Only works for text cells
                         msgBox = QMessageBox(parent=self.table)
                         msgBox.setText(_NONTEXTCELL)
-                        msgBox.exec_()
+                        msgBox.exec()
                         return False
                     if self.cut and (flags & Qt.ItemIsEditable):
                         data_model.setData(index, "")
@@ -311,32 +324,7 @@ class CopyAllCellsAction(QAction):
         using tabulations and newlines to keep the table structure.
         Put this text into the clipboard.
         """
-        data_model = self.table.model()
-        copied_text = ""
-        for row in range(data_model.rowCount()):
-            for col in range(data_model.columnCount()):
-                index = data_model.index(row, col)
-                cell_text = data_model.data(index)
-                flags = data_model.flags(index)
-                if cell_text is not None:
-                    try:
-                        copied_text += cell_text
-                    except:
-                        # Only works for text cells
-                        msgBox = QMessageBox(parent=self.table)
-                        msgBox.setText(_NONTEXTCELL)
-                        msgBox.exec_()
-                        return False
-                    if self.cut and (flags & Qt.ItemIsEditable):
-                        data_model.setData(index, "")
-                copied_text += col_separator
-            # remove the right-most tabulation
-            copied_text = copied_text[:-len(col_separator)]
-            # add a newline
-            copied_text += row_separator
-        # remove final newline
-        copied_text = copied_text[:-len(row_separator)]
-
+        copied_text = self.table.getAllCells(self.cut)
         # put this text into clipboard
         qapp = QApplication.instance()
         qapp.clipboard().setText(copied_text)
@@ -392,7 +380,7 @@ class CutAllCellsAction(CopyAllCellsAction):
         self.cut = True
 
 
-def _parseTextAsTable(text, row_separator=row_separator, col_separator=col_separator):
+def _parseTextAsTable(text, col_separator=col_separator):
     """Parse text into list of lists (2D sequence).
 
     The input text must be tabulated using tabulation characters and
@@ -406,7 +394,7 @@ def _parseTextAsTable(text, row_separator=row_separator, col_separator=col_separ
     :return: 2D sequence of strings, all rows having the same length
         (padded with '' if necessary).
     """
-    rows = text.split(row_separator)
+    rows = text.splitlines()
     table_data = []
     max_len = 0
     for row in rows:
@@ -488,7 +476,7 @@ class PasteCellsAction(QAction):
         if len(selected) != 1:
             msgBox = QMessageBox(parent=self.table)
             msgBox.setText(_PASTE1)
-            msgBox.exec_()
+            msgBox.exec()
             return False
         selrange = selected[0]
         irows = range(selrange.topRow(), selrange.bottomRow() + 1)
@@ -528,12 +516,12 @@ class PasteCellsAction(QAction):
         except RangeError:
             msgBox = QMessageBox(parent=self.table)
             msgBox.setText(_PASTE1)
-            msgBox.exec_()
+            msgBox.exec()
             return False
         if protected_cells or self.out_of_range_cells:
             msgBox = QMessageBox(parent=self.table)
             msgBox.setText(_PASTEFAIL)
-            msgBox.exec_()
+            msgBox.exec()
             return False
         return True
 
@@ -596,9 +584,8 @@ class TableWidget(QTableWidget):
     :param bool allCells: Enable copy(/cut) all cells
     :param fn on_changed: Callback(row, col, text) for changed cells
     """
-    def __init__(self, parent = None, cut = False, paste = False,
+    def setup(self, parent = None, cut = False, paste = False,
             allCells = False, row_add_del = False, on_changed = None):
-        super().__init__(parent)
         self.on_changed = on_changed
         self._text_last_cell_clicked = None
 #
@@ -660,18 +647,21 @@ class TableWidget(QTableWidget):
             self.on_changed(row, col, self.item(row, col).text())
 
     def activated(self, row, col):
+        # This is called when a cell is left-clicked or when the selected
+        # cell has "Enter" pressed. When multiple cells are selected,
+        # the last selected one is activated.
         pass
-#        print("ACTIVATED:", row, col)
+        #print("ACTIVATED:", row, col)
 
 #    def vheader_popup(self, point):
-#        action = self.header_menu.exec_(self.mapToGlobal(point))
+#        action = self.header_menu.exec(self.mapToGlobal(point))
 #        if action:
 #            i = self.verticalHeader().logicalIndexAt(point)
 ##            print("VHEADER:", i)
 #            action.run(i)
 
     def mousePressEvent(self, event):
-        item = self.itemAt(event.pos())
+        item = self.itemAt(event.position().toPoint())
         if item is not None:
             self._text_last_cell_clicked = item.text()
         super().mousePressEvent(event)
@@ -716,11 +706,37 @@ class TableWidget(QTableWidget):
                 self.copySingleCellAction.setEnabled(False)
         super().setSelectionMode(mode)
 
+    def getAllCells(self, cut = False):
+        """Concatenate the text content of all cells into a string
+        using tabulations and newlines to keep the table structure.
+        If <cut> is true, the cells will be emptied if they are editable.
+        """
+        data_model = self.model()
+        copied_text = ""
+        for row in range(data_model.rowCount()):
+            for col in range(data_model.columnCount()):
+                index = data_model.index(row, col)
+                cell_text = data_model.data(index)
+                if cell_text:
+                    copied_text += cell_text
+                    if cut and (data_model.flags(index) & Qt.ItemIsEditable):
+                        data_model.setData(index, "")
+                copied_text += col_separator
+            # remove the right-most tabulation
+            copied_text = copied_text[:-len(col_separator)]
+            # add a newline
+            copied_text += row_separator
+        # remove final newline
+        return copied_text[:-len(row_separator)]
+
+
 
 if __name__ == "__main__":
     app = QApplication([])
 
-    tablewidget = TableWidget(row_add_del = True, cut = True, paste = True)
+    tablewidget = TableWidget()
+    tablewidget.setup(row_add_del = True, cut = True, paste = True)
+    tablewidget.setSelectionMode(QTableView.ExtendedSelection)
     tablewidget.setWindowTitle("TableWidget")
     cols = ["Column %02d" % n for n in range(10)]
     tablewidget.setColumnCount(len(cols))
@@ -728,6 +744,9 @@ if __name__ == "__main__":
     rows = ["Row %02d" % n for n in range(7)]
     tablewidget.setRowCount(len(rows))
     tablewidget.setVerticalHeaderLabels(rows)
+
+# Note that inserting and deleting rows will make a mess of the row
+# headers set above
 
     r, c = 2, 3
     tablewidget.set_text(r, c, 'R%02d:C%02d' % (r, c))
@@ -739,4 +758,4 @@ if __name__ == "__main__":
 
     tablewidget.resize(600, 400)
     tablewidget.show()
-    app.exec_()
+    app.exec()
