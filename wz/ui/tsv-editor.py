@@ -79,7 +79,8 @@ class TsvEditor:
     def __init__(self, ofile = None):
         self.window = ui_load('tsv-editor.ui')
         self.table = self.window.table_widget
-        self.table.setup(row_add_del = True, cut = True, paste = True)
+        self.table.setup(row_add_del = True,# column_add_del = True,
+                cut = True, paste = True)
         self.table.setSelectionMode(self.table.ExtendedSelection)
 #        self.table.setWindowTitle("TableWidget")
         self.window.action_open.triggered.connect(self.get_file)
@@ -162,10 +163,12 @@ class TsvEditor:
 
 
 if __name__ == '__main__':
+    import ui.qrc_icons
+    from PySide6.QtGui import QIcon
     ofile = sys.argv[1] if len(sys.argv) == 2 else None
     print("tsv-editor.py:", sys.argv, "-->", ofile)
     tsv_edit = TsvEditor(ofile)
     builtins.WINDOW = tsv_edit.window
-#    WINDOW.setWindowIcon(QIcon(":/icons/tt.svg")) # in ui file
+#    WINDOW.setWindowIcon(QIcon("/tsv.svg")) # in ui file
     WINDOW.show()
     sys.exit(app.exec())

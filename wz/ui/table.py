@@ -3,15 +3,15 @@
 """
 gui/table.py
 
-Last updated:  2021-10-07
+Last updated:  2021-10-09
 
-A slight modification of "TableWidget.py" from the "silx" project
-(www.silx.org), thanks to P. Knobel.
+An editable table widget using QTableWidget as base class. Only text
+cells are handled.
+Based on "TableWidget.py" from the "silx" project (www.silx.org),
+thanks to P. Knobel.
 
- - Adapted to run in this project (mostly tweaking of the imports).
- - Added German display texts.
- - Added check for text cells when copying to clip board (only text
-  may be copied.
+  - Adapted to run in this project (mostly tweaking of the imports).
+  - Added German display texts.
   - By default, cut/copy all cells is not enabled (if there are non-text
    cells it wouldn't work anyway).
   - Removed the TableView version.
@@ -22,8 +22,6 @@ Modifications Copyright (c) 2021 Michael Towers
 
 Original Licence below.
 """
-
-#TODO: Are non-text cells at all possible???!!!
 
 # /*##########################################################################
 #
@@ -118,21 +116,32 @@ _INSERT1 = "Um eine neue Zeile einzufügen, muss genau eine selektiert sein"
 _DELETEROWS = "Zeilen löschen"
 #_TTDELETEROWS = "Delete selected Rows"
 _TTDELETEROWS = "Selektierte Zeilen löschen"
-#_INSERT1 = "A single row must be selected to insert a new one"
+#_DELETE1 = "A single row must be selected to insert a new one"
 _DELETE1 = "Um Zeilen zu löschen, müssen sie eindeutig selektiert sein"
+#_INSERTCOLUMN = "Insert Column"
+_INSERTCOLUMN = "Spalte einfügen"
+#_TTINSERTCOLUMN = "Insert Column"
+_TTINSERTCOLUMN = "Spalte einfügen nach der aktuellen Spalte"
+#_INSERT2 = "A single column must be selected to insert a new one"
+_INSERT2 = "Um eine neue Spalte einzufügen, muss genau eine selektiert sein"
+#_DELETECOLUMNS = "Delete Columns"
+_DELETECOLUMNS = "Spalten löschen"
+#_TTDELETECOLUMNS = "Delete selected Columns"
+_TTDELETECOLUMNS = "Selektierte Spalten löschen"
+#_DELETE2 = "A single column must be selected to insert a new one"
+_DELETE2 = "Um Spalten zu löschen, müssen sie eindeutig selektiert sein"
 _NONCONTIGUOUS = "Selektierte Zellen sind nicht zusammenhängend"
 
 import sys
 from PySide6.QtWidgets import QApplication, \
-        QTableView, QTableWidget, QMessageBox#, QMenu
-from PySide6.QtCore import Qt
+        QTableView, QTableWidget, QMessageBox, \
+        QStyledItemDelegate, QStyleOptionViewItem
+from PySide6.QtCore import Qt, QPointF, QRectF, QSize
 from PySide6.QtGui import QAction, QKeySequence
 
 row_separator = '\n'
 col_separator = '\t'
 
-
-#TODO: Disallow multiple selections?
 
 class InsertRowAction(QAction):
     """QAction to insert a row of cells.
@@ -161,7 +170,7 @@ class InsertRowAction(QAction):
             selrange = selected[0]
             i = selrange.bottomRow()
             if i == selrange.topRow():
-                # Just one selected row (can be more than on cell)
+                # Just one selected row (can be more than one cell)
                 data_model = self.table.model()
                 self.table.insertRow(i + 1)
                 return True
@@ -183,7 +192,7 @@ class DeleteRowsAction(QAction):
         super().__init__(table)
         self.setText(_DELETEROWS)
         self.setToolTip(_TTDELETEROWS)
-        self.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_R))
+        self.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_D))
         self.setShortcutContext(Qt.WidgetShortcut)
         self.triggered.connect(self.delete_rows)
         self.table = table
@@ -203,6 +212,79 @@ class DeleteRowsAction(QAction):
         n = selrange.bottomRow()
         while i <= n:
             self.table.removeRow(i)
+            n -= 1
+        return True
+
+
+class InsertColumnAction(QAction):
+    """QAction to insert a column of cells.
+
+    :param table: :class:`QTableView` to which this action belongs.
+    """
+    def __init__(self, table):
+        if not isinstance(table, QTableView):
+            raise ValueError('InsertColumnAction must be initialised ' +
+                             'with a QTableWidget.')
+        super().__init__(table)
+        self.setText(_INSERTCOLUMN)
+        self.setToolTip(_TTINSERTCOLUMN)
+# The tooltip is not shown in a popup menu ...
+        self.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_A))
+        self.setShortcutContext(Qt.WidgetShortcut)
+        self.triggered.connect(self.insert_column)
+        self.table = table
+
+    def insert_column(self):
+        """Insert an empty column after the current one.
+        """
+        selected = self.table.selectedRanges()
+        if len(selected) == 1:
+            # Just one selected block
+            selrange = selected[0]
+            i = selrange.rightColumn()
+            if i == selrange.leftColumn():
+                # Just one selected column (can be more than one cell)
+                data_model = self.table.model()
+                self.table.insertColumn(i + 1)
+                return True
+        msgBox = QMessageBox(parent=self.table)
+        msgBox.setText(_INSERT2)
+        msgBox.exec()
+        return False
+
+
+class DeleteColumnsAction(QAction):
+    """QAction to delete columns of cells.
+
+    :param table: :class:`QTableView` to which this action belongs.
+    """
+    def __init__(self, table):
+        if not isinstance(table, QTableView):
+            raise ValueError('DeleteColumnsAction must be initialised ' +
+                             'with a QTableWidget.')
+        super().__init__(table)
+        self.setText(_DELETECOLUMNS)
+        self.setToolTip(_TTDELETECOLUMNS)
+        self.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_X))
+        self.setShortcutContext(Qt.WidgetShortcut)
+        self.triggered.connect(self.delete_columns)
+        self.table = table
+
+    def delete_columns(self):
+        """Delete the selected rows.
+        """
+        selected = self.table.selectedRanges()
+        if len(selected) != 1:
+            msgBox = QMessageBox(parent=self.table)
+            msgBox.setText(_DELETE2)
+            msgBox.exec()
+            return False
+        data_model = self.table.model()
+        selrange = selected[0]
+        i = selrange.leftColumn()
+        n = selrange.rightColumn()
+        while i <= n:
+            self.table.removeColumn(i)
             n -= 1
         return True
 
@@ -274,14 +356,7 @@ class CopySelectedCellsAction(QAction):
                 flags = data_model.flags(index)
 
                 if (row, col) in selected_idx_tuples and cell_text is not None:
-                    try:
-                        copied_text += cell_text
-                    except:
-                        # Only works for text cells
-                        msgBox = QMessageBox(parent=self.table)
-                        msgBox.setText(_NONTEXTCELL)
-                        msgBox.exec()
-                        return False
+                    copied_text += cell_text
                     if self.cut and (flags & Qt.ItemIsEditable):
                         data_model.setData(index, "")
                 copied_text += col_separator
@@ -566,6 +641,9 @@ class TableWidget(QTableWidget):
     of them optional:
 
         - :class:`InsertRowAction`
+        - :class:`InsertColumnAction`
+        - :class:`DeleteRowsAction`
+        - :class:`DeleteColumnAsction`
         - :class:`CopySelectedCellsAction`
         - :class:`CopyAllCellsAction`
         - :class:`CutSelectedCellsAction`
@@ -585,7 +663,8 @@ class TableWidget(QTableWidget):
     :param fn on_changed: Callback(row, col, text) for changed cells
     """
     def setup(self, parent = None, cut = False, paste = False,
-            allCells = False, row_add_del = False, on_changed = None):
+            allCells = False, row_add_del = False, column_add_del = False,
+            on_changed = None):
         self.on_changed = on_changed
         self._text_last_cell_clicked = None
 #
@@ -604,7 +683,18 @@ class TableWidget(QTableWidget):
             self.addAction(insertRowAction)
             deleteRowsAction = DeleteRowsAction(self)
             self.addAction(deleteRowsAction)
-            sep = QAction(self)
+            #sep = QAction(self)
+            sep = QAction(" ", self)
+            sep.setSeparator(True)
+            self.addAction(sep)
+        if column_add_del:
+            insertColumnAction = InsertColumnAction(self)
+            self.addAction(insertColumnAction)
+            deleteColumnsAction = DeleteColumnsAction(self)
+            self.addAction(deleteColumnsAction)
+#Qt bug?: Without the string, only one separator is shown.
+            #sep = QAction(self)
+            sep = QAction(" ", self)
             sep.setSeparator(True)
             self.addAction(sep)
 #
@@ -730,13 +820,39 @@ class TableWidget(QTableWidget):
         return copied_text[:-len(row_separator)]
 
 
+class VerticalTextDelegate(QStyledItemDelegate):
+    """A <QStyledItemDelegate> for vertical text. It can be set on a
+    row or column (or the whole table), not on single cells.
+    """
+    def paint(self, painter, option, index):
+        optionCopy = QStyleOptionViewItem(option)
+        rectCenter = QPointF(QRectF(option.rect).center())
+        painter.save()
+        painter.translate(rectCenter.x(), rectCenter.y())
+        painter.rotate(-90.0)
+        painter.translate(-rectCenter.x(), -rectCenter.y())
+        optionCopy.rect = painter.worldTransform().mapRect(option.rect)
+
+        # Call the base class implementation
+        super().paint(painter, optionCopy, index)
+
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        val = QSize(super().sizeHint(option, index))
+        return QSize(val.height(), val.width())
+
 
 if __name__ == "__main__":
     app = QApplication([])
 
     tablewidget = TableWidget()
-    tablewidget.setup(row_add_del = True, cut = True, paste = True)
-    tablewidget.setSelectionMode(QTableView.ExtendedSelection)
+    tablewidget.setup(row_add_del = True, column_add_del = True,
+            cut = True, paste = True)
+#?
+    tablewidget.setSelectionMode(QTableView.ContiguousSelection)
+#    tablewidget.setSelectionMode(QTableView.ExtendedSelection)
+
     tablewidget.setWindowTitle("TableWidget")
     cols = ["Column %02d" % n for n in range(10)]
     tablewidget.setColumnCount(len(cols))
@@ -755,6 +871,11 @@ if __name__ == "__main__":
     tablewidget.set_text(r, c, 'R%02d:C%02d' % (r, c))
     print("???", tablewidget.get_text(r, c))
     print("???", tablewidget.get_text(0, 0))
+
+    tablewidget.setItemDelegateForRow(2, VerticalTextDelegate())
+    tablewidget.resizeRowToContents(1)
+    tablewidget.resizeRowToContents(2)
+    tablewidget.resizeColumnToContents(3)
 
     tablewidget.resize(600, 400)
     tablewidget.show()
