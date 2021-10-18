@@ -1,0 +1,8 @@
+#!/bin/bash
+
+thisfile=$( realpath "$0"  )
+thisdir=$( dirname "$thisfile" )
+cd "$thisdir/wz-data/designer"
+export PROGRAM_DATA="$thisdir/wz-data"
+"$thisdir/venv/bin/python" "$thisdir/wz/tsv-editor.py" "$*"
+

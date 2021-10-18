@@ -1,8 +1,0 @@
-#!/bin/bash
-
-thisfile=$( realpath "$0"  )
-thisdir=$( dirname "$thisfile" )
-#cd "$thisdir/wz/ui"
-#"$thisdir/venv/bin/python" "tsv-editor.py" "$1"
-"$thisdir/venv/bin/python" "$thisdir/wz/ui/tsv-editor.py" "$1"
-

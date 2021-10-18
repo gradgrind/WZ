@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-ui/ui_support.py
+ui/ui_extra.py
 
-Last updated:  2021-10-13
+Last updated:  2021-10-16
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -48,19 +48,15 @@ _FILESAVE = "Datei speichern"
 
 #####################################################
 
-import sys, os, builtins, traceback
+import sys, os, builtins, traceback, glob
 from importlib import resources         # Python >= 3.7
 
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
         QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox, \
         QListWidget, QFileDialog, QLineEdit
-from PySide6.QtGui import QMovie, QPixmap
+from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt, QObject, QFile, QIODevice
-from PySide6.QtUiTools import QUiLoader
-
-import ui.icons_rc
-from ui.xwidgets import GViewResizing
 
 ### +++++
 
@@ -69,38 +65,9 @@ class GuiError(Exception):
 
 ### -----
 
-def ui_load(filename):
-    """Load a Qt Designer 'ui'-file.
-    Folder 'ui/designer' must have an '__init__.py' file (which can be empty).
-    """
-#    with resources.path('ui.designer', filename) as path:
-#        ui_file_name = str(path)
-    ui_file_name = os.path.join(DATADIR, 'designer', filename)
-    ui_file = QFile(ui_file_name)
-    if not ui_file.open(QIODevice.ReadOnly):
-        raise GuiError("BUG: Cannot open {}: {}".format(ui_file_name,
-                ui_file.errorString()))
-#    loader = QUiLoader()
-    loader = UiLoader()
-#    loader.clearPluginPaths()
-#    print("§§§", loader.pluginPaths())
-    ui = loader.load(ui_file, None)
-    ui_file.close()
-    if not ui:
-        raise GuiError("BUG: " + loader.errorString())
-    return ui
-
-##Add custom widgets thus?
-class UiLoader(QUiLoader):
-    def createWidget(self, className, parent=None, name=""):
-        print("UI:", className, name)
-#        if name == 'table_view':
-        if className == 'GViewResizing':
-            return GViewResizing(parent=parent)
-        if className == 'TableWidget':
-            from ui.table import TableWidget
-            return TableWidget(parent=parent)
-        return super().createWidget(className, parent, name)
+def get_icon(name):
+    ilist = glob.glob(os.path.join(DATADIR, 'icons', f'{name}.*'))
+    return QIcon(ilist[0])
 
 ###
 

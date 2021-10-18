@@ -14,8 +14,8 @@
    <string>MainWindow</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="../myicons.qrc">
-    <normaloff>:/icons/icons/datatable.png</normaloff>:/icons/icons/datatable.png</iconset>
+   <iconset>
+    <normaloff>../icons/tsv.svg</normaloff>../icons/tsv.svg</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
@@ -82,8 +82,6 @@
    <header>table.py</header>
   </customwidget>
  </customwidgets>
- <resources>
-  <include location="../myicons.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>

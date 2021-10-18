@@ -33,19 +33,10 @@ _NOT_TSV        = "Keine tsv-Datei: {filepath}"
 
 import sys, os, builtins, traceback
 if __name__ == '__main__':
-    # Enable package import if running module directly
-    this = sys.path[0]
-    appdir = os.path.dirname(this)
-    sys.path[0] = appdir
-    basedir = os.path.dirname(appdir)
-#    appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-#    basedir = os.path.dirname(appdir)
-
-### +++++
-
 #TODO: IF I use this feature, this is probably the wrong path ...
 # Without the environment variable there is a disquieting error message.
-    os.environ['PYSIDE_DESIGNER_PLUGINS'] = this
+    builtins.DATADIR = os.environ['PROGRAM_DATA']
+    os.environ['PYSIDE_DESIGNER_PLUGINS'] = DATADIR
 
     from PySide6.QtWidgets import QApplication#, QStyleFactory
     from PySide6.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
@@ -63,6 +54,8 @@ if __name__ == '__main__':
     # Persistent Settings:
     builtins.SETTINGS = QSettings(
             QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
+
+    print(DATADIR)
 
 from ui.ui_support import ui_load, openDialog, saveDialog
 # Uses the modified QTableWidget in table.py (via <ui_load>).
@@ -164,12 +157,12 @@ class TsvEditor:
 
 
 if __name__ == '__main__':
-    import ui.qrc_icons
+#    import ui.qrc_icons
     from PySide6.QtGui import QIcon
     ofile = sys.argv[1] if len(sys.argv) == 2 else None
     print("tsv-editor.py:", sys.argv, "-->", ofile)
     tsv_edit = TsvEditor(ofile)
-    builtins.WINDOW = tsv_edit.window
-#    WINDOW.setWindowIcon(QIcon("/tsv.svg")) # in ui file
+    WINDOW = tsv_edit.window
+#    WINDOW.setWindowIcon(QIcon(os.path.join(DATADIR, 'icons', 'tsv.svg')))
     WINDOW.show()
     sys.exit(app.exec())

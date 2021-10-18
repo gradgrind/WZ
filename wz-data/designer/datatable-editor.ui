@@ -6,21 +6,53 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>668</width>
+    <height>503</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>DataTable Editor</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="../myicons.qrc">
-    <normaloff>:/icons/icons/datatable.png</normaloff>:/icons/icons/datatable.png</iconset>
+   <iconset>
+    <normaloff>../icons/datatable.png</normaloff>../icons/datatable.png</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
-     <widget class="TableWidget" name="table_widget"/>
+     <widget class="QSplitter" name="splitter">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <widget class="TableWidget" name="info_table">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Maximum">
+         <horstretch>0</horstretch>
+         <verstretch>1</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="rowCount">
+        <number>1</number>
+       </property>
+       <property name="columnCount">
+        <number>1</number>
+       </property>
+       <attribute name="horizontalHeaderVisible">
+        <bool>false</bool>
+       </attribute>
+       <attribute name="horizontalHeaderStretchLastSection">
+        <bool>true</bool>
+       </attribute>
+      </widget>
+      <widget class="TableWidget" name="table_widget">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>1</verstretch>
+        </sizepolicy>
+       </property>
+      </widget>
+     </widget>
     </item>
    </layout>
   </widget>
@@ -29,7 +61,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>668</width>
      <height>20</height>
     </rect>
    </property>
@@ -82,8 +114,6 @@
    <header>table.py</header>
   </customwidget>
  </customwidgets>
- <resources>
-  <include location="../myicons.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>

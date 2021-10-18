@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-10-03
+Last updated:  2021-10-15
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -200,6 +200,9 @@ class Spreadsheet:
     All cell values are strings, or <None> if empty.
     """
     _SUPPORTED_TYPES = {'tsv': TsvReader, 'ods': OdsReader, 'xlsx': XlsReader}
+    @classmethod
+    def filetype_endings(cls):
+        return list(cls._SUPPORTED_TYPES)
     #+
     @classmethod
     def supportedType(cls, filename):
