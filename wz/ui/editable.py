@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-10-20
+Last updated:  2021-10-21
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -28,10 +28,15 @@ Copyright 2021 Michael Towers
 =-LICENCE=================================
 """
 
+#TODO
+### Ideally actions which in the present state don't do anything should
+### be disabled.
+### An invisible QAction seems to imply it is also disabled.
+### There is a signal on QItemSelectionModel:
+###    selectionChanged(const QItemSelection &selected, const QItemSelection &deselected)
+
 ### Messages
 
-#_CLEARSELECTION = "Clear selection"
-_CLEARSELECTION = "Auswahl aufheben"
 #_TOO_MANY_ROWS = "Too many rows to insert"
 _TOO_MANY_ROWS = "Einfügen nicht möglich – zu viele Zeilen"
 #_TOO_MANY_COLUMNS = "Too many columns to insert"
@@ -43,10 +48,10 @@ _BAD_PASTE_RANGE = "Die Dimensionen der einzufügenden Daten sind nicht" \
 #_PASTE_PROTECTED = "Some data could not be inserted because of" \
 #        " write-protected cells.
 _PASTE_PROTECTED = "Zellen sind schreibgeschützt – einfügen nicht möglich"
-#_TTCUTSELECTION = "Cut selection, placing cell values in the clipboard."
-_TTCUTSELECTION = "Auswahl ausschneiden und in die Zwischanablage kopieren."
 #_CUTSELECTION = "Cut selection"
 _CUTSELECTION = "Auswahl ausschneiden"
+#_TTCUTSELECTION = "Cut selection, placing cell values in the clipboard."
+_TTCUTSELECTION = "Auswahl ausschneiden und in die Zwischanablage kopieren."
 #_COPYSELECTION = "Copy selection"
 _COPYSELECTION = "Auswahl kopieren"
 #_TTCOPYSELECTION = "Copy selected cells into the clipboard."
@@ -71,8 +76,8 @@ _INSERTROWFAIL = "Um eine neue Zeile einzufügen, muss genau eine" \
 _DELETEROWS = "Zeilen löschen"
 #_TTDELETEROWS = "Delete selected Rows"
 _TTDELETEROWS = "ausgewählte Zeilen löschen"
-#_DELETEROWSFAIL = "No rows are selected"
-_DELETEROWSFAIL = "Keine ausgewählten Zeilen"
+#_DELETEROWSFAIL = "Deletion of the last row(s) is not permitted"
+_DELETEROWSFAIL = "Das Löschen der letzten Zeile(n) ist nicht zulässig"
 #_INSERTCOLUMN = "Insert Column"
 _INSERTCOLUMN = "Spalte einfügen"
 #_TTINSERTCOLUMN = "Insert Column"
@@ -85,18 +90,12 @@ _INSERTCOLUMNFAIL = "Um eine neue Spalte einzufügen, muss genau eine" \
 _DELETECOLUMNS = "Spalten löschen"
 #_TTDELETECOLUMNS = "Delete selected Columns"
 _TTDELETECOLUMNS = "ausgewählte Spalten löschen"
-#_DELETECOLUMNSFAIL = "No columns are selected"
-_DELETECOLUMNSFAIL = "Keine ausgewählten Spalten"
-#_UNDO = "Undo"
-_UNDO = "Rückgängig"
-#_TTUNDO = "Undo last change"
-_TTUNDO = "Letzte Änderung rückgängig machen"
-#_REDO = "Redo"
-_REDO = "Wiederherstellen"
-#_TTREDO = "Redo"
-_TTREDO = "Letzte Änderung wiederherstellen"
+#_DELETECOLUMNSFAIL = "Deletion of the last column(s) is not permitted"
+_DELETECOLUMNSFAIL = "Das Löschen der letzten Spalte(n) ist nicht zulässig"
 
 ########################################################################
+
+from enum import Enum, auto
 
 from PySide6.QtWidgets import QApplication, \
         QTableView, QTableWidget, QMessageBox, \
@@ -105,6 +104,17 @@ from PySide6.QtCore import Qt, QPointF, QRectF, QSize, Signal
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
 
 ### -----
+
+class Change(Enum):
+    """Types of changes which are to be recorded by undo/redo function.
+    """
+    CELL = auto()
+    BLOCK = auto()
+    ADD_ROW = auto()
+    DEL_ROW = auto()
+    ADD_COL = auto()
+    DEL_COL = auto()
+
 
 class InsertRowAction(QAction):
     """QAction to insert a row of cells.
@@ -126,9 +136,12 @@ class InsertRowAction(QAction):
         if selected[0] and selected[4] == 1:
             self.table.insertRow(selected[1] + 1)
         else:
-            msgBox = QMessageBox(parent = self.table)
-            msgBox.setText(_INSERTROWFAIL)
-            msgBox.exec()
+            self.table.insertRow(self.table.currentRow() + 1)
+
+#TODO
+#            msgBox = QMessageBox(parent = self.table)
+#            msgBox.setText(_INSERTROWFAIL)
+#            msgBox.exec()
 
 
 class InsertColumnAction(QAction):
@@ -169,19 +182,26 @@ class DeleteRowsAction(QAction):
         self.table = table
 
     def delete_rows(self):
-        """Delete the selected rows.
+        """Delete the selected rows or else the current row.
         """
         selected = self.table.get_selection()
         if selected[0]:
+            n = selected[4]
             r0 = selected[1]
-            r = r0 + selected[4]
-            while r > r0:
-                r -= 1
-                self.table.removeRow(r)
         else:
+            n = 1
+            r0 = self.table.currentRow()
+            if r0 < 0:
+                return
+        if n == self.table.row_count():
             msgBox = QMessageBox(parent = self.table)
             msgBox.setText(_DELETEROWSFAIL)
             msgBox.exec()
+        else:
+            r = r0 + n
+            while r > r0:
+                r -= 1
+                self.table.removeRow(r)
 
 
 class DeleteColumnsAction(QAction):
@@ -201,15 +221,22 @@ class DeleteColumnsAction(QAction):
         """
         selected = self.table.get_selection()
         if selected[0]:
+            n = selected[3]
             c0 = selected[2]
-            c = c0 + selected[3]
-            while c > c0:
-                c -= 1
-                self.table.removeColumn(c)
         else:
+            n = 1
+            c0 = self.table.currentColumn()
+            if c0 < 0:
+                return
+        if n == self.table.column_count():
             msgBox = QMessageBox(parent = self.table)
             msgBox.setText(_DELETECOLUMNSFAIL)
             msgBox.exec()
+        else:
+            c = c0 + n
+            while c > c0:
+                c -= 1
+                self.table.removeColumn(c)
 
 
 class CopyCellsAction(QAction):
@@ -412,69 +439,61 @@ class UndoRedo:
         self.mark0(True)
         self.enabled = en
 
-    def change(self, row, column, olddata, newdata):
-        if self.enabled and not self.blocked:
-            del(self.changes[self.index:])
-            self.changes.append((row, column, olddata, newdata))
-            self.index = len(self.changes)
+    def change(self, chtype, change):
+        if self.enabled:
+            if not self.blocked:
+                #print("CHANGE:", chtype, change)
+                del(self.changes[self.index:])
+                self.changes.append((chtype, change))
+                self.index = len(self.changes)
+                self.table.set_modified(True)
+        else:
+            self.table.set_modified(True)
 
     def undo(self):
         if self.enabled and self.index > 0:
             self.blocked = True
             self.index -= 1
-            row, column, olddata, newdata = self.changes[self.index]
-            if row < 0:
-                # insert/delete column
-                if olddata is None:
-                    # undo "insert column"
-                    self.table.removeColumn(column)
-                else:
-                    # undo "delete column"
-                    self.table.insertColumn(column, data = olddata)
-            elif column < 0:
-                # insert/delete row
-                if olddata is None:
-                    # undo "insert row"
-                    self.table.removeRow(row)
-                else:
-                    # undo "delete row"
-                    self.table.insertRow(row, data = olddata)
-            else:
-                self.table.set_text(row, column, olddata)
+            chtype, change = self.changes[self.index]
+            if chtype is Change.ADD_COL:
+                self.table.removeColumn(change)
+            elif chtype is Change.DEL_COL:
+                self.table.insertColumn(change[0], data = change[1])
+            elif chtype is Change.ADD_ROW:
+                self.table.removeRow(change)
+            elif chtype is Change.DEL_ROW:
+                self.table.insertRow(change[0], data = change[1])
+            elif chtype is Change.BLOCK:
+                for _change in change:  # <change> is here a list
+                    self.table.set_text(*_change[:3])
+            elif chtype is Change.CELL:
+                self.table.set_text(*change[:3])
             self.blocked = False
             self.table.set_modified(self.index != self.index0)
 
-#TODO: not working
     def redo(self):
         if self.enabled and self.index < len(self.changes):
             self.blocked = True
-            row, column, olddata, newdata = self.changes[self.index]
+            chtype, change = self.changes[self.index]
             self.index += 1
-            if row < 0:
-                # insert/delete column
-                if olddata is None:
-                    # redo "insert column"
-                    self.table.insertColumn(column, data = olddata)
-                else:
-                    # redo "delete column"
-                    self.table.removeColumn(column)
-            elif column < 0:
-                # insert/delete row
-                if olddata is None:
-                    # redo "insert row"
-                    self.table.insertRow(row, data = olddata)
-                else:
-                    # redo "delete row"
-                    self.table.removeRow(row)
-            else:
-                self.table.set_text(row, column, olddata)
+            if chtype is Change.ADD_COL:
+                self.table.insertColumn(change)
+            elif chtype is Change.DEL_COL:
+                self.table.removeColumn(change[0])
+            elif chtype is Change.ADD_ROW:
+                self.table.insertRow(change)
+            elif chtype is Change.DEL_ROW:
+                self.table.removeRow(change[0])
+            elif chtype is Change.BLOCK:
+                for _change in change:  # <change> is here a list
+                    self.table.set_text(*_change[:2], _change[3])
+            elif chtype is Change.CELL:
+                self.table.set_text(*change[:2], change[3])
             self.blocked = False
             self.table.set_modified(self.index != self.index0)
 
 
 class EdiTableWidget(QTableWidget):
-    modified = Signal(bool)
-    #+
     def __init__(self, parent = None):
         super().__init__(parent = parent)
         self.setSelectionMode(self.ContiguousSelection)
@@ -521,19 +540,15 @@ class EdiTableWidget(QTableWidget):
         self.deleteColumnsAction = DeleteColumnsAction(self)
         self.addAction(self.deleteColumnsAction)
 
-
-#TODO: Make <setup> specify the basic parameters of the table, but not
-# the rows and columns – unless row- or column-headers are specified,
-# then the one size or other should probably be fixed.
-
-    def setup(self, rows, columns, colheaders = None, rowheaders = None,
+    def setup(self, colheaders = None, rowheaders = None,
             undo_redo = False, cut = False, paste = False,
-            row_add_del = False, column_add_del = False):
+            row_add_del = False, column_add_del = False,
+            on_changed = None):
         """Inizialize the table.
         Only the copy action is enabled by default.
+        If column headers are provided, adding/deleting columns is forbidden.
+        If row headers are provided, adding/deleting rows is forbidden.
 
-        :param int rows: number of rows
-        :param int columns: number of columns
         :param [str] colheaders: list of column headers
         :param [str] rowheaders: list of row headers
         :param bool undo_redo: Enable undo/redo actions
@@ -541,38 +556,41 @@ class EdiTableWidget(QTableWidget):
         :param bool paste: Enable paste action
         :param bool row_add_del: Enable adding/deleting a table row
         :param bool col_add_del: Enable adding/deleting a table column
-        :param fn on_changed: Callback(row, col, text) for changed cells
+        :param fn on_changed: Callback(bool) indicating change of
+                "modified" status
         """
-        self.setRowCount(rows)
-        self.setColumnCount(columns)
-        self.clear()
+        self.on_changed = on_changed
+        self.colheaders = colheaders
+        self.rowheaders = rowheaders
         if colheaders:
-            if len(colheaders) != columns:
-                raise Bug("Wrong number of column headers")
+            if column_add_del:
+                raise Bug("Changing number of columns is not permitted"
+                        " if column headers are provided")
+            self.setColumnCount(len(colheaders))
             self.setHorizontalHeaderLabels(colheaders)
         if rowheaders:
-            if len(rowheaders) != rows:
-                raise Bug("Wrong number of row headers")
+            if row_add_del:
+                raise Bug("Changing number of rows is not permitted"
+                        " if row headers are provided")
+            self.setRowCount(len(rowheaders))
             self.setVerticalHeaderLabels(rowheaders)
-        # Initially no data, set up the data table:
-        self.table_data = [[''] * columns for r in range(rows)]
         # Enable desired actions
-        self.reset_modified(clear = True)
         self.undoredo.enable(undo_redo)
+
         self.cutCellsAction.setVisible(cut)
-        self.cutCellsAction.setEnabled(cut)
+#        self.cutCellsAction.setEnabled(cut)
         self.pasteCellsAction.setVisible(paste)
-        self.pasteCellsAction.setEnabled(paste)
+#        self.pasteCellsAction.setEnabled(paste)
         self.sep_rowactions.setVisible(row_add_del)
         self.insertRowAction.setVisible(row_add_del)
-        self.insertRowAction.setEnabled(row_add_del)
+#        self.insertRowAction.setEnabled(row_add_del)
         self.deleteRowsAction.setVisible(row_add_del)
-        self.deleteRowsAction.setEnabled(row_add_del)
+#        self.deleteRowsAction.setEnabled(row_add_del)
         self.sep_colactions.setVisible(column_add_del)
         self.insertColumnAction.setVisible(column_add_del)
-        self.insertColumnAction.setEnabled(column_add_del)
+#        self.insertColumnAction.setEnabled(column_add_del)
         self.deleteColumnsAction.setVisible(column_add_del)
-        self.deleteColumnsAction.setEnabled(column_add_del)
+#        self.deleteColumnsAction.setEnabled(column_add_del)
         #
         self.setContextMenuPolicy(Qt.ActionsContextMenu)
         #
@@ -581,15 +599,73 @@ class EdiTableWidget(QTableWidget):
         self.cellClicked.connect(self.activated)
         self.cellActivated.connect(self.newline_press)
 
-    def init_data(self, data):
-        """Set the initial table data from a list of lists of strings.
+    def init0(self, rows, columns):
+        """Set the initial number of rows and columns and check that
+        this is not in conflict with headers, if these have been set.
         """
-#TODO
-        print("set_data: TBI")
+        self.reset_modified(clear = True)
+        self.clearContents()
+        if self.colheaders:
+            if columns != len(self.colheaders):
+                raise Bug("Number of columns doesn't match header list")
+        else:
+            self.setColumnCount(columns)
+        if self.rowheaders:
+            if rows != len(self.rowheaders):
+                raise Bug("Number of rows doesn't match header list")
+        else:
+            self.setRowCount(rows)
+
+    def init_data(self, data):
+        """Set the initial table data from a (complete) list of lists
+        of strings.
+        """
+        def dummy(*args):   # Don't report data changes
+            pass
+        #+
+        rows = len(data)
+        columns = len(data[0])
+        self.init0(rows, columns)
+        # Disable change reporting
+        self.set_change_report(dummy)
+        # Enter data
+        self.table_data = []
+        data_model = self.model()
+        for r in range(rows):
+            self.table_data.append([''] * columns)
+            for c in range(columns):
+                val = data[r][c]
+                #print("SET", r, c, repr(val))
+                if isinstance(val, str):
+                    if val:
+                        data_model.setData(data_model.index(r, c), val)
+                else:
+                    raise Bug("Only string data is accepted")
+        # Enable change reporting
+        self.set_change_report()
 
     def init_sparse_data(self, rows, columns, data_list):
-#TODO
-        print("set_sparse_data: TBI")
+        """Set the initial table data from a list of cell values.
+        data_list is a list of tuples: [(row, column, value), ... ].
+        All other cells are left empty.
+        """
+        def dummy(*args):   # Don't report data changes
+            pass
+        #+
+        self.init0(rows, columns)
+        # Disable change reporting
+        self.set_change_report(dummy)
+        # Enter data
+        self.table_data = [[''] * columns for r in range(rows)]
+        data_model = self.model()
+        for r, c, val in data_list:
+            if isinstance(val, str):
+                if val:
+                    data_model.setData(data_model.index(r, c), val)
+            else:
+                raise Bug("Only string data is accepted")
+        # Enable change reporting
+        self.set_change_report()
 
     def row_count(self):
         return self.model().rowCount()
@@ -643,12 +719,12 @@ class EdiTableWidget(QTableWidget):
         self.table_data.insert(row, newrow)
         super().insertRow(row)
         if data is None:
-            self.add_change(row, -1, None, newrow)
+            self.add_change(Change.ADD_ROW, row)
         else:
+            # There should only be data when undoing
             if len(data) != ncols:
                 raise Bug("insertRow: data length doesn't match table width")
-            for column in range(ncols):
-                self.set_text(row, column, data[column])
+            self.paste_block(row, 0, [data])
 
     def insertColumn(self, column, data = None):
         # Consistency check
@@ -659,22 +735,22 @@ class EdiTableWidget(QTableWidget):
             row.insert(column, '')
         super().insertColumn(column)
         if data is None:
-            self.add_change(-1, column, None, [''] * self.row_count())
+            self.add_change(Change.ADD_COL, column)
         else:
+            # There should only be data when undoing
             if len(data) != nrows:
                 raise Bug("insertColumn: data length doesn't match table height")
-            for row in range(nrows):
-                self.set_text(row, column, data[row])
+            self.paste_block(0, column, [[data[row]] for row in range(nrows)])
 
     def removeRow(self, row):
         rowdata = self.table_data.pop(row)
         super().removeRow(row)
-        self.add_change(row, -1, '\t'.join(rowdata), None)
+        self.add_change(Change.DEL_ROW, (row, rowdata))
 
     def removeColumn(self, column):
         coldata = [rowdata.pop(column) for rowdata in self.table_data]
         super().removeColumn(column)
-        self.add_change(-1, column, '\t'.join(coldata), None)
+        self.add_change(Change.DEL_COL, (column, coldata))
 
     def cell_changed(self, row, col):
         """This is called automatically whenever a cell's content changes.
@@ -684,66 +760,13 @@ class EdiTableWidget(QTableWidget):
         old = self.table_data[row][col]
         if old != text:
             self.table_data[row][col] = text
-            self.add_change(row, col, old, text)
-#            self.undoredo.add_change(row, col, old, text)
-
-#TODO!
-# Changes:
-# - single cell
-# - add line (empty)
-# - add line with content? (could be useful for undo/redo)
-# - remove line (with content)
-# - remove line ignoring content? (could be useful for undo/redo)
-# - cut/delete block
-# - paste block
-### The last two should be provided separately from individual cell
-### changes to ease undo/redo of cut/paste.
-### Changes as a result of undo/redo are not added to the undo/redo stack.
-### There should be a modified callback (rather than a signal), perhaps
-### associated directly with a flag. It will be handled a bit differently
-### when undo/redo is enabled.
-### Perhaps there should be a one-off setup method, which selects the
-### enabled features. If it is better as a once-only setup, there could
-### be a trap when it is called a second time. Note that, using methods
-### actions() and removeAction() it would be possible to remove all the
-### added actions on the table ... but disabling/enabling the desired
-### ones might be better.
-### Ideally actions which in the present state don't do anything should
-### be disabled. Invisible seems to imply disabled.
-### A separate init method would set the initial size and initial
-### contents – without causing a modified callback.
-### At present deleting a row/column also deletes the header, without
-### retaining it for an undo operation. Also editing a header is not
-### supported. If this remains so, it would be logical to only allow
-### headers if insert/delete is not allowed.
-
-### There is a signal on QItemSelectionModel:
-###    selectionChanged(const QItemSelection &selected, const QItemSelection &deselected)
-
+            self.add_change(Change.CELL, (row, col, old, text))
 
     def set_change_report(self, handler = None):
         if handler:
             self.add_change = handler
         else:
-            self.add_change = self.add_change0
-
-    def add_change0(self, row, column, olddata, newdata):
-        """Add each change to a sort of stack for undo/redo support.
-        Normally a single cell will be changed, but it is possible to
-        insert or delete a whole row or column.
-        To insert/delete a column, row is -1.
-        To insert/delete a row, column is -1.
-        Deleted rows/columns are supplied as tab-separated-value strings.
-        """
-        self.undoredo.change(row, column, olddata, newdata)
-        self.set_modified(True)
-
-#TODO
-        print("CHANGE:", row, column, repr(olddata), repr(newdata))
-
-
-
-
+            self.add_change = self.undoredo.change
 
     def activated(self, row, col):
         # This is called when a cell is left-clicked or when the (single)
@@ -754,13 +777,6 @@ class EdiTableWidget(QTableWidget):
         #if self.get_selection()[0] == 1:
         if self.get_selection()[0] <= 1:
             self.activated(row, col)
-
-#    def vheader_popup(self, point):
-#        action = self.header_menu.exec(self.mapToGlobal(point))
-#        if action:
-#            i = self.verticalHeader().logicalIndexAt(point)
-##            print("VHEADER:", i)
-#            action.run(i)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and \
@@ -777,15 +793,17 @@ class EdiTableWidget(QTableWidget):
             if key == Qt.Key_Delete:
                 if self.cut_selection() is None:
                     self.takeItem(self.currentRow(), self.currentColumn())
-                return # in this case don't call base class method
+                return # in this case don't call the base class method
         super().keyPressEvent(event)
 
     def cut_selection(self):
         """Cut the selected range, returning the contents as "tsv".
         The changed cells are reported as a single item, possibly a list.
         """
-        def gather(*args):
-            change_list.append(args)
+        def gather(chtype, change):
+            if chtype != Change.CELL:
+                raise Bug("Cutting block should only cause cell changes")
+            change_list.append(change)
         #+
         n, t, l, w, h = self.get_selection()
         if n == 0:
@@ -807,13 +825,12 @@ class EdiTableWidget(QTableWidget):
                 c += 1
             t += 1
         self.set_change_report()
-#TODO?
         # Report changes as a list – only cells which actually changed
         if change_list:
             if len(change_list) == 1:
-                self.add_change(*change_list[0])
+                self.add_change(Change.CELL, change_list[0])
             else:
-                self.add_change(-1, -1, change_list, None)
+                self.add_change(Change.BLOCK, change_list)
         return table2tsv(block)
 
     def get_selection(self):
@@ -835,8 +852,10 @@ class EdiTableWidget(QTableWidget):
     def paste_block(self, top, left, block):
         """The block must be a list of lists of strings.
         """
-        def gather(*args):
-            change_list.append(args)
+        def gather(chtype, change):
+            if chtype != Change.CELL:
+                raise Bug("Pasting block should only cause cell changes")
+            change_list.append(change)
         #+
         change_list = []
         self.set_change_report(gather)
@@ -847,18 +866,28 @@ class EdiTableWidget(QTableWidget):
                 c += 1
             top += 1
         self.set_change_report()
-#TODO?
         # Report changes as a list – only cells which actually changed
         if change_list:
             if len(change_list) == 1:
-                self.add_change(*change_list[0])
+                self.add_change(Change.CELL, change_list[0])
             else:
-                self.add_change(-1, -1, change_list, None)
+                self.add_change(Change.BLOCK, change_list)
 
     def set_modified(self, mod):
+        """Whenever a change away from the "initial" table data is made,
+        this is called with <mod> true. When undo/redo is enabled, it is
+        also possible to return to the initial data state. In that case
+        <mod> is false.
+        This method keeps the <self.__modified> flag up-to-date. When
+        a change to that flag occurs here, the callback <self.on_changed>
+        will be called with the new flag value.
+        It is also possible to specify a new "initial" state: see the
+        method <self.reset_modified>.
+        """
         if mod != self.__modified:
             self.__modified = mod
-            self.modified.emit(mod)
+            if self.on_changed:
+                self.on_changed(mod)
 
     def reset_modified(self, clear = False):
         """Reset the "starting point" for registering changes.
@@ -866,6 +895,8 @@ class EdiTableWidget(QTableWidget):
         unmodified state is reasserted. It can also be called after
         initializing the table data (e.g. from a file).
         If <clear> is true, the undo list is cleared (if there is one).
+        Otherwise the undo list is untouched, so that an undo operation
+        can return to a state previous to the new initial state.
         """
         self.__modified = False
         self.undoredo.mark0(clear)
@@ -896,36 +927,40 @@ class VerticalTextDelegate(QStyledItemDelegate):
 
 if __name__ == "__main__":
     app = QApplication([])
-    def is_modified(mod):
-        print("MODIFIED:", mod)
+    def is_modified1(mod):
+        print("MODIFIED1:", mod)
+    def is_modified2(mod):
+        print("MODIFIED2:", mod)
 
     cols = ["Column %02d" % n for n in range(10)]
     rows = ["Row %02d" % n for n in range(7)]
     tablewidget = EdiTableWidget()
-    tablewidget.setup(len(rows), len(cols),
-            colheaders = cols, rowheaders = rows,
-            undo_redo = True, cut = True, paste = True,
-            row_add_del = True, column_add_del = True)
-    tablewidget.modified.connect(is_modified)
+    tablewidget.setup(colheaders = cols, rowheaders = rows,
+            on_changed = is_modified1)
 
-    tablewidget.setWindowTitle("TableWidget")
+    tablewidget.setWindowTitle("EdiTableWidget")
 
     tablewidget.setItemDelegateForRow(2, VerticalTextDelegate())
 
-# Note that inserting and deleting rows will make a mess of the row
-# headers set above
-
+    sparse_data = []
     r, c = 2, 3
-    tablewidget.set_text(r, c, 'R%02d:C%02d' % (r, c))
+    sparse_data.append((r, c, 'R%02d:C%02d' % (r, c)))
     r, c = 1, 4
-    tablewidget.set_text(r, c, 'R%02d:C%02d' % (r, c))
+    sparse_data.append((r, c, 'R%02d:C%02d' % (r, c)))
+    tablewidget.init_sparse_data(len(rows), len(cols), sparse_data)
 
     tablewidget.resizeRowToContents(1)
     tablewidget.resizeRowToContents(2)
     tablewidget.resizeColumnToContents(3)
-
-    tablewidget.reset_modified(True)
-
     tablewidget.resize(600, 400)
     tablewidget.show()
+
+    tw2 = EdiTableWidget()
+    tw2.setup(undo_redo = True, cut = True, paste = True,
+            row_add_del = True, column_add_del = True,
+            on_changed = is_modified2)
+    tw2.init_data([["1", "2", "3", "4"], [""] * 4])
+    tw2.resize(400, 300)
+    tw2.show()
+
     app.exec()
