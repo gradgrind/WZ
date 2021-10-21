@@ -2,7 +2,7 @@
 """
 ui/datatable_widget.py
 
-Last updated:  2021-10-16
+Last updated:  2021-10-21
 
 Gui editor widget for "DataTables".
 
@@ -24,59 +24,17 @@ Copyright 2021 Michael Towers
 =-LICENCE=================================
 """
 
-### Messages
-_OPEN_FILE          = "Tabellendatei öffnen"
-_SAVE_FILE          = "Tabellendatei speichern"
-_OPEN_TABLETYPE     = "Tabellendatei"
-#_NOT_DATATABLE        = "Keine Tabellendatei: {filepath}"
-
-########################################################################
+#TODO: Callback for modification of info items – separate from main table?
+# Undo/redo for info items?
 
 from PySide6.QtWidgets import QSizePolicy, QSplitter, \
         QScrollArea, QWidget, QGridLayout, QLabel, QLineEdit
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Qt, QSize
 
-from ui.table import TableWidget
+from ui.editable import EdiTableWidget
 from tables.spreadsheet import Spreadsheet, read_DataTable
 
 ### -----
-
-#class TsvError(Exception):
-#    pass
-
-###
-
-#TODO: Add/delete columns? Rather not ...
-# Undo/redo?
-
-class InfoTable0(TableWidget):
-    def __init__(self):
-        super().__init__()
-        self.setup(#row_add_del = True,
-                # column_add_del = True,
-                #cut = True,
-                paste = True)
-        self.setSelectionMode(self.NoSelection)
-#?
-        self.setMinimumSize(0, 30)
-
-        sizePolicy0 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
-        sizePolicy0.setHorizontalStretch(0)
-        sizePolicy0.setVerticalStretch(1)
-        sizePolicy0.setHeightForWidth(False)
-        self.setSizePolicy(sizePolicy0)
-        self.setRowCount(1)
-        self.setColumnCount(1)
-
-        self.horizontalHeader().setVisible(False)
-        self.horizontalHeader().setStretchLastSection(True)
-#
-    def sizeHint(self):
-        h = 4
-        for r in range(self.rowCount()):
-            h += self.rowHeight(r)
-        return QSize(0, h)
-
 
 class TextLine(QLineEdit):
     def __init__(self, index, dataTableEditor):
@@ -87,37 +45,31 @@ class TextLine(QLineEdit):
         self.__text = ''
 #        self.textEdited.connect(self.newtext)
         self.editingFinished.connect(self.newtext)
-#
+
     def set(self, text):
         self.setText(text)
         self.__text = text
-#
-#    def newtext(self, text):
-#        self.dataTableEditor.modified.emit(0, self.index, 1, text)
+
     def newtext(self):
         text = self.text()
         if text != self.__text:
             self.__text = text
-            self.dataTableEditor.modified.emit(0, self.index, 1, text)
+            self.dataTableEditor.modified(True)
 
 
 class InfoTable(QScrollArea):
     def __init__(self):
         super().__init__()
-
-#?        self.setMinimumSize(0, 30)
-
         sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(False)
         self.setSizePolicy(sizePolicy)
         self.setWidgetResizable(True)
-#
+
     def init(self, info, dataTableEditor):
         contents = QWidget()
         gridLayout = QGridLayout(contents)
-#        self.contents.setGeometry(QRect(0, 0, 597, 96))
         self.info = []
         r = 0
         for key, val in info.items():
@@ -132,20 +84,13 @@ class InfoTable(QScrollArea):
 
 
 class DataTableEditor(QSplitter):
-    modified = Signal(int, int, int, str)
-    #+
     def __init__(self):
         super().__init__()
         self.setOrientation(Qt.Vertical)
         self.info = InfoTable()
         self.addWidget(self.info)
 
-        self.table = TableWidget()
-        self.table.setup(row_add_del = True,
-                # column_add_del = True,
-                cut = True, paste = True)
-        self.table.setSelectionMode(self.table.ContiguousSelection)
-
+        self.table = EdiTableWidget()
         sizePolicy1 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         sizePolicy1.setHorizontalStretch(0)
         sizePolicy1.setVerticalStretch(1)
@@ -153,24 +98,11 @@ class DataTableEditor(QSplitter):
         self.table.setSizePolicy(sizePolicy1)
         self.addWidget(self.table)
 
-#        self.info.cellChanged.connect(self.info_cell_changed)
-        self.table.cellChanged.connect(self.table_cell_changed)
-#---?
-        self.modified.connect(self.__modified)
-#
-    def __modified(self, table, row, column, val):
-        print("§§§", table, row, column, val)
-#
-#    def info_cell_changed(self, row, column):
-#        """Indicate data changed.
-#        """
-#        self.modified.emit(0, row, column, self.info.get_text(row, column))
-#
-    def table_cell_changed(self, row, column):
+    def modified(self, mod):
         """Indicate data changed.
         """
-        self.modified.emit(1, row, column, self.table.get_text(row, column))
-#
+        print(f"** MODIFIED: {mod} **")
+
     def open_table(self, datatable):
         """Read in a DataTable from the given path.
         """
@@ -181,25 +113,20 @@ class DataTableEditor(QSplitter):
         rows = datatable['__ROWS__']
 
         self.info.init(info, self)
-# Setting the height of the info table is a bit of a problem
-# (a weakness/bug in qt?). Consider using a grid of label / textedit pairs,
-# perhaps with the ability to hide them (groupbox?)
-#        self.info.setRowCount(len(info))
-#        self.info.setVerticalHeaderLabels(info)
-#        r = 0
-#        for val in info.values():
-#            self.info.set_text(r, 0, val)
-#            r += 1
-#        print("???", self.info.rowHeight(0), self.info.sizeHint())
-
         self.table.setColumnCount(len(columns))
         self.table.setRowCount(len(rows))
         self.table.setHorizontalHeaderLabels(columns)
-        r = 0
+        data = []
         for row in rows:
+            rowdata = []
+            data.append(rowdata)
             c = 0
             for h in columns:
-                self.table.set_text(r, c, row[h])
+                rowdata.append(row[h])
                 c += 1
-            r += 1
+        self.table.setup(colheaders = columns,
+                undo_redo = True, row_add_del = True,
+                cut = True, paste = True,
+                on_changed = self.modified)
+        self.table.init_data(data)
         self.table.resizeColumnsToContents()

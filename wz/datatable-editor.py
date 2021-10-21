@@ -2,7 +2,7 @@
 """
 datatable-editor.py
 
-Last updated:  2021-10-16
+Last updated:  2021-10-21
 
 Gui editor for "DataTables".
 
@@ -35,16 +35,21 @@ _SAVE_FILE          = "Tabellendatei speichern"
 _SAVE_FILE_AS       = "Tabellendatei speichern unter"
 _EXIT               = "Schließen"
 _OPEN_TABLETYPE     = "Tabellendatei"
-#_NOT_DATATABLE        = "Keine Tabellendatei: {filepath}"
 _INVALID_DATATABLE  = "Ungültige DataTable: {path}\n ... {message}"
 
 ########################################################################
 
 import sys, os, builtins, traceback
 if __name__ == '__main__':
+    try:
+        builtins.DATADIR = os.environ['PROGRAM_DATA']
+    except KeyError:
+        this = sys.path[0]
+        basedir = os.path.dirname(this)
+        builtins.DATADIR = os.path.join(basedir, 'wz-data')
+
 #TODO: IF I use this feature, this is probably the wrong path ...
 # Without the environment variable there is a disquieting error message.
-    builtins.DATADIR = os.environ['PROGRAM_DATA']
     os.environ['PYSIDE_DESIGNER_PLUGINS'] = DATADIR
 
     from PySide6.QtWidgets import QApplication#, QStyleFactory
@@ -73,14 +78,6 @@ from ui.ui_extra import openDialog, saveDialog, get_icon
 from tables.spreadsheet import Spreadsheet, read_DataTable, TableError
 
 ### -----
-
-#class TsvError(Exception):
-#    pass
-
-###
-
-#TODO: Add/delete columns? Rather not ...
-# Undo/redo?
 
 class DataTableEditor(QMainWindow):
     def __init__(self):
@@ -147,7 +144,6 @@ class DataTableEditor(QMainWindow):
             SHOW_ERROR(f"BUG while reading {str(filepath)}:\n"
                     f" ... {traceback.format_exc()}")
             return
-
         self.currrent_file = filepath
         self.filename = os.path.basename(filepath)
         self.centralwidget.open_table(datatable)
@@ -158,6 +154,13 @@ class DataTableEditor(QMainWindow):
     def save_file(self, sfile = None):
         if not sfile:
             sfile = self.currrent_file
+        if not sfile.endswith('.tsv'):
+            if sfile.endswith('.xlsx'):
+                pass
+
+
+
+
         copied_text = self.table.getAllCells()
         if not sfile.endswith('.tsv'):
             sfile += '.tsv'

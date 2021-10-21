@@ -29,8 +29,10 @@ Copyright 2021 Michael Towers
 """
 
 #TODO
+### Undo of multiple add/remove rows/columns as a block rather than
+###     individual rows/columns?
 ### Ideally actions which in the present state don't do anything should
-### be disabled.
+###     be disabled.
 ### An invisible QAction seems to imply it is also disabled.
 ### There is a signal on QItemSelectionModel:
 ###    selectionChanged(const QItemSelection &selected, const QItemSelection &deselected)
@@ -68,10 +70,6 @@ _TTPASTE = "Daten einfügen. Die ausgewählte Zelle ist oben links" \
 _INSERTROW = "Zeile einfügen"
 #_TTINSERTROW = "Insert Row"
 _TTINSERTROW = "Zeile einfügen nach der aktuellen Zeile"
-#_INSERTROWFAIL = "One – and only one – row must be selected to insert" \
-#        " a new one"
-_INSERTROWFAIL = "Um eine neue Zeile einzufügen, muss genau eine" \
-        " ausgewählt sein"
 #_DELETEROWS = "Delete Rows"
 _DELETEROWS = "Zeilen löschen"
 #_TTDELETEROWS = "Delete selected Rows"
@@ -82,10 +80,6 @@ _DELETEROWSFAIL = "Das Löschen der letzten Zeile(n) ist nicht zulässig"
 _INSERTCOLUMN = "Spalte einfügen"
 #_TTINSERTCOLUMN = "Insert Column"
 _TTINSERTCOLUMN = "Spalte einfügen nach der aktuellen Spalte"
-#_INSERTCOLUMNFAIL = "One – and only one – column must be selected to" \
-#        " insert a new one"
-_INSERTCOLUMNFAIL = "Um eine neue Spalte einzufügen, muss genau eine" \
-        " ausgewählt sein"
 #_DELETECOLUMNS = "Delete Columns"
 _DELETECOLUMNS = "Spalten löschen"
 #_TTDELETECOLUMNS = "Delete selected Columns"
@@ -100,8 +94,11 @@ from enum import Enum, auto
 from PySide6.QtWidgets import QApplication, \
         QTableView, QTableWidget, QMessageBox, \
         QStyledItemDelegate, QStyleOptionViewItem
-from PySide6.QtCore import Qt, QPointF, QRectF, QSize, Signal
+from PySide6.QtCore import Qt, QPointF, QRectF, QSize
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
+
+class Bug(Exception):
+    pass
 
 ### -----
 
@@ -131,17 +128,19 @@ class InsertRowAction(QAction):
 
     def insert_row(self):
         """Insert an empty row below the current one.
+        If multiple rows are selected, the same number will be added
+        after the last selected row.
         """
         selected = self.table.get_selection()
-        if selected[0] and selected[4] == 1:
-            self.table.insertRow(selected[1] + 1)
+        if selected[0]:
+            h = selected[4]
+            r = selected[1] + h
         else:
-            self.table.insertRow(self.table.currentRow() + 1)
-
-#TODO
-#            msgBox = QMessageBox(parent = self.table)
-#            msgBox.setText(_INSERTROWFAIL)
-#            msgBox.exec()
+            h = 1
+            r = self.table.currentRow() + 1
+        while h > 0:
+            self.table.insertRow(r)
+            h -= 1
 
 
 class InsertColumnAction(QAction):
@@ -159,14 +158,19 @@ class InsertColumnAction(QAction):
 
     def insert_column(self):
         """Insert an empty column after the current one.
+        If multiple columns are selected, the same number will be added
+        after the last selected column.
         """
         selected = self.table.get_selection()
-        if selected[0] and selected[3] == 1:
-            self.table.insertColumn(selected[2] + 1)
+        if selected[0]:
+            w = selected[3]
+            c = selected[2] + w
         else:
-            msgBox = QMessageBox(parent = self.table)
-            msgBox.setText(_INSERTCOLUMNFAIL)
-            msgBox.exec()
+            w = 1
+            c = self.table.currentColumn() + 1
+        while w > 0:
+            self.table.insertColumn(c)
+            w -= 1
 
 
 class DeleteRowsAction(QAction):
