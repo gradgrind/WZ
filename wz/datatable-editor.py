@@ -24,9 +24,6 @@ Copyright 2021 Michael Towers
 =-LICENCE=================================
 """
 
-#TODO: file saving, _-info items (title, modified),
-# change handling – also on line add/delete, undo/redo
-
 ### Messages
 PROGRAM_NAME        = "DataTable Editor"
 _FILE_MENU          = "Datei"
@@ -36,6 +33,10 @@ _SAVE_FILE_AS       = "Tabellendatei speichern unter"
 _EXIT               = "Schließen"
 _OPEN_TABLETYPE     = "Tabellendatei"
 _INVALID_DATATABLE  = "Ungültige DataTable: {path}\n ... {message}"
+
+_SAVE_AS_TSV        = "Als tsv-Datei speichern?\n\n{path}"
+_UNSUPPORTED_SAVE   = "Tabelle speichern – Dateityp '.{ending}'" \
+        " wird nicht unterstützt"
 
 ########################################################################
 
@@ -73,11 +74,20 @@ from PySide6.QtWidgets import QMainWindow, QMenu, QMenuBar, QStatusBar
 from PySide6.QtGui import QAction, QKeySequence
 #from PySide6.QtCore import Qt
 
+from core.base import Dates
 from ui.datatable_widget import DataTableEditor as DataTableWidget
 from ui.ui_extra import openDialog, saveDialog, get_icon
-from tables.spreadsheet import Spreadsheet, read_DataTable, TableError
+from tables.spreadsheet import Spreadsheet, read_DataTable, TableError, \
+        make_DataTable, make_DataTable_filetypes, read_DataTable_filetypes
 
 ### -----
+
+class MainTable(DataTableWidget):
+    def modified(self, mod):
+        """Indicate data changed.
+        """
+        self.parent().modified(mod)
+
 
 class DataTableEditor(QMainWindow):
     def __init__(self):
@@ -91,7 +101,7 @@ class DataTableEditor(QMainWindow):
         self.action_save.setShortcut(QKeySequence.Save)
         self.action_save_as = QAction(_SAVE_FILE_AS, self)
         self.action_save_as.setShortcut(QKeySequence.SaveAs)
-        self.centralwidget = DataTableWidget()
+        self.centralwidget = MainTable()
         self.setCentralWidget(self.centralwidget)
         menubar = self.menuBar()
         menu_file = menubar.addMenu(_FILE_MENU)
@@ -116,21 +126,21 @@ class DataTableEditor(QMainWindow):
         self.action_open.triggered.connect(self.get_file)
         self.action_save.triggered.connect(self.save_file)
         self.action_save_as.triggered.connect(self.save_as_file)
-#
+
+    def modified(self, mod):
+        self.__modified = mod
+        if mod:
+            self.setWindowTitle(f"{PROGRAM_NAME} – {self.filename} *")
+        else:
+            self.setWindowTitle(f"{PROGRAM_NAME} – {self.filename}")
+
     def get_file(self):
         filetypes = ' '.join(['*.' + fte
                 for fte in Spreadsheet.filetype_endings()])
         ofile = openDialog(f"{_OPEN_TABLETYPE} ({filetypes})", _OPEN_FILE)
         if ofile:
             self.open_file(ofile)
-#
-    def save_as_file(self):
-#TODO: Check that there is data?
-# File type? tsv or xlsx as choice or preset.
-        sfile = saveDialog("tsv-Datei (*.tsv)", self.currrent_file, _SAVE_FILE)
-        if sfile:
-            self.save_file(sfile)
-#
+
     def open_file(self, filepath):
         """Read in a DataTable from the given path.
         """
@@ -147,26 +157,49 @@ class DataTableEditor(QMainWindow):
         self.currrent_file = filepath
         self.filename = os.path.basename(filepath)
         self.centralwidget.open_table(datatable)
-        self.setWindowTitle(f"{PROGRAM_NAME} – {self.filename}")
+        self.modified(False)
 
-#
-#TODO
-    def save_file(self, sfile = None):
-        if not sfile:
-            sfile = self.currrent_file
-        if not sfile.endswith('.tsv'):
-            if sfile.endswith('.xlsx'):
-                pass
+    def save_as_file(self):
+        endings = make_DataTable_filetypes()
+        ftypes = ' '.join(['*.' + e for e in endings])
+        filepath = saveDialog(f"{_OPEN_TABLETYPE} ({ftypes})",
+                self.currrent_file, _SAVE_FILE)
+        if filepath:
+            fpath, ending = filepath.rsplit('.', 1)
+            if ending in endings:
+                data = self.centralwidget.get_data()
+                fbytes = make_DataTable(data, ending,
+                        __MODIFIED__ = Dates.timestamp())
+                with open(filepath, 'wb') as fh:
+                    fh.write(fbytes)
+                self.currrent_file = filepath
+                self.centralwidget.reset_modified()
+            else:
+                SHOW_ERROR(_UNSUPPORTED_SAVE.format(ending = ending))
+
+    def save_file(self):
+        fpath, ending = self.currrent_file.rsplit('.', 1)
+        if ending == 'tsv':
+            filepath = self.currrent_file
+        else:
+            if ending in read_DataTable_filetypes():
+                filepath = fpath + '.tsv'
+            else:
+                filepath = self.currrent_file + '.tsv'
+            if not SHOW_CONFIRM(_SAVE_AS_TSV.format(path = filepath)):
+                self.save_as_file()
+                return
+        data = self.centralwidget.get_data()
+        tsvbytes = make_DataTable(data, 'tsv',
+                __MODIFIED__ = Dates.timestamp())
+        with open(filepath, 'wb') as fh:
+            fh.write(tsvbytes)
+        self.currrent_file = filepath
+        self.centralwidget.reset_modified()
 
 
-
-
-        copied_text = self.table.getAllCells()
-        if not sfile.endswith('.tsv'):
-            sfile += '.tsv'
-        with open(sfile, 'w', encoding = 'utf-8') as fh:
-            fh.write(copied_text)
-
+"""
+####???? Just as an example ...
 class MainWindow(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
@@ -190,12 +223,16 @@ class MainWindow(QMainWindow):
         # Window dimensions
         geometry = self.screen().availableGeometry()
         self.setFixedSize(geometry.width() * 0.8, geometry.height() * 0.7)
+"""
 
 if __name__ == '__main__':
-#    edit = MainWindow()
     edit = DataTableEditor()
-    print("???", sys.argv)
+    #print("???", sys.argv)
     if len(sys.argv) == 2:
         edit.open_file(sys.argv[1])
     edit.show()
+    # Window dimensions
+    geometry = edit.screen().availableGeometry()
+    edit.setFixedSize(geometry.width() * 0.7, geometry.height() * 0.7)
+    #edit.resize(800, 600)
     sys.exit(app.exec())

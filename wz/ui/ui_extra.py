@@ -2,7 +2,7 @@
 """
 ui/ui_extra.py
 
-Last updated:  2021-10-16
+Last updated:  2021-10-21
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -45,6 +45,8 @@ _ERROR = "Fehler"
 _FILEOPEN = "Datei öffnen"
 _DIROPEN = "Ordner öffnen"
 _FILESAVE = "Datei speichern"
+
+_CONFIRMATION = "Bestätigen"
 
 #####################################################
 
@@ -420,6 +422,12 @@ builtins.SHOW_WARNING = _popupWarn
 def _popupError(message):
      QMessageBox.critical(None, _ERROR, message)
 builtins.SHOW_ERROR = _popupError
+##
+def _popupConfirm(question):
+    return QMessageBox.question(None, _CONFIRMATION, question,
+        buttons = QMessageBox.Ok | QMessageBox.Cancel,
+        defaultButton = QMessageBox.Ok) == QMessageBox.Ok
+builtins.SHOW_CONFIRM = _popupConfirm
 
 ### File/Folder Dialogs
 
@@ -446,7 +454,6 @@ def saveDialog(filetype, filename, title = None):
     if fpath:
         SETTINGS.setValue('LAST_SAVE_DIR', os.path.dirname(fpath))
     return fpath
-
 
 ############### Handle uncaught exceptions ###############
 class UncaughtHook(QObject):

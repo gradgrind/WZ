@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-10-15
+Last updated:  2021-10-21
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -353,6 +353,8 @@ class Spreadsheet:
 
 ###
 
+def read_DataTable_filetypes(): return tuple(Spreadsheet._SUPPORTED_TYPES)
+
 def read_DataTable(filepath_or_stream):
     """<filepath_or_stream> is a full file-path or in-memory stream as
     for <Spreadsheet>, which is used to read the file.
@@ -493,15 +495,15 @@ def filter_DataTable(data, fieldlist, infolist, extend = True):
 
 ###
 
-make_DataTable_filetypes = ('tsv', 'xlsx')
-#+
+def make_DataTable_filetypes(): return ('tsv', 'xlsx')
+
 def make_DataTable(data, filetype,
         fieldlist = None, infolist = None,
-        extend = True):
+        extend = True,  **xinfo):
     """Build a DataTable with info-lines, header-line and records.
     <data> is a mapping as returned by <read_DataTable>.
     <filetype> specifies which of the file-types in
-    <make_DataTable_filetypes> is to be generated.
+    <make_DataTable_filetypes()> is to be generated.
     <fieldlist> is a list of triples (or longer tuples):
         [[internal-name, external-name, necessary, ... ], ... ]
         "necessary" is true if the field must be present and not
@@ -513,6 +515,7 @@ def make_DataTable(data, filetype,
     are not supplied in the data will be added (does not apply to
     "necessary" fields, because if one of these is missing the
     function will fail).
+    <xinfo> optionallyadds info fields.
     The file is returned as a <bytes> object.
     """
     if filetype == 'xlsx':
@@ -523,6 +526,7 @@ def make_DataTable(data, filetype,
         raise TableError(_UNSUPPORTED_FILETYPE.format(ending = filetype))
     hasinfo = 0
     info = data['__INFO__']
+    info.update(xinfo)
     if infolist:
         for f, t, needed, *x in infolist:
             try:
