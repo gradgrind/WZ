@@ -2,9 +2,11 @@
 """
 ui/datatable_widget.py
 
-Last updated:  2021-10-21
+Last updated:  2021-10-22
 
 Gui editor widget for "DataTables".
+See datatable-editor.py for an app which can be used for testing this
+widget.
 
 =+LICENCE=================================
 Copyright 2021 Michael Towers
