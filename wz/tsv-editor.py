@@ -24,24 +24,28 @@ Copyright 2021 Michael Towers
 =-LICENCE=================================
 """
 
-### Messages
-_OPEN_FILE      = "tsv-Datei öffnen"
-_SAVE_FILE      = "tsv-Datei speichern"
-_NOT_TSV        = "Keine tsv-Datei: {filepath}"
+# Messages
+import traceback
+import builtins
+import os
+import sys
+from ui.ui_support import ui_load, openDialog, saveDialog
+_OPEN_FILE = "tsv-Datei öffnen"
+_SAVE_FILE = "tsv-Datei speichern"
+_NOT_TSV = "Keine tsv-Datei: {filepath}"
 
 ########################################################################
 
-import sys, os, builtins, traceback
 if __name__ == '__main__':
-#TODO: IF I use this feature, this is probably the wrong path ...
-# Without the environment variable there is a disquieting error message.
+    # TODO: IF I use this feature, this is probably the wrong path ...
+    # Without the environment variable there is a disquieting error message.
     builtins.DATADIR = os.environ['PROGRAM_DATA']
     os.environ['PYSIDE_DESIGNER_PLUGINS'] = DATADIR
 
-    from PySide6.QtWidgets import QApplication#, QStyleFactory
+    from PySide6.QtWidgets import QApplication  # , QStyleFactory
     from PySide6.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
-    #print(QStyleFactory.keys())
-    #QApplication.setStyle('windows')
+    # print(QStyleFactory.keys())
+    # QApplication.setStyle('windows')
     # Qt initialization
     app = QApplication(sys.argv)
     # Set up language/locale for Qt
@@ -49,32 +53,32 @@ if __name__ == '__main__':
     QLocale.setDefault(LOCALE)
     qtr = QTranslator()
     qtr.load("qt_" + LOCALE.name(),
-            QLibraryInfo.location(QLibraryInfo.TranslationsPath))
+             QLibraryInfo.location(QLibraryInfo.TranslationsPath))
     app.installTranslator(qtr)
     # Persistent Settings:
     builtins.SETTINGS = QSettings(
-            QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
+        QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
 
     print(DATADIR)
 
-from ui.ui_support import ui_load, openDialog, saveDialog
 # Uses the modified QTableWidget in table.py (via <ui_load>).
 
-### -----
+# -----
 
-#class TsvError(Exception):
+# class TsvError(Exception):
 #    pass
 
 ###
 
-#TODO: Add/delete columns?
+# TODO: Add/delete columns?
+
 
 class TsvEditor:
-    def __init__(self, ofile = None):
+    def __init__(self, ofile=None):
         self.window = ui_load('tsv-editor.ui')
         self.table = self.window.table_widget
-        self.table.setup(row_add_del = True,# column_add_del = True,
-                cut = True, paste = True)
+        self.table.setup(row_add_del=True,  # column_add_del = True,
+                         cut=True, paste=True)
         self.table.setSelectionMode(self.table.ExtendedSelection)
 #        self.table.setWindowTitle("TableWidget")
         self.window.action_open.triggered.connect(self.get_file)
@@ -83,19 +87,22 @@ class TsvEditor:
         if ofile:
             self.open_file(ofile)
 #
+
     def get_file(self):
         ofile = openDialog("tsv-Datei (*.tsv)", _OPEN_FILE)
         if ofile:
             self.open_file(ofile)
 #
-#TODO: Indicator for unsaved data?
+# TODO: Indicator for unsaved data?
 #
+
     def save_as_file(self):
-#TODO: Check that there is data?
+        # TODO: Check that there is data?
         sfile = saveDialog("tsv-Datei (*.tsv)", self.currrent_file, _SAVE_FILE)
         if sfile:
             self.save_file(sfile)
 #
+
     def open_file(self, filepath):
         """Read a tab-separated-value table as a list of rows,
         each row is a list of cell values.
@@ -114,9 +121,9 @@ class TsvEditor:
                 rows = []
                 maxlen = 0
                 for row_b in lines:
-                    #print(repr(row_b))
+                    # print(repr(row_b))
                     row = [cell.decode('utf-8').strip()
-                            for cell in row_b.split(b'\t')]
+                           for cell in row_b.split(b'\t')]
                     l = len(row)
                     if l > maxlen:
                         maxlen = l
@@ -127,14 +134,14 @@ class TsvEditor:
                         row += [''] * dl
             except:
                 SHOW_ERROR(f"Problem reading tsv-file: {filepath}\n"
-                        f" ...\n{traceback.format_exc()}")
+                           f" ...\n{traceback.format_exc()}")
                 return None
         else:
-            SHOW_ERROR(_NOT_TSV.format(filepath = filepath))
+            SHOW_ERROR(_NOT_TSV.format(filepath=filepath))
             return None
         self.currrent_file = filepath
 
-#TODO: Set column headers to header line? Maybe in special DataTable editor ...
+# TODO: Set column headers to header line? Maybe in special DataTable editor ...
         self.table.setColumnCount(maxlen)
         self.table.setRowCount(len(rows))
         r = 0
@@ -145,19 +152,19 @@ class TsvEditor:
                 c += 1
             r += 1
 #
-    def save_file(self, sfile = None):
+
+    def save_file(self, sfile=None):
         if not sfile:
             sfile = self.currrent_file
         copied_text = self.table.getAllCells()
         if not sfile.endswith('.tsv'):
             sfile += '.tsv'
-        with open(sfile, 'w', encoding = 'utf-8') as fh:
+        with open(sfile, 'w', encoding='utf-8') as fh:
             fh.write(copied_text)
 
 
-
 if __name__ == '__main__':
-#    import ui.qrc_icons
+    #    import ui.qrc_icons
     from PySide6.QtGui import QIcon
     ofile = sys.argv[1] if len(sys.argv) == 2 else None
     print("tsv-editor.py:", sys.argv, "-->", ofile)

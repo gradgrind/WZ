@@ -2,7 +2,7 @@
 """
 ui/ui_extra.py
 
-Last updated:  2021-10-21
+Last updated:  2021-10-27
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -56,7 +56,7 @@ from importlib import resources         # Python >= 3.7
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
         QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox, \
-        QListWidget, QFileDialog, QLineEdit
+        QListWidget, QFileDialog, QLineEdit, QWidget
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt, QObject, QFile, QIODevice
 
@@ -67,33 +67,47 @@ class GuiError(Exception):
 
 ### -----
 
+class HLine(QFrame):
+    def __init__(self):
+        super().__init__()
+        self.setFrameShape(QFrame.HLine)
+        self.setFrameShadow(QFrame.Sunken)
+
+###
+
+class VLine(QFrame):
+    def __init__(self):
+        super().__init__()
+        self.setFrameShape(QFrame.VLine)
+        self.setFrameShadow(QFrame.Sunken)
+
+###
+
 def get_icon(name):
     ilist = glob.glob(os.path.join(DATADIR, 'icons', f'{name}.*'))
     return QIcon(ilist[0])
 
 ###
 
-class StackPage:
-    """Base class for the behaviour of the page widgets in the main "stack".
+class StackPage(QWidget):
+    """Base class for the page widgets ("tab" widgets) in the main "stack".
     Subclass this to add the required functionality.
     The actual visible widget is referenced by its name.
     """
-    def __init__(self, widget_name):
-        self.name = widget_name
-        self.widget = getattr(WINDOW, widget_name)
-#
+    name = "StackPage"
+
     def enter(self):
         """Called when a tab page is activated (selected) and when there
         is a change of year (which is treated as a reentry).
         """
         pass
-#
+
     def leave(self):
         """Called to tidy up the data structures of the tab page, for
         example before leaving (deselecting) it.
         """
         pass
-#
+
     def leave_ok(self):
         """If there are unsaved changes, ask whether it is ok to lose
         them. Return <True> if ok to lose them (or if there aren't any
@@ -102,7 +116,7 @@ class StackPage:
         if self.is_modified():
             return YesOrNoDialog(_LOSE_CHANGES, _LOSE_CHANGES_TITLE)
         return True
-#
+
     def is_modified(self):
         """Return <True> if there are unsaved changes.
         """
