@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-10-21
+Last updated:  2021-10-31
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -91,11 +91,12 @@ _DELETECOLUMNSFAIL = "Das Löschen der letzten Spalte(n) ist nicht zulässig"
 
 from enum import Enum, auto
 
-from PySide6.QtWidgets import QApplication, \
+from qtpy.QtWidgets import QApplication, \
         QTableView, QTableWidget, QMessageBox, \
         QStyledItemDelegate, QStyleOptionViewItem
-from PySide6.QtCore import Qt, QPointF, QRectF, QSize
-from PySide6.QtGui import QAction, QKeySequence, QShortcut
+from qtpy.QtCore import Qt, QPointF, QRectF, QSize
+from qtpy.QtGui import QKeySequence
+from qtpy.QtWidgets import QAction, QShortcut  # in Qt6 these are in QtGui
 
 class Bug(Exception):
     pass

@@ -5,6 +5,11 @@ todo
 logs
 
 git_info
-DATA
+DATA*
 old
 NOTEN
+.idea
+.settings
+.project
+.pydevproject
+WZ.geany

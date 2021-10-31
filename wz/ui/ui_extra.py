@@ -2,7 +2,7 @@
 """
 ui/ui_extra.py
 
-Last updated:  2021-10-27
+Last updated:  2021-10-30
 
 Support stuff for the GUI: dialogs, etc.
 
@@ -53,12 +53,23 @@ _CONFIRMATION = "Bestätigen"
 import sys, os, builtins, traceback, glob
 from importlib import resources         # Python >= 3.7
 
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, \
+"""
+from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, \
         QLabel, QPushButton, QComboBox, QFrame, QTextEdit, \
         QDialog, QTreeWidget, QTreeWidgetItem, QMessageBox, \
         QListWidget, QFileDialog, QLineEdit, QWidget
-from PySide6.QtGui import QIcon
-from PySide6.QtCore import Qt, QObject, QFile, QIODevice
+from qtpy.QtGui import QIcon
+from qtpy.QtCore import Qt, QObject, QFile, QIODevice
+"""
+from qtpy.QtWidgets import *
+from qtpy.QtGui import *
+from qtpy.QtCore import *
+
+APP = QApplication(sys.argv)
+
+def run(window):
+    window.show()
+    sys.exit(APP.exec())
 
 ### +++++
 
@@ -121,6 +132,18 @@ class StackPage(QWidget):
         """Return <True> if there are unsaved changes.
         """
         return False
+
+###
+
+class StandalonePage(StackPage):
+    name = "StandalonePage"
+
+    def closeEvent(self, event):
+        if self.leave_ok():
+            event.accept()
+#            super().closeEvent(event)
+        else:
+            event.ignore()
 
 ###
 

@@ -5,18 +5,17 @@ _TITLE = "WZ"
 ########################################################################
 
 import sys, os
+
 if __name__ == '__main__':
-    from PySide6.QtWidgets import QApplication
     # Enable package import if running as module
+    #print(sys.path)
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
 
-#from PySide6.QtCore import Qt
-#from PySide6.QtGui import
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, \
-        QLabel, QStackedWidget, QFrame, QPushButton
+from ui.ui_extra import QWidget, QVBoxLayout, QHBoxLayout, \
+        QLabel, QStackedWidget, QFrame, QPushButton, HLine, run
 
-from ui.ui_extra import HLine
+### -----
 
 class MainWindow(QWidget):
     def __init__(self):
@@ -491,7 +490,6 @@ class MainWindowUI(QWidget):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
     from ui.ui_extra import StackPage
     class Page2(StackPage):
         name = "Another module"
@@ -505,6 +503,4 @@ if __name__ == "__main__":
     MAIN_WIDGET.select_tab(0)
     MAIN_WIDGET.year_term.setText("2022.1")
 
-    MAIN_WIDGET.show()
-
-    sys.exit(app.exec())
+    run(MAIN_WIDGET)

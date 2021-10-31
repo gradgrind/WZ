@@ -2,7 +2,7 @@
 """
 ui/pupils_delta_widget.py
 
-Last updated:  2021-10-22
+Last updated:  2021-10-30
 
 Gui widget for comparing class data with a newer version from an
 external source.
@@ -43,10 +43,18 @@ _DELTA_LEN_MAX = 80
 
 #####################################################
 
-import os
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, \
-        QTreeWidget, QTreeWidgetItem
-from PySide6.QtCore import Qt
+if __name__ == '__main__':
+    # Enable package import if running as module
+    import sys, os
+    #print(sys.path)
+    this = sys.path[0]
+    sys.path[0] = os.path.dirname(this)
+    from ui.ui_extra import StandalonePage as Page
+else:
+    from ui.ui_extra import StackPage as Page
+
+from ui.ui_extra import QWidget, QLabel, QVBoxLayout, \
+        QTreeWidget, QTreeWidgetItem, Qt
 
 # Types of change which can be recorded
 NEW = 1     # data: the pupil-data mapping
@@ -124,10 +132,16 @@ class PupilsDeltaWidget(QWidget):
 
 
 if __name__ == "__main__":
-    from PySide6.QtWidgets import QApplication, \
-            QHBoxLayout, QTextEdit, QPushButton
-    from PySide6.QtGui import QTextOption
-    app = QApplication([])
+    from ui.ui_extra import run, QHBoxLayout, QTextEdit, QPushButton, \
+            QTextOption
+
+    class MyPage(Page):
+        def is_modified(self):
+            """Return <True> if there are unsaved changes.
+            """
+#TODO: test whether there really are any changes?
+            return True
+
 
     test_data = {
         '01G': [
@@ -148,7 +162,7 @@ if __name__ == "__main__":
             for item in items:
                 text.append(f"    {repr(item)}")
 
-    widget = QWidget()
+    widget = MyPage()
     layout = QVBoxLayout(widget)
     deltawidget = PupilsDeltaWidget()
     layout.addWidget(deltawidget)
@@ -169,5 +183,4 @@ if __name__ == "__main__":
 #TODO: Add a button to print the data ...
 
     widget.resize(600, 400)
-    widget.show()
-    app.exec()
+    run(widget)
