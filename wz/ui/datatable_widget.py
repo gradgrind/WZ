@@ -2,7 +2,7 @@
 """
 ui/datatable_widget.py
 
-Last updated:  2021-10-22
+Last updated:  2021-11-01
 
 Gui editor widget for "DataTables".
 See datatable-editor.py for an app which can be used for testing this
@@ -29,9 +29,9 @@ Copyright 2021 Michael Towers
 #TODO: Callback for modification of info items – separate from main table?
 # Undo/redo for info items?
 
-from PySide6.QtWidgets import QSizePolicy, QSplitter, \
+from qtpy.QtWidgets import QSizePolicy, QSplitter, \
         QScrollArea, QWidget, QGridLayout, QLabel, QLineEdit
-from PySide6.QtCore import Qt, QSize
+from qtpy.QtCore import Qt, QSize
 
 from ui.editable import EdiTableWidget
 from tables.spreadsheet import Spreadsheet, read_DataTable

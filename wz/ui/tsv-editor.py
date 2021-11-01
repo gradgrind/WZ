@@ -2,7 +2,7 @@
 """
 ui/tsv-editor.py
 
-Last updated:  2021-10-08
+Last updated:  2021-11-01
 
 Gui editor for Tab-Separated-Value files.
 
@@ -25,9 +25,19 @@ Copyright 2021 Michael Towers
 """
 
 ### Messages
+PROGRAM_NAME    = "tsv Editor"
 _OPEN_FILE      = "tsv-Datei öffnen"
 _SAVE_FILE      = "tsv-Datei speichern"
 _NOT_TSV        = "Keine tsv-Datei: {filepath}"
+
+#?
+_FILE_MENU          = "Datei"
+_OPEN_FILE          = "Tabellendatei öffnen"
+_SAVE_FILE          = "Tabellendatei speichern"
+_SAVE_FILE_AS       = "Tabellendatei speichern unter"
+_EXIT               = "Schließen"
+_OPEN_TABLETYPE     = "Tabellendatei"
+_INVALID_DATATABLE  = "Ungültige DataTable: {path}\n ... {message}"
 
 ########################################################################
 
@@ -35,37 +45,24 @@ import sys, os, builtins, traceback
 if __name__ == '__main__':
     # Enable package import if running module directly
     this = sys.path[0]
-    appdir = os.path.dirname(this)
-    sys.path[0] = appdir
-    basedir = os.path.dirname(appdir)
-#    appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-#    basedir = os.path.dirname(appdir)
+    sys.path[0] = os.path.dirname(this)
+#    print("???", sys.path)
 
-### +++++
+#?
+    try:
+        builtins.PROGRAM_DATA = os.environ['PROGRAM_DATA']
+    except KeyError:
+        basedir = os.path.dirname(os.path.dirname(this))
+        builtins.PROGRAM_DATA = os.path.join(basedir, 'wz-data')
+#    print("???", PROGRAM_DATA)
 
-#TODO: IF I use this feature, this is probably the wrong path ...
-# Without the environment variable there is a disquieting error message.
-    os.environ['PYSIDE_DESIGNER_PLUGINS'] = this
+from ui.ui_base import run, openDialog, saveDialog, QMainWindow, \
+        get_icon, QKeySequence, QAction, APP
+from ui.editable import EdiTableWidget
 
-    from PySide6.QtWidgets import QApplication#, QStyleFactory
-    from PySide6.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
-    #print(QStyleFactory.keys())
-    #QApplication.setStyle('windows')
-    # Qt initialization
-    app = QApplication(sys.argv)
-    # Set up language/locale for Qt
-    LOCALE = QLocale(QLocale.German, QLocale.Germany)
-    QLocale.setDefault(LOCALE)
-    qtr = QTranslator()
-    qtr.load("qt_" + LOCALE.name(),
-            QLibraryInfo.location(QLibraryInfo.TranslationsPath))
-    app.installTranslator(qtr)
-    # Persistent Settings:
-    builtins.SETTINGS = QSettings(
-            QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
-
-from ui.ui_support import ui_load, openDialog, saveDialog
-# Uses the modified QTableWidget in table.py (via <ui_load>).
+# This seems to deactivate activate-on-single-click in filedialog
+# (presumably elsewhere as well?)
+APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
 ### -----
 
@@ -74,35 +71,190 @@ from ui.ui_support import ui_load, openDialog, saveDialog
 
 ###
 
-#TODO: Add/delete columns?
+class DataTableEditor(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(PROGRAM_NAME)
+        icon = get_icon('tsv')
+        self.setWindowIcon(icon)
+        self.action_open = QAction(_OPEN_FILE, self)
+        self.action_open.setShortcut(QKeySequence.Open)
+        self.action_save = QAction(_SAVE_FILE, self)
+        self.action_save.setShortcut(QKeySequence.Save)
+        self.action_save_as = QAction(_SAVE_FILE_AS, self)
+        self.action_save_as.setShortcut(QKeySequence.SaveAs)
+        self.centralwidget = MainTable()
+        self.setCentralWidget(self.centralwidget)
+        menubar = self.menuBar()
+        menu_file = menubar.addMenu(_FILE_MENU)
+#        self.setMenuBar(menubar)
+#        statusbar = self.statusBar()
+#        self.setStatusBar(statusbar)
 
-class TsvEditor:
-    def __init__(self, ofile = None):
-        self.window = ui_load('tsv-editor.ui')
-        self.table = self.window.table_widget
-        self.table.setup(row_add_del = True,# column_add_del = True,
-                cut = True, paste = True)
-        self.table.setSelectionMode(self.table.ExtendedSelection)
-#        self.table.setWindowTitle("TableWidget")
-        self.window.action_open.triggered.connect(self.get_file)
-        self.window.action_save.triggered.connect(self.save_file)
-        self.window.action_save_as.triggered.connect(self.save_as_file)
+#        menubar.addAction(menu_file.menuAction())
+        menu_file.addAction(self.action_open)
+        menu_file.addAction(self.action_save)
+        menu_file.addAction(self.action_save_as)
+
+        # Exit QAction
+        sep = QAction(" ", self)
+        sep.setSeparator(True)
+        menu_file.addAction(sep)
+        exit_action = QAction(_EXIT, self)
+        exit_action.setShortcut(QKeySequence.Quit)
+        exit_action.triggered.connect(self.close)
+        menu_file.addAction(exit_action)
+
+        self.action_open.triggered.connect(self.get_file)
+        self.action_save.triggered.connect(self.save_file)
+        self.action_save_as.triggered.connect(self.save_as_file)
+
+    def modified(self, mod):
+        self.__modified = mod
+        if mod:
+            self.setWindowTitle(f"{PROGRAM_NAME} – {self.filename} *")
+        else:
+            self.setWindowTitle(f"{PROGRAM_NAME} – {self.filename}")
+
+    def get_file(self):
+        filetypes = ' '.join(['*.' + fte
+                for fte in Spreadsheet.filetype_endings()])
+        ofile = openDialog(f"{_OPEN_TABLETYPE} ({filetypes})", _OPEN_FILE)
         if ofile:
             self.open_file(ofile)
-#
+
+    def open_file(self, filepath):
+        """Read in a DataTable from the given path.
+        """
+        try:
+            datatable = read_DataTable(filepath)
+        except TableError as e:
+            SHOW_ERROR(_INVALID_DATATABLE.format(path = str(filepath),
+                    message = str(e)))
+            return
+        except:
+            SHOW_ERROR(f"BUG while reading {str(filepath)}:\n"
+                    f" ... {traceback.format_exc()}")
+            return
+        self.currrent_file = filepath
+        self.filename = os.path.basename(filepath)
+        self.centralwidget.open_table(datatable)
+        self.modified(False)
+
+    def save_as_file(self):
+        endings = make_DataTable_filetypes()
+        ftypes = ' '.join(['*.' + e for e in endings])
+        filepath = saveDialog(f"{_OPEN_TABLETYPE} ({ftypes})",
+                self.currrent_file, _SAVE_FILE)
+        if filepath:
+            fpath, ending = filepath.rsplit('.', 1)
+            if ending in endings:
+                data = self.centralwidget.get_data()
+                fbytes = make_DataTable(data, ending,
+                        __MODIFIED__ = Dates.timestamp())
+                with open(filepath, 'wb') as fh:
+                    fh.write(fbytes)
+                self.currrent_file = filepath
+                self.centralwidget.reset_modified()
+            else:
+                SHOW_ERROR(_UNSUPPORTED_SAVE.format(ending = ending))
+
+    def save_file(self):
+        fpath, ending = self.currrent_file.rsplit('.', 1)
+        if ending == 'tsv':
+            filepath = self.currrent_file
+        else:
+            if ending in read_DataTable_filetypes():
+                filepath = fpath + '.tsv'
+            else:
+                filepath = self.currrent_file + '.tsv'
+            if not SHOW_CONFIRM(_SAVE_AS_TSV.format(path = filepath)):
+                self.save_as_file()
+                return
+        data = self.centralwidget.get_data()
+        tsvbytes = make_DataTable(data, 'tsv',
+                __MODIFIED__ = Dates.timestamp())
+        with open(filepath, 'wb') as fh:
+            fh.write(tsvbytes)
+        self.currrent_file = filepath
+        self.centralwidget.reset_modified()
+
+
+
+
+
+
+
+
+
+#TODO: Add/delete columns?
+
+class TsvEditor(QMainWindow):
+    def __init__(self, ofile = None):
+        super().__init__()
+        self.setWindowTitle(PROGRAM_NAME)
+        icon = get_icon('tsv')
+        self.setWindowIcon(icon)
+        self.action_open = QAction(_OPEN_FILE, self)
+        self.action_open.setShortcut(QKeySequence.Open)
+        self.action_save = QAction(_SAVE_FILE, self)
+        self.action_save.setShortcut(QKeySequence.Save)
+        self.action_save_as = QAction(_SAVE_FILE_AS, self)
+        self.action_save_as.setShortcut(QKeySequence.SaveAs)
+        self.table = EdiTableWidget()
+        self.setCentralWidget(self.table)
+        menubar = self.menuBar()
+        menu_file = menubar.addMenu(_FILE_MENU)
+#        self.setMenuBar(menubar)
+#        statusbar = self.statusBar()
+#        self.setStatusBar(statusbar)
+
+#        menubar.addAction(menu_file.menuAction())
+        menu_file.addAction(self.action_open)
+        menu_file.addAction(self.action_save)
+        menu_file.addAction(self.action_save_as)
+
+        # Exit QAction
+        sep = QAction(" ", self)
+        sep.setSeparator(True)
+        menu_file.addAction(sep)
+        exit_action = QAction(_EXIT, self)
+        exit_action.setShortcut(QKeySequence.Quit)
+        exit_action.triggered.connect(self.close)
+        menu_file.addAction(exit_action)
+
+        self.action_open.triggered.connect(self.get_file)
+        self.action_save.triggered.connect(self.save_file)
+        self.action_save_as.triggered.connect(self.save_as_file)
+
+        self.table.setup(
+                undo_redo = True,
+                row_add_del = True,
+                column_add_del = True,
+                cut = True, paste = True,
+                on_changed = self.modified)
+        if ofile:
+            self.open_file(ofile)
+
+    def modified(self, mod):
+        print("MOD:", mod)
+
+
+
+#TODO: Also read odt and xlsx?
     def get_file(self):
         ofile = openDialog("tsv-Datei (*.tsv)", _OPEN_FILE)
         if ofile:
             self.open_file(ofile)
-#
+
 #TODO: Indicator for unsaved data?
-#
+
     def save_as_file(self):
 #TODO: Check that there is data?
         sfile = saveDialog("tsv-Datei (*.tsv)", self.currrent_file, _SAVE_FILE)
         if sfile:
             self.save_file(sfile)
-#
+
     def open_file(self, filepath):
         """Read a tab-separated-value table as a list of rows,
         each row is a list of cell values.
@@ -140,18 +292,9 @@ class TsvEditor:
             SHOW_ERROR(_NOT_TSV.format(filepath = filepath))
             return None
         self.currrent_file = filepath
+        self.table.init_data(rows)
+        self.table.resizeColumnsToContents()
 
-#TODO: Set column headers to header line? Maybe in special DataTable editor ...
-        self.table.setColumnCount(maxlen)
-        self.table.setRowCount(len(rows))
-        r = 0
-        for row in rows:
-            c = 0
-            for cell in row:
-                self.table.set_text(r, c, cell)
-                c += 1
-            r += 1
-#
     def save_file(self, sfile = None):
         if not sfile:
             sfile = self.currrent_file
@@ -164,12 +307,12 @@ class TsvEditor:
 
 
 if __name__ == '__main__':
-    import ui.qrc_icons
-    from PySide6.QtGui import QIcon
+    from ui.ui_base import QIcon
     ofile = sys.argv[1] if len(sys.argv) == 2 else None
     print("tsv-editor.py:", sys.argv, "-->", ofile)
     tsv_edit = TsvEditor(ofile)
-    builtins.WINDOW = tsv_edit.window
-#    WINDOW.setWindowIcon(QIcon("/tsv.svg")) # in ui file
-    WINDOW.show()
-    sys.exit(app.exec())
+    # Window dimensions
+    geometry = APP.primaryScreen().availableGeometry()
+    tsv_edit.resize(int(geometry.width() * 0.7),
+            int(geometry.height() * 0.7))
+    run(tsv_edit)

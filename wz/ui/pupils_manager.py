@@ -2,7 +2,7 @@
 """
 ui/pupils_manager.py
 
-Last updated:  2021-10-31
+Last updated:  2021-11-01
 
 Gui for managing pupil data.
 
@@ -39,11 +39,11 @@ if __name__ == '__main__':
     #print(sys.path)
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
-    from ui.ui_extra import StandalonePage as Page
+    from ui.ui_base import StandalonePage as Page
 else:
-    from ui.ui_extra import StackPage as Page
+    from ui.ui_base import StackPage as Page
 
-from ui.ui_extra import QHBoxLayout, QVBoxLayout, QLabel, QPushButton, run
+from ui.ui_base import QHBoxLayout, QVBoxLayout, QLabel, QPushButton, run
 from ui.editable import EdiTableWidget
 
 

@@ -43,40 +43,23 @@ _UNSUPPORTED_SAVE   = "Tabelle speichern – Dateityp '.{ending}'" \
 import sys, os, builtins, traceback
 if __name__ == '__main__':
     try:
-        builtins.DATADIR = os.environ['PROGRAM_DATA']
+        builtins.PROGRAM_DATA = os.environ['PROGRAM_DATA']
     except KeyError:
         this = sys.path[0]
         basedir = os.path.dirname(this)
-        builtins.DATADIR = os.path.join(basedir, 'wz-data')
+        builtins.PROGRAM_DATA = os.path.join(basedir, 'wz-data')
 
 #TODO: IF I use this feature, this is probably the wrong path ...
 # Without the environment variable there is a disquieting error message.
-    os.environ['PYSIDE_DESIGNER_PLUGINS'] = DATADIR
+#    os.environ['PYSIDE_DESIGNER_PLUGINS'] = PROGRAM_DATA
 
-    from PySide6.QtWidgets import QApplication#, QStyleFactory
-    from PySide6.QtCore import QLocale, QTranslator, QLibraryInfo, QSettings
-    #print(QStyleFactory.keys())
-    #QApplication.setStyle('windows')
-    # Qt initialization
-    app = QApplication(sys.argv)
-    # Set up language/locale for Qt
-    LOCALE = QLocale(QLocale.German, QLocale.Germany)
-    QLocale.setDefault(LOCALE)
-    qtr = QTranslator()
-    qtr.load("qt_" + LOCALE.name(),
-            QLibraryInfo.location(QLibraryInfo.TranslationsPath))
-    app.installTranslator(qtr)
-    # Persistent Settings:
-    builtins.SETTINGS = QSettings(
-            QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
-
-from PySide6.QtWidgets import QMainWindow, QMenu, QMenuBar, QStatusBar
-from PySide6.QtGui import QAction, QKeySequence
-#from PySide6.QtCore import Qt
+from ui.ui_base import openDialog, saveDialog, get_icon, \
+        QMainWindow, QMenu, QMenuBar, QStatusBar, QAction, \
+        QKeySequence
 
 from core.base import Dates
 from ui.datatable_widget import DataTableEditor as DataTableWidget
-from ui.ui_extra import openDialog, saveDialog, get_icon
+from ui.ui_base import openDialog, saveDialog, get_icon
 from tables.spreadsheet import Spreadsheet, read_DataTable, TableError, \
         make_DataTable, make_DataTable_filetypes, read_DataTable_filetypes
 

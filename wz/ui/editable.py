@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-10-31
+Last updated:  2021-11-01
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -789,7 +789,10 @@ class EdiTableWidget(QTableWidget):
             self.clearSelection()
             self.setCurrentItem(None)
             return
-        item = self.itemAt(event.position().toPoint())
+#TODO?
+#PySide6:        item = self.itemAt(event.position().toPoint())
+        item = self.itemAt(event.pos())
+
         super().mousePressEvent(event)
 
     def keyPressEvent(self, event):

@@ -25,8 +25,6 @@ Copyright 2021 Michael Towers
 =-LICENCE========================================
 """
 
-print("DEPRECATED – use ui_base instead")
-assert False
 ### Messages
 _UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
 
@@ -55,7 +53,7 @@ _CONFIRMATION = "Bestätigen"
 import sys, os, builtins, traceback, glob
 from importlib import resources         # Python >= 3.7
 
-#TODO: IF I use this feature, this is probably the wrong path ...
+#TODO: PySide6 only?: If I use this feature, this is probably the wrong path ...
 # Without the environment variable there is a disquieting error message.
 #    os.environ['PYSIDE_DESIGNER_PLUGINS'] = this
 from qtpy.QtWidgets import *
@@ -97,7 +95,7 @@ class VLine(QFrame):
 ###
 
 def get_icon(name):
-    ilist = glob.glob(os.path.join(DATADIR, 'icons', f'{name}.*'))
+    ilist = glob.glob(os.path.join(PROGRAM_DATA, 'icons', f'{name}.*'))
     return QIcon(ilist[0])
 
 ###

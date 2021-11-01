@@ -503,4 +503,5 @@ if __name__ == "__main__":
     MAIN_WIDGET.select_tab(0)
     MAIN_WIDGET.year_term.setText("2022.1")
 
-    run(MAIN_WIDGET)
+    if SHOW_CONFIRM("Shall I do this?"):
+        run(MAIN_WIDGET)
