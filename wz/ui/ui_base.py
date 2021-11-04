@@ -2,7 +2,7 @@
 """
 ui/ui_extra.py
 
-Last updated:  2021-11-01
+Last updated:  2021-11-03
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
