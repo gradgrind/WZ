@@ -29,8 +29,6 @@ Copyright 2021 Michael Towers
 """
 
 #TODO
-### Undo of multiple add/remove rows/columns as a block rather than
-###     individual rows/columns?
 ### Ideally actions which in the present state don't do anything should
 ###     be disabled.
 ### An invisible QAction seems to imply it is also disabled.
@@ -112,6 +110,9 @@ class Change(Enum):
     DEL_ROW = auto()
     ADD_COL = auto()
     DEL_COL = auto()
+    # For multiple row/column changes
+    GROUP = auto()
+    END_GROUP = auto()
 
 
 def new_action(parent, text = None, icontext = None,
@@ -199,10 +200,7 @@ class UndoRedo:
             self.table.set_modified(True)
 
     def undo(self):
-        if self.enabled and self.index > 0:
-            self.blocked = True
-            self.index -= 1
-            chtype, change = self.changes[self.index]
+        def do_undo():
             if chtype is Change.ADD_COL:
                 self.table.removeColumn(change)
             elif chtype is Change.DEL_COL:
@@ -216,14 +214,27 @@ class UndoRedo:
                     self.table.set_text(*_change[:3])
             elif chtype is Change.CELL:
                 self.table.set_text(*change[:3])
+            else:
+                raise Bug(f"Invalid Undo-change: {chtype}")
+        #+
+        if self.enabled and self.index > 0:
+            self.blocked = True
+            self.index -= 1
+            chtype, change = self.changes[self.index]
+            if chtype is Change.END_GROUP:
+                while True:
+                    self.index -= 1
+                    chtype, change = self.changes[self.index]
+                    if chtype is Change.GROUP:
+                        break
+                    do_undo()
+            else:
+                do_undo()
             self.blocked = False
             self.table.set_modified(self.index != self.index0)
 
     def redo(self):
-        if self.enabled and self.index < len(self.changes):
-            self.blocked = True
-            chtype, change = self.changes[self.index]
-            self.index += 1
+        def do_redo():
             if chtype is Change.ADD_COL:
                 self.table.insertColumn(change)
             elif chtype is Change.DEL_COL:
@@ -237,6 +248,22 @@ class UndoRedo:
                     self.table.set_text(*_change[:2], _change[3])
             elif chtype is Change.CELL:
                 self.table.set_text(*change[:2], change[3])
+            else:
+                raise Bug(f"Invalid Redo-change: {chtype}")
+        #+
+        if self.enabled and self.index < len(self.changes):
+            self.blocked = True
+            chtype, change = self.changes[self.index]
+            self.index += 1
+            if chtype is Change.GROUP:
+                while True:
+                    chtype, change = self.changes[self.index]
+                    self.index += 1
+                    if chtype is Change.END_GROUP:
+                        break
+                    do_redo()
+            else:
+                do_redo()
             self.blocked = False
             self.table.set_modified(self.index != self.index0)
 
@@ -501,9 +528,14 @@ class EdiTableWidget(QTableWidget):
         else:
             h = 1
             r = self.currentRow() + 1
-        while h > 0:
+        if h == 1:
             self.insertRow(r)
-            h -= 1
+        else:
+            self.add_change(Change.GROUP, None)
+            while h > 0:
+                self.insertRow(r)
+                h -= 1
+            self.add_change(Change.END_GROUP, None)
 
     def insertRow(self, row, data = None):
         # Consistency check
@@ -534,9 +566,14 @@ class EdiTableWidget(QTableWidget):
         else:
             w = 1
             c = self.currentColumn() + 1
-        while w > 0:
+        if w == 1:
             self.insertColumn(c)
-            w -= 1
+        else:
+            self.add_change(Change.GROUP, None)
+            while w > 0:
+                self.insertColumn(c)
+                w -= 1
+            self.add_change(Change.END_GROUP, None)
 
     def insertColumn(self, column, data = None):
         # Consistency check
@@ -570,11 +607,15 @@ class EdiTableWidget(QTableWidget):
             msgBox = QMessageBox(parent = self)
             msgBox.setText(_DELETEROWSFAIL)
             msgBox.exec()
+        elif n == 1:
+            self.removeRow(r)
         else:
+            self.add_change(Change.GROUP, None)
             r = r0 + n
             while r > r0:
                 r -= 1
                 self.removeRow(r)
+            self.add_change(Change.END_GROUP, None)
 
     def removeRow(self, row):
         rowdata = self.table_data.pop(row)
@@ -597,11 +638,15 @@ class EdiTableWidget(QTableWidget):
             msgBox = QMessageBox(parent = self)
             msgBox.setText(_DELETECOLUMNSFAIL)
             msgBox.exec()
+        elif n == 1:
+            self.removeColumn(r)
         else:
+            self.add_change(Change.GROUP, None)
             c = c0 + n
             while c > c0:
                 c -= 1
                 self.removeColumn(c)
+            self.add_change(Change.END_GROUP, None)
 
     def removeColumn(self, column):
         coldata = [rowdata.pop(column) for rowdata in self.table_data]
