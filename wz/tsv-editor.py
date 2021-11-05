@@ -2,7 +2,7 @@
 """
 ui/tsv-editor.py
 
-Last updated:  2021-11-04
+Last updated:  2021-11-05
 
 Gui editor for Tab-Separated-Value files.
 
@@ -117,7 +117,7 @@ class TsvEditor(QWidget):
         undo_action = QAction(get_icon('undo'), "Undo", self)
         undo_action.triggered.connect(self.table.undoredo.undo)
         toolbar.addAction(undo_action)
-        redo_action = QAction(get_icon('redo'), "Undo", self)
+        redo_action = QAction(get_icon('redo'), "Redo", self)
         redo_action.triggered.connect(self.table.undoredo.redo)
         toolbar.addAction(redo_action)
 

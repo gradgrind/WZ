@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-01
+Last updated:  2021-11-05
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -66,24 +66,24 @@ _PASTE = "Einfügen"
 #         " The selected cell is the top-left corner of the paste area."
 _TTPASTE = "Daten einfügen. Die ausgewählte Zelle ist oben links" \
         " im Bereich, der eingefügt wird."
-#_INSERTROW = "Insert Row"
-_INSERTROW = "Zeile einfügen"
-#_TTINSERTROW = "Insert Row"
-_TTINSERTROW = "Zeile einfügen nach der aktuellen Zeile"
-#_DELETEROWS = "Delete Rows"
-_DELETEROWS = "Zeilen löschen"
-#_TTDELETEROWS = "Delete selected Rows"
+#_INSERTROW = "Insert Row(s)"
+_INSERTROW = "Zeile(n) einfügen"
+#_TTINSERTROW = "Insert Row(s)"
+_TTINSERTROW = "Zeile(n) einfügen nach der aktuellen Zeile"
+#_DELETEROWS = "Delete Row(s)"
+_DELETEROWS = "Zeile(n) löschen"
+#_TTDELETEROWS = "Delete selected Row(s)"
 _TTDELETEROWS = "ausgewählte Zeilen löschen"
 #_DELETEROWSFAIL = "Deletion of the last row(s) is not permitted"
 _DELETEROWSFAIL = "Das Löschen der letzten Zeile(n) ist nicht zulässig"
-#_INSERTCOLUMN = "Insert Column"
-_INSERTCOLUMN = "Spalte einfügen"
-#_TTINSERTCOLUMN = "Insert Column"
-_TTINSERTCOLUMN = "Spalte einfügen nach der aktuellen Spalte"
-#_DELETECOLUMNS = "Delete Columns"
-_DELETECOLUMNS = "Spalten löschen"
-#_TTDELETECOLUMNS = "Delete selected Columns"
-_TTDELETECOLUMNS = "ausgewählte Spalten löschen"
+#_INSERTCOLUMN = "Insert Column(s)"
+_INSERTCOLUMN = "Spalte(n) einfügen"
+#_TTINSERTCOLUMN = "Insert Column(s)"
+_TTINSERTCOLUMN = "Spalte(n) einfügen nach der aktuellen Spalte"
+#_DELETECOLUMNS = "Delete Column(s)"
+_DELETECOLUMNS = "Spalte(n) löschen"
+#_TTDELETECOLUMNS = "Delete selected Column(s)"
+_TTDELETECOLUMNS = "ausgewählte Spalte(n) löschen"
 #_DELETECOLUMNSFAIL = "Deletion of the last column(s) is not permitted"
 _DELETECOLUMNSFAIL = "Das Löschen der letzten Spalte(n) ist nicht zulässig"
 
@@ -114,197 +114,21 @@ class Change(Enum):
     DEL_COL = auto()
 
 
-class InsertRowAction(QAction):
-    """QAction to insert a row of cells.
-    """
-    def __init__(self, table):
-        super().__init__(table)
-        self.setText(_INSERTROW)
-        self.setToolTip(_TTINSERTROW)
-# The tooltip is not shown in a popup menu ...
-        self.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_N))
-        self.setShortcutContext(Qt.WidgetShortcut)
-        self.triggered.connect(self.insert_row)
-        self.table = table
-
-    def insert_row(self):
-        """Insert an empty row below the current one.
-        If multiple rows are selected, the same number will be added
-        after the last selected row.
-        """
-        selected = self.table.get_selection()
-        if selected[0]:
-            h = selected[4]
-            r = selected[1] + h
-        else:
-            h = 1
-            r = self.table.currentRow() + 1
-        while h > 0:
-            self.table.insertRow(r)
-            h -= 1
-
-
-class InsertColumnAction(QAction):
-    """QAction to insert a column of cells.
-    """
-    def __init__(self, table):
-        super().__init__(table)
-        self.setText(_INSERTCOLUMN)
-        self.setToolTip(_TTINSERTCOLUMN)
-# The tooltip is not shown in a popup menu ...
-        self.setShortcut(QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_N))
-        self.setShortcutContext(Qt.WidgetShortcut)
-        self.triggered.connect(self.insert_column)
-        self.table = table
-
-    def insert_column(self):
-        """Insert an empty column after the current one.
-        If multiple columns are selected, the same number will be added
-        after the last selected column.
-        """
-        selected = self.table.get_selection()
-        if selected[0]:
-            w = selected[3]
-            c = selected[2] + w
-        else:
-            w = 1
-            c = self.table.currentColumn() + 1
-        while w > 0:
-            self.table.insertColumn(c)
-            w -= 1
-
-
-class DeleteRowsAction(QAction):
-    """QAction to delete rows of cells.
-    """
-    def __init__(self, table):
-        super().__init__(table)
-        self.setText(_DELETEROWS)
-        self.setToolTip(_TTDELETEROWS)
-        self.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_U))
-        self.setShortcutContext(Qt.WidgetShortcut)
-        self.triggered.connect(self.delete_rows)
-        self.table = table
-
-    def delete_rows(self):
-        """Delete the selected rows or else the current row.
-        """
-        selected = self.table.get_selection()
-        if selected[0]:
-            n = selected[4]
-            r0 = selected[1]
-        else:
-            n = 1
-            r0 = self.table.currentRow()
-            if r0 < 0:
-                return
-        if n == self.table.row_count():
-            msgBox = QMessageBox(parent = self.table)
-            msgBox.setText(_DELETEROWSFAIL)
-            msgBox.exec()
-        else:
-            r = r0 + n
-            while r > r0:
-                r -= 1
-                self.table.removeRow(r)
-
-
-class DeleteColumnsAction(QAction):
-    """QAction to delete columns of cells.
-    """
-    def __init__(self, table):
-        super().__init__(table)
-        self.setText(_DELETECOLUMNS)
-        self.setToolTip(_TTDELETECOLUMNS)
-        self.setShortcut(QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_U))
-        self.setShortcutContext(Qt.WidgetShortcut)
-        self.triggered.connect(self.delete_columns)
-        self.table = table
-
-    def delete_columns(self):
-        """Delete the selected columns.
-        """
-        selected = self.table.get_selection()
-        if selected[0]:
-            n = selected[3]
-            c0 = selected[2]
-        else:
-            n = 1
-            c0 = self.table.currentColumn()
-            if c0 < 0:
-                return
-        if n == self.table.column_count():
-            msgBox = QMessageBox(parent = self.table)
-            msgBox.setText(_DELETECOLUMNSFAIL)
-            msgBox.exec()
-        else:
-            c = c0 + n
-            while c > c0:
-                c -= 1
-                self.table.removeColumn(c)
-
-
-class CopyCellsAction(QAction):
-    """QAction to copy text from selected cells into the clipboard.
-    If no cell is selected, no action is taken.
-    If multiple cells are selected, the copied text will be a concatenation
-    of the texts in all selected cells, tabulated with tabulation and
-    newline characters.
-    """
-    def __init__(self, table):
-        super().__init__(table)
-        self.setText(_COPYSELECTION)
-        self.setToolTip(_TTCOPYSELECTION)
-        self.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_C))
-        self.setShortcutContext(Qt.WidgetShortcut)
-        self.triggered.connect(self.copyCellsToClipboard)
-        self.table = table
-
-    def copyCellsToClipboard(self):
-        """Concatenate the text content of all selected cells into a string
-        using tabulations and newlines to keep the table structure.
-        Put this text into the clipboard.
-        """
-        n, t, l, w, h = self.table.get_selection()
-        if n:
-            rows = self.table.read_block(t, l, w, h)
-            # put this data into clipboard
-            qapp = QApplication.instance()
-            qapp.clipboard().setText(table2tsv(rows))
-        else:
-            msgBox = QMessageBox(parent = self.table)
-            msgBox.setText(_COPYFAIL)
-            msgBox.exec()
-
-
-class CutCellsAction(QAction):
-    """QAction to copy text from selected cells into the clipboard and
-    clear these cells in the table. For undo/redo this should count as
-    a single operation.
-    """
-    def __init__(self, table):
-        super().__init__(table)
-        self.setText(_CUTSELECTION)
-        self.setToolTip(_TTCUTSELECTION)
-        self.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_X))
-        self.setShortcutContext(Qt.WidgetShortcut)
-        self.triggered.connect(self.cutCellsToClipboard)
-        self.table = table
-
-    def cutCellsToClipboard(self):
-        """Concatenate the text content of all selected cells into a string
-        using tabulations and newlines to keep the table structure.
-        Put this text into the clipboard. Clear the selected cells.
-        """
-        block = self.table.cut_selection()
-        if block is None:
-            msgBox = QMessageBox(parent = self.table)
-            msgBox.setText(_COPYFAIL)
-            msgBox.exec()
-        else:
-            # put this data into clipboard
-            qapp = QApplication.instance()
-            qapp.clipboard().setText(block)
+def new_action(parent, text = None, icontext = None,
+        tooltip = None, shortcut = None,
+        function = None):
+    action = QAction(parent)
+    if text: action.setText(text)
+    if icontext: action.setIconText(icontext)
+    # The tooltip is not shown in a popup (context) menu ...
+    if tooltip: action.setToolTip(tooltip)
+    #action.setStatusTip(
+    #action.setIcon(
+    if shortcut:
+        action.setShortcut(shortcut)
+        action.setShortcutContext(Qt.WidgetShortcut)
+    if function: action.triggered.connect(function)
+    return action
 
 
 def tsv2table(text):
@@ -346,87 +170,6 @@ def table2tsv(table):
 
 class RangeError(Exception):
     pass
-
-
-class PasteCellsAction(QAction):
-    """QAction to paste text from the clipboard into the table.
-
-    If the text contains tabulations and newlines, they are interpreted
-    as column and row separators.
-    In such a case, the text is split into multiple texts to be pasted
-    into multiple cells.
-    """
-    def __init__(self, table):
-        super().__init__(table)
-        self.table = table
-        self.setText(_PASTE)
-        self.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_V))
-        self.setShortcutContext(Qt.WidgetShortcut)
-        self.setToolTip(_TTPASTE)
-        self.triggered.connect(self.pasteCellFromClipboard)
-
-    def pasteCellFromClipboard(self):
-        """Paste text from clipboard into the table.
-
-        Pasting to more than one selected cell is possible if the data
-        to be pasted has "compatible" dimensions:
-            A single cell can be pasted to any block.
-            A single row of cells can be pasted to a single column of cells.
-            A single column of cells can be pasted to a single row of cells.
-            Otherwise a block of cells can only be pasted to a single cell.
-
-        If the block to be pasted would affect cells outside the grid,
-        the pasting will fail.
-        """
-        nrows = self.table.row_count()
-        ncols = self.table.column_count()
-        n, r0, c0, w, h = self.table.get_selection()
-        if n == 0:
-            msgBox = QMessageBox(parent = self.table)
-            msgBox.setText(_COPYFAIL)
-            msgBox.exec()
-            return
-        qapp = QApplication.instance()
-        clipboard_text = qapp.clipboard().text()
-        table_data = tsv2table(clipboard_text)
-        data_model = self.table.model()
-        protected_cells = 0
-        ph = len(table_data)
-        pw = len(table_data[0])
-        try:
-            if ph == 1:                 # paste a single row
-                if w == 1:              # ... to a single column
-                    paste_data = table_data * h
-                elif pw == 1:           # paste a single cell
-                    row = table_data[0] * w
-                    paste_data = [row] * h
-                else:
-                    raise RangeError(_BAD_PASTE_RANGE)
-            elif pw == 1:               # paste a single column
-                if h == 1:              # ... to a single row
-                    paste_data = [row * w for row in table_data]
-                else:
-                    raise RangeError(_BAD_PASTE_RANGE)
-            elif n == 1:                    # paste to a single cell
-                paste_data = table_data
-            else:
-                raise RangeError(_BAD_PASTE_RANGE)
-            # Check that the data to be pasted will fit into the table.
-            if r0 + ph > nrows:
-                raise RangeError(_TOO_MANY_ROWS)
-            if c0 + pw > ncols:
-                raise RangeError(_TOO_MANY_COLUMNS)
-        except RangeError as e:
-            msgBox = QMessageBox(parent=self.table)
-            msgBox.setText(str(e))
-            msgBox.exec()
-            return
-        if protected_cells:
-            msgBox = QMessageBox(parent = self.table)
-            msgBox.setText(_PASTE_PROTECTED)
-            msgBox.exec()
-        # Do the pasting
-        self.table.paste_block(r0, c0, paste_data)
 
 
 class UndoRedo:
@@ -516,27 +259,27 @@ class EdiTableWidget(QTableWidget):
         undo.activated.connect(self.undoredo.undo)
         redo = QShortcut(QKeySequence(Qt.CTRL + Qt.Key_Y), self)
         redo.activated.connect(self.undoredo.redo)
-#        self.undo = QAction(self)
-#        self.undo.setText("Undo")
-#        self.undo.setToolTip("Undo tooltip")
-#        self.undo.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_Z))
-#        self.undo.setShortcutContext(Qt.WidgetShortcut)
-#        self.undo.triggered.connect(self.undoredo.undo)
-#        self.addAction(self.undo)
-#        self.redo = QAction(self)
-#        self.redo.setText("Redo")
-#        self.redo.setToolTip("Redo tooltip")
-#        self.redo.setShortcut(QKeySequence(Qt.CTRL + Qt.Key_Y))
-#        self.redo.setShortcutContext(Qt.WidgetShortcut)
-#        self.redo.triggered.connect(self.undoredo.redo)
-#        self.addAction(self.redo)
 
         ### Actions
-        self.copyCellsAction = CopyCellsAction(self)
+        # QAction to copy selected cells to clipboard.
+        self.copyCellsAction = new_action(self, text = _COPYSELECTION,
+                tooltip = _TTCOPYSELECTION,
+                shortcut = QKeySequence(Qt.CTRL + Qt.Key_C),
+                function = self.copyCellsToClipboard)
         self.addAction(self.copyCellsAction)
-        self.pasteCellsAction = PasteCellsAction(self)
+
+        # QAction to paste clipboard at selected cell(s).
+        self.pasteCellsAction = new_action(self, text = _PASTE,
+                tooltip = _TTPASTE,
+                shortcut = QKeySequence(Qt.CTRL + Qt.Key_V),
+                function = self.pasteCellFromClipboard)
         self.addAction(self.pasteCellsAction)
-        self.cutCellsAction = CutCellsAction(self)
+
+        # QAction to cut selected cells to clipboard.
+        self.cutCellsAction = new_action(self, text = _CUTSELECTION,
+                tooltip = _TTCUTSELECTION,
+                shortcut = QKeySequence(Qt.CTRL + Qt.Key_X),
+                function = self.cutCellsToClipboard)
         self.addAction(self.cutCellsAction)
 
         #self.sep_rowactions = QAction(self)
@@ -544,9 +287,18 @@ class EdiTableWidget(QTableWidget):
         self.sep_rowactions.setSeparator(True)
         self.addAction(self.sep_rowactions)
 
-        self.insertRowAction = InsertRowAction(self)
+        # QAction to insert a row or rows of cells.
+        self.insertRowAction = new_action(self, text = _INSERTROW,
+                tooltip = _TTINSERTROW,
+                shortcut = QKeySequence(Qt.CTRL + Qt.Key_N),
+                function = self.insert_row)
         self.addAction(self.insertRowAction)
-        self.deleteRowsAction = DeleteRowsAction(self)
+
+        # QAction to delete a row or rows of cells.
+        self.deleteRowsAction =new_action(self, text = _DELETEROWS,
+                tooltip = _TTDELETEROWS,
+                shortcut = QKeySequence(Qt.CTRL + Qt.Key_U),
+                function = self.delete_rows)
         self.addAction(self.deleteRowsAction)
 
         #self.sep_colactions = QAction(self)
@@ -554,9 +306,18 @@ class EdiTableWidget(QTableWidget):
         self.sep_colactions.setSeparator(True)
         self.addAction(self.sep_colactions)
 
-        self.insertColumnAction = InsertColumnAction(self)
+        # QAction to insert a column or columns of cells.
+        self.insertColumnAction = new_action(self, text = _INSERTCOLUMN,
+                tooltip = _TTINSERTCOLUMN,
+                shortcut = QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_N),
+                function = self.insert_column)
         self.addAction(self.insertColumnAction)
-        self.deleteColumnsAction = DeleteColumnsAction(self)
+
+        # QAction to delete a column or columns of cells.
+        self.deleteColumnsAction = new_action(self, text = _DELETECOLUMNS,
+                tooltip = _TTDELETECOLUMNS,
+                shortcut = QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_U),
+                function = self.delete_columns)
         self.addAction(self.deleteColumnsAction)
 
     def setup(self, colheaders = None, rowheaders = None,
@@ -728,6 +489,22 @@ class EdiTableWidget(QTableWidget):
             rows.append(rowdata)
         return rows
 
+    def insert_row(self):
+        """Insert an empty row below the current one.
+        If multiple rows are selected, the same number of rows will be
+        added after the last selected row.
+        """
+        selected = self.get_selection()
+        if selected[0]:
+            h = selected[4]
+            r = selected[1] + h
+        else:
+            h = 1
+            r = self.currentRow() + 1
+        while h > 0:
+            self.insertRow(r)
+            h -= 1
+
     def insertRow(self, row, data = None):
         # Consistency check
         ncols = self.column_count()
@@ -745,6 +522,22 @@ class EdiTableWidget(QTableWidget):
                 raise Bug("insertRow: data length doesn't match table width")
             self.paste_block(row, 0, [data])
 
+    def insert_column(self):
+        """Insert an empty column after the current one.
+        If multiple columns are selected, the same number of columns
+        will be added after the last selected column.
+        """
+        selected = self.get_selection()
+        if selected[0]:
+            w = selected[3]
+            c = selected[2] + w
+        else:
+            w = 1
+            c = self.currentColumn() + 1
+        while w > 0:
+            self.insertColumn(c)
+            w -= 1
+
     def insertColumn(self, column, data = None):
         # Consistency check
         nrows = self.row_count()
@@ -761,10 +554,54 @@ class EdiTableWidget(QTableWidget):
                 raise Bug("insertColumn: data length doesn't match table height")
             self.paste_block(0, column, [[data[row]] for row in range(nrows)])
 
+    def delete_rows(self):
+        """Delete the selected rows or else the current row.
+        """
+        selected = self.get_selection()
+        if selected[0]:
+            n = selected[4]
+            r0 = selected[1]
+        else:
+            n = 1
+            r0 = self.currentRow()
+            if r0 < 0:
+                return
+        if n == self.row_count():
+            msgBox = QMessageBox(parent = self)
+            msgBox.setText(_DELETEROWSFAIL)
+            msgBox.exec()
+        else:
+            r = r0 + n
+            while r > r0:
+                r -= 1
+                self.removeRow(r)
+
     def removeRow(self, row):
         rowdata = self.table_data.pop(row)
         super().removeRow(row)
         self.add_change(Change.DEL_ROW, (row, rowdata))
+
+    def delete_columns(self):
+        """Delete the selected columns.
+        """
+        selected = self.get_selection()
+        if selected[0]:
+            n = selected[3]
+            c0 = selected[2]
+        else:
+            n = 1
+            c0 = self.currentColumn()
+            if c0 < 0:
+                return
+        if n == self.column_count():
+            msgBox = QMessageBox(parent = self)
+            msgBox.setText(_DELETECOLUMNSFAIL)
+            msgBox.exec()
+        else:
+            c = c0 + n
+            while c > c0:
+                c -= 1
+                self.removeColumn(c)
 
     def removeColumn(self, column):
         coldata = [rowdata.pop(column) for rowdata in self.table_data]
@@ -818,6 +655,37 @@ class EdiTableWidget(QTableWidget):
                 return # in this case don't call the base class method
         super().keyPressEvent(event)
 
+    def copyCellsToClipboard(self):
+        """Concatenate the text content of all selected cells into a string
+        using tabulations and newlines to keep the table structure.
+        Put this text into the clipboard.
+        """
+        n, t, l, w, h = self.get_selection()
+        if n:
+            rows = self.read_block(t, l, w, h)
+            # put this data into clipboard
+            qapp = QApplication.instance()
+            qapp.clipboard().setText(table2tsv(rows))
+        else:
+            msgBox = QMessageBox(parent = self)
+            msgBox.setText(_COPYFAIL)
+            msgBox.exec()
+
+    def cutCellsToClipboard(self):
+        """Concatenate the text content of all selected cells into a string
+        using tabulations and newlines to keep the table structure.
+        Put this text into the clipboard. Clear the selected cells.
+        """
+        block = self.cut_selection()
+        if block is None:
+            msgBox = QMessageBox(parent = self)
+            msgBox.setText(_COPYFAIL)
+            msgBox.exec()
+        else:
+            # put this data into clipboard
+            qapp = QApplication.instance()
+            qapp.clipboard().setText(block)
+
     def cut_selection(self):
         """Cut the selected range, returning the contents as "tsv".
         The changed cells are reported as a single item, possibly a list.
@@ -870,6 +738,69 @@ class EdiTableWidget(QTableWidget):
         t = selrange.topRow()
         h = selrange.bottomRow() - t + 1
         return (w * h, t, l, w, h)
+
+    def pasteCellFromClipboard(self):
+        """Paste text from clipboard into the table.
+
+        Pasting to more than one selected cell is possible if the data
+        to be pasted has "compatible" dimensions:
+            A single cell can be pasted to any block.
+            A single row of cells can be pasted to a single column of cells.
+            A single column of cells can be pasted to a single row of cells.
+            Otherwise a block of cells can only be pasted to a single cell.
+
+        If the block to be pasted would affect cells outside the grid,
+        the pasting will fail.
+        """
+        nrows = self.row_count()
+        ncols = self.column_count()
+        n, r0, c0, w, h = self.get_selection()
+        if n == 0:
+            msgBox = QMessageBox(parent = self)
+            msgBox.setText(_COPYFAIL)
+            msgBox.exec()
+            return
+        qapp = QApplication.instance()
+        clipboard_text = qapp.clipboard().text()
+        table_data = tsv2table(clipboard_text)
+        data_model = self.model()
+        protected_cells = 0
+        ph = len(table_data)
+        pw = len(table_data[0])
+        try:
+            if ph == 1:                 # paste a single row
+                if w == 1:              # ... to a single column
+                    paste_data = table_data * h
+                elif pw == 1:           # paste a single cell
+                    row = table_data[0] * w
+                    paste_data = [row] * h
+                else:
+                    raise RangeError(_BAD_PASTE_RANGE)
+            elif pw == 1:               # paste a single column
+                if h == 1:              # ... to a single row
+                    paste_data = [row * w for row in table_data]
+                else:
+                    raise RangeError(_BAD_PASTE_RANGE)
+            elif n == 1:                    # paste to a single cell
+                paste_data = table_data
+            else:
+                raise RangeError(_BAD_PASTE_RANGE)
+            # Check that the data to be pasted will fit into the table.
+            if r0 + ph > nrows:
+                raise RangeError(_TOO_MANY_ROWS)
+            if c0 + pw > ncols:
+                raise RangeError(_TOO_MANY_COLUMNS)
+        except RangeError as e:
+            msgBox = QMessageBox(parent=self)
+            msgBox.setText(str(e))
+            msgBox.exec()
+            return
+        if protected_cells:
+            msgBox = QMessageBox(parent = self)
+            msgBox.setText(_PASTE_PROTECTED)
+            msgBox.exec()
+        # Do the pasting
+        self.paste_block(r0, c0, paste_data)
 
     def paste_block(self, top, left, block):
         """The block must be a list of lists of strings.
