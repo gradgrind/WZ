@@ -37,6 +37,14 @@ Copyright 2021 Michael Towers
 
 ### Messages
 
+#_SELECT_ALL = "Select all"
+_SELECT_ALL = "Alles auswählen"
+#_TTSELECT_ALL = "Select all cells of the table"
+_TTSELECT_ALL = "Ganze Tabelle auswählen"
+#_UNSELECT = "Unselect"
+_UNSELECT = "Auswahl zurücksetzen"
+#_TTUNSELECT = "Clear the selection"
+_TTUNSELECT = "keine Zellen sollen ausgewählt sein"
 #_TOO_MANY_ROWS = "Too many rows to insert"
 _TOO_MANY_ROWS = "Einfügen nicht möglich – zu viele Zeilen"
 #_TOO_MANY_COLUMNS = "Too many columns to insert"
@@ -81,9 +89,17 @@ _TTINSERTCOLUMN = "Spalte(n) einfügen nach der aktuellen Spalte"
 #_DELETECOLUMNS = "Delete Column(s)"
 _DELETECOLUMNS = "Spalte(n) löschen"
 #_TTDELETECOLUMNS = "Delete selected Column(s)"
-_TTDELETECOLUMNS = "ausgewählte Spalte(n) löschen"
+_TTDELETECOLUMNS = "Ausgewählte Spalte(n) löschen"
 #_DELETECOLUMNSFAIL = "Deletion of the last column(s) is not permitted"
 _DELETECOLUMNSFAIL = "Das Löschen der letzten Spalte(n) ist nicht zulässig"
+#_UNDO = "Undo"
+_UNDO = "Rückgängig"
+#_TTUNDO = "Undo the last change"
+_TTUNDO = "Die letzte Änderung rückgängig machen"
+#_REDO = "Redo"
+_REDO = "Wiederherstellen"
+#_TTREDO = "Redo the last undone change"
+_TTREDO = "Die letzte rückgängig gemachte Änderung wiederherstellen"
 
 ########################################################################
 
@@ -113,23 +129,6 @@ class Change(Enum):
     # For multiple row/column changes
     GROUP = auto()
     END_GROUP = auto()
-
-
-def new_action(parent, text = None, icontext = None,
-        tooltip = None, shortcut = None,
-        function = None):
-    action = QAction(parent)
-    if text: action.setText(text)
-    if icontext: action.setIconText(icontext)
-    # The tooltip is not shown in a popup (context) menu ...
-    if tooltip: action.setToolTip(tooltip)
-    #action.setStatusTip(
-    #action.setIcon(
-    if shortcut:
-        action.setShortcut(shortcut)
-        action.setShortcutContext(Qt.WidgetShortcut)
-    if function: action.triggered.connect(function)
-    return action
 
 
 def tsv2table(text):
@@ -187,6 +186,9 @@ class UndoRedo:
     def enable(self, en):
         self.mark0(True)
         self.enabled = en
+        self.table.sep_undoredo.setVisible(en)
+        self.table.undo.setVisible(en)
+        self.table.redo.setVisible(en)
 
     def change(self, chtype, change):
         if self.enabled:
@@ -269,83 +271,111 @@ class UndoRedo:
 
 
 class EdiTableWidget(QTableWidget):
+    def new_action(self, text = None, icontext = None,
+            tooltip = None, shortcut = None,
+            function = None):
+        action = QAction(self)
+        if text: action.setText(text)
+        if icontext: action.setIconText(icontext)
+        # The tooltip is not shown in a popup (context) menu ...
+        if tooltip: action.setToolTip(tooltip)
+        #action.setStatusTip(
+        #action.setIcon(
+        if shortcut:
+            action.setShortcut(shortcut)
+            action.setShortcutContext(Qt.WidgetShortcut)
+        if function: action.triggered.connect(function)
+        self.addAction(action)
+        return action
+
+    def context_menu_spacer(self):
+        #self.sep_rowactions = QAction(self)
+        sep = QAction(" ", self)
+        sep.setSeparator(True)
+        self.addAction(sep)
+        return sep
+
     def __init__(self, parent = None):
         super().__init__(parent = parent)
         self.setSelectionMode(self.ContiguousSelection)
 
-        ### Extra shortcuts
-        # Ctrl-A selects all cells (built-in shortcut in Qt)
-        # Ctrl-Shift-A should cancel selection
-        unselect = QShortcut(QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_A),
-                self)
-        unselect.activated.connect(self.clearSelection)
-
-        # Undo (Ctrl-Z) and redo (Ctrl-Y)
-        self.undoredo = UndoRedo(self)
-        undo = QShortcut(QKeySequence(Qt.CTRL + Qt.Key_Z), self)
-        undo.activated.connect(self.undoredo.undo)
-        redo = QShortcut(QKeySequence(Qt.CTRL + Qt.Key_Y), self)
-        redo.activated.connect(self.undoredo.redo)
-
         ### Actions
+        # QAction to select all cells.
+        # This seems to override the built-in shortcut, but only if the
+        # table "has keyboard focus".
+        self.select_all = self.new_action(text = _SELECT_ALL,
+                tooltip = _TTSELECT_ALL,
+                shortcut = QKeySequence(Qt.CTRL + Qt.Key_A),
+                function = self.selectAll)
+
+        # QAction to clear the selection.
+        self.unselect = self.new_action(text = _UNSELECT,
+                tooltip = _TTUNSELECT,
+                shortcut = QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_A),
+                function = self.clearSelection)
+
+        self.context_menu_spacer()
+
         # QAction to copy selected cells to clipboard.
-        self.copyCellsAction = new_action(self, text = _COPYSELECTION,
+        self.copyCellsAction = self.new_action(text = _COPYSELECTION,
                 tooltip = _TTCOPYSELECTION,
                 shortcut = QKeySequence(Qt.CTRL + Qt.Key_C),
                 function = self.copyCellsToClipboard)
-        self.addAction(self.copyCellsAction)
 
         # QAction to paste clipboard at selected cell(s).
-        self.pasteCellsAction = new_action(self, text = _PASTE,
+        self.pasteCellsAction = self.new_action(text = _PASTE,
                 tooltip = _TTPASTE,
                 shortcut = QKeySequence(Qt.CTRL + Qt.Key_V),
                 function = self.pasteCellFromClipboard)
-        self.addAction(self.pasteCellsAction)
 
         # QAction to cut selected cells to clipboard.
-        self.cutCellsAction = new_action(self, text = _CUTSELECTION,
+        self.cutCellsAction = self.new_action(text = _CUTSELECTION,
                 tooltip = _TTCUTSELECTION,
                 shortcut = QKeySequence(Qt.CTRL + Qt.Key_X),
                 function = self.cutCellsToClipboard)
-        self.addAction(self.cutCellsAction)
 
-        #self.sep_rowactions = QAction(self)
-        self.sep_rowactions = QAction(" ", self)
-        self.sep_rowactions.setSeparator(True)
-        self.addAction(self.sep_rowactions)
+        self.sep_rowactions = self.context_menu_spacer()
 
         # QAction to insert a row or rows of cells.
-        self.insertRowAction = new_action(self, text = _INSERTROW,
+        self.insertRowAction = self.new_action(text = _INSERTROW,
                 tooltip = _TTINSERTROW,
                 shortcut = QKeySequence(Qt.CTRL + Qt.Key_N),
                 function = self.insert_row)
-        self.addAction(self.insertRowAction)
 
         # QAction to delete a row or rows of cells.
-        self.deleteRowsAction =new_action(self, text = _DELETEROWS,
+        self.deleteRowsAction =self.new_action(text = _DELETEROWS,
                 tooltip = _TTDELETEROWS,
                 shortcut = QKeySequence(Qt.CTRL + Qt.Key_U),
                 function = self.delete_rows)
-        self.addAction(self.deleteRowsAction)
 
-        #self.sep_colactions = QAction(self)
-        self.sep_colactions = QAction(" ", self)
-        self.sep_colactions.setSeparator(True)
-        self.addAction(self.sep_colactions)
+        self.sep_colactions = self.context_menu_spacer()
 
         # QAction to insert a column or columns of cells.
-        self.insertColumnAction = new_action(self, text = _INSERTCOLUMN,
+        self.insertColumnAction = self.new_action(text = _INSERTCOLUMN,
                 tooltip = _TTINSERTCOLUMN,
                 shortcut = QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_N),
                 function = self.insert_column)
-        self.addAction(self.insertColumnAction)
 
         # QAction to delete a column or columns of cells.
-        self.deleteColumnsAction = new_action(self, text = _DELETECOLUMNS,
+        self.deleteColumnsAction = self.new_action(text = _DELETECOLUMNS,
                 tooltip = _TTDELETECOLUMNS,
                 shortcut = QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_U),
                 function = self.delete_columns)
-        self.addAction(self.deleteColumnsAction)
+
+        self.sep_undoredo = self.context_menu_spacer()
+
+        # QAction to undo last change
+        self.undoredo = UndoRedo(self)
+        self.undo = self.new_action(text = _UNDO,
+                tooltip = _TTUNDO,
+                shortcut = QKeySequence(Qt.CTRL + Qt.Key_Z),
+                function = self.undoredo.undo)
+
+        # QAction to redo last undone change
+        self.redo = self.new_action(text = _REDO,
+                tooltip = _TTREDO,
+                shortcut = QKeySequence(Qt.CTRL + Qt.Key_Y),
+                function = self.undoredo.redo)
 
     def setup(self, colheaders = None, rowheaders = None,
             undo_redo = False, cut = False, paste = False,
@@ -405,6 +435,8 @@ class EdiTableWidget(QTableWidget):
         self.cellChanged.connect(self.cell_changed)
         self.cellClicked.connect(self.activated)
         self.cellActivated.connect(self.newline_press)
+        #
+        self.setFocus()
 
     def init0(self, rows, columns):
         """Set the initial number of rows and columns and check that
@@ -608,7 +640,7 @@ class EdiTableWidget(QTableWidget):
             msgBox.setText(_DELETEROWSFAIL)
             msgBox.exec()
         elif n == 1:
-            self.removeRow(r)
+            self.removeRow(r0)
         else:
             self.add_change(Change.GROUP, None)
             r = r0 + n
@@ -639,7 +671,7 @@ class EdiTableWidget(QTableWidget):
             msgBox.setText(_DELETECOLUMNSFAIL)
             msgBox.exec()
         elif n == 1:
-            self.removeColumn(r)
+            self.removeColumn(c0)
         else:
             self.add_change(Change.GROUP, None)
             c = c0 + n
