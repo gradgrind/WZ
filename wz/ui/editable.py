@@ -3,12 +3,12 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-05
+Last updated:  2021-11-06
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
 Originally inspired by "TableWidget.py" from the "silx" project (www.silx.org),
-thanks to P. Knobel, but it differs in several respects.
+thanks to P. Knobel, but it is now very different.
 
 =+LICENCE=================================
 Copyright 2021 Michael Towers
@@ -27,13 +27,6 @@ Copyright 2021 Michael Towers
 
 =-LICENCE=================================
 """
-
-#TODO
-### Ideally actions which in the present state don't do anything should
-###     be disabled.
-### An invisible QAction seems to imply it is also disabled.
-### There is a signal on QItemSelectionModel:
-###    selectionChanged(const QItemSelection &selected, const QItemSelection &deselected)
 
 ### Messages
 
@@ -100,15 +93,17 @@ _TTUNDO = "Die letzte Änderung rückgängig machen"
 _REDO = "Wiederherstellen"
 #_TTREDO = "Redo the last undone change"
 _TTREDO = "Die letzte rückgängig gemachte Änderung wiederherstellen"
+#_VALIDATION_ERROR = "Invalid value: {msg}"
+_VALIDATION_ERROR = "Ungültiger Wert: {msg}"
 
 ########################################################################
 
 from enum import Enum, auto
 
-from qtpy.QtWidgets import QApplication, \
+from qtpy.QtWidgets import QApplication, QWidget, \
         QTableView, QTableWidget, QMessageBox, \
         QStyledItemDelegate, QStyleOptionViewItem
-from qtpy.QtCore import Qt, QPointF, QRectF, QSize
+from qtpy.QtCore import Qt, QPointF, QRectF, QSize, QEvent
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QAction, QShortcut  # in Qt6 these are in QtGui
 
@@ -180,6 +175,8 @@ class UndoRedo:
     def mark0(self, clear):
         if clear:
             self.changes = []
+            self.table.undo.setEnabled(False)
+            self.table.redo.setEnabled(False)
             self.index = 0
         self.index0 = self.index
 
@@ -189,6 +186,8 @@ class UndoRedo:
         self.table.sep_undoredo.setVisible(en)
         self.table.undo.setVisible(en)
         self.table.redo.setVisible(en)
+        self.table.undo.setEnabled(False)
+        self.table.redo.setEnabled(False)
 
     def change(self, chtype, change):
         if self.enabled:
@@ -196,6 +195,7 @@ class UndoRedo:
                 #print("CHANGE:", chtype, change)
                 del(self.changes[self.index:])
                 self.changes.append((chtype, change))
+                self.table.undo.setEnabled(True)
                 self.index = len(self.changes)
                 self.table.set_modified(True)
         else:
@@ -234,6 +234,9 @@ class UndoRedo:
                 do_undo()
             self.blocked = False
             self.table.set_modified(self.index != self.index0)
+            if self.index == 0:
+                self.table.undo.setEnabled(False)
+            self.table.redo.setEnabled(True)
 
     def redo(self):
         def do_redo():
@@ -268,6 +271,9 @@ class UndoRedo:
                 do_redo()
             self.blocked = False
             self.table.set_modified(self.index != self.index0)
+            if self.index == len(self.changes):
+                self.table.redo.setEnabled(False)
+            self.table.undo.setEnabled(True)
 
 
 class EdiTableWidget(QTableWidget):
@@ -419,23 +425,25 @@ class EdiTableWidget(QTableWidget):
         self.pasteCellsAction.setVisible(paste)
 #        self.pasteCellsAction.setEnabled(paste)
         self.sep_rowactions.setVisible(row_add_del)
+
         self.insertRowAction.setVisible(row_add_del)
-#        self.insertRowAction.setEnabled(row_add_del)
         self.deleteRowsAction.setVisible(row_add_del)
-#        self.deleteRowsAction.setEnabled(row_add_del)
         self.sep_colactions.setVisible(column_add_del)
         self.insertColumnAction.setVisible(column_add_del)
-#        self.insertColumnAction.setEnabled(column_add_del)
         self.deleteColumnsAction.setVisible(column_add_del)
-#        self.deleteColumnsAction.setEnabled(column_add_del)
-        #
+        self.insertRowAction.setEnabled(False)
+        self.deleteRowsAction.setEnabled(False)
+        self.insertColumnAction.setEnabled(False)
+        self.deleteColumnsAction.setEnabled(False)
+
         self.setContextMenuPolicy(Qt.ActionsContextMenu)
-        #
+
         self.set_change_report()
         self.cellChanged.connect(self.cell_changed)
-        self.cellClicked.connect(self.activated)
-        self.cellActivated.connect(self.newline_press)
-        #
+        self.cellClicked.connect(self.cell_clicked)
+#        self.cellActivated.connect(self.newline_press)
+        self.cellDoubleClicked.connect(self.newline_press)
+
         self.setFocus()
 
     def init0(self, rows, columns):
@@ -454,6 +462,11 @@ class EdiTableWidget(QTableWidget):
                 raise Bug("Number of rows doesn't match header list")
         else:
             self.setRowCount(rows)
+        if rows:
+            self.insertRowAction.setEnabled(True)
+            self.deleteRowsAction.setEnabled(True)
+            self.insertColumnAction.setEnabled(True)
+            self.deleteColumnsAction.setEnabled(True)
 
     def init_data(self, data):
         """Set the initial table data from a (complete) list of lists
@@ -509,8 +522,18 @@ class EdiTableWidget(QTableWidget):
     def row_count(self):
         return self.model().rowCount()
 
+#    def rowCountChanged(self, oldCount, newCount):
+#        """Slot override.
+#        """
+#        super().rowCountChanged(oldCount, newCount)
+
     def column_count(self):
         return self.model().columnCount()
+
+#    def columnCountChanged(self, oldCount, newCount):
+#        """Slot override.
+#        """
+#        super().columnCountChanged(oldCount, newCount)
 
     def _get_text(self, row, col):
         """Convenience method for reading a cell from the QTableWidget.
@@ -692,8 +715,29 @@ class EdiTableWidget(QTableWidget):
         text = self._get_text(row, col)
         old = self.table_data[row][col]
         if old != text:
-            self.table_data[row][col] = text
-            self.add_change(Change.CELL, (row, col, old, text))
+            v = self.validate(row, col, text)
+            if v:
+                msgBox = QMessageBox(parent = self)
+                msgBox.setText(_VALIDATION_ERROR.format(msg = v))
+                msgBox.exec()
+                if old:
+                    data_model = self.model()
+                    data_model.setData(data_model.index(row, col), old)
+                else:
+                    self.takeItem(row, col)
+            else:
+                self.table_data[row][col] = text
+                self.add_change(Change.CELL, (row, col, old, text))
+
+    def validate(self, row, col, text):
+        """OVERRIDE THIS METHOD FOR VALIDATION.
+        Check the validity of the given text for the given cell.
+        If OK return None.
+        Otherwise return a message.
+        """
+        #if text == 'x':
+        #    return "Bet you weren't expecting the Spanish Inquisition!"
+        return None
 
     def set_change_report(self, handler = None):
         if handler:
@@ -701,27 +745,57 @@ class EdiTableWidget(QTableWidget):
         else:
             self.add_change = self.undoredo.change
 
+    def cell_clicked(self, row, col):
+        """Ctrl-Click "activates" the cell.
+        """
+        if (QApplication.keyboardModifiers() & Qt.ControlModifier) \
+                and self.get_selection()[0] == 1:
+            self.activated(row, col)
+
     def activated(self, row, col):
         # This is called when a cell is left-clicked or when the (single)
         # selected cell has "Return/Newline" pressed.
+        # See 'activate-on-singleclick' below.
         print("ACTIVATED:", row, col)
 
     def newline_press(self, row, col):
-        #if self.get_selection()[0] == 1:
-        if self.get_selection()[0] <= 1:
+        if self.get_selection()[0] == 1:
+        #if self.get_selection()[0] <= 1:
             self.activated(row, col)
 
+    @staticmethod
+    def _get_point(event):
+#PySide2:
+        return event.pos()
+#PySide6:
+        return event.position().toPoint()
+
     def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clearSelection()
+            self.pressed_at = self.indexAt(self._get_point(event))
+            self.setCurrentIndex(self.pressed_at)
+            if QApplication.keyboardModifiers() & Qt.ControlModifier:
+                return
+        else:
+            self.pressed_at = None
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and \
                 QApplication.keyboardModifiers() & Qt.ControlModifier:
-            self.clearSelection()
-            self.setCurrentItem(None)
-            return
-#TODO?
-#PySide6:        item = self.itemAt(event.position().toPoint())
-        item = self.itemAt(event.pos())
-
-        super().mousePressEvent(event)
+            if self.get_selection()[0] == 1:
+                ix = self.indexAt(self._get_point(event))
+                self.activated(ix.row(), ix.column())
+                return
+#            if self.indexAt(self._get_point(event)) == self.pressed_at \
+#                    and self.get_selection()[0] == 1:
+#                self.activated(self.pressed_at.row(),
+#                        self.pressed_at.column())
+#                return
+            else:
+                self.clearSelection()
+        super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event):
         if self.state() != self.EditingState:
@@ -730,6 +804,8 @@ class EdiTableWidget(QTableWidget):
                 if self.cut_selection() is None:
                     self.takeItem(self.currentRow(), self.currentColumn())
                 return # in this case don't call the base class method
+            if key == Qt.Key_Return:
+                self.newline_press(self.currentRow(), self.currentColumn())
         super().keyPressEvent(event)
 
     def copyCellsToClipboard(self):
@@ -931,6 +1007,12 @@ class EdiTableWidget(QTableWidget):
         self.__modified = False
         self.undoredo.mark0(clear)
 
+#    def selectionChanged(self, selected, deselected):
+#        """Override the slot. The parameters are <QItemSelection> items.
+#        """
+#        super().selectionChanged(selected, deselected)
+#        #print("SELECTION " + ("ON" if self.selectedRanges() else "EMPTY"))
+
 
 class VerticalTextDelegate(QStyledItemDelegate):
     """A <QStyledItemDelegate> for vertical text. It can be set on a
@@ -957,6 +1039,9 @@ class VerticalTextDelegate(QStyledItemDelegate):
 
 if __name__ == "__main__":
     app = QApplication([])
+    # This seems to deactivate activate-on-single-click
+    # (presumably elsewhere as well?)
+    app.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
     def is_modified1(mod):
         print("MODIFIED1:", mod)
     def is_modified2(mod):
@@ -965,6 +1050,7 @@ if __name__ == "__main__":
     cols = ["Column %02d" % n for n in range(10)]
     rows = ["Row %02d" % n for n in range(7)]
     tablewidget = EdiTableWidget()
+    tablewidget.installEventFilter(tablewidget)
     tablewidget.setup(colheaders = cols, rowheaders = rows,
             on_changed = is_modified1)
 
