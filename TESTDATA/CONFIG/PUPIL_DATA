@@ -1,0 +1,29 @@
+#+++ __TITLE__   : Felder der Schülertabellen (eine Tabelle pro Klasse)
+#+++ __MINION__  : 1.0
+#+++ __MODIFIED__: 2021-11-01
+#+++###########################################################
+#+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
+#+++# wird beim Speichern (in WZ) automatisch aktualisiert.
+#--------------------------------------------------------------
+
+PUPIL_INFO: [
+    [SCHOOLYEAR  Schuljahr  Pflichtfeld]
+    [CLASS       Klasse     Pflichtfeld]
+]
+
+PUPIL_FIELDS: [
+#    [CLASS         Klasse          Pflichtfeld]
+    [PID            ID              Pflichtfeld]
+    [PSORT          Sortiername     &]
+    [FIRSTNAME      Rufname         Pflichtfeld]
+    [LASTNAME       Name            Pflichtfeld]
+    [GROUPS         Gruppen         &]
+    [FIRSTNAMES     Vornamen        Pflichtfeld]
+    [DOB_D          Geburtsdatum    Pflichtfeld]
+    [POB            Geburtsort      Pflichtfeld]
+    [SEX            Geschlecht      Pflichtfeld]
+    [HOME           Ort             Pflichtfeld]
+    [ENTRY_D        Eintrittsdatum  Pflichtfeld]
+    [EXIT_D         Schulaustritt   &]
+    [QUALI_D        Eintritt-SekII  &]
+]

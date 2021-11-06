@@ -773,12 +773,9 @@ class EdiTableWidget(QTableWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.clearSelection()
-            self.pressed_at = self.indexAt(self._get_point(event))
-            self.setCurrentIndex(self.pressed_at)
+            self.setCurrentIndex(self.indexAt(self._get_point(event)))
             if QApplication.keyboardModifiers() & Qt.ControlModifier:
                 return
-        else:
-            self.pressed_at = None
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
@@ -788,11 +785,6 @@ class EdiTableWidget(QTableWidget):
                 ix = self.indexAt(self._get_point(event))
                 self.activated(ix.row(), ix.column())
                 return
-#            if self.indexAt(self._get_point(event)) == self.pressed_at \
-#                    and self.get_selection()[0] == 1:
-#                self.activated(self.pressed_at.row(),
-#                        self.pressed_at.column())
-#                return
             else:
                 self.clearSelection()
         super().mouseReleaseEvent(event)
@@ -1007,6 +999,9 @@ class EdiTableWidget(QTableWidget):
         self.__modified = False
         self.undoredo.mark0(clear)
 
+    def is_modified(self):
+        return self.__modified
+
 #    def selectionChanged(self, selected, deselected):
 #        """Override the slot. The parameters are <QItemSelection> items.
 #        """
@@ -1041,7 +1036,7 @@ if __name__ == "__main__":
     app = QApplication([])
     # This seems to deactivate activate-on-single-click
     # (presumably elsewhere as well?)
-    app.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
+#    app.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
     def is_modified1(mod):
         print("MODIFIED1:", mod)
     def is_modified2(mod):

@@ -65,6 +65,8 @@ from ui.editable import EdiTableWidget, table2tsv
 # (presumably elsewhere as well?)
 APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
+from tables.spreadsheet import Spreadsheet, TableError
+
 ### -----
 
 #TODO: Add all actions to toolbar (with enable/diable?)
@@ -75,7 +77,7 @@ APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 class TsvEditor(QWidget):
     def __init__(self, ofile = None):
         super().__init__()
-        self.setWindowTitle(PROGRAM_NAME)
+        self.filename = None
         icon = get_icon('tsv')
         self.setWindowIcon(icon)
         self.action_open = QAction(get_icon('open'), _OPEN_FILE, self)
@@ -141,72 +143,24 @@ class TsvEditor(QWidget):
         self.action_save_as.setEnabled(False)
         if ofile:
             self.open_file(ofile)
-
-
-        return
-
-
-#class TsvEditor(QMainWindow):
-#    def __init__(self, ofile = None):
-        super().__init__()
-        self.setWindowTitle(PROGRAM_NAME)
-        icon = get_icon('tsv')
-        self.setWindowIcon(icon)
-        self.action_open = QAction(_OPEN_FILE, self)
-        self.action_open.setShortcut(QKeySequence.Open)
-        self.action_save = QAction(_SAVE_FILE, self)
-        self.action_save.setShortcut(QKeySequence.Save)
-        self.action_save_as = QAction(_SAVE_FILE_AS, self)
-        self.action_save_as.setShortcut(QKeySequence.SaveAs)
-        self.table = EdiTableWidget()
-        self.setCentralWidget(self.table)
-        menubar = self.menuBar()
-        menu_file = menubar.addMenu(_FILE_MENU)
-#        self.setMenuBar(menubar)
-#        statusbar = self.statusBar()
-#        self.setStatusBar(statusbar)
-
-#        menubar.addAction(menu_file.menuAction())
-        menu_file.addAction(self.action_open)
-        menu_file.addAction(self.action_save)
-        menu_file.addAction(self.action_save_as)
-
-        # Exit QAction
-        sep = QAction(" ", self)
-        sep.setSeparator(True)
-        menu_file.addAction(sep)
-        exit_action = QAction(_EXIT, self)
-        exit_action.setShortcut(QKeySequence.Quit)
-        exit_action.triggered.connect(self.close)
-        menu_file.addAction(exit_action)
-
-        self.action_open.triggered.connect(self.get_file)
-        self.action_save.triggered.connect(self.save_file)
-        self.action_save_as.triggered.connect(self.save_as_file)
-
-        self.table.setup(
-                undo_redo = True,
-                row_add_del = True,
-                column_add_del = True,
-                cut = True, paste = True,
-                on_changed = self.modified)
-        if ofile:
-            self.open_file(ofile)
+        self.set_title(False)
 
     def modified(self, mod):
         print("MOD:", mod)
         self.action_save.setEnabled(mod)
+        self.set_title(mod)
 
-
-
+    def set_title(self, changed):
+        x = ' *' if changed else ''
+        title = f"{PROGRAM_NAME} – {self.filename}{x}" \
+                if self.filename else PROGRAM_NAME
+        self.setWindowTitle(title)
 
 #TODO: Also read odt and xlsx?
     def get_file(self):
         ofile = openDialog("tsv-Datei (*.tsv)", _OPEN_FILE)
         if ofile:
             self.open_file(ofile)
-
-#TODO: Indicator for unsaved data?
 
     def save_as_file(self):
 #TODO: Check that there is data?
@@ -223,38 +177,17 @@ class TsvEditor(QWidget):
         All values are returned as "stripped" strings.
         All lines are padded to the length of the longest line.
         """
-        if filepath.endswith('.tsv'):
-            try:
-                if type(filepath) == str:
-                    with open(filepath, 'rb') as fbi:
-                        lines = fbi.read().splitlines()
-                else:
-                    lines = filepath.read().splitlines()
-                rows = []
-                maxlen = 0
-                for row_b in lines:
-                    #print(repr(row_b))
-                    row = [cell.decode('utf-8').strip()
-                            for cell in row_b.split(b'\t')]
-                    l = len(row)
-                    if l > maxlen:
-                        maxlen = l
-                    rows.append(row)
-                for row in rows:
-                    dl = maxlen - len(row)
-                    if dl:
-                        row += [''] * dl
-            except:
-                SHOW_ERROR(f"Problem reading tsv-file: {filepath}\n"
-                        f" ...\n{traceback.format_exc()}")
-                return None
-        else:
-            SHOW_ERROR(_NOT_TSV.format(filepath = filepath))
+        try:
+            sheet = Spreadsheet(filepath)
+        except TableError as e:
+            SHOW_ERROR(str(e))
             return None
-        self.currrent_file = filepath
-        self.table.init_data(rows)
+        self.filename = sheet.filename.rsplit('.', 1)[0]
+        self.currrent_file = filepath.rsplit('.', 1)[0] + '.tsv'
+        self.table.init_data(sheet.table())
         self.table.resizeColumnsToContents()
         self.action_save_as.setEnabled(True)
+        self.set_title(changed = False)
 
     def save_file(self, sfile = None):
         if not sfile:

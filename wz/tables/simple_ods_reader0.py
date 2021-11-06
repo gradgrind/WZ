@@ -4,7 +4,7 @@
 """
 tables/simple_ods_reader.py
 
-Last updated:  2021-11-06
+Last updated:  2021-01-05
 
 OdsReader:
 Read the data from the sheets of an ods-file ignoring all formatting and
@@ -34,8 +34,7 @@ import sys, os
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
-    appdir = os.path.dirname(this)
-    sys.path[0] = appdir
+    sys.path[0] = os.path.dirname(this)
 
 import zipfile as zf
 from types import SimpleNamespace
@@ -69,13 +68,15 @@ class OdsReader(dict):
                 cells = []
                 for cell in row:
                     if cell == None:
-                        cells.append('')
+                        cells.append(None)
                     else:
                         ctype, cval, ctext, cformula = cell
                         if ctype == None:
-                            v = ''
+                            v = None
                         elif ctype == 'string':
                             v = ctext.strip()
+                            if v == '':
+                                v = None
                         elif ctype == 'float':
                             # Fix for integers returned as floats
                             i = int(cval)
@@ -297,15 +298,13 @@ def readOdsFile(filepath, ignore_covered_cells):
     return INFO.sheets
 
 
-#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    from core.base import start
-    basedir = os.path.dirname(appdir)
-    start.setup(os.path.join(basedir, 'TESTDATA'))
+    from core.base import init
+    init()
     import io
 
-    filepath = DATAPATH('testing/Test1.ods')
+    filepath = os.path.join(DATA, 'testing', 'Test1.ods')
     fname = os.path.basename(filepath)
     ss = OdsReader(filepath)
     for sheet, table in ss.items():
