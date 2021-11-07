@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-11-06
+Last updated:  2021-11-07
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -584,6 +584,17 @@ class NewTable:
     The characters '\t', '\n' and '\r' are filtered out of the input
     strings.
     """
+    @classmethod
+    def make(cls, data, filepath = None):
+        """Build a tsv file from the table <data>, which should be a
+        list of rows, each row being a list of strings.
+        The result is provided by the <save> method.
+        """
+        ss = cls()
+        for row in data:
+            ss.add_row(row)
+        return ss.save(filepath)
+
     def __init__(self):
         self._rowlist = []
 
@@ -621,17 +632,22 @@ class NewTable:
 class NewSpreadsheet:
     """Build a simple xlsx table from scratch.
     """
+    @classmethod
+    def make(cls, data, filepath = None):
+        """Build an xlsx file from the table <data>, which should be a
+        list of rows, each row being a list of strings.
+        The result is provided by the <save> method.
+        """
+        ss = cls()
+        for row in data:
+            ss.add_row(row)
+        return ss.save(filepath)
+
     def __init__(self):
         # Create the workbook and worksheet we'll be working with
         self._wb = Workbook()
         self._ws = self._wb.active
         self._row = 0   # row counter, for serial row addition
-
-    def set_cell(self, row, col, value):
-        """Set a cell value (string only), using 0-based indexing.
-        """
-        self._ws.cell(row = row + 1, column = col + 1,
-                value = '' if value == None else str(value))
 
     def add_row(self, items):
         """Add a row with the values listed in <items>. The values will
@@ -640,7 +656,9 @@ class NewSpreadsheet:
         if items:
             col = 0
             for item in items:
-                self.set_cell(self._row, col, item)
+                if item:
+                    self._ws.cell(row = self._row + 1, column = col + 1,
+                            value = item)
                 col += 1
         self._row += 1
 

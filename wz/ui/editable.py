@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-06
+Last updated:  2021-11-07
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -284,7 +284,10 @@ class EdiTableWidget(QTableWidget):
         if text: action.setText(text)
         if icontext: action.setIconText(icontext)
         # The tooltip is not shown in a popup (context) menu ...
-        if tooltip: action.setToolTip(tooltip)
+        if tooltip:
+            if shortcut:
+                tooltip += f" – [{shortcut.toString()}]"
+            action.setToolTip(tooltip)
         #action.setStatusTip(
         #action.setIcon(
         if shortcut:
@@ -304,6 +307,7 @@ class EdiTableWidget(QTableWidget):
     def __init__(self, parent = None):
         super().__init__(parent = parent)
         self.setSelectionMode(self.ContiguousSelection)
+        self.__modified = False
 
         ### Actions
         # QAction to select all cells.
@@ -996,7 +1000,7 @@ class EdiTableWidget(QTableWidget):
         Otherwise the undo list is untouched, so that an undo operation
         can return to a state previous to the new initial state.
         """
-        self.__modified = False
+        self.set_modified(False)
         self.undoredo.mark0(clear)
 
     def is_modified(self):
