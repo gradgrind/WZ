@@ -2,7 +2,7 @@
 """
 datatable-editor.py
 
-Last updated:  2021-10-21
+Last updated:  2021-11-07
 
 Gui editor for "DataTables".
 
@@ -53,7 +53,7 @@ if __name__ == '__main__':
 # Without the environment variable there is a disquieting error message.
 #    os.environ['PYSIDE_DESIGNER_PLUGINS'] = PROGRAM_DATA
 
-from ui.ui_base import openDialog, saveDialog, get_icon, \
+from ui.ui_base import APP, run, openDialog, saveDialog, get_icon, \
         QMainWindow, QMenu, QMenuBar, QStatusBar, QAction, \
         QKeySequence
 
@@ -215,7 +215,10 @@ if __name__ == '__main__':
         edit.open_file(sys.argv[1])
     edit.show()
     # Window dimensions
-    geometry = edit.screen().availableGeometry()
-    edit.setFixedSize(geometry.width() * 0.7, geometry.height() * 0.7)
-    #edit.resize(800, 600)
-    sys.exit(app.exec())
+#    geometry = edit.screen().availableGeometry()
+#    edit.setFixedSize(geometry.width() * 0.7, geometry.height() * 0.7)
+#    #edit.resize(800, 600)
+    geometry = APP.primaryScreen().availableGeometry()
+    edit.resize(int(geometry.width() * 0.7),
+            int(geometry.height() * 0.7))
+    run(edit)

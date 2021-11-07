@@ -2,7 +2,7 @@
 """
 ui/datatable_widget.py
 
-Last updated:  2021-11-01
+Last updated:  2021-11-07
 
 Gui editor widget for "DataTables".
 See datatable-editor.py for an app which can be used for testing this
@@ -93,15 +93,24 @@ class DataTableEditor(QSplitter):
         super().__init__()
         self.setOrientation(Qt.Vertical)
         self.info = InfoTable()
+#        sizePolicy0 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+#        sizePolicy0.setHorizontalStretch(0)
+#        sizePolicy0.setVerticalStretch(0)
+#        sizePolicy0.setHeightForWidth(False)
+#        self.info.setSizePolicy(sizePolicy0)
         self.addWidget(self.info)
 
         self.table = EdiTableWidget()
-        sizePolicy1 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        sizePolicy1.setHorizontalStretch(0)
-        sizePolicy1.setVerticalStretch(1)
-        sizePolicy1.setHeightForWidth(False)
-        self.table.setSizePolicy(sizePolicy1)
+#        sizePolicy1 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+#        sizePolicy1.setHorizontalStretch(0)
+#        sizePolicy1.setVerticalStretch(1)
+#        sizePolicy1.setHeightForWidth(False)
+#        self.table.setSizePolicy(sizePolicy1)
         self.addWidget(self.table)
+
+        self.setStretchFactor(0, 0)
+        self.setStretchFactor(1, 1)
+        self.setSizes([100, 500])
 
     def modified(self, mod):
         """Indicate data changed. Override this method in a subclass.
