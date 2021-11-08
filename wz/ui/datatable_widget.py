@@ -28,6 +28,8 @@ Copyright 2021 Michael Towers
 
 #TODO: Callback for modification of info items – separate from main table?
 # Undo/redo for info items?
+# Could I share the undo/redo system? At present, the shortcuts only work
+# when the table is focussed.
 
 from qtpy.QtWidgets import QSizePolicy, QSplitter, \
         QScrollArea, QWidget, QGridLayout, QLabel, QLineEdit
@@ -89,7 +91,9 @@ class InfoTable(QScrollArea):
 
 
 class DataTableEditor(QSplitter):
-    def __init__(self):
+    def __init__(self, on_changed = None):
+        # Set up handler for "change of changed" notification
+        self.modified = on_changed if on_changed else self.__modified
         super().__init__()
         self.setOrientation(Qt.Vertical)
         self.setChildrenCollapsible(False)
@@ -97,13 +101,21 @@ class DataTableEditor(QSplitter):
         self.addWidget(self.info)
 
         self.table = EdiTableWidget()
+        self.table.horizontalHeader().setStyleSheet("QHeaderView::section{" \
+            "background-color:#FFFF80;" \
+            "padding: 2px;" \
+            "border: 1px solid #808080;" \
+            "border-bottom: 2px solid #0000C0;" \
+        "}")
         self.addWidget(self.table)
 
         self.setStretchFactor(0, 0)
         self.setStretchFactor(1, 1)
+        self.setHandleWidth(20)
 
-    def modified(self, mod):
-        """Indicate data changed. Override this method in a subclass.
+    def __modified(self, mod):
+        """Dummy method for "change of changed" notification.
+        <mod> is true/false.
         """
         #print(f"** MODIFIED: {mod} **")
         pass

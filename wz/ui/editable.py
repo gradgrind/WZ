@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-07
+Last updated:  2021-11-08
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -175,8 +175,8 @@ class UndoRedo:
     def mark0(self, clear):
         if clear:
             self.changes = []
-            self.table.undo.setEnabled(False)
-            self.table.redo.setEnabled(False)
+            self.table.undoAction.setEnabled(False)
+            self.table.redoAction.setEnabled(False)
             self.index = 0
         self.index0 = self.index
 
@@ -184,10 +184,10 @@ class UndoRedo:
         self.mark0(True)
         self.enabled = en
         self.table.sep_undoredo.setVisible(en)
-        self.table.undo.setVisible(en)
-        self.table.redo.setVisible(en)
-        self.table.undo.setEnabled(False)
-        self.table.redo.setEnabled(False)
+        self.table.undoAction.setVisible(en)
+        self.table.redoAction.setVisible(en)
+        self.table.undoAction.setEnabled(False)
+        self.table.redoAction.setEnabled(False)
 
     def change(self, chtype, change):
         if self.enabled:
@@ -195,7 +195,7 @@ class UndoRedo:
                 #print("CHANGE:", chtype, change)
                 del(self.changes[self.index:])
                 self.changes.append((chtype, change))
-                self.table.undo.setEnabled(True)
+                self.table.undoAction.setEnabled(True)
                 self.index = len(self.changes)
                 self.table.set_modified(True)
         else:
@@ -235,8 +235,8 @@ class UndoRedo:
             self.blocked = False
             self.table.set_modified(self.index != self.index0)
             if self.index == 0:
-                self.table.undo.setEnabled(False)
-            self.table.redo.setEnabled(True)
+                self.table.undoAction.setEnabled(False)
+            self.table.redoAction.setEnabled(True)
 
     def redo(self):
         def do_redo():
@@ -272,8 +272,8 @@ class UndoRedo:
             self.blocked = False
             self.table.set_modified(self.index != self.index0)
             if self.index == len(self.changes):
-                self.table.redo.setEnabled(False)
-            self.table.undo.setEnabled(True)
+                self.table.redoAction.setEnabled(False)
+            self.table.undoAction.setEnabled(True)
 
 
 class EdiTableWidget(QTableWidget):
@@ -376,13 +376,13 @@ class EdiTableWidget(QTableWidget):
 
         # QAction to undo last change
         self.undoredo = UndoRedo(self)
-        self.undo = self.new_action(text = _UNDO,
+        self.undoAction = self.new_action(text = _UNDO,
                 tooltip = _TTUNDO,
                 shortcut = QKeySequence(Qt.CTRL + Qt.Key_Z),
                 function = self.undoredo.undo)
 
         # QAction to redo last undone change
-        self.redo = self.new_action(text = _REDO,
+        self.redoAction = self.new_action(text = _REDO,
                 tooltip = _TTREDO,
                 shortcut = QKeySequence(Qt.CTRL + Qt.Key_Y),
                 function = self.undoredo.redo)

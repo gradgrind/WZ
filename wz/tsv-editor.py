@@ -2,7 +2,7 @@
 """
 ui/tsv-editor.py
 
-Last updated:  2021-11-07
+Last updated:  2021-11-08
 
 Gui editor for Tab-Separated-Value files.
 
@@ -32,12 +32,10 @@ _SAVE_FILE          = "Tabellendatei speichern"
 _SAVE_FILE_AS       = "Tabellendatei speichern unter"
 _EXIT               = "Schließen"
 _TABLEFILE          = "Tabellendatei"
-_INVALID_DATATABLE  = "Ungültige DataTable: {path}\n ... {message}"
 _LOSE_CHANGES       = "Es gibt ungespeicherte Änderungen.\n" \
         "Wirklich schließen?"
 _LOSE_CHANGES_OPEN  = "Es gibt ungespeicherte Änderungen.\n" \
         "Neue Datei trotzdem öffnen?"
-_SAVE_EXISTS        = "Die Datei existiert schon:\n{path}\nÜberschreiben?"
 _SAVING_FORMAT      = "Formatierungen werden möglicherweise verloren gehen:" \
         "\n{path}\nÜberschreiben?"
 _TABLETYPE_NOT_SUPPORTED = "Tabellentyp '{ending}' ist nicht unterstützt"
@@ -124,10 +122,10 @@ class TsvEditor(QWidget):
         toolbar.addAction(self.table.deleteColumnsAction)
 
         toolbar.addSeparator()
-        self.table.undo.setIcon(get_icon('undo'))
-        toolbar.addAction(self.table.undo)
-        self.table.redo.setIcon(get_icon('redo'))
-        toolbar.addAction(self.table.redo)
+        self.table.undoAction.setIcon(get_icon('undo'))
+        toolbar.addAction(self.table.undoAction)
+        self.table.redoAction.setIcon(get_icon('redo'))
+        toolbar.addAction(self.table.redoAction)
 
         # Exit QAction
         toolbar.addSeparator()
@@ -181,9 +179,9 @@ class TsvEditor(QWidget):
     def get_file(self):
         if self.table.is_modified() and not SHOW_CONFIRM(_LOSE_CHANGES_OPEN):
             return
-#        ofile = openDialog("tsv-Datei (*.tsv);;Excel-Datei (*.xlsx)" \
-#                ";;Calc-Datei (*.ods)", _OPEN_FILE)
-        ofile = openDialog(f"{_TABLEFILE} (*.tsv *.xlsx *.ods)", _OPEN_FILE)
+        filetypes = ' '.join(['*.' + fte
+                for fte in Spreadsheet.filetype_endings()])
+        ofile = openDialog(f"{_TABLEFILE} ({filetypes})", _OPEN_FILE)
         if ofile:
             self.open_file(ofile)
 
@@ -199,7 +197,7 @@ class TsvEditor(QWidget):
             sheet = Spreadsheet(filepath)
         except TableError as e:
             SHOW_ERROR(str(e))
-            return None
+            return
         self.set_current_file(sheet.filepath)
         self.table.init_data(sheet.table())
         self.table.resizeColumnsToContents()

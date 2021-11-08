@@ -38,6 +38,14 @@ _SAVE_AS_TSV        = "Als tsv-Datei speichern?\n\n{path}"
 _UNSUPPORTED_SAVE   = "Tabelle speichern – Dateityp '.{ending}'" \
         " wird nicht unterstützt"
 
+_LOSE_CHANGES       = "Es gibt ungespeicherte Änderungen.\n" \
+        "Wirklich schließen?"
+_LOSE_CHANGES_OPEN  = "Es gibt ungespeicherte Änderungen.\n" \
+        "Neue Datei trotzdem öffnen?"
+_SAVING_FORMAT      = "Formatierungen werden möglicherweise verloren gehen:" \
+        "\n{path}\nÜberschreiben?"
+
+
 ########################################################################
 
 import sys, os, builtins, traceback
@@ -49,13 +57,9 @@ if __name__ == '__main__':
         basedir = os.path.dirname(this)
         builtins.PROGRAM_DATA = os.path.join(basedir, 'wz-data')
 
-#TODO: IF I use this feature, this is probably the wrong path ...
-# Without the environment variable there is a disquieting error message.
-#    os.environ['PYSIDE_DESIGNER_PLUGINS'] = PROGRAM_DATA
-
 from ui.ui_base import APP, run, openDialog, saveDialog, get_icon, \
-        QMainWindow, QMenu, QMenuBar, QStatusBar, QAction, \
-        QKeySequence
+        QWidget, QToolBar, QStatusBar, QVBoxLayout, \
+        QAction, QKeySequence, Qt
 
 # This seems to deactivate activate-on-single-click in filedialog
 # (presumably elsewhere as well?)
@@ -69,59 +73,82 @@ from tables.spreadsheet import Spreadsheet, read_DataTable, TableError, \
 
 ### -----
 
-class MainTable(DataTableWidget):
-    def modified(self, mod):
-        """Indicate data changed.
-        """
-        self.parent().modified(mod)
+class DataTableEditor(QWidget):
+    def new_action(self, icon, text, shortcut):
+        action = QAction(self)
+        if shortcut:
+            text += f" – [{shortcut.toString()}]"
+            action.setShortcut(shortcut)
+        action.setText(text)
+        action.setIcon(get_icon(icon))
+        return action
 
-
-class DataTableEditor(QMainWindow):
-    def __init__(self):
+    def __init__(self, ofile = None):
         super().__init__()
-        self.setWindowTitle(PROGRAM_NAME)
         icon = get_icon('datatable')
         self.setWindowIcon(icon)
-        self.action_open = QAction(_OPEN_FILE, self)
-        self.action_open.setShortcut(QKeySequence.Open)
-        self.action_save = QAction(_SAVE_FILE, self)
-        self.action_save.setShortcut(QKeySequence.Save)
-        self.action_save_as = QAction(_SAVE_FILE_AS, self)
-        self.action_save_as.setShortcut(QKeySequence.SaveAs)
-        self.centralwidget = MainTable()
-        self.setCentralWidget(self.centralwidget)
-        menubar = self.menuBar()
-        menu_file = menubar.addMenu(_FILE_MENU)
-#        self.setMenuBar(menubar)
-#        statusbar = self.statusBar()
-#        self.setStatusBar(statusbar)
+        self.action_open = self.new_action('open', _OPEN_FILE,
+                QKeySequence(Qt.CTRL + Qt.Key_O))
+        self.action_save = self.new_action('save', _SAVE_FILE,
+                QKeySequence(Qt.CTRL + Qt.Key_S))
+        self.action_save_as = self.new_action('saveas', _SAVE_FILE_AS,
+                QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_S))
 
-#        menubar.addAction(menu_file.menuAction())
-        menu_file.addAction(self.action_open)
-        menu_file.addAction(self.action_save)
-        menu_file.addAction(self.action_save_as)
+        vbox = QVBoxLayout(self)
+        toolbar = QToolBar()
+        vbox.addWidget(toolbar)
+        self.datatable = DataTableWidget(self.modified)
+        vbox.addWidget(self.datatable)
+
+        toolbar.addAction(self.action_open)
+        toolbar.addAction(self.action_save)
+        toolbar.addAction(self.action_save_as)
 
         # Exit QAction
-        sep = QAction(" ", self)
-        sep.setSeparator(True)
-        menu_file.addAction(sep)
-        exit_action = QAction(_EXIT, self)
-        exit_action.setShortcut(QKeySequence.Quit)
+        toolbar.addSeparator()
+        exit_action = self.new_action('quit', _EXIT,
+                QKeySequence(Qt.CTRL + Qt.Key_Q))
         exit_action.triggered.connect(self.close)
-        menu_file.addAction(exit_action)
+        toolbar.addAction(exit_action)
 
         self.action_open.triggered.connect(self.get_file)
         self.action_save.triggered.connect(self.save_file)
         self.action_save_as.triggered.connect(self.save_as_file)
 
-    def modified(self, mod):
-        self.__modified = mod
-        if mod:
-            self.setWindowTitle(f"{PROGRAM_NAME} – {self.filename} *")
+        self.set_current_file(None)
+        self.modified(False)
+        self.action_save_as.setEnabled(False)
+        if ofile:
+            self.open_file(ofile)
+
+    def closeEvent(self, event):
+        if self.__modified:
+            if SHOW_CONFIRM(_LOSE_CHANGES):
+                event.accept()
+            else:
+                event.ignore()
         else:
-            self.setWindowTitle(f"{PROGRAM_NAME} – {self.filename}")
+            event.accept()
+
+    def modified(self, mod):
+        print("MOD:", mod)
+        self.__modified = mod
+        self.action_save.setEnabled(mod)
+        self.set_title(mod)
+
+    def set_title(self, changed):
+        x = ' *' if changed else ''
+        title = f"{PROGRAM_NAME} – {self.filename}{x}" \
+                if self.filename else PROGRAM_NAME
+        self.setWindowTitle(title)
+
+    def set_current_file(self, path):
+        self.current_file = path
+        self.filename = os.path.basename(path) if path else None
 
     def get_file(self):
+        if self.__modified and not SHOW_CONFIRM(_LOSE_CHANGES_OPEN):
+            return
         filetypes = ' '.join(['*.' + fte
                 for fte in Spreadsheet.filetype_endings()])
         ofile = openDialog(f"{_OPEN_TABLETYPE} ({filetypes})", _OPEN_FILE)
@@ -141,9 +168,10 @@ class DataTableEditor(QMainWindow):
             SHOW_ERROR(f"BUG while reading {str(filepath)}:\n"
                     f" ... {traceback.format_exc()}")
             return
-        self.currrent_file = filepath
-        self.filename = os.path.basename(filepath)
-        self.centralwidget.open_table(datatable)
+        self.set_current_file(filepath)
+        self.datatable.open_table(datatable)
+        self.action_save_as.setEnabled(True)
+        self.saved = False
         self.modified(False)
 
     def save_as_file(self):
@@ -185,32 +213,7 @@ class DataTableEditor(QMainWindow):
         self.centralwidget.reset_modified()
 
 
-"""
-####???? Just as an example ...
-class MainWindow(QMainWindow):
-    def __init__(self):
-        QMainWindow.__init__(self)
-        self.setWindowTitle("Eartquakes information")
-
-        # Menu
-        menu = self.menuBar()
-        file_menu = menu.addMenu("File")
-
-        # Exit QAction
-        exit_action = QAction("Exit", self)
-        exit_action.setShortcut(QKeySequence.Quit)
-        exit_action.triggered.connect(self.close)
-
-        file_menu.addAction(exit_action)
-
-        # Status Bar
-        status = self.statusBar()
-        status.showMessage("Data loaded and plotted")
-
-        # Window dimensions
-        geometry = self.screen().availableGeometry()
-        self.setFixedSize(geometry.width() * 0.8, geometry.height() * 0.7)
-"""
+#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
     edit = DataTableEditor()
