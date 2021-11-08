@@ -2,7 +2,7 @@
 """
 ui/datatable_widget.py
 
-Last updated:  2021-11-07
+Last updated:  2021-11-08
 
 Gui editor widget for "DataTables".
 See datatable-editor.py for an app which can be used for testing this
@@ -62,27 +62,27 @@ class TextLine(QLineEdit):
 class InfoTable(QScrollArea):
     def __init__(self):
         super().__init__()
-        sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(False)
-        self.setSizePolicy(sizePolicy)
         self.setWidgetResizable(True)
 
     def init(self, info, dataTableEditor):
         contents = QWidget()
+        contents.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         gridLayout = QGridLayout(contents)
         self.info = []
         r = 0
         for key, val in info.items():
             if key[0] != '_':
                 gridLayout.addWidget(QLabel(key), r, 0, 1, 1)
-                lineEdit = TextLine(0, dataTableEditor)
+                lineEdit = TextLine(r, dataTableEditor)
                 lineEdit.set(val)
                 gridLayout.addWidget(lineEdit, r, 1, 1, 1)
                 self.info.append([key, lineEdit])
                 r += 1
         self.setWidget(contents)
+        # Extra height may be needed to avoid a scrollbar:
+        h = contents.size().height() + 2
+        self.setMaximumHeight(h)
+        return h
 
     def get_info(self):
         return [(key, w.text()) for key, w in self.info]
@@ -92,25 +92,15 @@ class DataTableEditor(QSplitter):
     def __init__(self):
         super().__init__()
         self.setOrientation(Qt.Vertical)
+        self.setChildrenCollapsible(False)
         self.info = InfoTable()
-#        sizePolicy0 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-#        sizePolicy0.setHorizontalStretch(0)
-#        sizePolicy0.setVerticalStretch(0)
-#        sizePolicy0.setHeightForWidth(False)
-#        self.info.setSizePolicy(sizePolicy0)
         self.addWidget(self.info)
 
         self.table = EdiTableWidget()
-#        sizePolicy1 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-#        sizePolicy1.setHorizontalStretch(0)
-#        sizePolicy1.setVerticalStretch(1)
-#        sizePolicy1.setHeightForWidth(False)
-#        self.table.setSizePolicy(sizePolicy1)
         self.addWidget(self.table)
 
         self.setStretchFactor(0, 0)
         self.setStretchFactor(1, 1)
-        self.setSizes([100, 500])
 
     def modified(self, mod):
         """Indicate data changed. Override this method in a subclass.
@@ -134,7 +124,9 @@ class DataTableEditor(QSplitter):
         self.__columns = datatable['__FIELDS__']
         self.__rows = datatable['__ROWS__']
 
-        self.info.init(self.__info, self)
+        h = self.info.init(self.__info, self)
+        self.setSizes([h, 0])
+
         data = []
         for row in self.__rows:
             rowdata = []

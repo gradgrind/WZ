@@ -2,7 +2,7 @@
 """
 datatable-editor.py
 
-Last updated:  2021-11-07
+Last updated:  2021-11-08
 
 Gui editor for "DataTables".
 
@@ -56,6 +56,10 @@ if __name__ == '__main__':
 from ui.ui_base import APP, run, openDialog, saveDialog, get_icon, \
         QMainWindow, QMenu, QMenuBar, QStatusBar, QAction, \
         QKeySequence
+
+# This seems to deactivate activate-on-single-click in filedialog
+# (presumably elsewhere as well?)
+APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
 from core.base import Dates
 from ui.datatable_widget import DataTableEditor as DataTableWidget
