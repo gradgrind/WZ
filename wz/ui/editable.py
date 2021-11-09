@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-08
+Last updated:  2021-11-09
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -292,7 +292,7 @@ class EdiTableWidget(QTableWidget):
         #action.setIcon(
         if shortcut:
             action.setShortcut(shortcut)
-            action.setShortcutContext(Qt.WidgetShortcut)
+#            action.setShortcutContext(Qt.WidgetShortcut)
         if function: action.triggered.connect(function)
         self.addAction(action)
         return action

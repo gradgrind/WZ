@@ -2,7 +2,7 @@
 """
 ui/datatable_widget.py
 
-Last updated:  2021-11-08
+Last updated:  2021-11-09
 
 Gui editor widget for "DataTables".
 See datatable-editor.py for an app which can be used for testing this
@@ -33,12 +33,31 @@ Copyright 2021 Michael Towers
 
 from qtpy.QtWidgets import QSizePolicy, QSplitter, \
         QScrollArea, QWidget, QGridLayout, QLabel, QLineEdit
-from qtpy.QtCore import Qt, QSize
+from qtpy.QtCore import Qt, QSize, QEvent, QObject
 
 from ui.editable import EdiTableWidget
 from tables.spreadsheet import Spreadsheet, read_DataTable
 
 ### -----
+
+class ShortcutEater(QObject):
+    def eventFilter(self, obj, event):
+
+        if (event.type() == QEvent.KeyPress):
+            if event.modifiers() & Qt.ControlModifier:
+#                print("Key press Ctrl-%d" % event.key())
+                return True
+
+        elif (event.type() == QEvent.ShortcutOverride):
+            if event.modifiers() & Qt.ControlModifier:
+#                print("Override %d" % event.key())
+                event.ignore()
+                return True
+
+        # standard event processing
+        return QObject.eventFilter(self, obj, event)
+shortcutEater = ShortcutEater()
+
 
 class TextLine(QLineEdit):
     def __init__(self, index, dataTableEditor):
@@ -49,6 +68,7 @@ class TextLine(QLineEdit):
         self.__text = ''
 #        self.textEdited.connect(self.newtext)
         self.editingFinished.connect(self.newtext)
+        self.installEventFilter(shortcutEater)
 
     def set(self, text):
         self.setText(text)
@@ -59,6 +79,13 @@ class TextLine(QLineEdit):
         if text != self.__text:
             self.__text = text
             self.dataTableEditor.modified(True)
+
+#    def eventFilter(self, item, event):
+#        if event.type() == QEvent.ShortcutOverride:
+#            print("HI", event.key(), event.modifiers())
+#            event.ignore()
+#            return False
+#        return super().eventFilter(item, event)
 
 
 class InfoTable(QScrollArea):
