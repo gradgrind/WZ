@@ -1,4 +1,4 @@
-#*** MINION 1.0 ***#
+#*** MINION 2.0 ***#
 # ************** Zeugnis-Gruppen **************
 # Eine Sammlung der Daten für die Zeugnisgruppen.
 # Nur für die hier eingetragenen Gruppen können Notenzeugnisse erstellt
@@ -48,7 +48,7 @@ __DEFAULT__: {
     # (extra "grade" fields in internal table):
     # Zusätzliche "Notenfelder" in interner Notentabelle
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
+        [*ZA  "Zeugnis (Art)"]
         [*B   Bemerkungen]
     ]
 
@@ -84,7 +84,7 @@ __DEFAULT__: {
     ]
     # (The report type is determined by calculations):
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
+        [*ZA  "Zeugnis (Art)"]
         [*F_D Fertigstellung]
         [*B   Bemerkungen]
     ]
@@ -97,18 +97,18 @@ __DEFAULT__: {
     *ZA/2: [- Abgang]
     *ZA/S: [- Abgang]
     *F_D/A: DATE
-    *F_D: &
-    *B/A: &
+    *F_D: ""
+    *B/A: ""
 
     Calc: [
         [.Q  Ergebnis]
-        [.D  <<<Φ Alle Fächer>>>]
+        [.D  "Φ Alle Fächer"]
     ]
 #?
     .Q/A: [Abi FHS NA -]
     .Q: []
     .D/T: AVERAGE
-    .D: &
+    .D: ""
     NotenWerte: &ABITUR_GRADES
 }
 
@@ -122,7 +122,7 @@ __DEFAULT__: {
     Nullgruppen: [X]
     Maßstäbe: [Gym]
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
+        [*ZA  "Zeugnis (Art)"]
         [*Q   Qualifikation]
         [*B   Bemerkungen]
     ]
@@ -137,7 +137,7 @@ __DEFAULT__: {
 12.R: {
     Maßstäbe: [RS HS]
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
+        [*ZA  "Zeugnis (Art)"]
         [*Q   Qualifikation]
         [*B   Bemerkungen]
     ]
@@ -147,15 +147,15 @@ __DEFAULT__: {
     *ZA/S: [- Abgang]
     *Q: [Erw RS HS -]
     Calc: [
-        [.D  <<<Φ Alle Fächer>>>]
-        [.Dx <<<Φ De-En-Ma>>>]
+        [.D  "Φ Alle Fächer"]
+        [.Dx "Φ De-En-Ma"]
     ]
 }
 
 11.G: {
     Maßstäbe: [Gym]
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
+        [*ZA  "Zeugnis (Art)"]
         [*Q   Qualifikation]
         [*B   Bemerkungen]
     ]
@@ -163,14 +163,14 @@ __DEFAULT__: {
     *ZA/2: [Zeugnis Abgang]
     *Q: [12 HS -]
     Calc: [
-        [.D  <<<Φ Alle Fächer>>>]
+        [.D  "Φ Alle Fächer"]
     ]
 }
 
 11.R: {
     Maßstäbe: [RS HS]
     Notenfelder_X: [
-        [*ZA  <<<Zeugnis (Art)>>>]
+        [*ZA  "Zeugnis (Art)"]
         [*Q   Qualifikation]
         [*B   Bemerkungen]
     ]
@@ -180,8 +180,8 @@ __DEFAULT__: {
     *ZA/S: [- Abgang]
     *Q: [RS HS -]
     Calc: [
-        [.D  <<<Φ Alle Fächer>>>]
-        [.Dx <<<Φ De-En-Ma>>>]
+        [.D  "Φ Alle Fächer"]
+        [.Dx "Φ De-En-Ma"]
     ]
 }
 

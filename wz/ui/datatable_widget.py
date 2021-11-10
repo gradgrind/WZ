@@ -2,7 +2,7 @@
 """
 ui/datatable_widget.py
 
-Last updated:  2021-11-09
+Last updated:  2021-11-10
 
 Gui editor widget for "DataTables".
 See datatable-editor.py for an app which can be used for testing this
@@ -31,44 +31,52 @@ Copyright 2021 Michael Towers
 # Could I share the undo/redo system? At present, the shortcuts only work
 # when the table is focussed.
 
-from qtpy.QtWidgets import QSizePolicy, QSplitter, \
-        QScrollArea, QWidget, QGridLayout, QLabel, QLineEdit
-from qtpy.QtCore import Qt, QSize, QEvent, QObject
+### Messages
+
+OPEN_FILE          = "Tabellendatei öffnen"
+SAVE_FILE          = "Tabellendatei speichern"
+SAVE_FILE_AS       = "Tabellendatei speichern unter"
+EXIT               = "Schließen"
+
+########################################################################
+
+from ui.ui_base import get_icon, QSizePolicy, QSplitter, \
+        QScrollArea, QWidget, QToolBar, QVBoxLayout, QGridLayout, \
+        QLineEdit, QLabel, QAction, QKeySequence, \
+        Qt, Qt, QSize, QEvent, QObject
 
 from ui.editable import EdiTableWidget
 from tables.spreadsheet import Spreadsheet, read_DataTable
 
 ### -----
 
+"""
 class ShortcutEater(QObject):
     def eventFilter(self, obj, event):
-
         if (event.type() == QEvent.KeyPress):
             if event.modifiers() & Qt.ControlModifier:
-#                print("Key press Ctrl-%d" % event.key())
+                #print("Key press Ctrl-%d" % event.key())
                 return True
-
         elif (event.type() == QEvent.ShortcutOverride):
             if event.modifiers() & Qt.ControlModifier:
-#                print("Override %d" % event.key())
+                #print("Override %d" % event.key())
                 event.ignore()
                 return True
-
         # standard event processing
         return QObject.eventFilter(self, obj, event)
 shortcutEater = ShortcutEater()
-
+"""
 
 class TextLine(QLineEdit):
     def __init__(self, index, dataTableEditor):
         self.index = index
         self.dataTableEditor = dataTableEditor
         super().__init__()
-        self.setContextMenuPolicy(Qt.NoContextMenu)
+#        self.setContextMenuPolicy(Qt.NoContextMenu)
         self.__text = ''
 #        self.textEdited.connect(self.newtext)
         self.editingFinished.connect(self.newtext)
-        self.installEventFilter(shortcutEater)
+#        self.installEventFilter(shortcutEater)
 
     def set(self, text):
         self.setText(text)
@@ -80,13 +88,59 @@ class TextLine(QLineEdit):
             self.__text = text
             self.dataTableEditor.modified(True)
 
-#    def eventFilter(self, item, event):
-#        if event.type() == QEvent.ShortcutOverride:
-#            print("HI", event.key(), event.modifiers())
-#            event.ignore()
-#            return False
-#        return super().eventFilter(item, event)
+    def focusInEvent(self, event):
+        self.dataTableEditor.focussed = self.index
+        print("FOCUSSED", self.index)
+        super().focusInEvent(event)
 
+    def focusOutEvent(self, event):
+        self.dataTableEditor.focussed = -1
+        print("FOCUSSED", -1)
+        super().focusOutEvent(event)
+
+"""
+Toolbar:
+    copy
+    cut
+    paste
+
+    only table:
+        insert row
+        delete row
+
+    undo
+    redo
+
+
+    The basic editor application adds:
+        open
+        save
+        save as
+        exit
+
+Need to handle NAME vs. DISPLAY_NAME (translation) somewhere.
+
+Perhaps a new format for the specification tables, using mappings
+of field descriptors instead of lists?
+
+TABLE_FIELDS: [
+    {NAME: field-name 1, DISPLAY_NAME: tr1, REQUIRED: true}
+    {NAME: field-name 2, DISPLAY_NAME: tr2}
+
+]
+
+self.select_all
+self.unselect
+self.copyCellsAction
+self.pasteCellsAction
+self.cutCellsAction
+self.insertRowAction
+self.deleteRowsAction
+self.insertColumnAction
+self.deleteColumnsAction
+self.undoAction
+self.redoAction
+"""
 
 class InfoTable(QScrollArea):
     def __init__(self):
@@ -116,16 +170,63 @@ class InfoTable(QScrollArea):
     def get_info(self):
         return [(key, w.text()) for key, w in self.info]
 
+#    def focusInEvent(self, event):
+#    def focusOutEvent(self, event):
+# Can be used to set current info line?
 
-class DataTableEditor(QSplitter):
-    def __init__(self, on_changed = None):
-        # Set up handler for "change of changed" notification
-        self.modified = on_changed if on_changed else self.__modified
+# I would actually need to trigger info shortcuts ... perhaps:
+#    eventPress = QKeyEvent(QEvent.KeyPress, Qt.Key_C, Qt.ControlModifier)
+#    eventRealease = QKeyEvent(QEvent.KeyRelease, Qt.Key_C, Qt.ControlModifier)
+#    QApplication.postEvent(targetWidget, eventPress)
+#    QApplication.postEvent(targetWidget, eventRealease)
+
+#class DataTableEditor(QSplitter):
+class DataTableEditor(QWidget):
+    def new_action(self, icon, text, shortcut):
+        action = QAction(self)
+        if shortcut:
+            text += f" – [{shortcut.toString()}]"
+            action.setShortcut(shortcut)
+        action.setText(text)
+        action.setIcon(get_icon(icon))
+        return action
+
+    def __init__(self, on_exit = None,
+            on_open = None, on_save = None, on_save_as = None):
         super().__init__()
-        self.setOrientation(Qt.Vertical)
-        self.setChildrenCollapsible(False)
+        vbox = QVBoxLayout(self)
+        self.toolbar = QToolBar()
+        vbox.addWidget(self.toolbar)
+        # File QActions
+        if on_open:
+            self.action_open = self.new_action('open', OPEN_FILE,
+                    QKeySequence(Qt.CTRL + Qt.Key_O))
+            self.action_open.triggered.connect(on_open)
+            self.toolbar.addAction(self.action_open)
+        if on_save:
+            self.action_save = self.new_action('save', SAVE_FILE,
+                QKeySequence(Qt.CTRL + Qt.Key_S))
+            self.action_save.triggered.connect(on_save)
+            self.toolbar.addAction(self.action_save)
+        if on_save_as:
+            self.action_save_as = self.new_action('saveas', SAVE_FILE_AS,
+                QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_S))
+            self.action_save_as.triggered.connect(on_save_as)
+            self.toolbar.addAction(self.action_save_as)
+        # Exit QAction
+        if on_exit:
+            self.toolbar.addSeparator()
+            self.exit_action = self.new_action('quit', EXIT,
+                    QKeySequence(Qt.CTRL + Qt.Key_Q))
+            self.exit_action.triggered.connect(on_exit)
+            self.toolbar.addAction(self.exit_action)
+
+        self.splitter = QSplitter()
+        vbox.addWidget(self.splitter)
+        self.splitter.setOrientation(Qt.Vertical)
+        self.splitter.setChildrenCollapsible(False)
         self.info = InfoTable()
-        self.addWidget(self.info)
+        self.splitter.addWidget(self.info)
 
         self.table = EdiTableWidget()
         self.table.horizontalHeader().setStyleSheet("QHeaderView::section{" \
@@ -134,18 +235,18 @@ class DataTableEditor(QSplitter):
             "border: 1px solid #808080;" \
             "border-bottom: 2px solid #0000C0;" \
         "}")
-        self.addWidget(self.table)
+        self.splitter.addWidget(self.table)
 
-        self.setStretchFactor(0, 0)
-        self.setStretchFactor(1, 1)
-        self.setHandleWidth(20)
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setHandleWidth(20)
 
-    def __modified(self, mod):
+    def modified(self, mod):
         """Dummy method for "change of changed" notification.
         <mod> is true/false.
+        OVERRIDE this to customize behaviour.
         """
-        #print(f"** MODIFIED: {mod} **")
-        pass
+        print(f"** MODIFIED: {mod} **")
 
 #TODO?
     def reset_modified(self):
@@ -164,7 +265,8 @@ class DataTableEditor(QSplitter):
         self.__rows = datatable['__ROWS__']
 
         h = self.info.init(self.__info, self)
-        self.setSizes([h, 0])
+        self.splitter.setSizes([h, 0])
+        self.focussed = -1      # index of currently "focussed" info entry
 
         data = []
         for row in self.__rows:

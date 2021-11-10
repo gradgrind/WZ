@@ -304,9 +304,18 @@ class EdiTableWidget(QTableWidget):
         self.addAction(sep)
         return sep
 
-    def __init__(self, parent = None):
+    def __on_selection_state_change(self, sel):
+#TODO --
+        print("SELECTION " + ("ON" if sel else "EMPTY"))
+        pass
+
+    def __init__(self, parent = None, on_selection_state_change = None):
         super().__init__(parent = parent)
         self.setSelectionMode(self.ContiguousSelection)
+        self.has_selection = False
+        self.on_selection_state_change = on_selection_state_change \
+                if on_selection_state_change \
+                else self.__on_selection_state_change
         self.__modified = False
 
         ### Actions
@@ -384,7 +393,7 @@ class EdiTableWidget(QTableWidget):
         # QAction to redo last undone change
         self.redoAction = self.new_action(text = _REDO,
                 tooltip = _TTREDO,
-                shortcut = QKeySequence(Qt.CTRL + Qt.Key_Y),
+                shortcut = QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_Z),
                 function = self.undoredo.redo)
 
     def setup(self, colheaders = None, rowheaders = None,
@@ -448,8 +457,6 @@ class EdiTableWidget(QTableWidget):
 #        self.cellActivated.connect(self.newline_press)
         self.cellDoubleClicked.connect(self.newline_press)
 
-        self.setFocus()
-
     def init0(self, rows, columns):
         """Set the initial number of rows and columns and check that
         this is not in conflict with headers, if these have been set.
@@ -471,6 +478,7 @@ class EdiTableWidget(QTableWidget):
             self.deleteRowsAction.setEnabled(True)
             self.insertColumnAction.setEnabled(True)
             self.deleteColumnsAction.setEnabled(True)
+        self.setFocus()
 
     def init_data(self, data):
         """Set the initial table data from a (complete) list of lists
@@ -575,6 +583,7 @@ class EdiTableWidget(QTableWidget):
             rows.append(rowdata)
         return rows
 
+#TODO: Only insert/remove columns/rows when there is a proper selection?!
     def insert_row(self):
         """Insert an empty row below the current one.
         If multiple rows are selected, the same number of rows will be
@@ -1006,11 +1015,44 @@ class EdiTableWidget(QTableWidget):
     def is_modified(self):
         return self.__modified
 
-#    def selectionChanged(self, selected, deselected):
-#        """Override the slot. The parameters are <QItemSelection> items.
-#        """
-#        super().selectionChanged(selected, deselected)
-#        #print("SELECTION " + ("ON" if self.selectedRanges() else "EMPTY"))
+    def selectionChanged(self, selected, deselected):
+        """Override the slot. The parameters are <QItemSelection> items.
+        """
+        super().selectionChanged(selected, deselected)
+        sel = bool(self.selectedRanges())
+        if sel != self.has_selection:
+            self.has_selection = sel
+            self.on_selection_state_change(sel)
+#TODO: Enable/disable row/column actions? (also delete?)
+            if sel:
+                # Enable actions
+                pass
+            else:
+                # Disable actions
+                pass
+        """
+        self.select_all
+        self.unselect
+        self.copyCellsAction
+        self.pasteCellsAction
+        self.cutCellsAction
+        self.insertRowAction
+        self.deleteRowsAction
+        self.insertColumnAction
+        self.deleteColumnsAction
+        self.undoAction
+        self.redoAction
+        """
+
+    def focusInEvent(self, event):
+        self.focussed = True
+        print("FOCUSSED TABLE")
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event):
+        self.focussed = False
+        print("UNFOCUSSED TABLE")
+        super().focusOutEvent(event)
 
 
 class VerticalTextDelegate(QStyledItemDelegate):

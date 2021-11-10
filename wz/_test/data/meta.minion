@@ -1,4 +1,4 @@
-#*** MINION 1.0 ***#
+#*** MINION 2.0 ***#
 # ************** user-meta für SekI-Zeugnis-Vorlage **************
 
 COMMENT: [FROM *B_T]
@@ -10,10 +10,10 @@ G.*: [MAPSELECT {
     4: ausreichend
     5: mangelhaft
     6: ungenügend
-    nt: <<<nicht teilgenommen>>>
+    nt: "nicht teilgenommen"
     t: teilgenommen
     *: ––––––
-    nb: <<<kann nicht beurteilt werden>>>
+    nb: "kann nicht beurteilt werden"
     }]
 
 LEVEL: [MAP STREAM {

@@ -2,7 +2,7 @@
 """
 datatable-editor.py
 
-Last updated:  2021-11-08
+Last updated:  2021-11-10
 
 Gui editor for "DataTables".
 
@@ -26,11 +26,6 @@ Copyright 2021 Michael Towers
 
 ### Messages
 PROGRAM_NAME        = "DataTable Editor"
-_FILE_MENU          = "Datei"
-_OPEN_FILE          = "Tabellendatei öffnen"
-_SAVE_FILE          = "Tabellendatei speichern"
-_SAVE_FILE_AS       = "Tabellendatei speichern unter"
-_EXIT               = "Schließen"
 _OPEN_TABLETYPE     = "Tabellendatei"
 _INVALID_DATATABLE  = "Ungültige DataTable: {path}\n ... {message}"
 
@@ -57,64 +52,27 @@ if __name__ == '__main__':
         basedir = os.path.dirname(this)
         builtins.PROGRAM_DATA = os.path.join(basedir, 'wz-data')
 
-from ui.ui_base import APP, run, openDialog, saveDialog, get_icon, \
-        QWidget, QToolBar, QStatusBar, QVBoxLayout, \
-        QAction, QKeySequence, Qt
+from ui.ui_base import APP, run, openDialog, saveDialog, get_icon
 
 # This seems to deactivate activate-on-single-click in filedialog
 # (presumably elsewhere as well?)
 APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
 from core.base import Dates
-from ui.datatable_widget import DataTableEditor as DataTableWidget
-from ui.ui_base import openDialog, saveDialog, get_icon
+from ui.datatable_widget import DataTableEditor, OPEN_FILE, SAVE_FILE
 from tables.spreadsheet import Spreadsheet, read_DataTable, TableError, \
         make_DataTable, make_DataTable_filetypes, read_DataTable_filetypes
 
 ### -----
 
-class DataTableEditor(QWidget):
-    def new_action(self, icon, text, shortcut):
-        action = QAction(self)
-        if shortcut:
-            text += f" – [{shortcut.toString()}]"
-            action.setShortcut(shortcut)
-        action.setText(text)
-        action.setIcon(get_icon(icon))
-        return action
-
+class _DataTableEditor(DataTableEditor):
     def __init__(self, ofile = None):
-        super().__init__()
+        super().__init__(on_exit = self.close,
+            on_open = self.get_file,
+            on_save = self.save_file,
+            on_save_as = self.save_as_file
+        )
         icon = get_icon('datatable')
-        self.setWindowIcon(icon)
-        self.action_open = self.new_action('open', _OPEN_FILE,
-                QKeySequence(Qt.CTRL + Qt.Key_O))
-        self.action_save = self.new_action('save', _SAVE_FILE,
-                QKeySequence(Qt.CTRL + Qt.Key_S))
-        self.action_save_as = self.new_action('saveas', _SAVE_FILE_AS,
-                QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_S))
-
-        vbox = QVBoxLayout(self)
-        toolbar = QToolBar()
-        vbox.addWidget(toolbar)
-        self.datatable = DataTableWidget(self.modified)
-        vbox.addWidget(self.datatable)
-
-        toolbar.addAction(self.action_open)
-        toolbar.addAction(self.action_save)
-        toolbar.addAction(self.action_save_as)
-
-        # Exit QAction
-        toolbar.addSeparator()
-        exit_action = self.new_action('quit', _EXIT,
-                QKeySequence(Qt.CTRL + Qt.Key_Q))
-        exit_action.triggered.connect(self.close)
-        toolbar.addAction(exit_action)
-
-        self.action_open.triggered.connect(self.get_file)
-        self.action_save.triggered.connect(self.save_file)
-        self.action_save_as.triggered.connect(self.save_as_file)
-
         self.set_current_file(None)
         self.modified(False)
         self.action_save_as.setEnabled(False)
@@ -151,7 +109,7 @@ class DataTableEditor(QWidget):
             return
         filetypes = ' '.join(['*.' + fte
                 for fte in Spreadsheet.filetype_endings()])
-        ofile = openDialog(f"{_OPEN_TABLETYPE} ({filetypes})", _OPEN_FILE)
+        ofile = openDialog(f"{_OPEN_TABLETYPE} ({filetypes})", OPEN_FILE)
         if ofile:
             self.open_file(ofile)
 
@@ -169,7 +127,7 @@ class DataTableEditor(QWidget):
                     f" ... {traceback.format_exc()}")
             return
         self.set_current_file(filepath)
-        self.datatable.open_table(datatable)
+        self.open_table(datatable)
         self.action_save_as.setEnabled(True)
         self.saved = False
         self.modified(False)
@@ -178,45 +136,45 @@ class DataTableEditor(QWidget):
         endings = make_DataTable_filetypes()
         ftypes = ' '.join(['*.' + e for e in endings])
         filepath = saveDialog(f"{_OPEN_TABLETYPE} ({ftypes})",
-                self.currrent_file, _SAVE_FILE)
+                self.current_file, SAVE_FILE)
         if filepath:
             fpath, ending = filepath.rsplit('.', 1)
             if ending in endings:
-                data = self.centralwidget.get_data()
+                data = self.get_data()
                 fbytes = make_DataTable(data, ending,
                         __MODIFIED__ = Dates.timestamp())
                 with open(filepath, 'wb') as fh:
                     fh.write(fbytes)
-                self.currrent_file = filepath
-                self.centralwidget.reset_modified()
+                self.current_file = filepath
+                self.reset_modified()
             else:
                 SHOW_ERROR(_UNSUPPORTED_SAVE.format(ending = ending))
 
     def save_file(self):
-        fpath, ending = self.currrent_file.rsplit('.', 1)
+        fpath, ending = self.current_file.rsplit('.', 1)
         if ending == 'tsv':
-            filepath = self.currrent_file
+            filepath = self.current_file
         else:
             if ending in read_DataTable_filetypes():
                 filepath = fpath + '.tsv'
             else:
-                filepath = self.currrent_file + '.tsv'
+                filepath = self.current_file + '.tsv'
             if not SHOW_CONFIRM(_SAVE_AS_TSV.format(path = filepath)):
                 self.save_as_file()
                 return
-        data = self.centralwidget.get_data()
+        data = self.get_data()
         tsvbytes = make_DataTable(data, 'tsv',
                 __MODIFIED__ = Dates.timestamp())
         with open(filepath, 'wb') as fh:
             fh.write(tsvbytes)
-        self.currrent_file = filepath
-        self.centralwidget.reset_modified()
+        self.current_file = filepath
+        self.reset_modified()
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    edit = DataTableEditor()
+    edit = _DataTableEditor()
     #print("???", sys.argv)
     if len(sys.argv) == 2:
         edit.open_file(sys.argv[1])
