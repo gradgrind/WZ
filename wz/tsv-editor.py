@@ -2,7 +2,7 @@
 """
 ui/tsv-editor.py
 
-Last updated:  2021-11-08
+Last updated:  2021-11-12
 
 Gui editor for Tab-Separated-Value files.
 

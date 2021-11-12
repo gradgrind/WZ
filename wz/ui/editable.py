@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-09
+Last updated:  2021-11-12
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -69,12 +69,14 @@ _TTPASTE = "Daten einfügen. Die ausgewählte Zelle ist oben links" \
 _INSERTROW = "Zeile(n) einfügen"
 #_TTINSERTROW = "Insert Row(s)"
 _TTINSERTROW = "Zeile(n) einfügen nach der aktuellen Zeile"
+#_ROWOPFAIL = "No rows selected"
+_ROWOPFAIL = "Keine Zeilen sind ausgewählt"
 #_DELETEROWS = "Delete Row(s)"
 _DELETEROWS = "Zeile(n) löschen"
 #_TTDELETEROWS = "Delete selected Row(s)"
 _TTDELETEROWS = "ausgewählte Zeilen löschen"
-#_DELETEROWSFAIL = "Deletion of the last row(s) is not permitted"
-_DELETEROWSFAIL = "Das Löschen der letzten Zeile(n) ist nicht zulässig"
+#_DELETEROWSFAIL = "Deleting all rows is not permitted"
+_DELETEROWSFAIL = "Das Löschen aller Zeilen ist nicht zulässig"
 #_INSERTCOLUMN = "Insert Column(s)"
 _INSERTCOLUMN = "Spalte(n) einfügen"
 #_TTINSERTCOLUMN = "Insert Column(s)"
@@ -83,8 +85,10 @@ _TTINSERTCOLUMN = "Spalte(n) einfügen nach der aktuellen Spalte"
 _DELETECOLUMNS = "Spalte(n) löschen"
 #_TTDELETECOLUMNS = "Delete selected Column(s)"
 _TTDELETECOLUMNS = "Ausgewählte Spalte(n) löschen"
-#_DELETECOLUMNSFAIL = "Deletion of the last column(s) is not permitted"
-_DELETECOLUMNSFAIL = "Das Löschen der letzten Spalte(n) ist nicht zulässig"
+#_DELETECOLUMNSFAIL = "Deleting all columns is not permitted"
+_DELETECOLUMNSFAIL = "Das Löschen aller Spalten ist nicht zulässig"
+#_COLUMNOPFAIL = "No columns selected"
+_COLUMNOPFAIL = "Keine Spalten sind ausgewählt"
 #_UNDO = "Undo"
 _UNDO = "Rückgängig"
 #_TTUNDO = "Undo the last change"
@@ -93,16 +97,18 @@ _TTUNDO = "Die letzte Änderung rückgängig machen"
 _REDO = "Wiederherstellen"
 #_TTREDO = "Redo the last undone change"
 _TTREDO = "Die letzte rückgängig gemachte Änderung wiederherstellen"
-#_VALIDATION_ERROR = "Invalid value: {msg}"
-_VALIDATION_ERROR = "Ungültiger Wert: {msg}"
+#_VALIDATION_ERROR = "Validation Error"
+_VALIDATION_ERROR = "Ungültiger Wert"
+#_WARNING = "Warning"
+_WARNING = "Warnung"
 
 ########################################################################
 
 from enum import Enum, auto
 
 from qtpy.QtWidgets import QApplication, QWidget, \
-        QTableView, QTableWidget, QMessageBox, \
-        QStyledItemDelegate, QStyleOptionViewItem
+        QTableView, QTableWidget, QTableWidgetItem, QMessageBox, \
+        QStyledItemDelegate, QStyleOptionViewItem, QLineEdit
 from qtpy.QtCore import Qt, QPointF, QRectF, QSize, QEvent
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QAction, QShortcut  # in Qt6 these are in QtGui
@@ -277,6 +283,10 @@ class UndoRedo:
 
 
 class EdiTableWidget(QTableWidget):
+    """This adds features to the standard table widget and makes a
+    number of assumptions about the usage – specifically to provide a
+    useful base for a table editor dealing with string data only.
+    """
     def new_action(self, text = None, icontext = None,
             tooltip = None, shortcut = None,
             function = None):
@@ -311,6 +321,7 @@ class EdiTableWidget(QTableWidget):
 
     def __init__(self, parent = None, on_selection_state_change = None):
         super().__init__(parent = parent)
+        self.setItemPrototype(ValidatingWidgetItem())
         self.setSelectionMode(self.ContiguousSelection)
         self.has_selection = False
         self.on_selection_state_change = on_selection_state_change \
@@ -452,7 +463,7 @@ class EdiTableWidget(QTableWidget):
         self.setContextMenuPolicy(Qt.ActionsContextMenu)
 
         self.set_change_report()
-        self.cellChanged.connect(self.cell_changed)
+#        self.cellChanged.connect(self.cell_changed)
         self.cellClicked.connect(self.cell_clicked)
 #        self.cellActivated.connect(self.newline_press)
         self.cellDoubleClicked.connect(self.newline_press)
@@ -493,16 +504,13 @@ class EdiTableWidget(QTableWidget):
         # Disable change reporting
         self.set_change_report(dummy)
         # Enter data
-        self.table_data = []
         data_model = self.model()
         for r in range(rows):
-            self.table_data.append([''] * columns)
             for c in range(columns):
                 val = data[r][c]
                 #print("SET", r, c, repr(val))
                 if isinstance(val, str):
-                    if val:
-                        data_model.setData(data_model.index(r, c), val)
+                    data_model.setData(data_model.index(r, c), val)
                 else:
                     raise Bug("Only string data is accepted")
         # Enable change reporting
@@ -511,25 +519,13 @@ class EdiTableWidget(QTableWidget):
     def init_sparse_data(self, rows, columns, data_list):
         """Set the initial table data from a list of cell values.
         data_list is a list of tuples: [(row, column, value), ... ].
-        All other cells are left empty.
+        All other cells are null strings.
         """
-        def dummy(*args):   # Don't report data changes
-            pass
-        #+
-        self.init0(rows, columns)
-        # Disable change reporting
-        self.set_change_report(dummy)
+        data = [[''] * columns for r in range(rows)]
         # Enter data
-        self.table_data = [[''] * columns for r in range(rows)]
-        data_model = self.model()
         for r, c, val in data_list:
-            if isinstance(val, str):
-                if val:
-                    data_model.setData(data_model.index(r, c), val)
-            else:
-                raise Bug("Only string data is accepted")
-        # Enable change reporting
-        self.set_change_report()
+            data[r][c] = val
+        self.init_data(data)
 
     def row_count(self):
         return self.model().rowCount()
@@ -539,29 +535,25 @@ class EdiTableWidget(QTableWidget):
 #        """
 #        super().rowCountChanged(oldCount, newCount)
 
-    def column_count(self):
-        return self.model().columnCount()
+#    def column_count(self):
+#        return self.model().columnCount()
 
 #    def columnCountChanged(self, oldCount, newCount):
 #        """Slot override.
 #        """
 #        super().columnCountChanged(oldCount, newCount)
 
-    def _get_text(self, row, col):
+    def get_text(self, row, col):
         """Convenience method for reading a cell from the QTableWidget.
         """
         data_model = self.model()
         return data_model.data(data_model.index(row, col)) or ''
 
     def set_text(self, row, col, text):
-        """Convenience method for writing a cell, first to the QTableWidget,
-        then – indirectly – to <self.table_data>.
+        """Convenience method for writing a cell.
         """
-        old = self.table_data[row][col]
-        if text != old:
-            data_model = self.model()
-            data_model.setData(data_model.index(row, col), text)
-            # This will also (via method <cell_changed>) update <table_data>
+        data_model = self.model()
+        data_model.setData(data_model.index(row, col), text)
 
     def read_block(self, top, left, width, height):
         """Read a block of data from the table.
@@ -574,18 +566,16 @@ class EdiTableWidget(QTableWidget):
         rows = []
         while top < r1:
             rowdata = []
-            row = self.table_data[top]
             c = left
             while c < c1:
-                rowdata.append(row[c])
+                rowdata.append(self.get_text(top, c))
                 c += 1
             top += 1
             rows.append(rowdata)
         return rows
 
-#TODO: Only insert/remove columns/rows when there is a proper selection?!
     def insert_row(self):
-        """Insert an empty row below the current one.
+        """Insert an empty row below the currenty selected one(s).
         If multiple rows are selected, the same number of rows will be
         added after the last selected row.
         """
@@ -594,8 +584,8 @@ class EdiTableWidget(QTableWidget):
             h = selected[4]
             r = selected[1] + h
         else:
-            h = 1
-            r = self.currentRow() + 1
+            QMessageBox.warning(self, _WARNING, _ROWOPFAIL)
+            return
         if h == 1:
             self.insertRow(r)
         else:
@@ -605,25 +595,21 @@ class EdiTableWidget(QTableWidget):
                 h -= 1
             self.add_change(Change.END_GROUP, None)
 
-    def insertRow(self, row, data = None):
-        # Consistency check
-        ncols = self.column_count()
-        l = 0 if not self.table_data else len(self.table_data[0])
-        if l != ncols:
-            raise Bug("insertRow: table width mismatch")
-        newrow = [''] * ncols
-        self.table_data.insert(row, newrow)
+    def insertRow(self, row, data = None):  # override
+        ncols = self.columnCount()
         super().insertRow(row)
         if data is None:
             self.add_change(Change.ADD_ROW, row)
+            data = [''] * ncols
         else:
-            # There should only be data when undoing
+            # There should only be data when undoing, so no need to add
+            # a "change".
             if len(data) != ncols:
                 raise Bug("insertRow: data length doesn't match table width")
-            self.paste_block(row, 0, [data])
+        self.paste_block(row, 0, [data])
 
     def insert_column(self):
-        """Insert an empty column after the current one.
+        """Insert an empty column after the currently selected one(s).
         If multiple columns are selected, the same number of columns
         will be added after the last selected column.
         """
@@ -632,8 +618,8 @@ class EdiTableWidget(QTableWidget):
             w = selected[3]
             c = selected[2] + w
         else:
-            w = 1
-            c = self.currentColumn() + 1
+            QMessageBox.warning(self, _WARNING, _COLUMNOPFAIL)
+            return
         if w == 1:
             self.insertColumn(c)
         else:
@@ -643,38 +629,32 @@ class EdiTableWidget(QTableWidget):
                 w -= 1
             self.add_change(Change.END_GROUP, None)
 
-    def insertColumn(self, column, data = None):
+    def insertColumn(self, column, data = None):  # override
         # Consistency check
         nrows = self.row_count()
-        if len(self.table_data) != nrows:
-            raise Bug("insertColumn: table height mismatch")
-        for row in self.table_data:
-            row.insert(column, '')
         super().insertColumn(column)
         if data is None:
             self.add_change(Change.ADD_COL, column)
+            data = [''] * nrows
         else:
-            # There should only be data when undoing
+            # There should only be data when undoing, so no need to add
+            # a "change".
             if len(data) != nrows:
                 raise Bug("insertColumn: data length doesn't match table height")
             self.paste_block(0, column, [[data[row]] for row in range(nrows)])
 
     def delete_rows(self):
-        """Delete the selected rows or else the current row.
+        """Delete the selected rows.
         """
         selected = self.get_selection()
         if selected[0]:
             n = selected[4]
             r0 = selected[1]
         else:
-            n = 1
-            r0 = self.currentRow()
-            if r0 < 0:
-                return
+            QMessageBox.warning(self, _WARNING, _ROWOPFAIL)
+            return
         if n == self.row_count():
-            msgBox = QMessageBox(parent = self)
-            msgBox.setText(_DELETEROWSFAIL)
-            msgBox.exec()
+            QMessageBox.warning(self, _WARNING, _DELETEROWSFAIL)
         elif n == 1:
             self.removeRow(r0)
         else:
@@ -685,8 +665,9 @@ class EdiTableWidget(QTableWidget):
                 self.removeRow(r)
             self.add_change(Change.END_GROUP, None)
 
-    def removeRow(self, row):
-        rowdata = self.table_data.pop(row)
+    def removeRow(self, row):  # override
+        rowdata = [self.get_text(row, col)
+                for col in range(self.columnCount())]
         super().removeRow(row)
         self.add_change(Change.DEL_ROW, (row, rowdata))
 
@@ -698,14 +679,10 @@ class EdiTableWidget(QTableWidget):
             n = selected[3]
             c0 = selected[2]
         else:
-            n = 1
-            c0 = self.currentColumn()
-            if c0 < 0:
-                return
-        if n == self.column_count():
-            msgBox = QMessageBox(parent = self)
-            msgBox.setText(_DELETECOLUMNSFAIL)
-            msgBox.exec()
+            QMessageBox.warning(self, _WARNING, _COLUMNOPFAIL)
+            return
+        if n == self.columnCount():
+            QMessageBox.warning(self, _WARNING, _DELETECOLUMNSFAIL)
         elif n == 1:
             self.removeColumn(c0)
         else:
@@ -716,41 +693,11 @@ class EdiTableWidget(QTableWidget):
                 self.removeColumn(c)
             self.add_change(Change.END_GROUP, None)
 
-    def removeColumn(self, column):
-        coldata = [rowdata.pop(column) for rowdata in self.table_data]
+    def removeColumn(self, column):  # override
+        coldata = [self.get_text(row, column)
+                for row in range(self.rowCount())]
         super().removeColumn(column)
         self.add_change(Change.DEL_COL, (column, coldata))
-
-    def cell_changed(self, row, col):
-        """This is called automatically whenever a cell's content changes.
-        It is not called when a row or column is inserted or deleted.
-        """
-        text = self._get_text(row, col)
-        old = self.table_data[row][col]
-        if old != text:
-            v = self.validate(row, col, text)
-            if v:
-                msgBox = QMessageBox(parent = self)
-                msgBox.setText(_VALIDATION_ERROR.format(msg = v))
-                msgBox.exec()
-                if old:
-                    data_model = self.model()
-                    data_model.setData(data_model.index(row, col), old)
-                else:
-                    self.takeItem(row, col)
-            else:
-                self.table_data[row][col] = text
-                self.add_change(Change.CELL, (row, col, old, text))
-
-    def validate(self, row, col, text):
-        """OVERRIDE THIS METHOD FOR VALIDATION.
-        Check the validity of the given text for the given cell.
-        If OK return None.
-        Otherwise return a message.
-        """
-        #if text == 'x':
-        #    return "Bet you weren't expecting the Spanish Inquisition!"
-        return None
 
     def set_change_report(self, handler = None):
         if handler:
@@ -807,7 +754,8 @@ class EdiTableWidget(QTableWidget):
             key = event.key()
             if key == Qt.Key_Delete:
                 if self.cut_selection() is None:
-                    self.takeItem(self.currentRow(), self.currentColumn())
+                    self.set_text(self.currentRow(),
+                            self.currentColumn(), '')
                 return # in this case don't call the base class method
             if key == Qt.Key_Return:
                 self.newline_press(self.currentRow(), self.currentColumn())
@@ -825,9 +773,7 @@ class EdiTableWidget(QTableWidget):
             qapp = QApplication.instance()
             qapp.clipboard().setText(table2tsv(rows))
         else:
-            msgBox = QMessageBox(parent = self)
-            msgBox.setText(_COPYFAIL)
-            msgBox.exec()
+            QMessageBox.warning(self, _WARNING, _COPYFAIL)
 
     def cutCellsToClipboard(self):
         """Concatenate the text content of all selected cells into a string
@@ -836,9 +782,7 @@ class EdiTableWidget(QTableWidget):
         """
         block = self.cut_selection()
         if block is None:
-            msgBox = QMessageBox(parent = self)
-            msgBox.setText(_COPYFAIL)
-            msgBox.exec()
+            QMessageBox.warning(self, _WARNING, _COPYFAIL)
         else:
             # put this data into clipboard
             qapp = QApplication.instance()
@@ -857,10 +801,10 @@ class EdiTableWidget(QTableWidget):
         if n == 0:
             return None
         if n == 1:
-            item = self.takeItem(t, l)
-            if item:
-                return item.text()
-            return ''
+            text = self.get_text(t, l)
+            if text:
+                self.set_text(t, l, '')
+            return text
         block = self.read_block(t, l, w, h)
         change_list = []
         self.set_change_report(gather)
@@ -869,7 +813,7 @@ class EdiTableWidget(QTableWidget):
         while t < r1:
             c = l
             while c < c1:
-                self.takeItem(t, c)
+                self.set_text(t, c, '')
                 c += 1
             t += 1
         self.set_change_report()
@@ -911,12 +855,10 @@ class EdiTableWidget(QTableWidget):
         the pasting will fail.
         """
         nrows = self.row_count()
-        ncols = self.column_count()
+        ncols = self.columnCount()
         n, r0, c0, w, h = self.get_selection()
         if n == 0:
-            msgBox = QMessageBox(parent = self)
-            msgBox.setText(_COPYFAIL)
-            msgBox.exec()
+            QMessageBox.warning(self, _WARNING, _COPYFAIL)
             return
         qapp = QApplication.instance()
         clipboard_text = qapp.clipboard().text()
@@ -949,14 +891,10 @@ class EdiTableWidget(QTableWidget):
             if c0 + pw > ncols:
                 raise RangeError(_TOO_MANY_COLUMNS)
         except RangeError as e:
-            msgBox = QMessageBox(parent=self)
-            msgBox.setText(str(e))
-            msgBox.exec()
+            QMessageBox.warning(self, _WARNING, str(e))
             return
         if protected_cells:
-            msgBox = QMessageBox(parent = self)
-            msgBox.setText(_PASTE_PROTECTED)
-            msgBox.exec()
+            QMessageBox.warning(self, _WARNING, _PASTE_PROTECTED)
         # Do the pasting
         self.paste_block(r0, c0, paste_data)
 
@@ -1030,19 +968,6 @@ class EdiTableWidget(QTableWidget):
             else:
                 # Disable actions
                 pass
-        """
-        self.select_all
-        self.unselect
-        self.copyCellsAction
-        self.pasteCellsAction
-        self.cutCellsAction
-        self.insertRowAction
-        self.deleteRowsAction
-        self.insertColumnAction
-        self.deleteColumnsAction
-        self.undoAction
-        self.redoAction
-        """
 
     def focusInEvent(self, event):
         self.focussed = True
@@ -1053,6 +978,65 @@ class EdiTableWidget(QTableWidget):
         self.focussed = False
         print("UNFOCUSSED TABLE")
         super().focusOutEvent(event)
+
+
+'''
+# This is just for testing purposes. The approach using <ValidatingWidgetItem>
+# looks more promising.
+class MyDelegate(QStyledItemDelegate):
+    """Intercept data changes in the delegate.
+    """
+    def setModelData(self, editor, model, index):
+        col = index.column()
+        row = index.row()
+        n = editor.metaObject().userProperty().name()
+        if not n:
+            raise Bug("No user property name")
+            # In source for QStyledItemDelegate::setModelData:
+            #n = d->editorFactory()->valuePropertyName(
+            #model->data(index, Qt::EditRole).userType());
+        if n:
+            print("setModelData", n, type(n), "->", editor.property(n))
+            val = editor.property(n)
+            if val != 'x':
+                super().setModelData(editor, model, index)
+            else:
+                QMessageBox.warning(editor, _WARNING,
+                        f"{_VALIDATION_ERROR} "
+                        f"@({row}, {col}): {val}")
+'''
+
+
+class ValidatingWidgetItem(QTableWidgetItem):
+    def __init__(self, value = ''):
+        self.set_validator(None)
+        super().__init__(value)
+
+    def set_validator(self, validate):
+        self.__validate = validate
+
+    def clone(self):
+        return ValidatingWidgetItem()
+
+    def setData(self, role, value):
+        if role == Qt.EditRole:
+            if self.__validate:
+                v = self.__validate(value)
+                if v:
+                    QMessageBox.warning(self.tableWidget(), _WARNING,
+                            f"{_VALIDATION_ERROR} "
+                            f"@({self.row()}, {self.column()}): {value}")
+                    return
+            v0 = self.data(role)
+            if v0 == value:
+                return
+#TODO --
+            print(f"CHANGED @({self.row()}, {self.column()}): {v0} -> {value}")
+            tw = self.tableWidget()
+            if tw:
+                tw.add_change(Change.CELL, (self.row(), self.column(),
+                        v0, value))
+        super().setData(role, value)
 
 
 class VerticalTextDelegate(QStyledItemDelegate):
@@ -1078,6 +1062,8 @@ class VerticalTextDelegate(QStyledItemDelegate):
         return QSize(val.height(), val.width())
 
 
+#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+
 if __name__ == "__main__":
     app = QApplication([])
     # This seems to deactivate activate-on-single-click
@@ -1087,17 +1073,27 @@ if __name__ == "__main__":
         print("MODIFIED1:", mod)
     def is_modified2(mod):
         print("MODIFIED2:", mod)
+    def validate(value):
+        if value == 'v':
+            return f"invalid value"
+        return None
 
     cols = ["Column %02d" % n for n in range(10)]
     rows = ["Row %02d" % n for n in range(7)]
     tablewidget = EdiTableWidget()
+
     tablewidget.installEventFilter(tablewidget)
     tablewidget.setup(colheaders = cols, rowheaders = rows,
             on_changed = is_modified1)
 
     tablewidget.setWindowTitle("EdiTableWidget")
 
-    tablewidget.setItemDelegateForRow(2, VerticalTextDelegate())
+    # setItemDelegate doesn't take ownership of the custom delegates,
+    # so I retain references (otherwise there will be a segfault).
+    idel1 = VerticalTextDelegate()
+#    idel2 = MyDelegate()
+    tablewidget.setItemDelegateForRow(2, idel1)
+#    tablewidget.setItemDelegateForRow(1, idel2)
 
     sparse_data = []
     r, c = 2, 3
@@ -1117,6 +1113,7 @@ if __name__ == "__main__":
             row_add_del = True, column_add_del = True,
             on_changed = is_modified2)
     tw2.init_data([["1", "2", "3", "4"], [""] * 4])
+    tw2.item(1, 0).set_validator(validate)
     tw2.resize(400, 300)
     tw2.show()
 
