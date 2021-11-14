@@ -2,7 +2,7 @@
 """
 ui/datatable_widget.py
 
-Last updated:  2021-11-10
+Last updated:  2021-11-14
 
 Gui editor widget for "DataTables".
 See datatable-editor.py for an app which can be used for testing this
@@ -26,11 +26,6 @@ Copyright 2021 Michael Towers
 =-LICENCE=================================
 """
 
-#TODO: Callback for modification of info items – separate from main table?
-# Undo/redo for info items?
-# Could I share the undo/redo system? At present, the shortcuts only work
-# when the table is focussed.
-
 ### Messages
 
 OPEN_FILE          = "Tabellendatei öffnen"
@@ -40,13 +35,15 @@ EXIT               = "Schließen"
 
 ########################################################################
 
-from ui.ui_base import get_icon, QSizePolicy, QSplitter, \
+from ui.ui_base import APP, get_icon, QSizePolicy, QSplitter, \
         QScrollArea, QWidget, QToolBar, QVBoxLayout, QGridLayout, \
         QLineEdit, QLabel, QAction, QKeySequence, \
-        Qt, Qt, QSize, QEvent, QObject
+        Qt, QSize, QEvent, QObject, QKeyEvent
 
-from ui.editable import EdiTableWidget
+from ui.editable import EdiTableWidget, Change_X
 from tables.spreadsheet import Spreadsheet, read_DataTable
+
+Change_INFO = Change_X
 
 ### -----
 
@@ -67,6 +64,7 @@ class ShortcutEater(QObject):
 shortcutEater = ShortcutEater()
 """
 
+#TODO: validation?
 class TextLine(QLineEdit):
     def __init__(self, index, dataTableEditor):
         self.index = index
@@ -74,7 +72,7 @@ class TextLine(QLineEdit):
         super().__init__()
 #        self.setContextMenuPolicy(Qt.NoContextMenu)
         self.__text = ''
-#        self.textEdited.connect(self.newtext)
+#        self.textEdited.connect(self.text_changed)
         self.editingFinished.connect(self.newtext)
 #        self.installEventFilter(shortcutEater)
 
@@ -84,19 +82,25 @@ class TextLine(QLineEdit):
 
     def newtext(self):
         text = self.text()
+        self.setText(text)  # reset internal undo/modified mechanism
         if text != self.__text:
+            self.dataTableEditor.changed(self.index, self.__text, text)
             self.__text = text
-            self.dataTableEditor.modified(True)
 
     def focusInEvent(self, event):
-        self.dataTableEditor.focussed = self.index
-        print("FOCUSSED", self.index)
+        self.dataTableEditor.set_focussed(self.index)
+        #print("FOCUSSED", self.index)
         super().focusInEvent(event)
 
     def focusOutEvent(self, event):
-        self.dataTableEditor.focussed = -1
-        print("FOCUSSED", -1)
+        self.dataTableEditor.set_focussed(-1)
+        #print("FOCUSSED", -1)
         super().focusOutEvent(event)
+
+    def mousePressEvent(self, event):
+        event.accept()
+        self.selectAll()
+        return
 
 """
 Toolbar:
@@ -170,17 +174,60 @@ class InfoTable(QScrollArea):
     def get_info(self):
         return [(key, w.text()) for key, w in self.info]
 
-#    def focusInEvent(self, event):
-#    def focusOutEvent(self, event):
-# Can be used to set current info line?
+    def set_item(self, index, val):
+        self.info[index][1].set(val)
 
-# I would actually need to trigger info shortcuts ... perhaps:
-#    eventPress = QKeyEvent(QEvent.KeyPress, Qt.Key_C, Qt.ControlModifier)
-#    eventRealease = QKeyEvent(QEvent.KeyRelease, Qt.Key_C, Qt.ControlModifier)
-#    QApplication.postEvent(targetWidget, eventPress)
-#    QApplication.postEvent(targetWidget, eventRealease)
 
-#class DataTableEditor(QSplitter):
+def send_control_key(key, widget):
+    eventPress = QKeyEvent(QEvent.KeyPress, key, Qt.ControlModifier)
+    eventRealease = QKeyEvent(QEvent.KeyRelease, key, Qt.ControlModifier)
+    APP.postEvent(widget, eventPress)
+    APP.postEvent(widget, eventRealease)
+
+
+class TableWidget(EdiTableWidget):
+    def __init__(self, dteditor):
+        super().__init__()
+        self.dteditor = dteditor
+
+    def undoredo_extension(self, undo, chtype, change):
+        """Handle undo/redo for changes to info entries.
+        Overrides base class method.
+        """
+        if chtype == Change_INFO:
+            val = change[1] if undo else change[2]
+            self.dteditor.info.set_item(change[0], val)
+            #print("UNDO-REDO", undo, chtype, change)
+            return True
+        return False
+
+    def copyCellsToClipboard(self):
+        """Overrides base class method.
+        """
+        if self.hasFocus():
+            super().copyCellsToClipboard()
+        else:
+            send_control_key(Qt.Key_C, APP.focusWidget())
+
+    def cutCellsToClipboard(self):
+        """Overrides base class method.
+        """
+        if self.hasFocus():
+            super().cutCellsToClipboard()
+        else:
+            send_control_key(Qt.Key_X, APP.focusWidget())
+
+    def pasteCellFromClipboard(self):
+        """Overrides base class method.
+        """
+        if self.hasFocus():
+            super().pasteCellFromClipboard()
+        else:
+            send_control_key(Qt.Key_V, APP.focusWidget())
+
+
+
+
 class DataTableEditor(QWidget):
     def new_action(self, icon, text, shortcut):
         action = QAction(self)
@@ -213,13 +260,6 @@ class DataTableEditor(QWidget):
                 QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_S))
             self.action_save_as.triggered.connect(on_save_as)
             self.toolbar.addAction(self.action_save_as)
-        # Exit QAction
-        if on_exit:
-            self.toolbar.addSeparator()
-            self.exit_action = self.new_action('quit', EXIT,
-                    QKeySequence(Qt.CTRL + Qt.Key_Q))
-            self.exit_action.triggered.connect(on_exit)
-            self.toolbar.addAction(self.exit_action)
 
         self.splitter = QSplitter()
         vbox.addWidget(self.splitter)
@@ -228,7 +268,7 @@ class DataTableEditor(QWidget):
         self.info = InfoTable()
         self.splitter.addWidget(self.info)
 
-        self.table = EdiTableWidget()
+        self.table = TableWidget(self)
         self.table.horizontalHeader().setStyleSheet("QHeaderView::section{" \
             "background-color:#FFFF80;" \
             "padding: 2px;" \
@@ -240,6 +280,43 @@ class DataTableEditor(QWidget):
         self.splitter.setStretchFactor(0, 0)
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setHandleWidth(20)
+
+        ### Actions from table widget
+        self.toolbar.addSeparator()
+        self.table.copyCellsAction.setIcon(get_icon('copy'))
+        self.toolbar.addAction(self.table.copyCellsAction)
+        self.table.cutCellsAction.setIcon(get_icon('cut'))
+        self.toolbar.addAction(self.table.cutCellsAction)
+        self.table.pasteCellsAction.setIcon(get_icon('paste'))
+        self.toolbar.addAction(self.table.pasteCellsAction)
+
+        self.toolbar.addSeparator()
+        self.table.insertRowAction.setIcon(get_icon('insertrowsafter'))
+        self.toolbar.addAction(self.table.insertRowAction)
+        self.table.deleteRowsAction.setIcon(get_icon('deleterows'))
+        self.toolbar.addAction(self.table.deleteRowsAction)
+        self.table.insertColumnAction.setIcon(get_icon('insertcolumnsafter'))
+        self.toolbar.addAction(self.table.insertColumnAction)
+        self.table.deleteColumnsAction.setIcon(get_icon('deletecolumns'))
+        self.toolbar.addAction(self.table.deleteColumnsAction)
+
+        self.toolbar.addSeparator()
+        self.table.undoAction.setIcon(get_icon('undo'))
+        self.toolbar.addAction(self.table.undoAction)
+        self.table.redoAction.setIcon(get_icon('redo'))
+        self.toolbar.addAction(self.table.redoAction)
+
+
+        # Exit QAction
+        if on_exit:
+            self.toolbar.addSeparator()
+            self.exit_action = self.new_action('quit', EXIT,
+                    QKeySequence(Qt.CTRL + Qt.Key_Q))
+            self.exit_action.triggered.connect(on_exit)
+            self.toolbar.addAction(self.exit_action)
+
+    def changed(self, index, old, new):
+        self.table.add_change(Change_INFO, (index, old, new))
 
     def modified(self, mod):
         """Dummy method for "change of changed" notification.
@@ -266,7 +343,7 @@ class DataTableEditor(QWidget):
 
         h = self.info.init(self.__info, self)
         self.splitter.setSizes([h, 0])
-        self.focussed = -1      # index of currently "focussed" info entry
+        self.set_focussed(-1)      # index of currently "focussed" info entry
 
         data = []
         for row in self.__rows:
@@ -301,3 +378,7 @@ class DataTableEditor(QWidget):
             '__FIELDS__': self.__columns,
             '__ROWS__': self.__rows
         }
+
+    def set_focussed(self, index):
+        if index >= 0:
+            self.table.clearSelection()

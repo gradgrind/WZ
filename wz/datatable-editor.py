@@ -33,6 +33,9 @@ _SAVE_AS_TSV        = "Als tsv-Datei speichern?\n\n{path}"
 _UNSUPPORTED_SAVE   = "Tabelle speichern – Dateityp '.{ending}'" \
         " wird nicht unterstützt"
 
+_EDITING_CELL       = "Eine Zelle wird gerade modifiziert.\n" \
+        "Es gibt  ungespeicherte Änderungen.\n" \
+        "Wirklich schließen?"
 _LOSE_CHANGES       = "Es gibt ungespeicherte Änderungen.\n" \
         "Wirklich schließen?"
 _LOSE_CHANGES_OPEN  = "Es gibt ungespeicherte Änderungen.\n" \
@@ -52,7 +55,8 @@ if __name__ == '__main__':
         basedir = os.path.dirname(this)
         builtins.PROGRAM_DATA = os.path.join(basedir, 'wz-data')
 
-from ui.ui_base import APP, run, openDialog, saveDialog, get_icon
+from ui.ui_base import APP, run, openDialog, saveDialog, get_icon, \
+        QLineEdit
 
 # This seems to deactivate activate-on-single-click in filedialog
 # (presumably elsewhere as well?)
@@ -80,7 +84,14 @@ class _DataTableEditor(DataTableEditor):
             self.open_file(ofile)
 
     def closeEvent(self, event):
-        if self.__modified:
+        w = APP.focusWidget()
+        if w and isinstance(w, QLineEdit) and w.isModified():
+            # Editing cell
+            if SHOW_CONFIRM(_EDITING_CELL):
+                event.accept()
+            else:
+                event.ignore()
+        elif self.__modified:
             if SHOW_CONFIRM(_LOSE_CHANGES):
                 event.accept()
             else:

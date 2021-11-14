@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-12
+Last updated:  2021-11-14
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -104,8 +104,6 @@ _WARNING = "Warnung"
 
 ########################################################################
 
-from enum import Enum, auto
-
 from qtpy.QtWidgets import QApplication, QWidget, \
         QTableView, QTableWidget, QTableWidgetItem, QMessageBox, \
         QStyledItemDelegate, QStyleOptionViewItem, QLineEdit
@@ -116,21 +114,20 @@ from qtpy.QtWidgets import QAction, QShortcut  # in Qt6 these are in QtGui
 class Bug(Exception):
     pass
 
+# Types of changes which are to be recorded by undo/redo function.
+Change_CELL = 1
+Change_BLOCK = 2
+Change_ADD_ROW = 3
+Change_DEL_ROW = 4
+Change_ADD_COL = 5
+Change_DEL_COL = 6
+# For multiple row/column changes:
+Change_GROUP = 7
+Change_END_GROUP = 8
+# As a starting number for extensions:
+Change_X = 9
+
 ### -----
-
-class Change(Enum):
-    """Types of changes which are to be recorded by undo/redo function.
-    """
-    CELL = auto()
-    BLOCK = auto()
-    ADD_ROW = auto()
-    DEL_ROW = auto()
-    ADD_COL = auto()
-    DEL_COL = auto()
-    # For multiple row/column changes
-    GROUP = auto()
-    END_GROUP = auto()
-
 
 def tsv2table(text):
     """Parse a "tsv" (tab separated value) string into a list of lists
@@ -209,31 +206,31 @@ class UndoRedo:
 
     def undo(self):
         def do_undo():
-            if chtype is Change.ADD_COL:
+            if chtype is Change_ADD_COL:
                 self.table.removeColumn(change)
-            elif chtype is Change.DEL_COL:
+            elif chtype is Change_DEL_COL:
                 self.table.insertColumn(change[0], data = change[1])
-            elif chtype is Change.ADD_ROW:
+            elif chtype is Change_ADD_ROW:
                 self.table.removeRow(change)
-            elif chtype is Change.DEL_ROW:
+            elif chtype is Change_DEL_ROW:
                 self.table.insertRow(change[0], data = change[1])
-            elif chtype is Change.BLOCK:
+            elif chtype is Change_BLOCK:
                 for _change in change:  # <change> is here a list
                     self.table.set_text(*_change[:3])
-            elif chtype is Change.CELL:
+            elif chtype is Change_CELL:
                 self.table.set_text(*change[:3])
-            else:
+            elif not self.table.undoredo_extension(True, chtype, change):
                 raise Bug(f"Invalid Undo-change: {chtype}")
         #+
         if self.enabled and self.index > 0:
             self.blocked = True
             self.index -= 1
             chtype, change = self.changes[self.index]
-            if chtype is Change.END_GROUP:
+            if chtype is Change_END_GROUP:
                 while True:
                     self.index -= 1
                     chtype, change = self.changes[self.index]
-                    if chtype is Change.GROUP:
+                    if chtype is Change_GROUP:
                         break
                     do_undo()
             else:
@@ -246,31 +243,31 @@ class UndoRedo:
 
     def redo(self):
         def do_redo():
-            if chtype is Change.ADD_COL:
+            if chtype is Change_ADD_COL:
                 self.table.insertColumn(change)
-            elif chtype is Change.DEL_COL:
+            elif chtype is Change_DEL_COL:
                 self.table.removeColumn(change[0])
-            elif chtype is Change.ADD_ROW:
+            elif chtype is Change_ADD_ROW:
                 self.table.insertRow(change)
-            elif chtype is Change.DEL_ROW:
+            elif chtype is Change_DEL_ROW:
                 self.table.removeRow(change[0])
-            elif chtype is Change.BLOCK:
+            elif chtype is Change_BLOCK:
                 for _change in change:  # <change> is here a list
                     self.table.set_text(*_change[:2], _change[3])
-            elif chtype is Change.CELL:
+            elif chtype is Change_CELL:
                 self.table.set_text(*change[:2], change[3])
-            else:
+            elif not self.table.undoredo_extension(False, chtype, change):
                 raise Bug(f"Invalid Redo-change: {chtype}")
         #+
         if self.enabled and self.index < len(self.changes):
             self.blocked = True
             chtype, change = self.changes[self.index]
             self.index += 1
-            if chtype is Change.GROUP:
+            if chtype is Change_GROUP:
                 while True:
                     chtype, change = self.changes[self.index]
                     self.index += 1
-                    if chtype is Change.END_GROUP:
+                    if chtype is Change_END_GROUP:
                         break
                     do_redo()
             else:
@@ -318,6 +315,12 @@ class EdiTableWidget(QTableWidget):
 #TODO --
         print("SELECTION " + ("ON" if sel else "EMPTY"))
         pass
+
+    def undoredo_extension(self, undo, chtype, change):
+        """Allows external undo/redo operations to be handled.
+        OVERRIDE to use
+        """
+        return False
 
     def __init__(self, parent = None, on_selection_state_change = None):
         super().__init__(parent = parent)
@@ -589,17 +592,17 @@ class EdiTableWidget(QTableWidget):
         if h == 1:
             self.insertRow(r)
         else:
-            self.add_change(Change.GROUP, None)
+            self.add_change(Change_GROUP, None)
             while h > 0:
                 self.insertRow(r)
                 h -= 1
-            self.add_change(Change.END_GROUP, None)
+            self.add_change(Change_END_GROUP, None)
 
     def insertRow(self, row, data = None):  # override
         ncols = self.columnCount()
         super().insertRow(row)
         if data is None:
-            self.add_change(Change.ADD_ROW, row)
+            self.add_change(Change_ADD_ROW, row)
             data = [''] * ncols
         else:
             # There should only be data when undoing, so no need to add
@@ -623,18 +626,18 @@ class EdiTableWidget(QTableWidget):
         if w == 1:
             self.insertColumn(c)
         else:
-            self.add_change(Change.GROUP, None)
+            self.add_change(Change_GROUP, None)
             while w > 0:
                 self.insertColumn(c)
                 w -= 1
-            self.add_change(Change.END_GROUP, None)
+            self.add_change(Change_END_GROUP, None)
 
     def insertColumn(self, column, data = None):  # override
         # Consistency check
         nrows = self.row_count()
         super().insertColumn(column)
         if data is None:
-            self.add_change(Change.ADD_COL, column)
+            self.add_change(Change_ADD_COL, column)
             data = [''] * nrows
         else:
             # There should only be data when undoing, so no need to add
@@ -658,18 +661,18 @@ class EdiTableWidget(QTableWidget):
         elif n == 1:
             self.removeRow(r0)
         else:
-            self.add_change(Change.GROUP, None)
+            self.add_change(Change_GROUP, None)
             r = r0 + n
             while r > r0:
                 r -= 1
                 self.removeRow(r)
-            self.add_change(Change.END_GROUP, None)
+            self.add_change(Change_END_GROUP, None)
 
     def removeRow(self, row):  # override
         rowdata = [self.get_text(row, col)
                 for col in range(self.columnCount())]
         super().removeRow(row)
-        self.add_change(Change.DEL_ROW, (row, rowdata))
+        self.add_change(Change_DEL_ROW, (row, rowdata))
 
     def delete_columns(self):
         """Delete the selected columns.
@@ -686,18 +689,18 @@ class EdiTableWidget(QTableWidget):
         elif n == 1:
             self.removeColumn(c0)
         else:
-            self.add_change(Change.GROUP, None)
+            self.add_change(Change_GROUP, None)
             c = c0 + n
             while c > c0:
                 c -= 1
                 self.removeColumn(c)
-            self.add_change(Change.END_GROUP, None)
+            self.add_change(Change_END_GROUP, None)
 
     def removeColumn(self, column):  # override
         coldata = [self.get_text(row, column)
                 for row in range(self.rowCount())]
         super().removeColumn(column)
-        self.add_change(Change.DEL_COL, (column, coldata))
+        self.add_change(Change_DEL_COL, (column, coldata))
 
     def set_change_report(self, handler = None):
         if handler:
@@ -793,7 +796,7 @@ class EdiTableWidget(QTableWidget):
         The changed cells are reported as a single item, possibly a list.
         """
         def gather(chtype, change):
-            if chtype != Change.CELL:
+            if chtype != Change_CELL:
                 raise Bug("Cutting block should only cause cell changes")
             change_list.append(change)
         #+
@@ -820,9 +823,9 @@ class EdiTableWidget(QTableWidget):
         # Report changes as a list – only cells which actually changed
         if change_list:
             if len(change_list) == 1:
-                self.add_change(Change.CELL, change_list[0])
+                self.add_change(Change_CELL, change_list[0])
             else:
-                self.add_change(Change.BLOCK, change_list)
+                self.add_change(Change_BLOCK, change_list)
         return table2tsv(block)
 
     def get_selection(self):
@@ -902,7 +905,7 @@ class EdiTableWidget(QTableWidget):
         """The block must be a list of lists of strings.
         """
         def gather(chtype, change):
-            if chtype != Change.CELL:
+            if chtype != Change_CELL:
                 raise Bug("Pasting block should only cause cell changes")
             change_list.append(change)
         #+
@@ -918,9 +921,9 @@ class EdiTableWidget(QTableWidget):
         # Report changes as a list – only cells which actually changed
         if change_list:
             if len(change_list) == 1:
-                self.add_change(Change.CELL, change_list[0])
+                self.add_change(Change_CELL, change_list[0])
             else:
-                self.add_change(Change.BLOCK, change_list)
+                self.add_change(Change_BLOCK, change_list)
 
     def set_modified(self, mod):
         """Whenever a change away from the "initial" table data is made,
@@ -969,6 +972,7 @@ class EdiTableWidget(QTableWidget):
                 # Disable actions
                 pass
 
+    '''
     def focusInEvent(self, event):
         self.focussed = True
         print("FOCUSSED TABLE")
@@ -978,7 +982,7 @@ class EdiTableWidget(QTableWidget):
         self.focussed = False
         print("UNFOCUSSED TABLE")
         super().focusOutEvent(event)
-
+    '''
 
 '''
 # This is just for testing purposes. The approach using <ValidatingWidgetItem>
@@ -1030,11 +1034,10 @@ class ValidatingWidgetItem(QTableWidgetItem):
             v0 = self.data(role)
             if v0 == value:
                 return
-#TODO --
-            print(f"CHANGED @({self.row()}, {self.column()}): {v0} -> {value}")
+            #print(f"CHANGED @({self.row()}, {self.column()}): {v0} -> {value}")
             tw = self.tableWidget()
             if tw:
-                tw.add_change(Change.CELL, (self.row(), self.column(),
+                tw.add_change(Change_CELL, (self.row(), self.column(),
                         v0, value))
         super().setData(role, value)
 
