@@ -1,29 +1,26 @@
 #+++ __TITLE__   : Felder der Schülertabellen (eine Tabelle pro Klasse)
-#+++ __MINION__  : 1.0
-#+++ __MODIFIED__: 2021-11-01
-#+++###########################################################
-#+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
-#+++# wird beim Speichern (in WZ) automatisch aktualisiert.
+#+++ __MINION__  :  2.0
+#+++ __MODIFIED__: 2021-11-14
 #--------------------------------------------------------------
 
-PUPIL_INFO: [
-    [SCHOOLYEAR  Schuljahr  Pflichtfeld]
-    [CLASS       Klasse     Pflichtfeld]
+INFO_FIELDS: [
+    {NAME: SCHOOLYEAR   DISPLAY_NAME: Schuljahr     REQUIRED: true}
+    {NAME: CLASS        DISPLAY_NAME: Klasse        REQUIRED: true}
 ]
 
-PUPIL_FIELDS: [
-#    [CLASS         Klasse          Pflichtfeld]
-    [PID            ID              Pflichtfeld]
-    [PSORT          Sortiername     &]
-    [FIRSTNAME      Rufname         Pflichtfeld]
-    [LASTNAME       Name            Pflichtfeld]
-    [GROUPS         Gruppen         &]
-    [FIRSTNAMES     Vornamen        Pflichtfeld]
-    [DOB_D          Geburtsdatum    Pflichtfeld]
-    [POB            Geburtsort      Pflichtfeld]
-    [SEX            Geschlecht      Pflichtfeld]
-    [HOME           Ort             Pflichtfeld]
-    [ENTRY_D        Eintrittsdatum  Pflichtfeld]
-    [EXIT_D         Schulaustritt   &]
-    [QUALI_D        Eintritt-SekII  &]
+TABLE_FIELDS: [
+#    {NAME: CLASS        DISPLAY_NAME: Klasse        REQUIRED: true}
+    {NAME: PID          DISPLAY_NAME: ID            REQUIRED: true}
+    {NAME: PSORT        DISPLAY_NAME: Sortiername}
+    {NAME: FIRSTNAME    DISPLAY_NAME: Rufname       REQUIRED: true}
+    {NAME: LASTNAME     DISPLAY_NAME: Name          REQUIRED: true}
+    {NAME: GROUPS       DISPLAY_NAME: Gruppen}
+    {NAME: FIRSTNAMES   DISPLAY_NAME: Vornamen      REQUIRED: true}
+    {NAME: DOB_D        DISPLAY_NAME: Geburtsdatum  REQUIRED: true}
+    {NAME: POB          DISPLAY_NAME: Geburtsort    REQUIRED: true}
+    {NAME: SEX          DISPLAY_NAME: Geschlecht    REQUIRED: true}
+    {NAME: HOME         DISPLAY_NAME: Ort           REQUIRED: true}
+    {NAME: ENTRY_D      DISPLAY_NAME: Eintrittsdatum  REQUIRED: true}
+    {NAME: EXIT_D       DISPLAY_NAME: Schulaustritt}
+    {NAME: QUALI_D      DISPLAY_NAME: Eintritt-SekII}
 ]

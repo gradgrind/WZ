@@ -2,7 +2,7 @@
 """
 datatable-editor.py
 
-Last updated:  2021-11-10
+Last updated:  2021-11-14
 
 Gui editor for "DataTables".
 

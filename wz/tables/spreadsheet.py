@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-11-07
+Last updated:  2021-11-14
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -418,80 +418,101 @@ def read_DataTable(filepath_or_stream):
     }
 
 
-def filter_DataTable(data, fieldlist, infolist, extend = True):
-    """Process the table data into mappings based on the two
-    lists, <fields> and <info>, allowing translation of the field/key
-    names to internal versions. Only those fields which are in these
-    lists will be retained.
+def filter_DataTable(data, fields, extend = True):
+    """Process the table data into mappings based on the entries in the
+    mapping <fields>. This has (at least) the two entries
+    'INFO_FIELDS' and 'TABLE_FIELDS'. These allow translation of the
+    field/key names to internal versions. Only those fields which are
+    in these lists will be retained.
     Empty fields are guaranteed to contain ''.
     If <extend> is true, fields which are in the lists but not in
     the table will be added (though empty).
-    <fieldlist> and <infolist> are lists of triples (or longer tuples):
-        [   internal field-name,
-            external (translated) field-name ( or false, e.g. ''),
-            essential field (true/false),
+    <INFO_FIELDS> and <TABLE_FIELDS> are lists of mappings:
+        {   'NAME': internal field-name,
+            'DISPLAY_NAME': displayed field name or '', or field missing,
+            'REQUIRED': non-empty string, or '', or field missing,
             ... (possible further entries)
-        ]
-    If the external field name evaluates "false" (''), the internal
-    and external names are identical.
-    Return a mapping with the entries, '__INFO__' (the info-mapping),
-    '__FIELDS__' (the list of internal field names) and '__ROWS__'
-    (the list of row mappings).
+        }
+    If the DISPLAY_NAME is empty, the internal and external names are
+    identical.
+    Return a mapping with the following entries:
+        '__INFO__': the info-mapping,
+        '__FIELDS__': the list of internal field names,
+        '__ROWS__': the list of row mappings,
+        '__FIELD_NAMES__': map internal to external names (column titles),
+        '__INFO_NAMES__': map internal to external names (info titles)
     """
-    tinfo = data['__INFO__']
+    # The "metafields" ('__ ...') should be retained.
     newinfo = {}
-    for f, t, needed, *x in infolist:
-        name = t or f   # null <t> => no translation, use internal name
+    ifields = {}
+    imap = {}
+    for k, v in data['__INFO__'].items():
+        if k[0] == '_':
+            newinfo[k] = v
+        else:
+            ifields[k] = v
+    for item in fields['INFO_FIELDS']:
+        k = item['NAME']
+        # null <t> => no translation, use internal name:
+        t = item.get('DISPLAY_NAME') or k
         try:
-            val = tinfo[name]
-            if needed and not val:
-                raise TableError(_ESSENTIAL_INFO_EMPTY.format(
-                        field = name))
+            v = ifields[t]
         except KeyError:
-            if needed:
-                raise TableError(_ESSENTIAL_INFO_MISSING.format(
-                        field = name))
+            if item.get('REQUIRED'):
+                raise TableError(_ESSENTIAL_INFO_MISSING.format(field = name))
             if extend:
-                val = ''
-        newinfo[f] = val
+                v = ''
+            else:
+                continue
+        else:
+            if (not v) and item.get('REQUIRED'):
+                raise TableError(_ESSENTIAL_INFO_EMPTY.format(field = name))
+        newinfo[k] = v
+        imap[k] = t
+
+    newcols = []
     # Check available fields against desired fields
     tfields = set(data['__FIELDS__'])
-    fieldnames = []
-    flist = []
-    fname = {}
-    for ftn in fieldlist:
-        name = ftn[1] or ftn[0]   # null <t> => no translation, ...
-        if name in tfields:
-            flist.append(ftn)
-            fieldnames.append(ftn[0])
-        elif ftn[2]:
-            raise TableError(_ESSENTIAL_FIELD_MISSING.format(
-                            field = name))
-        elif extend:
-            flist.append(ftn)
-            fieldnames.append(ftn[0])
-        fname[ftn[0]] = name
+    fmap = {}
+    _fields = []
+    for item in fields['TABLE_FIELDS']:
+        k = item['NAME']
+        t = item.get('DISPLAY_NAME') or k
+        r = bool(item.get('REQUIRED'))
+        try:
+            tfields.remove(t)
+        except KeyError:
+            if r:
+                raise TableError(_ESSENTIAL_FIELD_MISSING.format(field = t))
+            if not extend:
+                continue
+        newcols.append((k, t, r))
+        fmap[k] = t
+        _fields.append(k)
     # Add the data rows
     rowmaps = []
     for row in data['__ROWS__']:
         rowmap = {}
         rowmaps.append(rowmap)
-        for f, t, needed, *x in flist:
-            name = t or f # null <t> => no translation, use internal name
-            val = row.get(name)
+        for k, t, needed in newcols:
+            val = row.get(t)
             if needed and not val:
-                raise TableError(_ESSENTIAL_FIELD_EMPTY.format(
-                        field = fname[f]))
-            rowmap[f] = val or ''
-    return {    '__INFO__': newinfo,
-                '__FIELDS__': fieldnames,
-                '__ROWS__': rowmaps
+                raise TableError(_ESSENTIAL_FIELD_EMPTY.format(field = t))
+            rowmap[k] = val or ''
+    return {
+        '__INFO__': newinfo,
+        '__FIELDS__': _fields,
+        '__ROWS__': rowmaps,
+        '__FIELD_NAMES__': fmap,
+        '__INFO_NAMES__': imap
     }
 
 
 def make_DataTable_filetypes(): return ('tsv', 'xlsx')
 
 
+#TODO: Use combined field mappings like filter_DataTable ...
+# ... using same lists of mappings
 def make_DataTable(data, filetype,
         fieldlist = None, infolist = None,
         extend = True,  **xinfo):
@@ -730,10 +751,17 @@ if __name__ == '__main__':
 #TODO: The new pupil tables don't have class entries!
     print("\nPUPILS + extend:")
     PUPIL_DATA = MINION(DATAPATH('CONFIG/PUPIL_DATA'))
+    table_fields = PUPIL_DATA['TABLE_FIELDS']
+    table_fields.insert(0, {'NAME': 'CLASS', 'DISPLAY_NAME': 'Klasse',
+            'REQUIRED': 'true'})
+    info_fields = [{'NAME': 'SCHOOLYEAR', 'DISPLAY_NAME': 'Schuljahr'}]
+    trfields = {
+        'INFO_FIELDS': info_fields,
+        'TABLE_FIELDS': table_fields
+    }
+    print("\n*** trfields ***\n", trfields)
     _dbt = read_DataTable(DATAPATH('testing/delta_test_pupils_2016'))
-    dbt = filter_DataTable(_dbt, PUPIL_DATA['PUPIL_FIELDS'],
-            [['SCHOOLYEAR', 'Schuljahr', False]],
-            extend = True)
+    dbt = filter_DataTable(_dbt, trfields)
     print("\nINFO:", dbt['__INFO__'])
     print("\nCONTENT:")
     for row in dbt['__ROWS__']:
@@ -741,9 +769,7 @@ if __name__ == '__main__':
 
     print("\nPUPILS:")
     _dbt = read_DataTable(DATAPATH('testing/delta_test_pupils_2016'))
-    dbt = filter_DataTable(_dbt, PUPIL_DATA['PUPIL_FIELDS'],
-            [['SCHOOLYEAR', 'Schuljahr', False]],
-            extend = False)
+    dbt = filter_DataTable(_dbt, trfields, extend = False)
     print("\nINFO:", dbt['__INFO__'])
     print("\nCONTENT:")
     for row in dbt['__ROWS__']:

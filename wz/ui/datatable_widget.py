@@ -103,25 +103,6 @@ class TextLine(QLineEdit):
         return
 
 """
-Toolbar:
-    copy
-    cut
-    paste
-
-    only table:
-        insert row
-        delete row
-
-    undo
-    redo
-
-
-    The basic editor application adds:
-        open
-        save
-        save as
-        exit
-
 Need to handle NAME vs. DISPLAY_NAME (translation) somewhere.
 
 Perhaps a new format for the specification tables, using mappings
@@ -132,18 +113,6 @@ TABLE_FIELDS: [
     {NAME: field-name 2, DISPLAY_NAME: tr2}
 
 ]
-
-self.select_all
-self.unselect
-self.copyCellsAction
-self.pasteCellsAction
-self.cutCellsAction
-self.insertRowAction
-self.deleteRowsAction
-self.insertColumnAction
-self.deleteColumnsAction
-self.undoAction
-self.redoAction
 """
 
 class InfoTable(QScrollArea):
@@ -151,7 +120,7 @@ class InfoTable(QScrollArea):
         super().__init__()
         self.setWidgetResizable(True)
 
-    def init(self, info, dataTableEditor):
+    def init(self, info, dataTableEditor, names):
         contents = QWidget()
         contents.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         gridLayout = QGridLayout(contents)
@@ -159,7 +128,11 @@ class InfoTable(QScrollArea):
         r = 0
         for key, val in info.items():
             if key[0] != '_':
-                gridLayout.addWidget(QLabel(key), r, 0, 1, 1)
+                try:
+                    n = names[key]
+                except:
+                    n = key
+                gridLayout.addWidget(QLabel(n), r, 0, 1, 1)
                 lineEdit = TextLine(r, dataTableEditor)
                 lineEdit.set(val)
                 gridLayout.addWidget(lineEdit, r, 1, 1, 1)
@@ -333,17 +306,25 @@ class DataTableEditor(QWidget):
         self.modified(False)
 
     def open_table(self, datatable):
-        """Read in a DataTable from the given path.
+        """Read in a DataTable.
         """
 #TODO: If it is done within another application, there might be translated headers
 # (calling for <filter_DataTable(data, fieldlist, infolist, extend = True)>).
         self.__info = datatable['__INFO__']
         self.__columns = datatable['__FIELDS__']
         self.__rows = datatable['__ROWS__']
-
-        h = self.info.init(self.__info, self)
+        # "Translations" of the field names:
+        self.__column_titles = datatable.get('__FIELD_NAMES__')
+        headers = []
+        for h in self.__columns:
+            try:
+                headers.append(self.__column_titles[h])
+            except:
+                headers.append(h)
+        self.__info_titles = datatable.get('__INFO_NAMES__')
+        h = self.info.init(self.__info, self, self.__info_titles)
         self.splitter.setSizes([h, 0])
-        self.set_focussed(-1)      # index of currently "focussed" info entry
+        self.set_focussed(-1)   # index of currently "focussed" info entry
 
         data = []
         for row in self.__rows:
@@ -353,7 +334,7 @@ class DataTableEditor(QWidget):
             for h in self.__columns:
                 rowdata.append(row[h])
                 c += 1
-        self.table.setup(colheaders = self.__columns,
+        self.table.setup(colheaders = headers,
                 undo_redo = True, row_add_del = True,
                 cut = True, paste = True,
                 on_changed = self.modified)

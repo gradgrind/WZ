@@ -2,7 +2,7 @@
 """
 core/base.py
 
-Last updated:  2021-10-06
+Last updated:  2021-11-14
 
 Basic configuration and structural stuff.
 
@@ -50,13 +50,13 @@ if __name__ == '__main__':
 
 ### +++++
 
-builtins.NONE = ''
+#builtins.NONE = ''
 
 class Bug(Exception):
     pass
 builtins.Bug = Bug
 
-from minion import Minion
+from minion2 import Minion
 _Minion = Minion()
 builtins.MINION = _Minion.parse_file
 
@@ -89,8 +89,7 @@ class start:
         builtins.DATAPATH = cls.__datadir
         builtins.RESOURCEPATH = cls.__resourcedir
         builtins.CONFIG = MINION(DATAPATH('CONFIG/BASE'))
-        builtins.CALENDAR = Dates.get_calendar(
-                DATAPATH(CONFIG['CALENDAR_FILE']))
+        builtins.CALENDAR = Dates.get_calendar(DATAPATH('CONFIG/Calendar'))
         builtins.SCHOOLYEAR = Dates.calendar_year(CALENDAR)
 #
     @classmethod
@@ -261,7 +260,7 @@ class Dates:
             y1 = int(schoolyear)
         except ValueError:
             raise DataError(_INVALID_SCHOOLYEAR.format(year = schoolyear))
-        if schoolyear not in (y0, str(int(y0) + 1)):
+        if y1 < int(y0) or y1 > int(y0) + 2:
             raise DataError(_DODGY_SCHOOLYEAR.format(year = schoolyear))
         for k, v in calendar.items():
             if isinstance(v, list):
@@ -300,7 +299,7 @@ class Dates:
             elif y == old_year:
                 y = new_year
             return y
-        calfile = calendar_path or DATAPATH(CONFIG['CALENDAR_FILE'])
+        calfile = calendar_path or DATAPATH('CONFIG/Calendar')
         with open(calfile, 'r', encoding = 'utf-8') as fh:
             caltext = fh.read()
         old_year = cls.calendar_year(_Minion.parse(caltext))
@@ -352,7 +351,7 @@ if __name__ == '__main__':
     print("Today (possibly faked):", Dates.today())
     print("Current school year:", Dates.get_schoolyear())
     print("School year of data:", SCHOOLYEAR)
-    print("DATE:", Dates.print_date('2016-04-25'))
+    print("A date:", Dates.print_date('2016-04-25'))
     try:
         print("BAD Date:", Dates.print_date('2016-02-30'))
     except DataError as e:

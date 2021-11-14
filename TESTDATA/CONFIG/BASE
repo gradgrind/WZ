@@ -1,13 +1,13 @@
 #+++ __TITLE__   : Allgemeine Konfiguration
-#+++ __MINION__  : 1.0
-#+++ __MODIFIED__: 2021-11-06
+#+++ __MINION__  : 2.0
+#+++ __MODIFIED__: 2021-11-14
 #+++###########################################################
 #+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
 #+++# wird beim Speichern (in WZ) automatisch aktualisiert.
 #--------------------------------------------------------------
 
-SCHOOL_NAME: <<<Freie Michaelschule>>>
-FONT: <<<Droid Sans>>>
+SCHOOL_NAME: "Freie Waldorfschule Hannover-Bothfeld"
+FONT: "Droid Sans"
 
 ###########################################################
 # Dezimal-Trennzeichen:
@@ -20,14 +20,14 @@ SCHOOLYEAR_MONTH_1: 8
 # Hier wird es für <datetime.datetime.strftime> in Python angegeben:
 DATEFORMAT: %d.%m.%Y    # TT.MM.JJJJ
 
-CALENDAR_HEADER: <<<#*** MINION 1.0 ***#\n
-<<<### Ferien und andere Jahresdaten\n
-<<<### Version: {date}\n
-<<<############################################################\n
-<<<# Diese Kopfzeilen sollten nicht geändert werden, das Datum\n
-<<<# wird beim Speichern automatisch aktualisiert.\n
-<<<#-----------------------------------------------------------\n
-<<<\n>>>
+CALENDAR_HEADER: "#*** MINION 2.0 ***#\n
+\### Ferien und andere Jahresdaten\n
+\### Version: {date}\n
+\############################################################\n
+\# Diese Kopfzeilen sollten nicht geändert werden, das Datum\n
+\# wird beim Speichern automatisch aktualisiert.\n
+\#-----------------------------------------------------------\n
+\\n"
 
 TABLE_FORMAT: tsv  # ("tab-separated-value") oder xlsx
 
@@ -52,47 +52,4 @@ CLASS_TABLE: Klassen/Schueler
 SUBJECT_TABLE: Klassen/Kursdaten
 CLASS_TIMES: Klassen/Zeiten
 
-PUPIL_TABLE: <<<Klasse_{klass}>>>
-
-###########################################################
-################# Schüler #################
-PUPIL_INFO: [
-    [SCHOOLYEAR  Schuljahr  Pflichtfeld]
-    [CLASS       Klasse     Pflichtfeld]
-]
-
-PUPIL_FIELDS: [
-#    [CLASS         Klasse          Pflichtfeld]
-    [PID            ID              Pflichtfeld]
-    [PSORT          Sortiername     &]
-    [FIRSTNAME      Rufname         Pflichtfeld]
-    [LASTNAME       Name            Pflichtfeld]
-    [GROUPS         Gruppen         &]
-    [FIRSTNAMES     Vornamen        Pflichtfeld]
-    [DOB_D          Geburtsdatum    Pflichtfeld]
-    [POB            Geburtsort      Pflichtfeld]
-    [SEX            Geschlecht      Pflichtfeld]
-    [HOME           Ort             Pflichtfeld]
-    [ENTRY_D        Eintrittsdatum  Pflichtfeld]
-    [EXIT_D         Schulaustritt   &]
-    [QUALI_D        Eintritt-SekII  &]
-]
-
-################# Fächer #################
-### Fachnamen
-SUBJECT_NAMES: [
-    [SID       Kürzel    Pflichtfeld]
-    [SUBJECT   Name      Pflichtfeld]
-]
-
-### Felder der Fächer-Datenbank.
-## Die Klassen bilden eine übergeordnete Ebene.
-
-COURSE_FIELDS: [
-    [SID       Fach-Kürzel    Pflichtfeld]
-    [SUBJECT   Fach           Pflichtfeld]
-    [TIDS      Lehrer-Kürzel  &] # darf mehrere sein, durch Leerzeichen getrennt
-    [GROUP     Gruppe         &]
-    [COMPOSITE Sammelfach     &] # darf mehrere sein, durch Leerzeichen getrennt
-    [SGROUP    Fachgruppe     &]
-]
+PUPIL_TABLE: "Klasse_{klass}"
