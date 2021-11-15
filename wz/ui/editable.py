@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-14
+Last updated:  2021-11-15
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -312,8 +312,7 @@ class EdiTableWidget(QTableWidget):
         return sep
 
     def __on_selection_state_change(self, sel):
-#TODO --
-        print("SELECTION " + ("ON" if sel else "EMPTY"))
+        #print("SELECTION " + ("ON" if sel else "EMPTY"))
         pass
 
     def undoredo_extension(self, undo, chtype, change):

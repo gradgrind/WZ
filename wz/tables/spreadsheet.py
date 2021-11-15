@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-11-14
+Last updated:  2021-11-15
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -459,14 +459,14 @@ def filter_DataTable(data, fields, extend = True):
             v = ifields[t]
         except KeyError:
             if item.get('REQUIRED'):
-                raise TableError(_ESSENTIAL_INFO_MISSING.format(field = name))
+                raise TableError(_ESSENTIAL_INFO_MISSING.format(field = t))
             if extend:
                 v = ''
             else:
                 continue
         else:
             if (not v) and item.get('REQUIRED'):
-                raise TableError(_ESSENTIAL_INFO_EMPTY.format(field = name))
+                raise TableError(_ESSENTIAL_INFO_EMPTY.format(field = t))
         newinfo[k] = v
         imap[k] = t
 
@@ -511,28 +511,19 @@ def filter_DataTable(data, fields, extend = True):
 def make_DataTable_filetypes(): return ('tsv', 'xlsx')
 
 
-#TODO: Use combined field mappings like filter_DataTable ...
-# ... using same lists of mappings
-def make_DataTable(data, filetype,
-        fieldlist = None, infolist = None,
-        extend = True,  **xinfo):
+def make_DataTable(data, filetype, fields = None, **xinfo):
     """Build a DataTable with info-lines, header-line and records.
     <data> is a mapping as returned by <read_DataTable>.
     <filetype> specifies which of the file-types in
     <make_DataTable_filetypes()> is to be generated.
-    <fieldlist> is a list of triples (or longer tuples):
-        [[internal-name, external-name, necessary, ... ], ... ]
-        "necessary" is true if the field must be present and not
-        empty in the supplied data.
-    If <fieldlist> is not supplied, use the fields in the provided
-    data.
-    <infolist> is a similar list of triples, but for the info-lines.
-    If <extend> is true, fields in <infolist> or <fieldlist> which
-    are not supplied in the data will be added (does not apply to
-    "necessary" fields, because if one of these is missing the
-    function will fail).
-    <xinfo> optionallyadds info fields.
-    The file is returned as a <bytes> object.
+    Return a <bytes> object.
+    If <fields> is supplied, use this to translate the info-key and
+    column names. Its structure is as defined in the method
+    <filter_DataTable>. If such entries are supplied, only those fields
+    listed there will be included. However, info-fields starting with
+    '_' will always be included – they are independent of the
+    translation. Fields missing in the data will be present, but empty.
+    <xinfo> optionally adds info fields (key = value).
     """
     if filetype == 'xlsx':
         table = NewSpreadsheet()
@@ -540,61 +531,66 @@ def make_DataTable(data, filetype,
         table = NewTable()
     else:
         raise TableError(_UNSUPPORTED_FILETYPE.format(ending = filetype))
-    hasinfo = 0
-    info = data['__INFO__']
-    info.update(xinfo)
-    if infolist:
-        for f, t, needed, *x in infolist:
+    # The "metafields" ('__ ...') should be retained.
+    newinfo = {}
+    ifields = {}
+    for k, v in data['__INFO__'].items():
+        if k[0] == '_':
+            newinfo[k] = v
+        else:
+            ifields[k] = v
+    if fields:
+        for item in fields['INFO_FIELDS']:
+            k = item['NAME']
+            # null <t> => no translation, use internal name:
+            t = item.get('DISPLAY_NAME') or k
             try:
-                val = info[f]
-                if needed and not val:
-                    raise TableError(_ESSENTIAL_INFO_EMPTY.format(
-                            field = f))
-                # null <t> => no translation, use internal name
-                table.add_row(('+++', t or f, val or None))
-                hasinfo += 1
+                v = ifields[k]
             except KeyError:
-                if needed:
-                    raise TableError(_ESSENTIAL_INFO_MISSING.format(
-                            field = name))
+                if item.get('REQUIRED'):
+                    raise TableError(_ESSENTIAL_INFO_MISSING.format(field = t))
                 if extend:
-                    # null <t> => no translation, use internal name
-                    table.add_row(('+++', t or f, None))
-                    hasinfo += 1
+                    v = ''
+                else:
+                    continue
+            else:
+                if (not v) and item.get('REQUIRED'):
+                    raise TableError(_ESSENTIAL_INFO_EMPTY.format(field = t))
+            newinfo[t] = v
+        # Check available data columns against translations
+        kfields = set(data['__FIELDS__'])
+        newcols = []
+        _fields = []
+        for item in fields['TABLE_FIELDS']:
+            k = item['NAME']
+            t = item.get('DISPLAY_NAME') or k
+            r = bool(item.get('REQUIRED'))
+            try:
+                kfields.remove(k)
+            except KeyError:
+                if r:
+                    raise TableError(_ESSENTIAL_FIELD_MISSING.format(field = t))
+            newcols.append((k, t, r))
+            _fields.append(t)
     else:
-        for key, val in info.items():
-            table.add_row(('+++', key, val))
-            hasinfo += 1
-    if hasinfo:
+        _fields = data['__FIELDS__']
+        newinfo.update(ifields)
+        newcols = [(f, f, False) for f in _fields]
+    newinfo.update(xinfo)
+    for k, v in newinfo.items():
+        table.add_row(('+++', k, v))
+    if newinfo:
         table.add_row(None)
-    tfields = data['__FIELDS__']
-    if fieldlist:
-        # Check available fields against desired fields
-        fieldnames = []
-        flist = []
-        for f, t, needed, *x in fieldlist:
-            if f in tfields:
-                flist.append((f, needed))
-                # null <t> => no translation, use internal name
-                fieldnames.append(t or f)
-            elif needed:
-                raise TableError(_ESSENTIAL_FIELD_MISSING.format(
-                                field = name))
-            elif extend:
-                flist.append((f, needed))
-                fieldnames.append(t or f)
-        table.add_row(fieldnames)
-    else:
-        flist = [(f, False) for f in tfields]
-        table.add_row(tfields)
+    table.add_row(_fields)
     # Add the data rows
     for row in data['__ROWS__']:
         rowvals = []
-        for f, needed in flist:
-            val = row.get(f)
-            if needed and not val:
+        for k, t, needed in newcols:
+            val = row.get(k)
+            if (not val) and needed:
                 raise TableError(_ESSENTIAL_FIELD_EMPTY.format(
-                        field = f))
+                        field = t))
+#? None?
             rowvals.append(val or None)
         table.add_row(rowvals)
     return table.save()
@@ -748,10 +744,10 @@ if __name__ == '__main__':
     for row in dbt['__ROWS__']:
         print(" :::", row)
 
-#TODO: The new pupil tables don't have class entries!
     print("\nPUPILS + extend:")
     PUPIL_DATA = MINION(DATAPATH('CONFIG/PUPIL_DATA'))
     table_fields = PUPIL_DATA['TABLE_FIELDS']
+    # The new pupil tables don't have class entries, so:
     table_fields.insert(0, {'NAME': 'CLASS', 'DISPLAY_NAME': 'Klasse',
             'REQUIRED': 'true'})
     info_fields = [{'NAME': 'SCHOOLYEAR', 'DISPLAY_NAME': 'Schuljahr'}]
@@ -776,8 +772,7 @@ if __name__ == '__main__':
         print(" :::", row)
 
     ftype = 'tsv'
-    fbytes = make_DataTable(dbt, ftype,
-            fieldlist = None, infolist = None, extend = False)
+    fbytes = make_DataTable(dbt, ftype)
     fpath = DATAPATH('testing/tmp/extended_no') + '.' + ftype
     os.makedirs(os.path.dirname(fpath), exist_ok = True)
     with open(fpath, 'wb') as fh:
@@ -785,10 +780,7 @@ if __name__ == '__main__':
     print("\nSAVED AS:", fpath)
 
     ftype = 'xlsx'
-    fbytes = make_DataTable(dbt, ftype,
-            fieldlist = PUPIL_DATA['PUPIL_FIELDS'],
-            infolist = [['SCHOOLYEAR', 'Schuljahr', True]],
-            extend = True)
+    fbytes = make_DataTable(dbt, ftype, trfields)
     fpath = DATAPATH('testing/tmp/extended_yes') + '.' + ftype
     with open(fpath, 'wb') as fh:
         fh.write(fbytes)

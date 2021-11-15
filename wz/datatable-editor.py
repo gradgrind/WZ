@@ -2,7 +2,7 @@
 """
 datatable-editor.py
 
-Last updated:  2021-11-14
+Last updated:  2021-11-15
 
 Gui editor for "DataTables".
 
@@ -100,7 +100,7 @@ class _DataTableEditor(DataTableEditor):
             event.accept()
 
     def modified(self, mod):
-        print("MOD:", mod)
+        #print("MOD:", mod)
         self.__modified = mod
         self.action_save.setEnabled(mod)
         self.set_title(mod)

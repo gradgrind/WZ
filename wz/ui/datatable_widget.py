@@ -296,7 +296,8 @@ class DataTableEditor(QWidget):
         <mod> is true/false.
         OVERRIDE this to customize behaviour.
         """
-        print(f"** MODIFIED: {mod} **")
+        #print(f"** MODIFIED: {mod} **")
+        pass
 
 #TODO?
     def reset_modified(self):
@@ -306,10 +307,9 @@ class DataTableEditor(QWidget):
         self.modified(False)
 
     def open_table(self, datatable):
-        """Read in a DataTable.
+        """Read in a DataTable. This may also be the result of a call
+        to <filter_DataTable>, including field translations.
         """
-#TODO: If it is done within another application, there might be translated headers
-# (calling for <filter_DataTable(data, fieldlist, infolist, extend = True)>).
         self.__info = datatable['__INFO__']
         self.__columns = datatable['__FIELDS__']
         self.__rows = datatable['__ROWS__']
