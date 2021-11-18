@@ -54,7 +54,7 @@ GRID_COLOUR = "000088"  # rrggbb
 # BORDER_WIDTH = 1
 
 SCENE_MARGIN = 10  # Margin around content in GraphicsView widgets
-
+TITLE_MARGIN = 15  # Left & right title margin (points)
 #####################
 
 ### Messages
@@ -174,25 +174,26 @@ class GridView(QGraphicsView):
 
     ### ---------------
 
-    def init(self, rowheights, columnwidths):
+    def init(self, rowheights, columnwidths, titleheight=0):
         """Set the grid size.
-            <columnwidths>: a list of column widths (pixels)
-            <rowheights>: a list of row heights (pixels)
+            <columnwidths>: a list of column widths (points)
+            <rowheights>: a list of row heights (points)
         Rows and columns are 0-indexed.
         The widths/heights include grid lines and other bounding boxes.
         """
+        self.titleheight = self.pt2px(titleheight)
         self.scene.clear()
         self.xmarks = [0]
-        x = 0
         xpt = 0
+        x = 0
         for c in columnwidths:
             xpt += c
             c = self.pt2px(c)
             x += c
             self.xmarks.append(x)
         self.grid_width = x
-        self.ymarks = [0]
-        y = 0
+        y = self.titleheight
+        self.ymarks = [y]
         ypt = 0
         for r in rowheights:
             ypt += r
@@ -202,6 +203,9 @@ class GridView(QGraphicsView):
         self.grid_height = y
         self.grid_xpt, self.grid_ypt = (xpt, ypt)
 
+        # print("X:", self.xmarks)
+        # print("Y:", self.ymarks)
+
         # Draw grid
         self.grid_pen = GraphicsSupport.getPen(1, GRID_COLOUR)
         for i in range(len(self.xmarks)):
@@ -210,13 +214,39 @@ class GridView(QGraphicsView):
             self.scene.addItem(GridLine(self, False, i))
 
         # Allow a little margin
+        margin = self.pt2px(SCENE_MARGIN)
         self._sceneRect = QRectF(
-            -SCENE_MARGIN,
-            -SCENE_MARGIN,
-            self.grid_width + SCENE_MARGIN * 2,
-            self.grid_height + SCENE_MARGIN * 2,
+            -margin,
+            -margin,
+            self.grid_width + margin * 2,
+            self.grid_height + margin * 2,
         )
         self.scene.setSceneRect(self._sceneRect)
+
+    def add_title(self, text, halign="c"):
+        textItem = QGraphicsSimpleTextItem()
+        self.scene.addItem(textItem)
+        font = QFont(GraphicsSupport.getFont())
+        if halign == "c":
+            font.setPointSizeF(font.pointSizeF() * 1.2)
+        font.setBold(True)
+        textItem.setFont(font)
+        textItem.setText(text)
+        bdrect = textItem.mapRectToParent(textItem.boundingRect())
+        w = bdrect.width()
+        h = bdrect.height()
+        xshift = 0.0
+        yshift = 0.0
+        margin = self.pt2px(TITLE_MARGIN)
+        if halign == "l":
+            xshift += margin
+        elif halign == "r":
+            xshift += self.grid_width - margin - w
+        else:
+            xshift += (self.grid_width - w) / 2
+        yshift += (self.titleheight - h) / 2
+        textItem.setPos(xshift, yshift)
+        return textItem
 
     def basic_tile(self, row, col, cspan=1, rspan=1, **kargs):
         """Add a basic tile to the grid, checking coordinates and
@@ -343,9 +373,9 @@ class GridLine(QGraphicsLineItem):
         self.index = index
         if vertical:
             self.w = 0
-            self.h = view.grid_height
+            self.h = view.grid_height - view.titleheight
             self.x = view.xmarks[index]
-            self.y = 0
+            self.y = view.titleheight
         else:
             self.w = view.grid_width
             self.h = 0
@@ -433,22 +463,9 @@ class Tile(QGraphicsRectItem):
             self.textItem.setFont(GraphicsSupport.getFont())
         self.setText(text)
         self.set_textcolour(self.style["fg"])
-
         # Border
-
-    #        if style.border == 1:
-    #            # Set the pen for the rectangle boundary
-    #            pen0 = CellStyle.getPen(BORDER_WIDTH, style.border_colour)
-    #        else:
-    #            # No border for the rectangle
-    #            pen0 = CellStyle.getPen(None)
-    #            if style.border != 0:
-    #                # Thick underline
-    #                line = QGraphicsLineItem(self)
-    #                line.setPen(CellStyle.getPen(UNDERLINE_WIDTH,
-    #                        style.border_colour))
-    #                line.setLine(0, h, w, h)
-    #        self.setPen(pen0)
+        pen0 = GraphicsSupport.getPen(None)
+        self.setPen(pen0)
 
     def set_background(self, colour):
         self.setBrush(GraphicsSupport.getBrush(colour))
@@ -465,7 +482,7 @@ class Tile(QGraphicsRectItem):
 
     def margin(self):
         #        return 0.4 * self._grid._gview.MM2PT
-        return 1
+        return self._grid.pt2px(2)
 
     def value(self):
         return self.text
@@ -478,12 +495,13 @@ class Tile(QGraphicsRectItem):
         self.textItem.setScale(1)
         w = self.textItem.boundingRect().width()
         h = self.textItem.boundingRect().height()
+        margin = self.margin()
         if text:
             scale = 1
-            maxw = self.width0 - self.margin() * 2
-            maxh = self.height0 - self.margin() * 2
+            maxw = self.width0 - margin * 2
+            maxh = self.height0 - margin * 2
             if self.rotation:
-                maxh -= self.margin() * 4
+                maxh -= margin * 4
                 if w > maxh:
                     scale = maxh / w
                 if h > maxw:
@@ -498,7 +516,7 @@ class Tile(QGraphicsRectItem):
                 trf = QTransform().rotate(-90)
                 self.textItem.setTransform(trf)
             else:
-                maxw -= self.margin() * 4
+                maxw -= margin * 4
                 if w > maxw:
                     scale = maxw / w
                 if h > maxh:
@@ -519,15 +537,15 @@ class Tile(QGraphicsRectItem):
         h = bdrect.height()
         xshift = 0.0
         if self.halign == "l":
-            xshift += self.margin()
+            xshift += margin
         elif self.halign == "r":
-            xshift += self.width0 - self.margin() - w
+            xshift += self.width0 - margin - w
         else:
             xshift += (self.width0 - w) / 2
         if self.valign == "t":
-            yshift += self.margin()
+            yshift += margin
         elif self.valign == "b":
-            yshift += self.height0 - self.margin() - h
+            yshift += self.height0 - margin - h
         else:
             yshift += (self.height0 - h) / 2
         self.textItem.setPos(xshift, yshift)
@@ -623,17 +641,22 @@ if __name__ == "__main__":
     app = QApplication([])
     #    grid = GridViewRescaling()
     grid = GridView()
-    grid.init(rows, cols)
+    titleheight = 25
+    grid.init(rows, cols, titleheight)
 
     t1 = grid.basic_tile(3, 0, text="Two Merged Cells", cspan=2, bg="ffff80")
     grid.basic_tile(5, 3, text="I am")
     grid.basic_tile(
         0,
         2,
-        textf="Rotated",
+        text="Rotated",
         rotate=True,
         font=GraphicsSupport.getFont("Serif", fontBold=True, fontItalic=False),
     )
+    if titleheight:
+        title = grid.add_title("Centre Title")
+        title_l = grid.add_title("Left Title", halign="l")
+        title_r = grid.add_title("Right Title", halign="r")
 
     grid.resize(600, 400)
     grid.show()
