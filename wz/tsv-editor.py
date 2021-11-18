@@ -2,7 +2,7 @@
 """
 ui/tsv-editor.py
 
-Last updated:  2021-11-12
+Last updated:  2021-11-18
 
 Gui editor for Tab-Separated-Value files.
 
@@ -26,40 +26,53 @@ Copyright 2021 Michael Towers
 
 ### Messages
 
-PROGRAM_NAME        = "tsv Editor"
-_OPEN_FILE          = "Tabellendatei öffnen"
-_SAVE_FILE          = "Tabellendatei speichern"
-_SAVE_FILE_AS       = "Tabellendatei speichern unter"
-_EXIT               = "Schließen"
-_TABLEFILE          = "Tabellendatei"
-_LOSE_CHANGES       = "Es gibt ungespeicherte Änderungen.\n" \
-        "Wirklich schließen?"
-_LOSE_CHANGES_OPEN  = "Es gibt ungespeicherte Änderungen.\n" \
-        "Neue Datei trotzdem öffnen?"
-_SAVING_FORMAT      = "Formatierungen werden möglicherweise verloren gehen:" \
-        "\n{path}\nÜberschreiben?"
+PROGRAM_NAME = "tsv Editor"
+_OPEN_FILE = "Tabellendatei öffnen"
+_SAVE_FILE = "Tabellendatei speichern"
+_SAVE_FILE_AS = "Tabellendatei speichern unter"
+_EXIT = "Schließen"
+_TABLEFILE = "Tabellendatei"
+_LOSE_CHANGES = "Es gibt ungespeicherte Änderungen.\n" "Wirklich schließen?"
+_LOSE_CHANGES_OPEN = (
+    "Es gibt ungespeicherte Änderungen.\n" "Neue Datei trotzdem öffnen?"
+)
+_SAVING_FORMAT = (
+    "Formatierungen werden möglicherweise verloren gehen:" "\n{path}\nÜberschreiben?"
+)
 _TABLETYPE_NOT_SUPPORTED = "Tabellentyp '{ending}' ist nicht unterstützt"
 
 ########################################################################
 
-import sys, os, builtins, traceback
-if __name__ == '__main__':
+import sys, os, builtins
+
+if __name__ == "__main__":
     # Enable package import if running module directly
     this = sys.path[0]
-#    sys.path[0] = os.path.dirname(this)
-#    print("???", sys.path)
+    #    sys.path[0] = os.path.dirname(this)
+    #    print("???", sys.path)
 
-#?
+    # ?
     try:
-        builtins.PROGRAM_DATA = os.environ['PROGRAM_DATA']
+        builtins.PROGRAM_DATA = os.environ["PROGRAM_DATA"]
     except KeyError:
-#        basedir = os.path.dirname(os.path.dirname(this))
+        #        basedir = os.path.dirname(os.path.dirname(this))
         basedir = os.path.dirname(this)
-        builtins.PROGRAM_DATA = os.path.join(basedir, 'wz-data')
+        builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
 #    print("???", PROGRAM_DATA)
 
-from ui.ui_base import run, openDialog, saveDialog, QWidget, Qt, \
-        QVBoxLayout, QToolBar, get_icon, QKeySequence, QAction, APP
+from ui.ui_base import (
+    run,
+    openDialog,
+    saveDialog,
+    QWidget,
+    Qt,
+    QVBoxLayout,
+    QToolBar,
+    get_icon,
+    QKeySequence,
+    QAction,
+    APP,
+)
 from ui.editable import EdiTableWidget, table2tsv
 
 # This seems to deactivate activate-on-single-click in filedialog
@@ -70,8 +83,9 @@ from tables.spreadsheet import Spreadsheet, TableError, NewSpreadsheet
 
 ### -----
 
-#TODO:
+# TODO:
 # Info/Help?
+
 
 class TsvEditor(QWidget):
     def new_action(self, icon, text, shortcut):
@@ -83,16 +97,19 @@ class TsvEditor(QWidget):
         action.setIcon(get_icon(icon))
         return action
 
-    def __init__(self, ofile = None):
+    def __init__(self, ofile=None):
         super().__init__()
-        icon = get_icon('tsv')
+        icon = get_icon("tsv")
         self.setWindowIcon(icon)
-        self.action_open = self.new_action('open', _OPEN_FILE,
-                QKeySequence(Qt.CTRL + Qt.Key_O))
-        self.action_save = self.new_action('save', _SAVE_FILE,
-                QKeySequence(Qt.CTRL + Qt.Key_S))
-        self.action_save_as = self.new_action('saveas', _SAVE_FILE_AS,
-                QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_S))
+        self.action_open = self.new_action(
+            "open", _OPEN_FILE, QKeySequence(Qt.CTRL + Qt.Key_O)
+        )
+        self.action_save = self.new_action(
+            "save", _SAVE_FILE, QKeySequence(Qt.CTRL + Qt.Key_S)
+        )
+        self.action_save_as = self.new_action(
+            "saveas", _SAVE_FILE_AS, QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_S)
+        )
 
         vbox = QVBoxLayout(self)
         toolbar = QToolBar()
@@ -106,31 +123,30 @@ class TsvEditor(QWidget):
 
         # Actions from table widget
         toolbar.addSeparator()
-        self.table.copyCellsAction.setIcon(get_icon('copy'))
+        self.table.copyCellsAction.setIcon(get_icon("copy"))
         toolbar.addAction(self.table.copyCellsAction)
-        self.table.cutCellsAction.setIcon(get_icon('cut'))
+        self.table.cutCellsAction.setIcon(get_icon("cut"))
         toolbar.addAction(self.table.cutCellsAction)
-        self.table.pasteCellsAction.setIcon(get_icon('paste'))
+        self.table.pasteCellsAction.setIcon(get_icon("paste"))
         toolbar.addAction(self.table.pasteCellsAction)
-        self.table.insertRowAction.setIcon(get_icon('insertrowsafter'))
+        self.table.insertRowAction.setIcon(get_icon("insertrowsafter"))
         toolbar.addAction(self.table.insertRowAction)
-        self.table.deleteRowsAction.setIcon(get_icon('deleterows'))
+        self.table.deleteRowsAction.setIcon(get_icon("deleterows"))
         toolbar.addAction(self.table.deleteRowsAction)
-        self.table.insertColumnAction.setIcon(get_icon('insertcolumnsafter'))
+        self.table.insertColumnAction.setIcon(get_icon("insertcolumnsafter"))
         toolbar.addAction(self.table.insertColumnAction)
-        self.table.deleteColumnsAction.setIcon(get_icon('deletecolumns'))
+        self.table.deleteColumnsAction.setIcon(get_icon("deletecolumns"))
         toolbar.addAction(self.table.deleteColumnsAction)
 
         toolbar.addSeparator()
-        self.table.undoAction.setIcon(get_icon('undo'))
+        self.table.undoAction.setIcon(get_icon("undo"))
         toolbar.addAction(self.table.undoAction)
-        self.table.redoAction.setIcon(get_icon('redo'))
+        self.table.redoAction.setIcon(get_icon("redo"))
         toolbar.addAction(self.table.redoAction)
 
         # Exit QAction
         toolbar.addSeparator()
-        exit_action = self.new_action('quit', _EXIT,
-                QKeySequence(Qt.CTRL + Qt.Key_Q))
+        exit_action = self.new_action("quit", _EXIT, QKeySequence(Qt.CTRL + Qt.Key_Q))
         exit_action.triggered.connect(self.close)
         toolbar.addAction(exit_action)
 
@@ -139,11 +155,13 @@ class TsvEditor(QWidget):
         self.action_save_as.triggered.connect(self.save_as_file)
 
         self.table.setup(
-                undo_redo = True,
-                row_add_del = True,
-                column_add_del = True,
-                cut = True, paste = True,
-                on_changed = self.modified)
+            undo_redo=True,
+            row_add_del=True,
+            column_add_del=True,
+            cut=True,
+            paste=True,
+            on_changed=self.modified,
+        )
 
         self.set_current_file(None)
         self.action_save.setEnabled(False)
@@ -162,14 +180,15 @@ class TsvEditor(QWidget):
             event.accept()
 
     def modified(self, mod):
-        #print("MOD:", mod)
+        # print("MOD:", mod)
         self.action_save.setEnabled(mod)
         self.set_title(mod)
 
     def set_title(self, changed):
-        x = ' *' if changed else ''
-        title = f"{PROGRAM_NAME} – {self.filename}{x}" \
-                if self.filename else PROGRAM_NAME
+        x = " *" if changed else ""
+        title = (
+            f"{PROGRAM_NAME} – {self.filename}{x}" if self.filename else PROGRAM_NAME
+        )
         self.setWindowTitle(title)
 
     def set_current_file(self, path):
@@ -179,8 +198,7 @@ class TsvEditor(QWidget):
     def get_file(self):
         if self.table.is_modified() and not SHOW_CONFIRM(_LOSE_CHANGES_OPEN):
             return
-        filetypes = ' '.join(['*.' + fte
-                for fte in Spreadsheet.filetype_endings()])
+        filetypes = " ".join(["*." + fte for fte in Spreadsheet.filetype_endings()])
         ofile = openDialog(f"{_TABLEFILE} ({filetypes})", _OPEN_FILE)
         if ofile:
             self.open_file(ofile)
@@ -206,45 +224,45 @@ class TsvEditor(QWidget):
         self.modified(False)
 
     def save_as_file(self):
-        sfile = saveDialog(f"{_TABLEFILE} (*.tsv *.xlsx)",
-                self.current_file, _SAVE_FILE)
+        sfile = saveDialog(
+            f"{_TABLEFILE} (*.tsv *.xlsx)", self.current_file, _SAVE_FILE
+        )
         if sfile and self.save_file(sfile):
             self.set_current_file(sfile)
             self.modified(False)
 
-    def save_file(self, sfile = None):
-        if not sfile:       # "Save"
+    def save_file(self, sfile=None):
+        if not sfile:  # "Save"
             sfile = self.current_file
-            if (not self.saved) and (not sfile.endswith('.tsv')):
-                if not SHOW_CONFIRM(_SAVING_FORMAT.format(path = sfile)):
+            if (not self.saved) and (not sfile.endswith(".tsv")):
+                if not SHOW_CONFIRM(_SAVING_FORMAT.format(path=sfile)):
                     return False
-        if sfile.endswith('.tsv'):
-            with open(sfile, 'w', encoding = 'utf-8') as fh:
+        if sfile.endswith(".tsv"):
+            with open(sfile, "w", encoding="utf-8") as fh:
                 fh.write(table2tsv(self.table.table_data))
-        elif sfile.endswith('.xlsx'):
+        elif sfile.endswith(".xlsx"):
             NewSpreadsheet.make(self.table.table_data, sfile)
         else:
             try:
-                _, ending = sfile.rsplit('.', 1)
+                _, ending = sfile.rsplit(".", 1)
             except ValueError:
-                ending = ''
-            SHOW_ERROR(_TABLETYPE_NOT_SUPPORTED.format(ending = ending))
+                ending = ""
+            SHOW_ERROR(_TABLETYPE_NOT_SUPPORTED.format(ending=ending))
             return False
         # Tell the table editor widget to register "no changes"
         self.table.reset_modified()
         self.saved = True
-#        self.modified(False)
+        #        self.modified(False)
         return True
 
 
-#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     ofile = sys.argv[1] if len(sys.argv) == 2 else None
-    #print("tsv-editor.py:", sys.argv, "-->", ofile)
+    # print("tsv-editor.py:", sys.argv, "-->", ofile)
     tsv_edit = TsvEditor(ofile)
     # Window dimensions
     geometry = APP.primaryScreen().availableGeometry()
-    tsv_edit.resize(int(geometry.width() * 0.7),
-            int(geometry.height() * 0.7))
+    tsv_edit.resize(int(geometry.width() * 0.7), int(geometry.height() * 0.7))
     run(tsv_edit)

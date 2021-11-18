@@ -2,7 +2,7 @@
 """
 ui/ui_extra.py
 
-Last updated:  2021-11-03
+Last updated:  2021-11-18
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -51,9 +51,8 @@ _CONFIRMATION = "Bestätigen"
 #####################################################
 
 import sys, os, builtins, traceback, glob
-from importlib import resources         # Python >= 3.7
 
-#TODO: PySide6 only?: If I use this feature, this is probably the wrong path ...
+# TODO: PySide6 only?: If I use this feature, this is probably the wrong path ...
 # Without the environment variable there is a disquieting error message.
 #    os.environ['PYSIDE_DESIGNER_PLUGINS'] = this
 from qtpy.QtWidgets import *
@@ -63,20 +62,23 @@ from qtpy.QtCore import *
 APP = QApplication(sys.argv)
 path = QLibraryInfo.location(QLibraryInfo.TranslationsPath)
 translator = QTranslator(APP)
-if translator.load(QLocale.system(), 'qtbase', '_', path):
+if translator.load(QLocale.system(), "qtbase", "_", path):
     APP.installTranslator(translator)
-SETTINGS = QSettings(QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
+# ?
+SETTINGS = QSettings(QSettings.IniFormat, QSettings.UserScope, "MT", "WZ")
+
 
 def run(window):
     window.show()
     sys.exit(APP.exec())
 
-### +++++
 
 class GuiError(Exception):
     pass
 
+
 ### -----
+
 
 class HLine(QFrame):
     def __init__(self):
@@ -84,7 +86,6 @@ class HLine(QFrame):
         self.setFrameShape(QFrame.HLine)
         self.setFrameShadow(QFrame.Sunken)
 
-###
 
 class VLine(QFrame):
     def __init__(self):
@@ -92,19 +93,18 @@ class VLine(QFrame):
         self.setFrameShape(QFrame.VLine)
         self.setFrameShadow(QFrame.Sunken)
 
-###
 
 def get_icon(name):
-    ilist = glob.glob(os.path.join(PROGRAM_DATA, 'icons', f'{name}.*'))
+    ilist = glob.glob(os.path.join(PROGRAM_DATA, "icons", f"{name}.*"))
     return QIcon(ilist[0])
 
-###
 
 class StackPage(QWidget):
     """Base class for the page widgets ("tab" widgets) in the main "stack".
     Subclass this to add the required functionality.
     The actual visible widget is referenced by its name.
     """
+
     name = "StackPage"
 
     def enter(self):
@@ -129,11 +129,9 @@ class StackPage(QWidget):
         return True
 
     def is_modified(self):
-        """Return <True> if there are unsaved changes.
-        """
+        """Return <True> if there are unsaved changes."""
         return False
 
-###
 
 class StandalonePage(StackPage):
     name = "StandalonePage"
@@ -141,11 +139,10 @@ class StandalonePage(StackPage):
     def closeEvent(self, event):
         if self.leave_ok():
             event.accept()
-#            super().closeEvent(event)
+        #            super().closeEvent(event)
         else:
             event.ignore()
 
-###
 
 class KeySelector:
     """Modifies the behaviour of an existing (pristine) QComboBox:
@@ -157,24 +154,23 @@ class KeySelector:
     (the new key) as <changed_callback>. If this function does not
     return a true value, the selection will be reset to the last value.
     """
-    def __init__(self, widget_name,
-            value_mapping = None, changed_callback = None):
+
+    def __init__(self, widget_name, value_mapping=None, changed_callback=None):
         self.name = widget_name
         self.widget = getattr(WINDOW, widget_name)
         self._selected = None
         self._cb = changed_callback
         self.widget.set_items(value_mapping)
-# Qt note: If connecting after adding the items, there seems
-# to be no signal; if before, then the first item is signalled.
+        # Qt note: If connecting after adding the items, there seems
+        # to be no signal; if before, then the first item is signalled.
         self.widget.currentIndexChanged.connect(self._new)
-#
-    def selected(self, display = False):
+
+    def selected(self, display=False):
         try:
-            return self.value_mapping[self.widget.currentIndex()][
-                    1 if display else 0]
+            return self.value_mapping[self.widget.currentIndex()][1 if display else 0]
         except:
             return None
-#
+
     def _new(self, index):
         if self.value_mapping and self.changed_callback:
             key = self.value_mapping[index][0]
@@ -184,9 +180,9 @@ class KeySelector:
                 self.changed_callback = None
                 self.widget.setCurrentIndex(self._selected)
                 self.changed_callback = self._cb
-#
+
     def reset(self, key):
-        self.changed_callback = None        # suppress callback
+        self.changed_callback = None  # suppress callback
         i = 0
         for k, _ in self.value_mapping:
             if k == key:
@@ -195,30 +191,29 @@ class KeySelector:
                 break
             i += 1
         else:
-            self.changed_callback = self._cb    # reenable callback
-            raise GuiError(_UNKNOWN_KEY.format(key = key))
-        self.changed_callback = self._cb    # reenable callback
-#
+            self.changed_callback = self._cb  # reenable callback
+            raise GuiError(_UNKNOWN_KEY.format(key=key))
+        self.changed_callback = self._cb  # reenable callback
+
     def trigger(self):
         self._new(self.widget.currentIndex())
-#
-    def set_items(self, value_mapping, index = 0):
+
+    def set_items(self, value_mapping, index=0):
         """Set / reset the items.
         <value_mapping> is a list: ((key, display text), ...)
         This will not cause a callback.
         """
-        self.changed_callback = None        # suppress callback
+        self.changed_callback = None  # suppress callback
         self.value_mapping = value_mapping
         self.widget.clear()
         if value_mapping:
             self.widget.addItems([text for _, text in value_mapping])
             self.widget.setCurrentIndex(index)
             self._selected = index
-        self.changed_callback = self._cb    # reenable callback
+        self.changed_callback = self._cb  # reenable callback
 
-###
 
-def YesOrNoDialog(message, title = None):
+def YesOrNoDialog(message, title=None):
     qd = QDialog()
     qd.setWindowTitle(title or _YESORNO_TITLE)
     vbox = QVBoxLayout(qd)
@@ -236,14 +231,13 @@ def YesOrNoDialog(message, title = None):
     cancel.setDefault(True)
     return qd.exec_() == QDialog.Accepted
 
-###
 
-def LineDialog(message, text = None, title = None):
+def LineDialog(message, text=None, title=None):
     td = QDialog()
     td.setWindowTitle(title or _INPUT_TITLE)
     vbox = QVBoxLayout(td)
     vbox.addWidget(QLabel(message))
-    lineedit = QLineEdit(text or '')
+    lineedit = QLineEdit(text or "")
     vbox.addWidget(lineedit)
     vbox.addWidget(HLine())
     bbox = QHBoxLayout()
@@ -260,9 +254,8 @@ def LineDialog(message, text = None, title = None):
         return lineedit.text().strip()
     return None
 
-###
 
-def TextAreaDialog(message = None, text = None, title = None):
+def TextAreaDialog(message=None, text=None, title=None):
     td = QDialog()
     td.setWindowTitle(title or _TEXTAREA_TITLE)
     vbox = QVBoxLayout(td)
@@ -270,7 +263,7 @@ def TextAreaDialog(message = None, text = None, title = None):
         msg = QTextEdit(message)
         msg.setReadOnly(True)
         vbox.addWidget(msg)
-    textedit = QTextEdit(text or '')
+    textedit = QTextEdit(text or "")
     vbox.addWidget(textedit)
     vbox.addWidget(HLine())
     bbox = QHBoxLayout()
@@ -287,9 +280,8 @@ def TextAreaDialog(message = None, text = None, title = None):
         return textedit.toPlainText().strip()
     return None
 
-###
 
-def ListSelect(title, message, data, button = None):
+def ListSelect(title, message, data, button=None):
     """A simple list widget as selection dialog.
     <data> is a list of (key, display-text) pairs.
     Selection is by clicking or keyboard select and return.
@@ -297,17 +289,17 @@ def ListSelect(title, message, data, button = None):
     """
     select = QDialog()
     select.setWindowTitle(title)
-#-
+
     def select_item(qlwi):
         if select.result == None:
             i = l.row(qlwi)
             select.result = data[i][0]
             select.accept()
-#-
+
     def xb_clicked():
         select.result = (None, button)
         select.accept()
-#-
+
     select.result = None
     layout = QVBoxLayout(select)
     layout.addWidget(QLabel(message))
@@ -334,26 +326,25 @@ def ListSelect(title, message, data, button = None):
     select.exec_()
     return select.result
 
-###
 
-def TreeDialog(title, message, data, button = None):
+def TreeDialog(title, message, data, button=None):
     """A simple two-level tree widget as selection dialog.
     Top level items may not be selected, they serve only as categories.
     Can take additional buttons ...?
     """
     select = QDialog()
     select.setWindowTitle(title)
-#-
+
     def select_item(qtwi, col):
         p = qtwi.parent()
         if p:
             select.result = (p.text(0), qtwi.text(0))
             select.accept()
-#-
+
     def xb_clicked():
         select.result = (None, button)
         select.accept()
-#-
+
     layout = QVBoxLayout(select)
     layout.addWidget(QLabel(message))
     tree = QTreeWidget()
@@ -386,10 +377,8 @@ def TreeDialog(title, message, data, button = None):
     select.exec_()
     return select.result
 
-###
 
-#TODO: tweak this to make it more readable ... (more spacing?)
-def TreeMultiSelect(title, message, data, checked = False):
+def TreeMultiSelect(title, message, data, checked=False):
     """A simple two-level tree widget as selection dialog.
     Top level items may not be selected, they serve only as categories.
     Any number of entries (atoms/leaves) may be selected.
@@ -404,7 +393,7 @@ def TreeMultiSelect(title, message, data, checked = False):
     elements = []
     tree = QTreeWidget()
     layout.addWidget(tree)
-#?    tree.setColumnCount(1)
+    # ?    tree.setColumnCount(1)
     tree.setHeaderHidden(True)
     # Enter the data
     for category, dataline in data:
@@ -412,8 +401,7 @@ def TreeMultiSelect(title, message, data, checked = False):
         elements.append((category, items))
         parent = QTreeWidgetItem(tree)
         parent.setText(0, category)
-        parent.setFlags(parent.flags() | Qt.ItemIsTristate
-                | Qt.ItemIsUserCheckable)
+        parent.setFlags(parent.flags() | Qt.ItemIsTristate | Qt.ItemIsUserCheckable)
         for d in dataline:
             child = QTreeWidgetItem(parent)
             items.append((child, d))
@@ -439,58 +427,76 @@ def TreeMultiSelect(title, message, data, checked = False):
         categories = []
         for k, items in elements:
             # Filter the changes lists
-            dlist = [d[0] for child, d in items
-                    if child.checkState(0) == Qt.Checked]
+            dlist = [d[0] for child, d in items if child.checkState(0) == Qt.Checked]
             categories.append((k, dlist))
         return categories
     else:
         return None
 
-###
 
 def _popupInfo(message):
     QMessageBox.information(None, _INFO, message)
-builtins.SHOW_INFO = _popupInfo
-##
+
+
 def _popupWarn(message):
     QMessageBox.warning(None, _WARNING, message)
-builtins.SHOW_WARNING = _popupWarn
-##
+
+
 def _popupError(message):
-     QMessageBox.critical(None, _ERROR, message)
-builtins.SHOW_ERROR = _popupError
-##
+    QMessageBox.critical(None, _ERROR, message)
+
+
 def _popupConfirm(question):
-    return QMessageBox.question(None, _CONFIRMATION, question,
-        buttons = QMessageBox.Ok | QMessageBox.Cancel,
-        defaultButton = QMessageBox.Ok) == QMessageBox.Ok
+    return (
+        QMessageBox.question(
+            None,
+            _CONFIRMATION,
+            question,
+            buttons=QMessageBox.Ok | QMessageBox.Cancel,
+            defaultButton=QMessageBox.Ok,
+        )
+        == QMessageBox.Ok
+    )
+
+
+builtins.SHOW_INFO = _popupInfo
+builtins.SHOW_WARNING = _popupWarn
+builtins.SHOW_ERROR = _popupError
 builtins.SHOW_CONFIRM = _popupConfirm
 
 ### File/Folder Dialogs
 
-def openDialog(filetype, title = None):
-    dir0 = SETTINGS.value('LAST_LOAD_DIR') or os.path.expanduser('~')
-    fpath = QFileDialog.getOpenFileName(None, title or _FILEOPEN,
-            dir0, filetype)[0]
+
+def openDialog(filetype, title=None):
+    dir0 = SETTINGS.value("LAST_LOAD_DIR") or os.path.expanduser("~")
+    fpath = QFileDialog.getOpenFileName(None, title or _FILEOPEN, dir0, filetype)[0]
     if fpath:
-        SETTINGS.setValue('LAST_LOAD_DIR', os.path.dirname(fpath))
+        SETTINGS.setValue("LAST_LOAD_DIR", os.path.dirname(fpath))
     return fpath
-##
-def dirDialog(title = None):
-    dir0 = SETTINGS.value('LAST_LOAD_DIR') or os.path.expanduser('~')
-    dpath = QFileDialog.getExistingDirectory(None, title or _DIROPEN, dir0,
-            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+
+
+def dirDialog(title=None):
+    dir0 = SETTINGS.value("LAST_LOAD_DIR") or os.path.expanduser("~")
+    dpath = QFileDialog.getExistingDirectory(
+        None,
+        title or _DIROPEN,
+        dir0,
+        QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+    )
     if dpath:
-        SETTINGS.setValue('LAST_LOAD_DIR', dpath)
+        SETTINGS.setValue("LAST_LOAD_DIR", dpath)
     return dpath
-##
-def saveDialog(filetype, filename, title = None):
-    dir0 = SETTINGS.value('LAST_SAVE_DIR') or os.path.expanduser('~')
-    fpath = QFileDialog.getSaveFileName(None, title or _FILESAVE,
-            os.path.join(dir0, filename), filetype)[0]
+
+
+def saveDialog(filetype, filename, title=None):
+    dir0 = SETTINGS.value("LAST_SAVE_DIR") or os.path.expanduser("~")
+    fpath = QFileDialog.getSaveFileName(
+        None, title or _FILESAVE, os.path.join(dir0, filename), filetype
+    )[0]
     if fpath:
-        SETTINGS.setValue('LAST_SAVE_DIR', os.path.dirname(fpath))
+        SETTINGS.setValue("LAST_SAVE_DIR", os.path.dirname(fpath))
     return fpath
+
 
 ############### Handle uncaught exceptions ###############
 class UncaughtHook(QObject):
@@ -499,16 +505,20 @@ class UncaughtHook(QObject):
         # This registers the <exception_hook> method as hook with
         # the Python interpreter
         sys.excepthook = self.exception_hook
-#
+
     def exception_hook(self, exc_type, exc_value, exc_traceback):
         """Function handling uncaught exceptions.
         It is triggered each time an uncaught exception occurs.
         """
-        log_msg = '{val}\n\n$${emsg}'.format(
-                val = exc_value, emsg = ''.join(traceback.format_exception(
-                        exc_type, exc_value, exc_traceback)))
+        log_msg = "{val}\n\n$${emsg}".format(
+            val=exc_value,
+            emsg="".join(
+                traceback.format_exception(exc_type, exc_value, exc_traceback)
+            ),
+        )
         # Show message
-        SHOW_ERROR('*** TRAP ***\n' + log_msg)
+        SHOW_ERROR("*** TRAP ***\n" + log_msg)
+
 
 # Create a global instance of <UncaughtHook> to register the hook
 qt_exception_hook = UncaughtHook()

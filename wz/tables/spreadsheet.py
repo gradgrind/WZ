@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-11-15
+Last updated:  2021-11-18
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -34,25 +34,26 @@ Copyright 2021 Michael Towers
 
 ### Messages
 
-_UNSUPPORTED_FILETYPE   = "Nicht unterstützer Dateityp ({ending})"
-_TABLENOTFOUND          = "Tabellendatei existiert nicht:\n   {path}"
-_MULTIPLEMATCHINGFILES  = "Mehrere passende Dateien:\n   {path}"
-_TABLENOTREADABLE       = "Tabellendatei konnte nicht eingelesen werden:\n   {path}"
-_INVALIDSHEETNAME       = "Ungültige Tabellenname: '{name}'"
-_INVALIDCELLNAME        = "Ungültiger Zellenbezeichnung: '{name}'"
-_INVALID_FILE           = "Ungültige oder fehlerhafte Datei"
-_NO_TYPE_EXTENSION      = "Dateityp-Erweiterung fehlt: {fname}"
-_DUPLICATE_COLUMN_NAME  = "Spaltenname doppelt vorhanden: {name}"
+_UNSUPPORTED_FILETYPE = "Nicht unterstützer Dateityp ({ending})"
+_TABLENOTFOUND = "Tabellendatei existiert nicht:\n   {path}"
+_MULTIPLEMATCHINGFILES = "Mehrere passende Dateien:\n   {path}"
+_TABLENOTREADABLE = "Tabellendatei konnte nicht eingelesen werden:\n   {path}"
+_INVALIDSHEETNAME = "Ungültige Tabellenname: '{name}'"
+_INVALIDCELLNAME = "Ungültiger Zellenbezeichnung: '{name}'"
+_INVALID_FILE = "Ungültige oder fehlerhafte Datei"
+_NO_TYPE_EXTENSION = "Dateityp-Erweiterung fehlt: {fname}"
+_DUPLICATE_COLUMN_NAME = "Spaltenname doppelt vorhanden: {name}"
 _ESSENTIAL_FIELD_MISSING = "Feld (Spalte) '{field}' fehlt in der Tabelle"
-_ESSENTIAL_FIELD_EMPTY  = "Feld (Spalte) '{field}' darf nicht leer sein"
+_ESSENTIAL_FIELD_EMPTY = "Feld (Spalte) '{field}' darf nicht leer sein"
 _ESSENTIAL_INFO_MISSING = "Info-Feld '{field}' fehlt in der Tabelle"
-_ESSENTIAL_INFO_EMPTY   = "Info-Feld '{field}' darf nicht leer sein"
-_INFO_IN_BODY           = "Info-Zeilen müssen vor der Kopfzeile stehen"
+_ESSENTIAL_INFO_EMPTY = "Info-Feld '{field}' darf nicht leer sein"
+_INFO_IN_BODY = "Info-Zeilen müssen vor der Kopfzeile stehen"
 
 ########################################################################
 
 import sys, os, datetime, re
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Enable package import if running as module
     this = sys.path[0]
     appdir = os.path.dirname(this)
@@ -67,13 +68,16 @@ from openpyxl.utils import get_column_letter
 
 from tables.simple_ods_reader import OdsReader
 
+
 class TableError(Exception):
     pass
 
+
 ### -----
 
+
 class TsvReader(dict):
-    def __init__ (self, filepath):
+    def __init__(self, filepath):
         """Read a tab-separated-value table as a list of rows,
         each row is a list of cell values.
         <filepath> can be the path to a tsv file, but it could be an
@@ -84,16 +88,15 @@ class TsvReader(dict):
         """
         super().__init__()
         if type(filepath) == str:
-            with open(filepath, 'rb') as fbi:
+            with open(filepath, "rb") as fbi:
                 lines = fbi.read().splitlines()
         else:
             lines = filepath.read().splitlines()
         rows = []
         maxlen = 0
         for row_b in lines:
-            #print(repr(row_b))
-            row = [cell.decode('utf-8').strip()
-                    for cell in row_b.split(b'\t')]
+            # print(repr(row_b))
+            row = [cell.decode("utf-8").strip() for cell in row_b.split(b"\t")]
             l = len(row)
             if l > maxlen:
                 maxlen = l
@@ -101,17 +104,16 @@ class TsvReader(dict):
         for row in rows:
             dl = maxlen - len(row)
             if dl:
-                row += [''] * dl
-        self['TSV'] = rows
+                row += [""] * dl
+        self["TSV"] = rows
 
-    def mergedRanges (self, sheetname):
-        """Returns an empty list as tsv doesn't support cell merging.
-        """
+    def mergedRanges(self, sheetname):
+        """Returns an empty list as tsv doesn't support cell merging."""
         return []
 
 
 class XlsReader(dict):
-    def __init__ (self, filepath):
+    def __init__(self, filepath):
         """Read an Excel spreadsheet as a list of rows,
         each row is a list of cell values.
         All sheets in the file are read, a <dict> of sheets
@@ -125,7 +127,7 @@ class XlsReader(dict):
         self._mergedRanges = {}
         # Note that <data_only=True> replaces all formulae by their value,
         # which is probably good for reading, but not for writing!
-        wb = load_workbook(filepath, data_only = True)
+        wb = load_workbook(filepath, data_only=True)
         for wsname in wb.sheetnames:
             ws = wb[wsname]
             rows = []
@@ -138,7 +140,7 @@ class XlsReader(dict):
                     elif type(v) == str:
                         v = v.strip()
                     elif v == None:
-                        v = ''
+                        v = ""
                     else:
                         v = str(v)
                     values.append(v)
@@ -147,8 +149,7 @@ class XlsReader(dict):
             self._mergedRanges[wsname] = ws.merged_cells.ranges
 
     def mergedRanges(self, sheetname):
-        """Returns a list like ['AK2:AM2', 'H33:AD33', 'I34:J34', 'L34:AI34'].
-        """
+        """Returns a list like ['AK2:AM2', 'H33:AD33', 'I34:J34', 'L34:AI34']."""
         return self._mergedRanges[sheetname]
 
 
@@ -157,26 +158,23 @@ def spreadsheet_file_complete(filepath):
     Check that it is one of the supported table formats.
     Return the full path including file-type extension.
     """
-    f_e = filepath.rsplit('.', 1)
+    f_e = filepath.rsplit(".", 1)
     if len(f_e) == 2:
         if f_e[1] in Spreadsheet._SUPPORTED_TYPES:
             if os.path.isfile(filepath):
                 return filepath
-            raise TableError(_TABLENOTFOUND.format(
-                    path = filepath))
+            raise TableError(_TABLENOTFOUND.format(path=filepath))
     # No type-extension provided, test valid possibilities
     found = None
     for x in Spreadsheet._SUPPORTED_TYPES:
-        fp = f'{filepath}.{x}'
+        fp = f"{filepath}.{x}"
         if os.path.isfile(fp):
             if found:
-                raise TableError(_MULTIPLEMATCHINGFILES.format(
-                        path = fpbase))
+                raise TableError(_MULTIPLEMATCHINGFILES.format(path=fpbase))
             found = fp
     if found:
         return found
-    raise TableError(_TABLENOTFOUND.format(
-            path = filepath))
+    raise TableError(_TABLENOTFOUND.format(path=filepath))
 
 
 class Spreadsheet:
@@ -193,17 +191,20 @@ class Spreadsheet:
     and <col> are 0-based indexes.
     All cell values are strings, or <None> if empty.
     """
-    _SUPPORTED_TYPES = {'tsv': TsvReader, 'ods': OdsReader, 'xlsx': XlsReader}
+
+    _SUPPORTED_TYPES = {"tsv": TsvReader, "ods": OdsReader, "xlsx": XlsReader}
+
     @classmethod
     def filetype_endings(cls):
         return list(cls._SUPPORTED_TYPES)
-    #+
+
+    # +
     @classmethod
     def supportedType(cls, filename):
         """Check the ending of a file name (or path).
         Return <True> if the type is supported, else <False>.
         """
-        fsplit = filename.rsplit('.', 1)
+        fsplit = filename.rsplit(".", 1)
         if len(fsplit) == 2:
             if fsplit[1] in cls._SUPPORTED_TYPES:
                 return True
@@ -226,7 +227,7 @@ class Spreadsheet:
             filepath = spreadsheet_file_complete(filepath)
             self.filename = os.path.basename(filepath)
             self.filepath = filepath
-            ending = self.filename.rsplit('.', 1)[1]
+            ending = self.filename.rsplit(".", 1)[1]
         else:
             # realfile = False
             try:
@@ -234,54 +235,53 @@ class Spreadsheet:
             except:
                 raise TableError(_INVALID_FILE)
             try:
-                ending = self.filename.rsplit('.', 1)[1]
+                ending = self.filename.rsplit(".", 1)[1]
             except:
-                raise TableError(_NO_TYPE_EXTENSION.format(
-                        fname=self.filename))
+                raise TableError(_NO_TYPE_EXTENSION.format(fname=self.filename))
             self.filepath = None
         try:
-            handler = self._SUPPORTED_TYPES [ending]
+            handler = self._SUPPORTED_TYPES[ending]
         except:
             raise TableError(_UNSUPPORTED_FILETYPE.format(ending=ending))
         try:
             self._spreadsheet = handler(filepath)
         except:
-            raise TableError(_TABLENOTREADABLE.format(
-                    path=self.filepath or self.filename))
+            raise TableError(
+                _TABLENOTREADABLE.format(path=self.filepath or self.filename)
+            )
         self._sheetNames = list(self._spreadsheet)
         # Default sheet is the first:
         self._table = self._spreadsheet[self._sheetNames[0]]
 
     def table(self):
-        """Return the current table (initially the first sheet).
-        """
+        """Return the current table (initially the first sheet)."""
         return self._table
 
-    def rowLen(self, table = None):
+    def rowLen(self, table=None):
         if not table:
             table = self._table
         return len(table[0])
 
-    def colLen(self, table = None):
+    def colLen(self, table=None):
         if not table:
             table = self._table
         return len(table)
 
-    def getValue(self, rx, cx, table = None):
+    def getValue(self, rx, cx, table=None):
         if not table:
             table = self._table
         return table[rx][cx]
 
-    def getABValue(self, A1, table = None):
+    def getABValue(self, A1, table=None):
         r, c = self.rowcol(A1)
         return self.getValue(r, c, table)
 
     def getTableNames(self):
         return self._sheetNames
 
-    def _getTable(self, tablename, failerror = True):
+    def _getTable(self, tablename, failerror=True):
         try:
-            #print (self._spreadsheet.keys())
+            # print (self._spreadsheet.keys())
             return self._spreadsheet[tablename]
         except:
             if failerror:
@@ -296,8 +296,8 @@ class Spreadsheet:
         else:
             return False
 
-#TODO: Is this needed?
-    def getColumnHeaders(self, rowix, table = None):
+    # TODO: Is this needed?
+    def getColumnHeaders(self, rowix, table=None):
         """Return a dict of table headers, header -> column index.
         The row containing the headers is passed as argument.
         """
@@ -306,15 +306,15 @@ class Spreadsheet:
         for cellix in range(self.rowLen(table)):
             cellV = self.getValue(rowix, cellix, table)
             if cellV:
-                if cellV == '#':
+                if cellV == "#":
                     continue
-                if cellV == '!':
+                if cellV == "!":
                     self.ixHeaderEnd = cellix
                     break
                 headers[cellV] = cellix
         return headers
 
-#TODO: Is this needed?
+    # TODO: Is this needed?
     def getMergedRanges(self, tablename):
         return self._spreadsheet.mergedRanges(tablename)
 
@@ -335,18 +335,18 @@ class Spreadsheet:
             col = (col + 1) * 26 + v - baseval
         try:
             assert col >= 0
-            return(int (cell[i:]) - 1, col)
+            return (int(cell[i:]) - 1, col)
         except:
             raise TableError(_INVALIDCELLNAME.format(name=cellname))
 
     @staticmethod
     def cellname(row, col):
-        """Return the name of a cell given its coordinates (0-based):
-        """
-        return get_column_letter(col+1) + str(row+1)
+        """Return the name of a cell given its coordinates (0-based):"""
+        return get_column_letter(col + 1) + str(row + 1)
 
 
-def read_DataTable_filetypes(): return tuple(Spreadsheet._SUPPORTED_TYPES)
+def read_DataTable_filetypes():
+    return tuple(Spreadsheet._SUPPORTED_TYPES)
 
 
 def read_DataTable(filepath_or_stream):
@@ -394,31 +394,27 @@ def read_DataTable(filepath_or_stream):
             rowmap = {}
             for f, i in header:
                 # <Spreadsheet> can return <None> in a cell:
-                rowmap[f] = row[i] or ''
+                rowmap[f] = row[i] or ""
             rows.append(rowmap)
-        elif c1 == '+++':
+        elif c1 == "+++":
             if header:
                 raise TableError(_INFO_IN_BODY)
-            info[row[1]] = row[2] or ''
+            info[row[1]] = row[2] or ""
         else:
             # The field names
-            i = 0   # column indexing
+            i = 0  # column indexing
             header = []
             for f in row:
                 if f:
                     if f in header:
-                        raise TableError(_DUPLICATE_COLUMN_NAME.format(
-                                name = f))
+                        raise TableError(_DUPLICATE_COLUMN_NAME.format(name=f))
                     header.append((f, i))
                     fields.append(f)
                 i += 1
-    return {    '__INFO__': info,
-                '__FIELDS__': fields,
-                '__ROWS__': rows
-    }
+    return {"__INFO__": info, "__FIELDS__": fields, "__ROWS__": rows}
 
 
-def filter_DataTable(data, fields, extend = True):
+def filter_DataTable(data, fields, extend=True):
     """Process the table data into mappings based on the entries in the
     mapping <fields>. This has (at least) the two entries
     'INFO_FIELDS' and 'TABLE_FIELDS'. These allow translation of the
@@ -446,44 +442,44 @@ def filter_DataTable(data, fields, extend = True):
     newinfo = {}
     ifields = {}
     imap = {}
-    for k, v in data['__INFO__'].items():
-        if k[0] == '_':
+    for k, v in data["__INFO__"].items():
+        if k[0] == "_":
             newinfo[k] = v
         else:
             ifields[k] = v
-    for item in fields['INFO_FIELDS']:
-        k = item['NAME']
+    for item in fields["INFO_FIELDS"]:
+        k = item["NAME"]
         # null <t> => no translation, use internal name:
-        t = item.get('DISPLAY_NAME') or k
+        t = item.get("DISPLAY_NAME") or k
         try:
             v = ifields[t]
         except KeyError:
-            if item.get('REQUIRED'):
-                raise TableError(_ESSENTIAL_INFO_MISSING.format(field = t))
+            if item.get("REQUIRED"):
+                raise TableError(_ESSENTIAL_INFO_MISSING.format(field=t))
             if extend:
-                v = ''
+                v = ""
             else:
                 continue
         else:
-            if (not v) and item.get('REQUIRED'):
-                raise TableError(_ESSENTIAL_INFO_EMPTY.format(field = t))
+            if (not v) and item.get("REQUIRED"):
+                raise TableError(_ESSENTIAL_INFO_EMPTY.format(field=t))
         newinfo[k] = v
         imap[k] = t
 
     newcols = []
     # Check available fields against desired fields
-    tfields = set(data['__FIELDS__'])
+    tfields = set(data["__FIELDS__"])
     fmap = {}
     _fields = []
-    for item in fields['TABLE_FIELDS']:
-        k = item['NAME']
-        t = item.get('DISPLAY_NAME') or k
-        r = bool(item.get('REQUIRED'))
+    for item in fields["TABLE_FIELDS"]:
+        k = item["NAME"]
+        t = item.get("DISPLAY_NAME") or k
+        r = bool(item.get("REQUIRED"))
         try:
             tfields.remove(t)
         except KeyError:
             if r:
-                raise TableError(_ESSENTIAL_FIELD_MISSING.format(field = t))
+                raise TableError(_ESSENTIAL_FIELD_MISSING.format(field=t))
             if not extend:
                 continue
         newcols.append((k, t, r))
@@ -491,27 +487,28 @@ def filter_DataTable(data, fields, extend = True):
         _fields.append(k)
     # Add the data rows
     rowmaps = []
-    for row in data['__ROWS__']:
+    for row in data["__ROWS__"]:
         rowmap = {}
         rowmaps.append(rowmap)
         for k, t, needed in newcols:
             val = row.get(t)
             if needed and not val:
-                raise TableError(_ESSENTIAL_FIELD_EMPTY.format(field = t))
-            rowmap[k] = val or ''
+                raise TableError(_ESSENTIAL_FIELD_EMPTY.format(field=t))
+            rowmap[k] = val or ""
     return {
-        '__INFO__': newinfo,
-        '__FIELDS__': _fields,
-        '__ROWS__': rowmaps,
-        '__FIELD_NAMES__': fmap,
-        '__INFO_NAMES__': imap
+        "__INFO__": newinfo,
+        "__FIELDS__": _fields,
+        "__ROWS__": rowmaps,
+        "__FIELD_NAMES__": fmap,
+        "__INFO_NAMES__": imap,
     }
 
 
-def make_DataTable_filetypes(): return ('tsv', 'xlsx')
+def make_DataTable_filetypes():
+    return ("tsv", "xlsx")
 
 
-def make_DataTable(data, filetype, fields = None, **xinfo):
+def make_DataTable(data, filetype, fields=None, **xinfo):
     """Build a DataTable with info-lines, header-line and records.
     <data> is a mapping as returned by <read_DataTable>.
     <filetype> specifies which of the file-types in
@@ -525,72 +522,71 @@ def make_DataTable(data, filetype, fields = None, **xinfo):
     translation. Fields missing in the data will be present, but empty.
     <xinfo> optionally adds info fields (key = value).
     """
-    if filetype == 'xlsx':
+    if filetype == "xlsx":
         table = NewSpreadsheet()
-    elif filetype == 'tsv':
+    elif filetype == "tsv":
         table = NewTable()
     else:
-        raise TableError(_UNSUPPORTED_FILETYPE.format(ending = filetype))
+        raise TableError(_UNSUPPORTED_FILETYPE.format(ending=filetype))
     # The "metafields" ('__ ...') should be retained.
     newinfo = {}
     ifields = {}
-    for k, v in data['__INFO__'].items():
-        if k[0] == '_':
+    for k, v in data["__INFO__"].items():
+        if k[0] == "_":
             newinfo[k] = v
         else:
             ifields[k] = v
     if fields:
-        for item in fields['INFO_FIELDS']:
-            k = item['NAME']
+        for item in fields["INFO_FIELDS"]:
+            k = item["NAME"]
             # null <t> => no translation, use internal name:
-            t = item.get('DISPLAY_NAME') or k
+            t = item.get("DISPLAY_NAME") or k
             try:
                 v = ifields[k]
             except KeyError:
-                if item.get('REQUIRED'):
-                    raise TableError(_ESSENTIAL_INFO_MISSING.format(field = t))
+                if item.get("REQUIRED"):
+                    raise TableError(_ESSENTIAL_INFO_MISSING.format(field=t))
                 if extend:
-                    v = ''
+                    v = ""
                 else:
                     continue
             else:
-                if (not v) and item.get('REQUIRED'):
-                    raise TableError(_ESSENTIAL_INFO_EMPTY.format(field = t))
+                if (not v) and item.get("REQUIRED"):
+                    raise TableError(_ESSENTIAL_INFO_EMPTY.format(field=t))
             newinfo[t] = v
         # Check available data columns against translations
-        kfields = set(data['__FIELDS__'])
+        kfields = set(data["__FIELDS__"])
         newcols = []
         _fields = []
-        for item in fields['TABLE_FIELDS']:
-            k = item['NAME']
-            t = item.get('DISPLAY_NAME') or k
-            r = bool(item.get('REQUIRED'))
+        for item in fields["TABLE_FIELDS"]:
+            k = item["NAME"]
+            t = item.get("DISPLAY_NAME") or k
+            r = bool(item.get("REQUIRED"))
             try:
                 kfields.remove(k)
             except KeyError:
                 if r:
-                    raise TableError(_ESSENTIAL_FIELD_MISSING.format(field = t))
+                    raise TableError(_ESSENTIAL_FIELD_MISSING.format(field=t))
             newcols.append((k, t, r))
             _fields.append(t)
     else:
-        _fields = data['__FIELDS__']
+        _fields = data["__FIELDS__"]
         newinfo.update(ifields)
         newcols = [(f, f, False) for f in _fields]
     newinfo.update(xinfo)
     for k, v in newinfo.items():
-        table.add_row(('+++', k, v))
+        table.add_row(("+++", k, v))
     if newinfo:
         table.add_row(None)
     table.add_row(_fields)
     # Add the data rows
-    for row in data['__ROWS__']:
+    for row in data["__ROWS__"]:
         rowvals = []
         for k, t, needed in newcols:
             val = row.get(k)
             if (not val) and needed:
-                raise TableError(_ESSENTIAL_FIELD_EMPTY.format(
-                        field = t))
-#? None?
+                raise TableError(_ESSENTIAL_FIELD_EMPTY.format(field=t))
+            # ? None?
             rowvals.append(val or None)
         table.add_row(rowvals)
     return table.save()
@@ -601,8 +597,9 @@ class NewTable:
     The characters '\t', '\n' and '\r' are filtered out of the input
     strings.
     """
+
     @classmethod
-    def make(cls, data, filepath = None):
+    def make(cls, data, filepath=None):
         """Build a tsv file from the table <data>, which should be a
         list of rows, each row being a list of strings.
         The result is provided by the <save> method.
@@ -617,29 +614,28 @@ class NewTable:
 
     @staticmethod
     def _filter(text):
-        return re.sub('\t\n\r', '', str(text)) if text else ''
+        return re.sub("\t\n\r", "", str(text)) if text else ""
 
     def add_row(self, items):
         """Add a row with the values listed in <items>. The values will
         all be read as strings.
         """
         if items:
-            self._rowlist.append('\t'.join([self._filter(item)
-                    for item in items]))
+            self._rowlist.append("\t".join([self._filter(item) for item in items]))
         else:
-            self._rowlist.append('')
+            self._rowlist.append("")
 
-    def save(self, filepath = None):
+    def save(self, filepath=None):
         """If <filepath> is given, the resulting table will be written
         to a file. The ending '.tsv' is added automatically if it is
         not present already. Then return the full filepath.
         Without <filepath>, a <bytes> object is returned.
         """
-        tbytes = '\n'.join(self._rowlist).encode('utf-8') + b'\n'
+        tbytes = "\n".join(self._rowlist).encode("utf-8") + b"\n"
         if filepath:
-            if not filepath.endswith('.tsv'):
-                filepath += '.tsv'
-            with open(filepath, 'wb') as fh:
+            if not filepath.endswith(".tsv"):
+                filepath += ".tsv"
+            with open(filepath, "wb") as fh:
                 fh.write(tbytes)
             return filepath
         else:
@@ -647,10 +643,10 @@ class NewTable:
 
 
 class NewSpreadsheet:
-    """Build a simple xlsx table from scratch.
-    """
+    """Build a simple xlsx table from scratch."""
+
     @classmethod
-    def make(cls, data, filepath = None):
+    def make(cls, data, filepath=None):
         """Build an xlsx file from the table <data>, which should be a
         list of rows, each row being a list of strings.
         The result is provided by the <save> method.
@@ -664,7 +660,7 @@ class NewSpreadsheet:
         # Create the workbook and worksheet we'll be working with
         self._wb = Workbook()
         self._ws = self._wb.active
-        self._row = 0   # row counter, for serial row addition
+        self._row = 0  # row counter, for serial row addition
 
     def add_row(self, items):
         """Add a row with the values listed in <items>. The values will
@@ -674,20 +670,19 @@ class NewSpreadsheet:
             col = 0
             for item in items:
                 if item:
-                    self._ws.cell(row = self._row + 1, column = col + 1,
-                            value = item)
+                    self._ws.cell(row=self._row + 1, column=col + 1, value=item)
                 col += 1
         self._row += 1
 
-    def save(self, filepath = None):
+    def save(self, filepath=None):
         """If <filepath> is given, the resulting table will be written
         to a file. The ending '.xlsx' is added automatically if it is
         not present already. Then return the full filepath.
         Without <filepath>, a <bytes> object is returned.
         """
         if filepath:
-            if not filepath.endswith('.xlsx'):
-                filepath += '.xlsx'
+            if not filepath.endswith(".xlsx"):
+                filepath += ".xlsx"
             self._wb.save(filepath)
             return filepath
         else:
@@ -696,92 +691,91 @@ class NewSpreadsheet:
             return virtual_workbook.getvalue()
 
 
-#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from core.base import start
+
     basedir = os.path.dirname(appdir)
-    start.setup(os.path.join(basedir, 'TESTDATA'))
+    start.setup(os.path.join(basedir, "TESTDATA"))
 
     for f in sys.argv[1:]:
-        if f[0] != '-':
+        if f[0] != "-":
             dbt = read_DataTable(f)
-            print("\nINFO:", dbt['__INFO__'])
-            print("\nFIELDS:", dbt['__FIELDS__'])
+            print("\nINFO:", dbt["__INFO__"])
+            print("\nFIELDS:", dbt["__FIELDS__"])
             print("\nCONTENT:")
-            for row in dbt['__ROWS__']:
+            for row in dbt["__ROWS__"]:
                 print(" :::", row)
             quit(0)
 
-    filepath = DATAPATH('testing/Test1.tsv')
+    filepath = DATAPATH("testing/Test1.tsv")
     fname = os.path.basename(filepath)
     tsv = TsvReader(filepath)
     print("\nROWS:")
-    for row in tsv['TSV']:
+    for row in tsv["TSV"]:
         print(" :::", row)
     print("\n\nAnd now using a file-like object ...\n")
-    with open(filepath, 'rb') as fbi:
+    with open(filepath, "rb") as fbi:
         bytefile = fbi.read()
     flo = io.BytesIO(bytefile)
     flo.filename = fname
     tsv = TsvReader(flo)
     print("\nROWS:")
-    for row in tsv['TSV']:
+    for row in tsv["TSV"]:
         print(" :::", row)
 
     dbt = read_DataTable(filepath)
-    print("\nINFO:", dbt['__INFO__'])
-    print("\nFIELDS:", dbt['__FIELDS__'])
+    print("\nINFO:", dbt["__INFO__"])
+    print("\nFIELDS:", dbt["__FIELDS__"])
     print("\nCONTENT:")
-    for row in dbt['__ROWS__']:
+    for row in dbt["__ROWS__"]:
         print(" :::", row)
 
     print("\nGRADES 10:")
-    dbt = read_DataTable(DATAPATH('testing/Noten/NOTEN_2/Noten_10_2'))
-    print("\nINFO:", dbt['__INFO__'])
-    print("\nFIELDS:", dbt['__FIELDS__'])
+    dbt = read_DataTable(DATAPATH("testing/Noten/NOTEN_2/Noten_10_2"))
+    print("\nINFO:", dbt["__INFO__"])
+    print("\nFIELDS:", dbt["__FIELDS__"])
     print("\nCONTENT:")
-    for row in dbt['__ROWS__']:
+    for row in dbt["__ROWS__"]:
         print(" :::", row)
 
     print("\nPUPILS + extend:")
-    PUPIL_DATA = MINION(DATAPATH('CONFIG/PUPIL_DATA'))
-    table_fields = PUPIL_DATA['TABLE_FIELDS']
+    PUPIL_DATA = MINION(DATAPATH("CONFIG/PUPIL_DATA"))
+    table_fields = PUPIL_DATA["TABLE_FIELDS"]
     # The new pupil tables don't have class entries, so:
-    table_fields.insert(0, {'NAME': 'CLASS', 'DISPLAY_NAME': 'Klasse',
-            'REQUIRED': 'true'})
-    info_fields = [{'NAME': 'SCHOOLYEAR', 'DISPLAY_NAME': 'Schuljahr'}]
-    trfields = {
-        'INFO_FIELDS': info_fields,
-        'TABLE_FIELDS': table_fields
-    }
+    table_fields.insert(
+        0, {"NAME": "CLASS", "DISPLAY_NAME": "Klasse", "REQUIRED": "true"}
+    )
+    info_fields = [{"NAME": "SCHOOLYEAR", "DISPLAY_NAME": "Schuljahr"}]
+    trfields = {"INFO_FIELDS": info_fields, "TABLE_FIELDS": table_fields}
     print("\n*** trfields ***\n", trfields)
-    _dbt = read_DataTable(DATAPATH('testing/delta_test_pupils_2016'))
+    _dbt = read_DataTable(DATAPATH("testing/delta_test_pupils_2016"))
     dbt = filter_DataTable(_dbt, trfields)
-    print("\nINFO:", dbt['__INFO__'])
+    print("\nINFO:", dbt["__INFO__"])
     print("\nCONTENT:")
-    for row in dbt['__ROWS__']:
+    for row in dbt["__ROWS__"]:
         print(" :::", row)
 
     print("\nPUPILS:")
-    _dbt = read_DataTable(DATAPATH('testing/delta_test_pupils_2016'))
-    dbt = filter_DataTable(_dbt, trfields, extend = False)
-    print("\nINFO:", dbt['__INFO__'])
+    _dbt = read_DataTable(DATAPATH("testing/delta_test_pupils_2016"))
+    dbt = filter_DataTable(_dbt, trfields, extend=False)
+    print("\nINFO:", dbt["__INFO__"])
     print("\nCONTENT:")
-    for row in dbt['__ROWS__']:
+    for row in dbt["__ROWS__"]:
         print(" :::", row)
 
-    ftype = 'tsv'
+    ftype = "tsv"
     fbytes = make_DataTable(dbt, ftype)
-    fpath = DATAPATH('testing/tmp/extended_no') + '.' + ftype
-    os.makedirs(os.path.dirname(fpath), exist_ok = True)
-    with open(fpath, 'wb') as fh:
+    fpath = DATAPATH("testing/tmp/extended_no") + "." + ftype
+    os.makedirs(os.path.dirname(fpath), exist_ok=True)
+    with open(fpath, "wb") as fh:
         fh.write(fbytes)
     print("\nSAVED AS:", fpath)
 
-    ftype = 'xlsx'
+    ftype = "xlsx"
     fbytes = make_DataTable(dbt, ftype, trfields)
-    fpath = DATAPATH('testing/tmp/extended_yes') + '.' + ftype
-    with open(fpath, 'wb') as fh:
+    fpath = DATAPATH("testing/tmp/extended_yes") + "." + ftype
+    with open(fpath, "wb") as fh:
         fh.write(fbytes)
     print("\nSAVED AS:", fpath)

@@ -2,7 +2,7 @@
 """
 ui/datatable_widget.py
 
-Last updated:  2021-11-14
+Last updated:  2021-11-18
 
 Gui editor widget for "DataTables".
 See datatable-editor.py for an app which can be used for testing this
@@ -28,20 +28,33 @@ Copyright 2021 Michael Towers
 
 ### Messages
 
-OPEN_FILE          = "Tabellendatei öffnen"
-SAVE_FILE          = "Tabellendatei speichern"
-SAVE_FILE_AS       = "Tabellendatei speichern unter"
-EXIT               = "Schließen"
+OPEN_FILE = "Tabellendatei öffnen"
+SAVE_FILE = "Tabellendatei speichern"
+SAVE_FILE_AS = "Tabellendatei speichern unter"
+EXIT = "Schließen"
 
 ########################################################################
 
-from ui.ui_base import APP, get_icon, QSizePolicy, QSplitter, \
-        QScrollArea, QWidget, QToolBar, QVBoxLayout, QGridLayout, \
-        QLineEdit, QLabel, QAction, QKeySequence, \
-        Qt, QSize, QEvent, QObject, QKeyEvent
+from ui.ui_base import (
+    APP,
+    get_icon,
+    QSizePolicy,
+    QSplitter,
+    QScrollArea,
+    QWidget,
+    QToolBar,
+    QVBoxLayout,
+    QGridLayout,
+    QLineEdit,
+    QLabel,
+    QAction,
+    QKeySequence,
+    Qt,
+    QEvent,
+    QKeyEvent,
+)
 
 from ui.editable import EdiTableWidget, Change_X
-from tables.spreadsheet import Spreadsheet, read_DataTable
 
 Change_INFO = Change_X
 
@@ -64,17 +77,18 @@ class ShortcutEater(QObject):
 shortcutEater = ShortcutEater()
 """
 
-#TODO: validation?
+# TODO: validation?
 class TextLine(QLineEdit):
     def __init__(self, index, dataTableEditor):
         self.index = index
         self.dataTableEditor = dataTableEditor
         super().__init__()
-#        self.setContextMenuPolicy(Qt.NoContextMenu)
-        self.__text = ''
-#        self.textEdited.connect(self.text_changed)
+        #        self.setContextMenuPolicy(Qt.NoContextMenu)
+        self.__text = ""
+        #        self.textEdited.connect(self.text_changed)
         self.editingFinished.connect(self.newtext)
-#        self.installEventFilter(shortcutEater)
+
+    #        self.installEventFilter(shortcutEater)
 
     def set(self, text):
         self.setText(text)
@@ -89,18 +103,19 @@ class TextLine(QLineEdit):
 
     def focusInEvent(self, event):
         self.dataTableEditor.set_focussed(self.index)
-        #print("FOCUSSED", self.index)
+        # print("FOCUSSED", self.index)
         super().focusInEvent(event)
 
     def focusOutEvent(self, event):
         self.dataTableEditor.set_focussed(-1)
-        #print("FOCUSSED", -1)
+        # print("FOCUSSED", -1)
         super().focusOutEvent(event)
 
     def mousePressEvent(self, event):
         event.accept()
         self.selectAll()
         return
+
 
 """
 Need to handle NAME vs. DISPLAY_NAME (translation) somewhere.
@@ -115,6 +130,7 @@ TABLE_FIELDS: [
 ]
 """
 
+
 class InfoTable(QScrollArea):
     def __init__(self):
         super().__init__()
@@ -127,7 +143,7 @@ class InfoTable(QScrollArea):
         self.info = []
         r = 0
         for key, val in info.items():
-            if key[0] != '_':
+            if key[0] != "_":
                 try:
                     n = names[key]
                 except:
@@ -170,35 +186,30 @@ class TableWidget(EdiTableWidget):
         if chtype == Change_INFO:
             val = change[1] if undo else change[2]
             self.dteditor.info.set_item(change[0], val)
-            #print("UNDO-REDO", undo, chtype, change)
+            # print("UNDO-REDO", undo, chtype, change)
             return True
         return False
 
     def copyCellsToClipboard(self):
-        """Overrides base class method.
-        """
+        """Overrides base class method."""
         if self.hasFocus():
             super().copyCellsToClipboard()
         else:
             send_control_key(Qt.Key_C, APP.focusWidget())
 
     def cutCellsToClipboard(self):
-        """Overrides base class method.
-        """
+        """Overrides base class method."""
         if self.hasFocus():
             super().cutCellsToClipboard()
         else:
             send_control_key(Qt.Key_X, APP.focusWidget())
 
     def pasteCellFromClipboard(self):
-        """Overrides base class method.
-        """
+        """Overrides base class method."""
         if self.hasFocus():
             super().pasteCellFromClipboard()
         else:
             send_control_key(Qt.Key_V, APP.focusWidget())
-
-
 
 
 class DataTableEditor(QWidget):
@@ -211,26 +222,28 @@ class DataTableEditor(QWidget):
         action.setIcon(get_icon(icon))
         return action
 
-    def __init__(self, on_exit = None,
-            on_open = None, on_save = None, on_save_as = None):
+    def __init__(self, on_exit=None, on_open=None, on_save=None, on_save_as=None):
         super().__init__()
         vbox = QVBoxLayout(self)
         self.toolbar = QToolBar()
         vbox.addWidget(self.toolbar)
         # File QActions
         if on_open:
-            self.action_open = self.new_action('open', OPEN_FILE,
-                    QKeySequence(Qt.CTRL + Qt.Key_O))
+            self.action_open = self.new_action(
+                "open", OPEN_FILE, QKeySequence(Qt.CTRL + Qt.Key_O)
+            )
             self.action_open.triggered.connect(on_open)
             self.toolbar.addAction(self.action_open)
         if on_save:
-            self.action_save = self.new_action('save', SAVE_FILE,
-                QKeySequence(Qt.CTRL + Qt.Key_S))
+            self.action_save = self.new_action(
+                "save", SAVE_FILE, QKeySequence(Qt.CTRL + Qt.Key_S)
+            )
             self.action_save.triggered.connect(on_save)
             self.toolbar.addAction(self.action_save)
         if on_save_as:
-            self.action_save_as = self.new_action('saveas', SAVE_FILE_AS,
-                QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_S))
+            self.action_save_as = self.new_action(
+                "saveas", SAVE_FILE_AS, QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_S)
+            )
             self.action_save_as.triggered.connect(on_save_as)
             self.toolbar.addAction(self.action_save_as)
 
@@ -242,12 +255,14 @@ class DataTableEditor(QWidget):
         self.splitter.addWidget(self.info)
 
         self.table = TableWidget(self)
-        self.table.horizontalHeader().setStyleSheet("QHeaderView::section{" \
-            "background-color:#FFFF80;" \
-            "padding: 2px;" \
-            "border: 1px solid #808080;" \
-            "border-bottom: 2px solid #0000C0;" \
-        "}")
+        self.table.horizontalHeader().setStyleSheet(
+            "QHeaderView::section{"
+            "background-color:#FFFF80;"
+            "padding: 2px;"
+            "border: 1px solid #808080;"
+            "border-bottom: 2px solid #0000C0;"
+            "}"
+        )
         self.splitter.addWidget(self.table)
 
         self.splitter.setStretchFactor(0, 0)
@@ -256,35 +271,35 @@ class DataTableEditor(QWidget):
 
         ### Actions from table widget
         self.toolbar.addSeparator()
-        self.table.copyCellsAction.setIcon(get_icon('copy'))
+        self.table.copyCellsAction.setIcon(get_icon("copy"))
         self.toolbar.addAction(self.table.copyCellsAction)
-        self.table.cutCellsAction.setIcon(get_icon('cut'))
+        self.table.cutCellsAction.setIcon(get_icon("cut"))
         self.toolbar.addAction(self.table.cutCellsAction)
-        self.table.pasteCellsAction.setIcon(get_icon('paste'))
+        self.table.pasteCellsAction.setIcon(get_icon("paste"))
         self.toolbar.addAction(self.table.pasteCellsAction)
 
         self.toolbar.addSeparator()
-        self.table.insertRowAction.setIcon(get_icon('insertrowsafter'))
+        self.table.insertRowAction.setIcon(get_icon("insertrowsafter"))
         self.toolbar.addAction(self.table.insertRowAction)
-        self.table.deleteRowsAction.setIcon(get_icon('deleterows'))
+        self.table.deleteRowsAction.setIcon(get_icon("deleterows"))
         self.toolbar.addAction(self.table.deleteRowsAction)
-        self.table.insertColumnAction.setIcon(get_icon('insertcolumnsafter'))
+        self.table.insertColumnAction.setIcon(get_icon("insertcolumnsafter"))
         self.toolbar.addAction(self.table.insertColumnAction)
-        self.table.deleteColumnsAction.setIcon(get_icon('deletecolumns'))
+        self.table.deleteColumnsAction.setIcon(get_icon("deletecolumns"))
         self.toolbar.addAction(self.table.deleteColumnsAction)
 
         self.toolbar.addSeparator()
-        self.table.undoAction.setIcon(get_icon('undo'))
+        self.table.undoAction.setIcon(get_icon("undo"))
         self.toolbar.addAction(self.table.undoAction)
-        self.table.redoAction.setIcon(get_icon('redo'))
+        self.table.redoAction.setIcon(get_icon("redo"))
         self.toolbar.addAction(self.table.redoAction)
-
 
         # Exit QAction
         if on_exit:
             self.toolbar.addSeparator()
-            self.exit_action = self.new_action('quit', EXIT,
-                    QKeySequence(Qt.CTRL + Qt.Key_Q))
+            self.exit_action = self.new_action(
+                "quit", EXIT, QKeySequence(Qt.CTRL + Qt.Key_Q)
+            )
             self.exit_action.triggered.connect(on_exit)
             self.toolbar.addAction(self.exit_action)
 
@@ -296,13 +311,12 @@ class DataTableEditor(QWidget):
         <mod> is true/false.
         OVERRIDE this to customize behaviour.
         """
-        #print(f"** MODIFIED: {mod} **")
+        # print(f"** MODIFIED: {mod} **")
         pass
 
-#TODO?
+    # TODO?
     def reset_modified(self):
-        """Reset the modified state of the data.
-        """
+        """Reset the modified state of the data."""
         self.table.reset_modified()
         self.modified(False)
 
@@ -310,21 +324,21 @@ class DataTableEditor(QWidget):
         """Read in a DataTable. This may also be the result of a call
         to <filter_DataTable>, including field translations.
         """
-        self.__info = datatable['__INFO__']
-        self.__columns = datatable['__FIELDS__']
-        self.__rows = datatable['__ROWS__']
+        self.__info = datatable["__INFO__"]
+        self.__columns = datatable["__FIELDS__"]
+        self.__rows = datatable["__ROWS__"]
         # "Translations" of the field names:
-        self.__column_titles = datatable.get('__FIELD_NAMES__')
+        self.__column_titles = datatable.get("__FIELD_NAMES__")
         headers = []
         for h in self.__columns:
             try:
                 headers.append(self.__column_titles[h])
             except:
                 headers.append(h)
-        self.__info_titles = datatable.get('__INFO_NAMES__')
+        self.__info_titles = datatable.get("__INFO_NAMES__")
         h = self.info.init(self.__info, self, self.__info_titles)
         self.splitter.setSizes([h, 0])
-        self.set_focussed(-1)   # index of currently "focussed" info entry
+        self.set_focussed(-1)  # index of currently "focussed" info entry
 
         data = []
         for row in self.__rows:
@@ -334,16 +348,19 @@ class DataTableEditor(QWidget):
             for h in self.__columns:
                 rowdata.append(row[h])
                 c += 1
-        self.table.setup(colheaders = headers,
-                undo_redo = True, row_add_del = True,
-                cut = True, paste = True,
-                on_changed = self.modified)
+        self.table.setup(
+            colheaders=headers,
+            undo_redo=True,
+            row_add_del=True,
+            cut=True,
+            paste=True,
+            on_changed=self.modified,
+        )
         self.table.init_data(data)
         self.table.resizeColumnsToContents()
 
     def get_data(self):
-        """Read the data from the widget. Return it as a "datatable".
-        """
+        """Read the data from the widget. Return it as a "datatable"."""
         for key, val in self.info.get_info():
             self.__info[key] = val
         self.__rows = []
@@ -355,9 +372,9 @@ class DataTableEditor(QWidget):
                 c += 1
             self.__rows.append(rowdata)
         return {
-            '__INFO__': self.__info,
-            '__FIELDS__': self.__columns,
-            '__ROWS__': self.__rows
+            "__INFO__": self.__info,
+            "__FIELDS__": self.__columns,
+            "__ROWS__": self.__rows,
         }
 
     def set_focussed(self, index):
