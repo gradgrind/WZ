@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
-
 """
-core/pupils.py - last updated 2021-06-05
+core/pupils.py - last updated 2021-11-19
 
 Manage pupil data.
 
@@ -21,10 +19,7 @@ Copyright 2021 Michael Towers
    limitations under the License.
 =-LICENCE=================================
 
-Use a single file to contain all the pupil data, as a list of
-field-value mappings (one for each pupil).
-When changes are made, date-time labelled back-ups are made, but only
-the first change of a day is backed up.
+For each school class there is a DataTable containing the pupil data.
 The file is a direct representation of the form in which pupil data
 is read in and passed around, a mapping:
     {   '__INFO__':     {key: value, ... },
@@ -34,13 +29,21 @@ is read in and passed around, a mapping:
 The info keys are, at present:
     __TITLE__: 'Pupil Data' (for example, not used in code)
     SCHOOLYEAR: '2016' (year in which the end of the school year falls)
+    CLASS: '02G' (name of the class)
     __MODIFIED__: <date-time> (not used in code)
 """
 
 ### Messages
+_SCHOOLYEAR_MISMATCH_DB = "Schüler-Datenbank-Fehler: falsches Jahr in\n{path}"
+_CLASS_MISMATCH_DB = "Schüler-Datenbank-Fehler: falsche Klasse in\n{path}"
+_DOUBLE_PID_DB = "Schüler-Datenbank-Fehler: Schüler-ID {pid} doppelt" \
+        " vorhanden, in Klassen {k1} und {k2}"
+
+
+
+
 _SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filename}"
 _NO_SCHOOLYEAR = "Kein '{year}' angegeben in Schülertabelle:\n  {filename}"
-_SCHOOLYEAR_MISMATCH_DB = "Schüler-Datenbank-Fehler: falsches Jahr"
 _NO_SCHOOLYEAR_DB = "Schüler-Datenbank-Fehler: kein 'SCHOOLYEAR'"
 _PID_DUPLICATE = "Schülerkennung {pid} mehrfach vorhanden:\n" \
         "  Klasse {c1} – {p1}\n  Klasse {c2} – {p2}"
@@ -60,33 +63,21 @@ if __name__ == '__main__':
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
-    start.setup(os.path.join(basedir, 'TESTDATA'))
+#    start.setup(os.path.join(basedir, 'TESTDATA'))
+    start.setup(os.path.join(basedir, 'DATA'))
 
 ### +++++
 
-import io
+#import io
+from glob import glob
 
-from local.base_config import PupilError, PupilsBase, sortkey
+#from local.base_config import PupilError, PupilsBase, sortkey
 from core.base import Dates
 from tables.spreadsheet import read_DataTable, filter_DataTable, \
-        make_DataTable, make_DataTable_filetypes
-from tables.datapack import get_pack, save_pack
+        make_DataTable, make_DataTable_filetypes, TableError
+#from tables.datapack import get_pack, save_pack
 
 ### -----
-
-#TODO!!! (External) access to functions only via module level functions!!!
-# It should be possible to return only strings, lists, dicts (~JSON)?
-# These DON'T fulfil this criterion!
-
-def Pupil_File(filepath, extend = True):
-    with open(filepath, 'rb') as fh:
-        fbytes = fh.read()
-    return _Pupils.init_from_bytes(fbytes, filepath, extend)
-
-def Pupils():
-    return _Pupils.fetch()
-
-#TODO: Consider adding data types (incl. selection lists) to field/info-lists.
 
 #TODO: I suppose the program should start with the stored data? If there is
 # none (or if it is dodgy) there can be a question dialog to load from
@@ -95,21 +86,126 @@ def Pupils():
 
 ### **************************************************************** ###
 
-class _Pupils(dict):
+class Pupils(dict):
     """Handler for pupil data.
-    Pupil-data items (mappings) can be added from various sources:
-     - the internal database
-     - an external file
-     - an external modified version of the existing data.
-    Normally the fields defined for a pupil (CONFIG['CLASS_TABLE'])
-    will be included, adding empty ones (<NONE>) if necessary. See the
-    method <init_from_bytes>.
+    The internal pupil data should be read and written only through this
+    interface.
     An instance of this class is a <dict> holding the pupil data as a
     mapping: {pid -> {field: value, ...}}.
-    The data is also sorted (alphabetically) into classes, the results
-    being available through the method <class_pupils>.
+    The fields defined for a pupil are read from the configuration file
+    CONFIG/PUPIL_DATA. For convenience, a field CLASS is added
+    internally to each pupil record.
+    The list of pupil-ids for a class is available via the method
+    <class_pupils> (alphabetically ordered).
     """
-    __pupils = None     # cache for current year
+    def __init__(self):
+        self.__classes = {}
+        super().__init__()
+        # Fields:
+        self.config = MINION(DATAPATH("CONFIG/PUPIL_DATA"))
+        # Each class has a table-file (substitute {klass}):
+        self.class_path = DATAPATH(CONFIG["PUPIL_TABLE"])
+        print("???", self.class_path.format(klass="*"))
+        for fpath in glob(self.class_path.format(klass="*")):
+            print("READING", fpath)
+            class_table = read_DataTable(fpath)
+            try:
+                class_table = filter_DataTable(class_table, self.config,
+                        notranslate=True)
+            except TableError as e:
+#TODO
+                print("ERROR:", str(e), "in\n", fpath)
+                raise
+
+            # The data should already be alphabetically ordered here.
+            info = class_table["__INFO__"]
+            if info["SCHOOLYEAR"] != SCHOOLYEAR:
+                raise PupilError(_SCHOOLYEAR_MISMATCH_DB.format(path=fpath))
+            klass = info["CLASS"]
+            if self.class_path.format(klass=klass) != fpath:
+                raise PupilError(_CLASS_MISMATCH_DB.format(path=fpath))
+            pdata_list = []
+            self.__classes[klass] = pdata_list
+            for row in class_table["__ROWS__"]:
+                pid = row["PID"]
+                if pid in self:
+                    raise PupilError(_DOUBLE_PID_DB.format(pid=pid,
+                            k1=self[pid]["CLASS"], k2=klass))
+                self[pid] = row
+                row["CLASS"] = klass
+                pdata_list.append(row)
+
+    def classes(self):
+        """Return a sorted list of class names.
+        """
+        return sorted(self.__classes)
+
+    def class_pupils(self, klass, groups = None, date = None):
+        """Read the pupil data for the given school-class (possibly with
+        group filter).
+        Return a list of mappings {field -> value} (the table rows), the
+        pupils being ordered alphabetically.
+        The result also has the attribute <_pidmap>, which maps the pid
+        to the pupil data.
+        If a <date> is supplied, pupils who left the school before that
+        date will not be included.
+        If <groups> is provided, only pupils in one of these groups are
+        included, otherwise all pupils in the class. <groups> must be a
+        list/set of groups – '*' is not valid here.
+        """
+        plist = []
+        groupset = set(groups or [])
+        for pdata in self.__classes[klass]:
+            if date:
+                # Check exit date
+                exd = pdata.get('EXIT_D')
+                if exd and exd < date:
+                    continue
+            if groups and not (groupset & set(pdata.get('GROUPS'))):
+                continue
+            plist.append(pdata)
+        return plist
+
+
+
+
+        if not ptable:
+            filepath = DATAPATH("CONFIG/PUPIL_DATA")
+            ptable = get_pack(filepath)
+            try:
+                if ptable['__INFO__']['SCHOOLYEAR'] != SCHOOLYEAR:
+                    raise PupilError(_SCHOOLYEAR_MISMATCH_DB)
+            except KeyError:
+                raise PupilError(_NO_SCHOOLYEAR_DB)
+        self.__fields = ptable['__FIELDS__']
+        self.__info = ptable['__INFO__']
+        self.set_data(ptable['__ROWS__'])
+
+
+    @staticmethod
+    def name(pdata):
+        return f"{pdata['FIRSTNAME']} {pdata['LASTNAME']}"
+
+    def pid2name(self, pid):
+        return self.name(self[pid])
+
+    def final_year_pupils(self):
+        """Return lists of pupils in their final year:
+            {class: [(pid, name), ... ], ...}
+        """
+        collect =  {}
+        for k, l in CONFIG["LEAVING_GROUPS"].items():
+            if l == '*':
+                plist = self.class_pupils(k)
+            else:
+                plist = self.class_pupils(k, groups = l)
+            collect[k] = [(pdata['PID'], Pupils.name(pdata))
+                    for pdata in plist]
+        return collect
+
+
+
+#TODO ...
     #+
     @classmethod
     def fetch(cls):
@@ -158,36 +254,7 @@ class _Pupils(dict):
                     filename = filename))
         return cls(ptable)
 #
-    def __init__(self, ptable = None):
-        """If there is no data, look for the internal database. Fail if
-        it is not present.
-        """
-        super().__init__()
-        if not ptable:
-            filepath = DATAPATH(CONFIG['CLASS_TABLE'])
-            ptable = get_pack(filepath)
-            try:
-                if ptable['__INFO__']['SCHOOLYEAR'] != SCHOOLYEAR:
-                    raise PupilError(_SCHOOLYEAR_MISMATCH_DB)
-            except KeyError:
-                raise PupilError(_NO_SCHOOLYEAR_DB)
-        self.__fields = ptable['__FIELDS__']
-        self.__info = ptable['__INFO__']
-        self.set_data(ptable['__ROWS__'])
 #
-    def set_data(self, pdata_list):
-        """Initialize the pupil-data mapping from the given pupil-data.
-        items.
-        """
-        for pdata in pdata_list:
-            pid = pdata['PID']
-            pd0 = self.get(pid)
-            if pd0:
-                raise PupilError(_PID_DUPLICATE.format(pid = pid,
-                        p1 = PupilsBase.name(pd0), c1 = pd0['CLASS'],
-                        p2 = PupilsBase.name(pdata), c2 = pdata['CLASS']))
-            self[pid] = pdata
-        self.fill_classes()
 #
     def fill_classes(self):
         """The pupils are allocated to classes and sorted within these.
@@ -231,25 +298,11 @@ class _Pupils(dict):
             # Make this the cached pupil-data
             self.tocache(self)
 #
-    def classes(self):
-        """Return a sorted list of class names.
-        """
-        return sorted(self.__classes)
 #
-    def final_year_pupils(self, klass):
-        """Return list of pupils in their final year:
-            [(pid, name), ... ]
-        """
-        try:
-            lgroups = SCHOOL_DATA['LEAVING_GROUPS'][klass]
-        except:
-            return []
-        if lgroups == '*':
-            plist = self.class_pupils(klass)
-        else:
-            plist = self.class_pupils(klass, groups = lgroups)
-        return [(pdata['PID'], PupilsBase.name(pdata)) for pdata in plist]
-#
+
+
+
+
     @staticmethod
     def pstring(pdata):
         """A visual representation of a pupil-data mapping.
@@ -257,31 +310,6 @@ class _Pupils(dict):
         items = ['{k}={v}'.format(k = f, v = v) for f, v in pdata.items()]
         return 'Pupil Data: <%s>' % '; '.join(items)
 #
-    def class_pupils(self, klass, groups = None, date = None):
-        """Read the pupil data for the given school-class (possibly with
-        group filter).
-        Return a list of mappings {field -> value} (the table rows), the
-        pupils being ordered alphabetically.
-        The result also has the attribute <_pidmap>, which maps the pid
-        to the pupil data.
-        If a <date> is supplied, pupils who left the school before that
-        date will not be included.
-        If <groups> is provided, only pupils in one of these groups are
-        included, otherwise all pupils in the class. <groups> must be a
-        list/set of groups – '*' is not valid here.
-        """
-        plist = _PupilList()
-        groupset = set(groups or [])
-        for pdata in self.__classes[klass]:
-            if date:
-                # Check exit date
-                exd = pdata.get('EXIT_D')
-                if exd and exd < date:
-                    continue
-            if groups and not (groupset & set(pdata.get('GROUPS'))):
-                continue
-            plist.append(pdata)
-        return plist
 #
     def compare_update(self, newdata):
         """Compare the new data with the existing data and compile a list
@@ -563,8 +591,10 @@ if __name__ == '__main__':
 
     pupils = Pupils()
     print("\nCLASSES (db):", pupils.classes())
-    print("\nLEAVING in 12:", pupils.final_year_pupils('12'))
+    for k, l in pupils.final_year_pupils().items():
+        print(f"\nLEAVING in {k}: {repr(l)}")
 
+    quit(0)
     ### Make a trial migration to next school-year.
     ### This also makes a back-up of the current pupil data.
     pupils.migrate(repeat_pids = ('200888', '200301'),

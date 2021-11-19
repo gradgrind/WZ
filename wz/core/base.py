@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 core/base.py
 
-Last updated:  2021-11-18
+Last updated:  2021-11-19
 
 Basic configuration and structural stuff.
 

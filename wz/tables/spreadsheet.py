@@ -414,7 +414,7 @@ def read_DataTable(filepath_or_stream):
     return {"__INFO__": info, "__FIELDS__": fields, "__ROWS__": rows}
 
 
-def filter_DataTable(data, fields, extend=True):
+def filter_DataTable(data, fields, extend=True, notranslate=False):
     """Process the table data into mappings based on the entries in the
     mapping <fields>. This has (at least) the two entries
     'INFO_FIELDS' and 'TABLE_FIELDS'. These allow translation of the
@@ -423,6 +423,8 @@ def filter_DataTable(data, fields, extend=True):
     Empty fields are guaranteed to contain ''.
     If <extend> is true, fields which are in the lists but not in
     the table will be added (though empty).
+    If <notranslate> is true, the input fields are expected to have
+    their internal names already.
     <INFO_FIELDS> and <TABLE_FIELDS> are lists of mappings:
         {   'NAME': internal field-name,
             'DISPLAY_NAME': displayed field name or '', or field missing,
@@ -451,18 +453,19 @@ def filter_DataTable(data, fields, extend=True):
         k = item["NAME"]
         # null <t> => no translation, use internal name:
         t = item.get("DISPLAY_NAME") or k
+        t2 = k if notranslate else t
         try:
-            v = ifields[t]
+            v = ifields[t2]
         except KeyError:
             if item.get("REQUIRED"):
-                raise TableError(_ESSENTIAL_INFO_MISSING.format(field=t))
+                raise TableError(_ESSENTIAL_INFO_MISSING.format(field=t2))
             if extend:
                 v = ""
             else:
                 continue
         else:
             if (not v) and item.get("REQUIRED"):
-                raise TableError(_ESSENTIAL_INFO_EMPTY.format(field=t))
+                raise TableError(_ESSENTIAL_INFO_EMPTY.format(field=t2))
         newinfo[k] = v
         imap[k] = t
 
@@ -474,15 +477,16 @@ def filter_DataTable(data, fields, extend=True):
     for item in fields["TABLE_FIELDS"]:
         k = item["NAME"]
         t = item.get("DISPLAY_NAME") or k
+        t2 = k if notranslate else t
         r = bool(item.get("REQUIRED"))
         try:
-            tfields.remove(t)
+            tfields.remove(t2)
         except KeyError:
             if r:
-                raise TableError(_ESSENTIAL_FIELD_MISSING.format(field=t))
+                raise TableError(_ESSENTIAL_FIELD_MISSING.format(field=t2))
             if not extend:
                 continue
-        newcols.append((k, t, r))
+        newcols.append((k, t2, r))
         fmap[k] = t
         _fields.append(k)
     # Add the data rows

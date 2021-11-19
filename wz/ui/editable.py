@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-18
+Last updated:  2021-11-19
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -593,8 +593,8 @@ class EdiTableWidget(QTableWidget):
     #        """
     #        super().rowCountChanged(oldCount, newCount)
 
-    #    def column_count(self):
-    #        return self.model().columnCount()
+    def col_count(self):
+        return self.model().columnCount()
 
     #    def columnCountChanged(self, oldCount, newCount):
     #        """Slot override.
@@ -629,6 +629,12 @@ class EdiTableWidget(QTableWidget):
             top += 1
             rows.append(rowdata)
         return rows
+
+    def read_all(self):
+        """Read all the table data.
+        Return list of rows, each row is a list of cell values.
+        """
+        return self.read_block(0, 0, self.col_count(), self.row_count())
 
     def insert_row(self):
         """Insert an empty row below the currenty selected one(s).

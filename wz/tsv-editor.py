@@ -2,7 +2,7 @@
 """
 ui/tsv-editor.py
 
-Last updated:  2021-11-18
+Last updated:  2021-11-19
 
 Gui editor for Tab-Separated-Value files.
 
@@ -239,9 +239,9 @@ class TsvEditor(QWidget):
                     return False
         if sfile.endswith(".tsv"):
             with open(sfile, "w", encoding="utf-8") as fh:
-                fh.write(table2tsv(self.table.table_data))
+                fh.write(table2tsv(self.table.read_all()))
         elif sfile.endswith(".xlsx"):
-            NewSpreadsheet.make(self.table.table_data, sfile)
+            NewSpreadsheet.make(self.table.read_all(), sfile)
         else:
             try:
                 _, ending = sfile.rsplit(".", 1)

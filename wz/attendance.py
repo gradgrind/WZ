@@ -2,7 +2,7 @@
 """
 attendance.py
 
-Last updated:  2021-11-18
+Last updated:  2021-11-19
 
 Gui editor for attendance tables.
 
@@ -43,9 +43,11 @@ PROGRAM_NAME = "Attendance"
 
 ########################################################################
 
-import sys, os, builtins, traceback
+import sys, os, builtins, traceback, datetime
 
 if __name__ == "__main__":
+    import locale
+    print("LOCALE:", locale.setlocale(locale.LC_ALL, ''))
     try:
         builtins.PROGRAM_DATA = os.environ["PROGRAM_DATA"]
     except KeyError:
@@ -207,17 +209,88 @@ class AttendanceEditor(QWidget):
         self.reset_modified()
 
 
+def readHols():
+    """Return a <set> of <datetime.date> instances for all holidays in
+    the calendar file for the current year. The dates are initially in
+    isoformat (YYYY-MM-DD).
+    """
+    deltaday = datetime.timedelta(days = 1)
+    hols = set()
+    for k, v in CALENDAR.items():
+        if k[0] == '_':
+            if type(v) == str:
+                # single date
+                hols.add(datetime.date.fromisoformat(v))
+            else:
+                d1, d2 = map(datetime.date.fromisoformat, v)
+                if d1 >= d2:
+                    raise AttendanceError(_BAD_RANGE.format(
+                            key = k, val = v))
+                while True:
+                    hols.add(d1)
+                    d1 += deltaday
+                    if d1 > d2:
+                        break
+    return hols
+
+
+class Month:
+    """Manage information, especially names for the months of the school year.
+    The calendar year is adjusted to the month of the school year.
+    """
+    def __init__(self, schoolyear, num=None):
+        self.month1 = self.boundmonth(num or SCHOOLYEAR_MONTH_1)
+        self.schoolyear = schoolyear
+        self.month = self.month1
+
+    def month(self):
+        """Return the index of the month, in the range 1 to 12.
+        """
+        return self.month
+
+    def __str__(self):
+        return calendar.month_name[self.month]
+
+    def tag(self):
+        return calendar.month_abbr[self.month]
+
+    @staticmethod
+    def boundmonth(m):
+        return ((m-1) % 12) + 1
+
+    def year(self):
+        return (int(self.schoolyear) if (self.month < SCHOOLYEAR_MONTH_1
+                    or SCHOOLYEAR_MONTH_1 == 1)
+                else (int(self.schoolyear) - 1))
+
+    def increment(self, delta = 1):
+        self.month = self.boundmonth(self.month + delta)
+
+    def last_tag(self):
+        return calendar.month_abbr[self.boundmonth(self.month1 - 1) - 1]
+
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
     # Enable package import if running as module
-    import sys, os
     # print(sys.path)
     this = sys.path[0]
     basedir = os.path.dirname(this)
 #    sys.path[0] = appdir
     from core.base import start
     start.setup(os.path.join(basedir, "TESTDATA"))
+    print("§§§", CALENDAR)
+
+    for d in sorted(readHols()):
+        print (" ---", d.isoformat())
+
+    import calendar
+    print(calendar.day_name[1])
+    print(calendar.day_abbr[1])
+    print(calendar.month_name[1])
+    print(calendar.month_abbr[1])
+
+
 
     edit = AttendanceEditor()
     icon = get_icon("attendance")
