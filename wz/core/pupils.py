@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2021-11-19
+core/pupils.py - last updated 2021-11-20
 
 Manage pupil data.
 
@@ -69,6 +69,7 @@ if __name__ == '__main__':
 ### +++++
 
 #import io
+import re
 from glob import glob
 
 #from local.base_config import PupilError, PupilsBase, sortkey
@@ -85,6 +86,54 @@ from tables.spreadsheet import read_DataTable, filter_DataTable, \
 # What about updating from file, with update selections?
 
 ### **************************************************************** ###
+
+class PupilData(dict):
+    def __init__(self, fromdict, klass=None):
+        super().__init__()
+        self.update(fromdict)
+        if klass:
+            self['CLASS'] = klass
+
+    def __str__(self):
+        """A visual representation of a pupil-data mapping.
+        """
+        items = ['{k}={v}'.format(k = f, v = v) for f, v in self.items()]
+        return 'Pupil Data: <%s>' % '; '.join(items)
+
+    def lastname(self):
+        """A '|' may be present to separate a prefix ("tussenvoegsel")
+        from the main name (see method <sorting_name> below).
+        """
+        return self['LASTNAME'].replace('|', '')
+
+    def name(self):
+        """Return the short-name of the pupil.
+        """
+        return f"{self['FIRSTNAME']} {self.lastname()}"
+
+    def sorting_name(self):
+        """In Dutch there is a word for those little last-name prefixes
+        like "van", "von" and "de": "tussenvoegsel". For sorting purposes
+        these can be a bit annoying because they should often be ignored,
+        e.g. "Vincent van Gogh" would be sorted primarily under "G".
+
+        A simple mechanism to handle this behaviour is provided by
+        allowing the separator '|' to appear in a last-name. Anything
+        before this separator is treated as a "tussenvoegsel". For
+        sorting, the name will be reordered as:
+            "last-name[_tussenvoegsel]_first-name"
+        where the "[_tussenvoegsel]" bit is only present if this
+        component is actually present.
+        In addition, non-ASCII characters are substituted.
+        """
+        _lastname = self['LASTNAME']
+        try:
+            tv, _lastname = _lastname.split('|', 1)
+            tv, _lastname = tv.rstrip(), _lastname.lstrip()
+        except ValueError:
+            return asciify(f"{_lastname}_{self['FIRSTNAME']}")
+        return asciify(f"{_lastname}_{tv}_{self['FIRSTNAME']}")
+
 
 class Pupils(dict):
     """Handler for pupil data.
@@ -105,9 +154,8 @@ class Pupils(dict):
         self.config = MINION(DATAPATH("CONFIG/PUPIL_DATA"))
         # Each class has a table-file (substitute {klass}):
         self.class_path = DATAPATH(CONFIG["PUPIL_TABLE"])
-        print("???", self.class_path.format(klass="*"))
         for fpath in glob(self.class_path.format(klass="*")):
-            print("READING", fpath)
+            #print("READING", fpath)
             class_table = read_DataTable(fpath)
             try:
                 class_table = filter_DataTable(class_table, self.config,
@@ -131,9 +179,9 @@ class Pupils(dict):
                 if pid in self:
                     raise PupilError(_DOUBLE_PID_DB.format(pid=pid,
                             k1=self[pid]["CLASS"], k2=klass))
-                self[pid] = row
-                row["CLASS"] = klass
-                pdata_list.append(row)
+                pdata = PupilData(row, klass)
+                self[pid] = pdata
+                pdata_list.append(pdata)
 
     def classes(self):
         """Return a sorted list of class names.
@@ -158,36 +206,16 @@ class Pupils(dict):
         for pdata in self.__classes[klass]:
             if date:
                 # Check exit date
-                exd = pdata.get('EXIT_D')
+                exd = pdata.get("EXIT_D")
                 if exd and exd < date:
                     continue
-            if groups and not (groupset & set(pdata.get('GROUPS'))):
+            if groups and not (groupset & set(pdata.get("GROUPS"))):
                 continue
             plist.append(pdata)
         return plist
 
-
-
-
-        if not ptable:
-            filepath = DATAPATH("CONFIG/PUPIL_DATA")
-            ptable = get_pack(filepath)
-            try:
-                if ptable['__INFO__']['SCHOOLYEAR'] != SCHOOLYEAR:
-                    raise PupilError(_SCHOOLYEAR_MISMATCH_DB)
-            except KeyError:
-                raise PupilError(_NO_SCHOOLYEAR_DB)
-        self.__fields = ptable['__FIELDS__']
-        self.__info = ptable['__INFO__']
-        self.set_data(ptable['__ROWS__'])
-
-
-    @staticmethod
-    def name(pdata):
-        return f"{pdata['FIRSTNAME']} {pdata['LASTNAME']}"
-
     def pid2name(self, pid):
-        return self.name(self[pid])
+        return self[pid].name()
 
     def final_year_pupils(self):
         """Return lists of pupils in their final year:
@@ -199,79 +227,25 @@ class Pupils(dict):
                 plist = self.class_pupils(k)
             else:
                 plist = self.class_pupils(k, groups = l)
-            collect[k] = [(pdata['PID'], Pupils.name(pdata))
-                    for pdata in plist]
+            collect[k] = [(pdata['PID'], pdata.name()) for pdata in plist]
         return collect
+
+    def sort_class(self, klass, nosave=False):
+        """Sort the pupil data items for the given class alphabetically.
+        This should only be necessary if names are changed.
+        """
+        if nosave:
+            return sorted(self.__classes[klass], key=PupilData.sorting_name)
+        self.__classes[klass].sort(key=PupilData.sorting_name)
+
+
 
 
 
 #TODO ...
-    #+
-    @classmethod
-    def fetch(cls):
-        """This is the main method for fetching the current data, which
-        is then cached in memory.
-        """
-        if not cls.__pupils:
-            cls.__pupils = cls()
-        return cls.__pupils
-    #+
-    @classmethod
-    def tocache(cls, pupils = None):
-        """Set or clear the cache.
-        """
-        cls.__pupils = pupils
-#
-    @classmethod
-    def init_from_bytes(cls, filebytes, filename, extend = True):
-        """Make a <_Pupils> instance from a file passed as <bytes>.
-        The <filename> parameter is necessary to determine the type of
-        data (ods, xlsx or tsv) – on the basis of its ending.
-        For update tables, <extend> should be false, so that no fields
-        are added to those in the source.
-        """
-        bstream = io.BytesIO(filebytes)
-        bstream.filename = filename
-        ptable = read_DataTable(bstream)
-        PupilsBase.process_source_table(ptable)
-        T_SCHOOLYEAR = CONFIG['T_SCHOOLYEAR']
-        ptable = filter_DataTable(ptable,
-                SCHOOL_DATA['PUPIL_FIELDS'],
-                infolist = [
-                        ['SCHOOLYEAR', T_SCHOOLYEAR, False],
-                        ['__MODIFIED__', None, False]
-                    ],
-                extend = extend)
-        info = ptable['__INFO__']
-        sy = info.get('SCHOOLYEAR')
-        if sy:
-            if sy != SCHOOLYEAR:
-                raise PupilError(_SCHOOLYEAR_MISMATCH.format(
-                        filename = filename))
-        else:
-            REPORT('WARN', _NO_SCHOOLYEAR.format(
-                    year = T_SCHOOLYEAR,
-                    filename = filename))
-        return cls(ptable)
 #
 #
 #
-    def fill_classes(self):
-        """The pupils are allocated to classes and sorted within these.
-        """
-        self.__classes = {}
-        for pid, pdata in self.items():
-            klass = pdata.get('CLASS')
-            if not klass:
-                raise PupilError(_CLASS_MISSING.format(row = repr(pdata)))
-            try:
-                plist = self.__classes[klass]
-            except KeyError:
-                plist = _PupilList()
-                self.__classes[klass] = plist
-            plist.append(pdata)
-        for plist in self.__classes.values():
-            plist.sortlist()
 #
     def save(self):
         """Save the pupil data to the pupil-database.
@@ -297,18 +271,9 @@ class Pupils(dict):
         if self != self.__pupils:
             # Make this the cached pupil-data
             self.tocache(self)
-#
-#
 
 
 
-
-    @staticmethod
-    def pstring(pdata):
-        """A visual representation of a pupil-data mapping.
-        """
-        items = ['{k}={v}'.format(k = f, v = v) for f, v in pdata.items()]
-        return 'Pupil Data: <%s>' % '; '.join(items)
 #
 #
     def compare_update(self, newdata):
@@ -534,34 +499,58 @@ class Pupils(dict):
             # This replaces the existing pupil data for the current year!
             pupils.save()
 
-###
 
-class _PupilList(list):
-    """Representation for a list of pupil-data mappings.
-    It also maintains a mapping {pid -> pupil-data}.
-    The resulting list should only be modified via the
-    methods provided here.
+
+
+def asciify(string, invalid_re = None):
+    """This converts a utf-8 string to ASCII, e.g. to ensure portable
+    filenames are used when creating files.
+    Also spaces are replaced by underlines.
+    Of course that means that the result might look quite different from
+    the input string!
+    A few explicit character conversions are given in the mapping
+    <ASCII_SUB>.
+    By supplying <invalid_re>, an alternative set of exclusion characters
+    can be used.
     """
-    def __init__(self):
-        super().__init__()
-        self.__pidmap = {}
-#
-    def append(self, item):
-        super().append(item)
-        self.__pidmap[item['PID']] = item
-#
-    def remove(self, item):
-        super().remove(item)
-        del(self.__pidmap[item['PID']])
-#
-    def pid2pdata(self, pid):
-        return self.__pidmap[pid]
-#
-    def sortlist(self):
-        """Alphabetical sort.
-        """
-        self.sort(key = sortkey)
+    # regex for characters which should be substituted:
+    if not invalid_re:
+        invalid_re = r'[^A-Za-z0-9_.~-]'
+    def rsub (m):
+        c = m.group (0)
+        if c == ' ':
+            return '_'
+        try:
+            return lookup[c]
+        except:
+            return '^'
 
+    lookup = ASCII_SUB
+    return re.sub(invalid_re, rsub, string)
+
+
+# Substitute characters used to convert utf-8 strings to ASCII, e.g. for
+# portable filenames. Non-ASCII characters which don't have
+# entries here will be substituted by '^':
+ASCII_SUB = {
+    'ä': 'ae',
+    'ö': 'oe',
+    'ü': 'ue',
+    'ß': 'ss',
+    'Ä': 'AE',
+    'Ö': 'OE',
+    'Ü': 'UE',
+    'ø': 'oe',
+    'ô': 'o',
+    'ó': 'o',
+    'é': 'e',
+    'è': 'e',
+    # Latin:
+    'ë': 'e',
+    # Cyrillic (looks like the previous character, but is actually different).
+    'ё': 'e',
+    'ñ': 'n'
+}
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
@@ -594,6 +583,10 @@ if __name__ == '__main__':
     for k, l in pupils.final_year_pupils().items():
         print(f"\nLEAVING in {k}: {repr(l)}")
 
+#    for klass in pupils.classes():
+#        print(f"\nSORT {klass}:")
+#        for pdata in pupils.sort_class(klass, nosave=True):
+#            print(f"  {pdata.sorting_name()}")
     quit(0)
     ### Make a trial migration to next school-year.
     ### This also makes a back-up of the current pupil data.

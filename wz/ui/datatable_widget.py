@@ -2,7 +2,7 @@
 """
 ui/datatable_widget.py
 
-Last updated:  2021-11-18
+Last updated:  2021-11-20
 
 Gui editor widget for "DataTables".
 See datatable-editor.py for an app which can be used for testing this
@@ -364,7 +364,7 @@ class DataTableEditor(QWidget):
         for key, val in self.info.get_info():
             self.__info[key] = val
         self.__rows = []
-        for row in self.table.table_data:
+        for row in self.table.read_all():
             rowdata = {}
             c = 0
             for hdr in self.__columns:
