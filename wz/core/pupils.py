@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2021-11-20
+core/pupils.py - last updated 2021-11-21
 
 Manage pupil data.
 
@@ -70,6 +70,7 @@ if __name__ == '__main__':
 
 #import io
 import re
+import tarfile
 from glob import glob
 
 #from local.base_config import PupilError, PupilsBase, sortkey
@@ -247,30 +248,40 @@ class Pupils(dict):
 #
 #
 #
-    def save(self):
-        """Save the pupil data to the pupil-database.
-        The first save of a day causes the current data to be backed up,
-        if it exists.
+    def save(self, klass):
+        """Save the data for the pupils in the given class to the
+        pupil-database.
+        The first save of a day causes the current data (all classes) to
+        be backed up.
         """
         timestamp = Dates.timestamp()
         today = timestamp.split('_', 1)[0]
-        pdlist = []
-        for klass in self.classes():
-            pdlist += self.__classes[klass]
-        self.__info = {
-            '__TITLE__': _TITLE,
-            'SCHOOLYEAR': SCHOOLYEAR,
-            '__MODIFIED__': timestamp,
-        }
+        folder = os.path.dirname(self.class_path)
+        buname = os.path.basename(folder)
+        bufolder = os.path.join(folder, "backup")
+        bufile = os.path.join(bufolder, f"{buname}_{today}.tar.gz")
+        if not os.path.isfile(bufile):
+            if not os.path.isdir(bufolder):
+                os.mkdir(bufolder)
+            tar = tarfile.open(bufile, "w:gz")
+            for fpath in glob(self.class_path.format(klass="*")):
+                tar.add(fpath, f"{buname}/{os.path.basename(fpath)}")
+            tar.close()
+            print(f"BACKED UP @ {bufile}")
         data = {
-            '__INFO__': self.__info,
-            '__FIELDS__': self.__fields,
-            '__ROWS__': pdlist
+            "__FIELDS__": [f["NAME"]
+                    for f in self.config["TABLE_FIELDS"]],
+            "__INFO__": {
+                "__TITLE__": _TITLE,
+                "SCHOOLYEAR": SCHOOLYEAR,
+                "CLASS": klass,
+                "__MODIFIED__": timestamp
+            },
+            "__ROWS__": self.__classes[klass]
         }
-        save_pack(DATAPATH(CONFIG['CLASS_TABLE']), data, today)
-        if self != self.__pupils:
-            # Make this the cached pupil-data
-            self.tocache(self)
+        tsvbytes = make_DataTable(data, "tsv")
+        with open(self.class_path.format(klass=klass), "wb") as fh:
+            fh.write(tsvbytes)
 
 
 
@@ -402,6 +413,7 @@ class Pupils(dict):
         self.save()
         return True
 #
+#TODO: Maybe I need something like this, but perhaps call it "export"?
     def backup(self, filepath, klass = None):
         """Save a table with all the pupil data for back-up purposes.
         This can be used as an "update" source to reinstate an earlier
@@ -587,6 +599,9 @@ if __name__ == '__main__':
 #        print(f"\nSORT {klass}:")
 #        for pdata in pupils.sort_class(klass, nosave=True):
 #            print(f"  {pdata.sorting_name()}")
+
+#    pupils.save("12G")
+
     quit(0)
     ### Make a trial migration to next school-year.
     ### This also makes a back-up of the current pupil data.
