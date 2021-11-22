@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2021-11-21
+core/pupils.py - last updated 2021-11-22
 
 Manage pupil data.
 
@@ -38,10 +38,11 @@ _SCHOOLYEAR_MISMATCH_DB = "Schüler-Datenbank-Fehler: falsches Jahr in\n{path}"
 _CLASS_MISMATCH_DB = "Schüler-Datenbank-Fehler: falsche Klasse in\n{path}"
 _DOUBLE_PID_DB = "Schüler-Datenbank-Fehler: Schüler-ID {pid} doppelt" \
         " vorhanden, in Klassen {k1} und {k2}"
+_CLASS_MISSING = "In importierten Daten: Klasse fehlt für {name}"
+_FILTER_ERROR = "Schülerdaten-Fehler: {mesg}"
 
 
-
-
+#???
 _SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filename}"
 _NO_SCHOOLYEAR = "Kein '{year}' angegeben in Schülertabelle:\n  {filename}"
 _NO_SCHOOLYEAR_DB = "Schüler-Datenbank-Fehler: kein 'SCHOOLYEAR'"
@@ -77,7 +78,9 @@ from glob import glob
 from core.base import Dates
 from tables.spreadsheet import read_DataTable, filter_DataTable, \
         make_DataTable, make_DataTable_filetypes, TableError
-#from tables.datapack import get_pack, save_pack
+
+class PupilError(Exception):
+    pass
 
 ### -----
 
@@ -136,6 +139,9 @@ class PupilData(dict):
         return asciify(f"{_lastname}_{tv}_{self['FIRSTNAME']}")
 
 
+#TODO: Need a similar reader for importing pupil data. Maybe just a
+# dict: pid -> PupilData (including CLASS field)
+
 class Pupils(dict):
     """Handler for pupil data.
     The internal pupil data should be read and written only through this
@@ -152,19 +158,34 @@ class Pupils(dict):
         self.__classes = {}
         super().__init__()
         # Fields:
-        self.config = MINION(DATAPATH("CONFIG/PUPIL_DATA"))
+        config = MINION(DATAPATH("CONFIG/PUPIL_DATA"))
+        self.all_fields = {}
+        self.fields = {}
+        for f in config["INFO_FIELDS"]:
+            k = f["NAME"]
+            if k == "CLASS":
+                self.all_fields["CLASS"] = (
+                    f.get("DISPLAY_NAME") or k,
+                    bool(f.get("REQUIRED"))
+                )
+        for f in config["TABLE_FIELDS"]:
+            k = f["NAME"]
+            self.fields[k] = (
+                f.get("DISPLAY_NAME") or k,
+                bool(f.get("REQUIRED"))
+            )
+        self.all_fields.update(self.fields)
         # Each class has a table-file (substitute {klass}):
         self.class_path = DATAPATH(CONFIG["PUPIL_TABLE"])
         for fpath in glob(self.class_path.format(klass="*")):
             #print("READING", fpath)
             class_table = read_DataTable(fpath)
             try:
-                class_table = filter_DataTable(class_table, self.config,
+                class_table = filter_DataTable(class_table, config,
                         notranslate=True)
             except TableError as e:
-#TODO
-                print("ERROR:", str(e), "in\n", fpath)
-                raise
+                raise PupilError(_FILTER_ERROR.format(
+                        msg = f"{e} in\n {fpath}"))
 
             # The data should already be alphabetically ordered here.
             info = class_table["__INFO__"]
@@ -267,10 +288,10 @@ class Pupils(dict):
             for fpath in glob(self.class_path.format(klass="*")):
                 tar.add(fpath, f"{buname}/{os.path.basename(fpath)}")
             tar.close()
+#TODO: Remove older backups?
             print(f"BACKED UP @ {bufile}")
         data = {
-            "__FIELDS__": [f["NAME"]
-                    for f in self.config["TABLE_FIELDS"]],
+            "__FIELDS__": list(self.fields),
             "__INFO__": {
                 "__TITLE__": _TITLE,
                 "SCHOOLYEAR": SCHOOLYEAR,
@@ -283,10 +304,6 @@ class Pupils(dict):
         with open(self.class_path.format(klass=klass), "wb") as fh:
             fh.write(tsvbytes)
 
-
-
-#
-#
     def compare_update(self, newdata):
         """Compare the new data with the existing data and compile a list
         of changes, grouped according to class. There are three types:
@@ -296,37 +313,40 @@ class Pupils(dict):
               for patching or migrating to a new year)
             - field(s) changed.
         """
-        pidset = set(self)      # to register removed pupils
-        # Initialize empty lists for all classes, covering old and new data
-        changes = {}
-        for k in self.__classes:
-            changes[k] = []
-        for k in newdata.__classes:
-            changes[k] = []
-        # Search for changes
-        for klass, plist in newdata.__classes.items():
-            kchanges = changes[klass]
-            for pdata in plist:
-                pid = pdata.get('PID')
+        class_delta = {}
+        rest_pids = dict(self)  # remove processed pids from this set
+        for pid, pdata in newdata.items():
+            try:
+                klass = pdata["CLASS"]
+            except KeyError:
+                raise PupilError(_CLASS_MISSING.format(name = pdata.name()))
+            try:
+                odata = rest_pids.pop(pid)
+            except KeyError:
+                # New pupil
                 try:
-                    old = self[pid]
+                    class_delta[klass].append(('NEW', pdata))
                 except KeyError:
-                    # New entry
-                    kchanges.append(('NEW', pdata))
-                    continue
-                pidset.remove(pid)
-                # Compare fields.
-                delta = self.compare(old, pdata)
-                if delta:
-                    # There is no special handling for change of CLASS
-                    kchanges.append(('DELTA', old, delta))
+                    class_delta[klass] = [('NEW', pdata)]
+                continue
+            # Compare data
+            delta = self.compare(odata, pdata)
+            if delta:
+                # CLASS changes are registered in the new class.
+#TODO: Should they also be registered in the old class?
+                try:
+                    class_delta[klass].append(('DELTA', odata, delta))
+                except KeyError:
+                    class_delta[klass] = [('DELTA', odata, delta)]
         # Add removed pupils to list
-        for pid in pidset:
-            pdata = self[pid]
-            changes[pdata['CLASS']].append(('REMOVE', pdata))
-        # Only include non-empty lists in result
-        return {k: clist for k, clist in changes.items() if clist}
-#
+        for pid, pdata in rest_pids.items():
+            klass = pdata["CLASS"]
+            try:
+                class_delta[klass].append(('REMOVE', pdata))
+            except KeyError:
+                class_delta[klass] = [('REMOVE', pdata)]
+        return class_delta
+
     @staticmethod
     def compare(old, new):
         """Compare the fields of the old pupil-data with the new ones.
@@ -344,11 +364,12 @@ class Pupils(dict):
             if v != vnew:
                 delta.append((k, vnew))
         return delta
-#
+
     def update_classes(self, changes):
         """Apply the changes in the <changes> lists to the pupil data.
         The entries are basically those generated by <self.compare_update>,
-        but it would be possible to insert a filtering step in between.
+        but it would be possible to insert a filtering step before
+        calling this function.
         """
         count = 0
         for klass, change_list in changes.items():
@@ -371,47 +392,76 @@ class Pupils(dict):
             self.fill_classes()
             # Make changes persistent
             self.save()
-#
+
+    def fill_classes(self):
+        """The pupils are allocated to classes and sorted within these.
+        """
+        self.__classes = {}
+        for pid, pdata in self.items():
+            klass = pdata["CLASS"]
+            try:
+                self.__classes[klass].append(pdata)
+            except KeyError:
+                self.__classes[klass] = [pdata]
+        for klass in self.__classes:
+            self.sort_class(klass)
+
     def remove_pupil(self, pid):
-        del(self[pid])
-        # Regenerate class lists
-        self.fill_classes()
+        pdata = self.pop(pid)
+        klass = pdata["CLASS"]
+        i = 0
+        for pd in self.__classes[klass]:
+            if pd["PID"] == pid:
+                del(self.__classes[klass][i])
+#TODO: if class now empty, remove it?
+                break
+            i += 1
         # Make changes persistent
         self.save()
         return True
-#
+
     def modify_pupil(self, pupil_data_list):
         """This is used by the pupil-data editor. All changes to a pupil's
         data should pass through here.
         It ensures that the internal structures are consistent and that
-        the changes get saved to the persistent storage.
+        the changes get saved to persistent storage.
         By supplying a pupil-id which is not already in use, a new
         pupil can be added.
+#TODO: or a null pupil id?
         <pupil_data_list> is a list of pupil-data mappings.
         """
-        for pupil_data in pupil_data_list:
-            pid = pupil_data['PID']
+        for pdata in pupil_data_list:
+            pid = pdata["PID"]
+#TODO?
+            if not pid:
+                pid = self.new_pid()
             # Check that essential fields are present
             missing = []
-            for f, *tnx in SCHOOL_DATA['PUPIL_FIELDS']:
-                fields.append(f)
-                if tnx[1]:     # an essential field
+            for f, fdata in self.all_fields.items():
+                if fdata[1]:    # an essential field
                     if not pupil_data.get(f):
-                        missing.append(tnx[0] or f)
+                        missing.append(fdata[0] or f)
             if missing:
-                REPORT('ERROR', _MISSING_FIELDS.format(
-                        fields = '\n  '.join(missing)))
+                REPORT("ERROR", _MISSING_FIELDS.format(
+                        fields = "\n  ".join(missing)))
                 return False
             if pid not in self:
+#TODO???? was in "base_config"
                 # A new pupil ... check PID validity
-                self.check_new_pid_valid(pid)
+                if not self.check_new_pid_valid(pid):
+                    REPORT("ERROR", _INVALID_PID.format(
+                        name=pdata.name(), pid = pid))
+                    return False
             # Rebuild pupil entry
-            self[pid] = {f: pupil_data.get(f) or NONE for f in self.__fields}
+            self[pid] = {f: pupil_data.get(f) or "" for f in self.all_fields}
         # Regenerate class lists
         self.fill_classes()
         # Make changes persistent
         self.save()
         return True
+
+
+#TODO ...
 #
 #TODO: Maybe I need something like this, but perhaps call it "export"?
     def backup(self, filepath, klass = None):
