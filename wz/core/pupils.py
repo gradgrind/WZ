@@ -290,19 +290,35 @@ class Pupils(dict):
             tar.close()
 #TODO: Remove older backups?
             print(f"BACKED UP @ {bufile}")
+        self.save_data(
+            klass,
+            self.__classes[klass],
+            self.class_path.format(klass=klass),
+            SCHOOLYEAR,
+            timestamp
+        )
+
+    def save_data(self, klass, pupil_list, filepath, schoolyear,
+            timestamp=None):
+        if not timestamp:
+            timestamp = Dates.timestamp()
         data = {
             "__FIELDS__": list(self.fields),
             "__INFO__": {
                 "__TITLE__": _TITLE,
-                "SCHOOLYEAR": SCHOOLYEAR,
+                "SCHOOLYEAR": schoolyear,
                 "CLASS": klass,
                 "__MODIFIED__": timestamp
             },
-            "__ROWS__": self.__classes[klass]
+            "__ROWS__": pupil_list
         }
         tsvbytes = make_DataTable(data, "tsv")
-        with open(self.class_path.format(klass=klass), "wb") as fh:
+        with open(filepath, "wb") as fh:
             fh.write(tsvbytes)
+
+
+
+
 
     def compare_update(self, newdata):
         """Compare the new data with the existing data and compile a list
@@ -511,6 +527,7 @@ class Pupils(dict):
 #
     def migrate(self, repeat_pids = [], save_as = None):
         """Create a pupil-data structure for the following year.
+#???
         If <save_as> is provided, it should be a file-path: the new
         pupil data will be saved here (as a DataTable) instead of in the
         internal database.
@@ -525,42 +542,68 @@ class Pupils(dict):
         yes_pids = set(repeat_pids)
         nextyear = str(int(SCHOOLYEAR) + 1)
         day1 = Dates.day1(nextyear) # for filtering out pupils who have left
-        newpupils = []
+        newpupils = {}
+        _class_path = DATAPATH(CONFIG["PUPIL_TABLE"], base="NEXT")
         # Filter out pupils from final classes, tweak pupil data
+        leavers = self.final_year_pupils()
         for klass in self.classes():
-            leavers = {pd[0] for pd in self.final_year_pupils(klass)}
-            pdlist = self.class_pupils(klass, date = day1)
-            for pdata in pdlist:
+            for _pdata in self.class_pupils(klass, date = day1):
+                pdata = _pdata.copy()
                 pid = pdata['PID']
                 if pid in yes_pids:
-                    # Don't check if leaver, don't tweak
-                    newpupils.append(pdata.copy())
-                elif pid not in leavers:
-                    # Progress to next class ...
-                    new_pd = PupilsBase.next_class(pdata)
-                    if new_pd:
-                        # Also <next_class> can filter out pupils
-                        newpupils.append(new_pd)
-        info = {
-            'SCHOOLYEAR': nextyear,
-        }
-        ptable = {
-            '__INFO__': info,
-            '__FIELDS__': self.__fields,
-            '__ROWS__': newpupils
-        }
-        pupils = _Pupils(ptable)
-        pupils.fill_classes()
-        # First back-up the existing data.
-        self.backup(DATAPATH(f'tmp/pupils_{SCHOOLYEAR}'))
-        if save_as:
-            # Don't replace the existing pupil data for the current year,
-            # save the new table somewhere else.
-            pupils.backup(save_as)
-        else:
-            # This replaces the existing pupil data for the current year!
-            pupils.save()
+                    new_klass = klass
+                else:
+                    # Progress to next class
+                    new_klass = next_class(pdata, leavers.get(klass))
+                try:
+                    newpupils[new_klass].append(pdata)
+                except KeyError:
+                    newpupils[new_klass] = [pdata]
+        folder = os.path.dirname(_class_path)
+        for dpath in glob(_class_path.format(klass="*")):
+            os.remove(dpath)
+        os.makedirs(folder, exist_ok=True)
+        timestamp = Dates.timestamp()
+        for klass, pdlist in newpupils.items():
+            self.save_data(
+                klass,
+                pdlist,
+                _class_path.format(klass=klass),
+                nextyear,
+                timestamp
+            )
 
+
+#TODO: Custom functions ... where to put these?
+def next_class(pdata, leavers):
+    """Adjust the pupil data to the next class.
+    Note that this is an "in-place" operation, so if the original data
+    should remain unchanged, pass in a copy.
+    """
+    klass = pdata['CLASS']
+    # Progress to next class ...
+    k_year = class_year(klass)
+    k_new = int(k_year) + 1
+    k_suffix = klass[2:]
+    klass = f'{k_new:02}{k_suffix}'
+    # Handle entry into "Qualifikationsphase"
+    if k_new == 12 and 'G' in pdata['GROUPS'].split():
+        try:
+            pdata['QUALI_D'] = CALENDAR['~NEXT_FIRST_DAY']
+        except KeyError:
+            pass
+    return k_new
+
+
+def class_year(klass):
+    """Get just the year part of a class name, as <str>, padded to
+    2 digits.
+    """
+    try:
+        k = int(klass[:2])
+    except:
+        k = int(klass[0])
+    return f'{k:02}'
 
 
 
@@ -652,6 +695,7 @@ if __name__ == '__main__':
 
 #    pupils.save("12G")
 
+    pupils.migrate()
     quit(0)
     ### Make a trial migration to next school-year.
     ### This also makes a back-up of the current pupil data.
