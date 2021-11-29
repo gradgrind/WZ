@@ -2,7 +2,7 @@
 """
 attendance.py
 
-Last updated:  2021-11-19
+Last updated:  2021-11-29
 
 Gui editor for attendance tables.
 
@@ -23,6 +23,21 @@ Copyright 2021 Michael Towers
 
 =-LICENCE=================================
 """
+
+TITLE_HEIGHT = 25
+ROWS0 = (25, 3)
+ROWi0 = len(ROWS0)
+ROWn = (25,)
+COLS0 = (120, 3)
+COLS = (120, 3) + (25,) * 31
+COLi0 = len(COLS0)
+
+#?
+TCOLS = [f"{n:02d}" for n in range(1, 32)]
+
+COLOUR_WEEKEND = "DDDDDD"
+COLOUR_HOLIDAY = "00CC00"
+COLOUR_NO_DAY = "99FFFF"
 
 ### Messages
 PROGRAM_NAME = "Attendance"
@@ -56,26 +71,222 @@ if __name__ == "__main__":
         builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
 
 from ui.ui_base import APP, run, openDialog, saveDialog, get_icon, \
-        QWidget, QVBoxLayout
+        QWidget, QVBoxLayout, QDialog, QPushButton, QButtonGroup, Qt
 
 # This seems to deactivate activate-on-single-click in filedialog
 # (presumably elsewhere as well?)
 APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
 from core.base import Dates
-from ui.grid0 import GridViewRescaling
+from core.pupils import Pupils
+#from ui.grid0 import GridViewRescaling
+from ui.grid0 import GridViewHFit
+
+from ui.editable import EdiTableWidget
+#?
+from ui.grid0 import GraphicsSupport
 
 ### -----
 
+CHOICE_ITEMS = (
+    ("", "anwesend"),
+    ("A", "ganztägig abwesend"),
+    ("Ae", "ganztägig abwesend – entschuldigt"),
+    ("T", "teils abwesend"),
+    ("Te", "teils abwesend – entschuldigt"),
+    ("V", "verspätet"),
+    ("Ve", "verspätet – entschuldigt")
+)
+#TODO: There are more possibilities ... Praktikum, Ausland, beurlaubt?, ...
+
+class Choice(QDialog):
+    @classmethod
+    def choice(cls, parent=None, x=None, y=None):
+        dlg = cls(parent, x, y)
+        dlg.exec()
+        return dlg.entry
+
+    def __init__(self, parent, x, y):
+        super().__init__(parent)
+        self.setWindowTitle("Abwesenheit")
+        group = QButtonGroup(self)
+        group.buttonClicked.connect(self.on_clicked)
+        layout = QVBoxLayout(self)
+        for k, v in CHOICE_ITEMS:
+            label = f"{k}:" if k else "(leer):"
+            p = QPushButton(f"{label:8} {v}")
+            p.setStyleSheet("text-align:left;")
+            p.entry = k
+            layout.addWidget(p)
+            group.addButton(p)
+
+    def on_clicked(self, btn):
+        print("§§§", btn.entry)
+        self.entry = btn.entry
+        self.accept()
+
+    def reject(self):
+        self.entry = None
+        super().reject()
+
+
+class AttendanceTable(EdiTableWidget):
+    def activated(self, row, col):
+        # This is called when a cell is left-clicked with Ctrl pressed
+        # or when the (single) selected cell has "Return/Newline" pressed
+        # together with Ctrl.
+#        v = ListSelect("?", "???", options)
+        item = self.item(row, col)
+        if item.flags() & Qt.ItemIsEditable:
+            v = Choice.choice(parent=self, x=None, y=None)
+            if v is not None:
+                self.set_text(row, col, v)
+
 
 class AttendanceEditor(QWidget):
+    def is_modified(self, changed):
+        print("CHANGED:", changed)
+
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
-        self.grid = GridViewRescaling()
+        self.table = AttendanceTable(self)
+        layout.addWidget(self.table)
+        self.table.horizontalHeader().setStyleSheet(
+            "QHeaderView::section{"
+            "background-color:#FFFF80;"
+            "padding: 2px;"
+            "border: 1px solid #808080;"
+            "border-bottom: 2px solid #0000C0;"
+            "}"
+        )
+
+    def setup(self, klass):
+        """Load the attendance data for the given class.
+        """
+        self.all_pupils = Pupils()
+        self.pupils = self.all_pupils.class_pupils(klass)
+
+        row = 0
+        trows = []
+
+#TODO: Actually this should be the absence data for each pupil ...
+        self.pupilmap = {}
+        for pdata in self.pupils:
+            pid, pname = pdata["PID"], pdata.name()
+            self.pupilmap[pid] = {}
+            trows.append(pname)
+            row += 1
+
+        self.table.setup(
+            colheaders=TCOLS,
+            rowheaders=trows,
+            undo_redo=True,
+            cut=True,
+            paste=True,
+            on_changed=self.is_modified,
+        )
+
+        self.table.resizeColumnsToContents()
+# It seems pretty impossible to get the dimensions of the underlying table.
+# So maybe the best way to proceed is to remember the window geometry
+# from one run to another?
+
+    def todo_formatting(self, month):
+        _month = Month(SCHOOLYEAR, month)
+#?
+        hols = readHols()
+        col_colour = []
+        for day in range(1, 32):
+            try:
+                date = datetime.date(_month.year(), month, day)
+                if date.weekday() > 4:
+                    # Weekend
+# What about school Saturdays?
+                    col_colour.append(COLOUR_WEEKEND)
+                elif date in hols:
+                    # Holiday weekday
+                    col_colour.append(COLOUR_HOLIDAY)
+                else:
+                    # A normal schoolday
+                    col_colour.append(None)
+            except ValueError:
+                # date out of range – grey out cell.
+                col_colour.append(COLOUR_NO_DAY)
+
+
+#TODO
+        self.table.init_sparse_data(len(self.pupilmap), 31, [])
+        row = 0
+        for pid, pupil_data in self.pupilmap.items():
+            col = 0
+            for colour in col_colour:
+                item = self.table.item(row, col)
+                if colour:
+                    item.setFlags(item.flags() & ~ Qt.ItemIsEditable)
+                    item.setBackground(GraphicsSupport.getBrush(colour))
+                else:
+                    item.setFlags(item.flags() | Qt.ItemIsEditable)
+                    item.setBackground(GraphicsSupport.getBrush())
+                col += 1
+            row += 1
+
+
+
+
+
+class AttendancePrinter(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+#        self.grid = GridViewRescaling()
+        self.grid = GridViewHFit()
         layout.addWidget(self.grid)
 
+    def setup(self, klass):
+        """Load the attendance data for the given class.
+        """
+        self.all_pupils = Pupils()
+        self.pupils = self.all_pupils.class_pupils(klass)
+        rows = ROWS0 + ROWn * len(self.pupils)
+        self.grid.init(rows, COLS, TITLE_HEIGHT)
+        col = COLi0
+        for day in range(1, 32):
+            self.grid.basic_tile(0, col, text=str(day))
+            col += 1
+        row = ROWi0
+        pupilmap = {}
+        for pdata in self.pupils:
+            pid, pname = pdata["PID"], pdata.name()
+            pupilmap[pid] = row
+            self.grid.basic_tile(row, 0, text=pname, halign="l")
+            row += 1
 
+
+        self.grid.add_title("This is the title", halign="l")
+
+#        self.set_current_file(None)
+#        self.modified(False)
+#        self.action_save_as.setEnabled(False)
+        return int(self.grid.grid_width), int(self.grid.grid_height)
+
+
+
+# For a large class this will probably lead to a scaling, which might
+# be the best way to deal with printing, but possibly not for editing
+# on screen – a vertical scrollbar might be useful here, i.e. yet
+# another grid variant that only scales on the width ...
+# However, then I would lose the title lines. Do I really want to
+# implement a fixed header? ... how?!
+# An alternative might be a sort of paged table on screen (at least for
+# editing, if not also for printing). That could be done using a row of
+# toggle buttons to select the page.
+# Could it be that a standard table editor would be better suited for
+# the screen part? I could still use the above for printing to one page.
+
+#TODO: Use the pupil db to get the pupils, according to class.
+# The attendance data could be a mapping for each pupil-id to a mapping
+# of date -> info.
     def open_file(self, filepath):
         pupils = (
             ("0006", "Henry King"),
@@ -83,10 +294,10 @@ class AttendanceEditor(QWidget):
             ("1002", "Anne Boleyn"),
         )
 
-        rows = (25, 3)
+        rows = ROWS0
         row0 = len(rows)
         rows += (25,) * len(pupils)
-        cols = (120, 3,)
+        cols = COLS0
         col0 = len(cols)
         cols += (25,) * 31
         self.grid.init(rows, cols, 25)
@@ -239,7 +450,8 @@ class Month:
     The calendar year is adjusted to the month of the school year.
     """
     def __init__(self, schoolyear, num=None):
-        self.month1 = self.boundmonth(num or SCHOOLYEAR_MONTH_1)
+        self.SCHOOLYEAR_MONTH_1 = int(CONFIG["SCHOOLYEAR_MONTH_1"])
+        self.month1 = self.boundmonth(num or self.SCHOOLYEAR_MONTH_1)
         self.schoolyear = schoolyear
         self.month = self.month1
 
@@ -259,8 +471,8 @@ class Month:
         return ((m-1) % 12) + 1
 
     def year(self):
-        return (int(self.schoolyear) if (self.month < SCHOOLYEAR_MONTH_1
-                    or SCHOOLYEAR_MONTH_1 == 1)
+        return (int(self.schoolyear) if (self.month < self.SCHOOLYEAR_MONTH_1
+                    or self.SCHOOLYEAR_MONTH_1 == 1)
                 else (int(self.schoolyear) - 1))
 
     def increment(self, delta = 1):
@@ -278,7 +490,9 @@ if __name__ == "__main__":
     basedir = os.path.dirname(this)
 #    sys.path[0] = appdir
     from core.base import start
-    start.setup(os.path.join(basedir, "TESTDATA"))
+#TODO:
+#    start.setup(os.path.join(basedir, "TESTDATA"))
+    start.setup(os.path.join(basedir, "DATA"))
     print("§§§", CALENDAR)
 
     for d in sorted(readHols()):
@@ -290,13 +504,24 @@ if __name__ == "__main__":
     print(calendar.month_name[1])
     print(calendar.month_abbr[1])
 
-
-
     edit = AttendanceEditor()
     icon = get_icon("attendance")
     edit.setWindowIcon(icon)
+    edit.setup("12G")
+    edit.todo_formatting(10)
+    edit.show()
+    edit.resize(900, 700)
+    run(edit)
+    quit(0)
 
-    x, y = edit.open_file(None)
+
+# To use as a printer, I don't need the view, just the scene?
+    prt = AttendancePrinter()
+    icon = get_icon("attendance")
+    prt.setWindowIcon(icon)
+
+#    x, y = edit.open_file(None)
+    x, y = prt.setup("12G")
 
 # This may well not be the best approach to resizing. By using
 # GridViewRescaling it shows the whole table ...
@@ -306,11 +531,12 @@ if __name__ == "__main__":
     max_x = int(geometry.width() * 0.9)
     max_y = int(geometry.height() * 0.9)
     if x + 50 > max_x or y + 50 > max_y:
-        edit.resize(max_x, max_y)
+        prt.resize(max_x, max_y)
     else:
-        edit.resize(x + 50, y + 50)
-    edit.show()
-    run(edit)
+        prt.resize(x + 50, y + 50)
+    prt.show()
+    prt.resize(int(geometry.width() * 0.7), int(geometry.height() * 0.7))
+    run(prt)
     quit(0)
 
 

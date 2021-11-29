@@ -2,7 +2,7 @@
 """
 ui/grid0.py
 
-Last updated:  2021-11-18
+Last updated:  2021-11-28
 
 Widget with tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -419,6 +419,42 @@ class GridViewRescaling(GridView):
         if qrect == None:
             qrect = self._sceneRect
         self.fitInView(qrect, Qt.KeepAspectRatio)
+
+
+# Experimental!
+class GridViewHFit(GridView):
+    """An QGraphicsView that automatically adjusts the scaling of its
+    scene to fill the width of the viewing window. If
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Apparently it is a good idea to disable scrollbars when using
+        # this resizing scheme. With this resizing scheme they would not
+        # appear anyway, so this doesn't lose any features!
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+#        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+    def resizeEvent(self, event):
+        self.rescale()
+        return super().resizeEvent(event)
+
+    def rescale(self, qrect=None):
+        if qrect == None:
+            qrect = self._sceneRect
+        size = self.size()
+        vsb = self.verticalScrollBar()
+        w = size.width()
+# This might be problematic at the point where the scrollbar appears or
+# disappears ...
+# Initially the scrollbar is reported as invisible, even when it is
+# clearly visible, so the calculation is wrong.
+        if vsb.isVisible():
+            w -= vsb.size().width()
+        scale = w / qrect.width()
+        t = QTransform().scale(scale, scale)
+        self.setTransform(t)
+#        self.fitInView(qrect, Qt.KeepAspectRatio)
 
 
 class Tile(QGraphicsRectItem):

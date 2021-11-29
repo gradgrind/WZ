@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2021-11-22
+core/pupils.py - last updated 2021-11-27
 
 Manage pupil data.
 
@@ -40,6 +40,8 @@ _DOUBLE_PID_DB = "Schüler-Datenbank-Fehler: Schüler-ID {pid} doppelt" \
         " vorhanden, in Klassen {k1} und {k2}"
 _CLASS_MISSING = "In importierten Daten: Klasse fehlt für {name}"
 _FILTER_ERROR = "Schülerdaten-Fehler: {mesg}"
+_PID_INVALID = "Ungültige Schülerkennung für {name}: '{pid}'"
+_MISSING_FIELDS = "Diese Felder dürfen nicht leer sein:\n  {fields}"
 
 
 #???
@@ -48,7 +50,6 @@ _NO_SCHOOLYEAR = "Kein '{year}' angegeben in Schülertabelle:\n  {filename}"
 _NO_SCHOOLYEAR_DB = "Schüler-Datenbank-Fehler: kein 'SCHOOLYEAR'"
 _PID_DUPLICATE = "Schülerkennung {pid} mehrfach vorhanden:\n" \
         "  Klasse {c1} – {p1}\n  Klasse {c2} – {p2}"
-_MISSING_FIELDS = "Diese Felder dürfen nicht leer sein:\n  {fields}"
 _BACKUP_FILE = "Schülerdaten für Klasse {klass} gespeichert als:\n  {path}"
 _FULL_BACKUP_FILE = "Alle Schülerdaten gespeichert als:\n  {path}"
 
@@ -254,21 +255,13 @@ class Pupils(dict):
 
     def sort_class(self, klass, nosave=False):
         """Sort the pupil data items for the given class alphabetically.
-        This should only be necessary if names are changed.
+        This should only be necessary if names are changed, or if a pupil
+        is added to a class.
         """
         if nosave:
             return sorted(self.__classes[klass], key=PupilData.sorting_name)
         self.__classes[klass].sort(key=PupilData.sorting_name)
 
-
-
-
-
-#TODO ...
-#
-#
-#
-#
     def save(self, klass):
         """Save the data for the pupils in the given class to the
         pupil-database.
@@ -442,32 +435,31 @@ class Pupils(dict):
         It ensures that the internal structures are consistent and that
         the changes get saved to persistent storage.
         By supplying a pupil-id which is not already in use, a new
-        pupil can be added.
-#TODO: or a null pupil id?
+        pupil can be added. If no pupil-id is supplied, a new value
+        will be generated automatically.
         <pupil_data_list> is a list of pupil-data mappings.
         """
         for pdata in pupil_data_list:
             pid = pdata["PID"]
-#TODO?
-            if not pid:
-                pid = self.new_pid()
+            if pid:
+                if pid not in self:
+                    # A new pupil ... check PID validity
+                    if not check_pid_valid(pid):
+                        REPORT("ERROR", _PID_INVALID.format(
+                            name=pdata.name(), pid=pid))
+                        return False
+            else:
+                pid = new_pid(self)
             # Check that essential fields are present
             missing = []
             for f, fdata in self.all_fields.items():
                 if fdata[1]:    # an essential field
-                    if not pupil_data.get(f):
-                        missing.append(fdata[0] or f)
+                    if not pdata.get(f):
+                        missing.append(fdata[0])
             if missing:
                 REPORT("ERROR", _MISSING_FIELDS.format(
                         fields = "\n  ".join(missing)))
                 return False
-            if pid not in self:
-#TODO???? was in "base_config"
-                # A new pupil ... check PID validity
-                if not self.check_new_pid_valid(pid):
-                    REPORT("ERROR", _INVALID_PID.format(
-                        name=pdata.name(), pid = pid))
-                    return False
             # Rebuild pupil entry
             self[pid] = {f: pupil_data.get(f) or "" for f in self.all_fields}
         # Regenerate class lists
@@ -476,85 +468,32 @@ class Pupils(dict):
         self.save()
         return True
 
-
-#TODO ...
-#
-#TODO: Maybe I need something like this, but perhaps call it "export"?
-    def backup(self, filepath, klass = None):
-        """Save a table with all the pupil data for back-up purposes.
-        This can be used as an "update" source to reinstate an earlier
-        state.
-        The field names are "translated".
-        If <klass> is supplied, only the data for that class will be saved.
-        """
-        info = {
-            CONFIG['T_SCHOOLYEAR']: self.__info.get('SCHOOLYEAR'),
-            '__MODIFIED__': self.__info.get('__MODIFIED__') \
-                    or Dates.timestamp(),
-            '__KEEP_NAMES__': '*' # The names don't need "renormalizing"
-        }
-        if klass:
-            info.append(('__CLASS__', klass))
-            classes = [klass]
-        else:
-            classes = self.classes()
-        pdlist = []
-        for k in classes:
-            pdlist.append({})
-            for pd in self.class_pupils(k):
-                pdlist.append(pd)
-        try:
-            filetype = filepath.rsplit('.', 1)[1]
-            if filetype not in make_DataTable_filetypes:
-                raise IndexError
-        except IndexError:
-            filetype = CONFIG.get('TABLE_FORMAT') or 'tsv'
-            filepath += '.' + filetype
-        data = {
-            '__INFO__': info,
-            '__FIELDS__': self.__fields,
-            '__ROWS__': pdlist
-        }
-        fbytes = make_DataTable(data, filetype)
-        fdir = os.path.dirname(filepath)
-        if not os.path.isdir(fdir):
-            os.makedirs(fdir, exist_ok = True)
-        with open(filepath, 'wb') as fh:
-            fh.write(fbytes)
-        REPORT('INFO', _BACKUP_FILE.format(klass = klass,
-                path = filepath) if klass
-                else _FULL_BACKUP_FILE.format(path = filepath))
-#
-    def migrate(self, repeat_pids = [], save_as = None):
+    def migrate(self, repeat_pids = [], save_in = None):
         """Create a pupil-data structure for the following year.
-#???
-        If <save_as> is provided, it should be a file-path: the new
-        pupil data will be saved here (as a DataTable) instead of in the
-        internal database.
-        The current pupil data is saved as a DataTable to the 'tmp'
-        folder within the data area.
+        If <save_in> is provided, it should be a folder-path: the new
+        pupil data will be saved here (as DataTables) instead of in the
+        internal data area (subfolder "NEXT").
         If <repeat_pids> is provided it should be an iterable object
         listing pupil-ids for those who will definitely stay on, even
         if their class/group would suggest leaving. This is, of course,
         overridden by a leaving date! Their data (including class) will,
-        however be unchanged.
+        be unchanged.
         """
-        yes_pids = set(repeat_pids)
+        stay_pids = set(repeat_pids)
         nextyear = str(int(SCHOOLYEAR) + 1)
         day1 = Dates.day1(nextyear) # for filtering out pupils who have left
         newpupils = {}
         _class_path = DATAPATH(CONFIG["PUPIL_TABLE"], base="NEXT")
         # Filter out pupils from final classes, tweak pupil data
-        leavers = self.final_year_pupils()
         for klass in self.classes():
             for _pdata in self.class_pupils(klass, date = day1):
                 pdata = _pdata.copy()
                 pid = pdata['PID']
-                if pid in yes_pids:
+                if pid in stay_pids:
                     new_klass = klass
                 else:
                     # Progress to next class
-                    new_klass = next_class(pdata, leavers.get(klass))
+                    new_klass = next_class(pdata)
                 try:
                     newpupils[new_klass].append(pdata)
                 except KeyError:
@@ -565,6 +504,7 @@ class Pupils(dict):
         os.makedirs(folder, exist_ok=True)
         timestamp = Dates.timestamp()
         for klass, pdlist in newpupils.items():
+            pdlist.sort(key=PupilData.sorting_name)
             self.save_data(
                 klass,
                 pdlist,
@@ -575,24 +515,31 @@ class Pupils(dict):
 
 
 #TODO: Custom functions ... where to put these?
-def next_class(pdata, leavers):
+def next_class(pdata):
     """Adjust the pupil data to the next class.
     Note that this is an "in-place" operation, so if the original data
     should remain unchanged, pass in a copy.
     """
     klass = pdata['CLASS']
+    leaving_groups = CONFIG["LEAVING_GROUPS"].get(klass)
+    if leaving_groups:
+        if leaving_groups == "*":
+            return "X"
+        for g in pdata['GROUPS'].split():
+            if g in leaving_groups:
+                return "X"
     # Progress to next class ...
     k_year = class_year(klass)
     k_new = int(k_year) + 1
     k_suffix = klass[2:]
-    klass = f'{k_new:02}{k_suffix}'
+    klass = f"{k_new:02}{k_suffix}"
     # Handle entry into "Qualifikationsphase"
     if k_new == 12 and 'G' in pdata['GROUPS'].split():
         try:
             pdata['QUALI_D'] = CALENDAR['~NEXT_FIRST_DAY']
         except KeyError:
             pass
-    return k_new
+    return klass
 
 
 def class_year(klass):
@@ -605,6 +552,38 @@ def class_year(klass):
         k = int(klass[0])
     return f'{k:02}'
 
+
+def new_pid(pupils):
+    """Generate a new pid conforming to the requirements of
+    function <check_pid_valid>.
+    """
+    # Base the new pid on today's date, adding a number to the end.
+    today = Dates.today().replace("-", "")  # it must be an integer
+    collect = []
+    for pid in pupils:
+        if pid.startswith(today):
+            try:
+                i = int(pid[8:])
+            except ValueError:
+                continue
+            collect.append(i)
+    if collect:
+        collect.sort()
+        i = str(collect[-1] + 1)
+    else:
+        i = "1"
+    return today + i
+
+
+def check_pid_valid(pid):
+    """Check that the pid is of the correct form.
+    """
+    # Accept any integer.
+    try:
+        int(pid)
+        return True
+    except:
+        return False
 
 
 def asciify(string, invalid_re = None):
@@ -696,6 +675,9 @@ if __name__ == '__main__':
 #    pupils.save("12G")
 
     pupils.migrate()
+
+    print("\nNEW PID:", new_pid(pupils))
+
     quit(0)
     ### Make a trial migration to next school-year.
     ### This also makes a back-up of the current pupil data.

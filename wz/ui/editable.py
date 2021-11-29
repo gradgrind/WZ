@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-19
+Last updated:  2021-11-29
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -27,6 +27,8 @@ Copyright 2021 Michael Towers
 
 =-LICENCE=================================
 """
+
+#TODO: I might want to handle editing of non-editable items ...
 
 ### Messages
 
@@ -235,7 +237,6 @@ class UndoRedo:
             elif not self.table.undoredo_extension(True, chtype, change):
                 raise Bug(f"Invalid Undo-change: {chtype}")
 
-        # +
         if self.enabled and self.index > 0:
             self.blocked = True
             self.index -= 1
@@ -273,7 +274,6 @@ class UndoRedo:
             elif not self.table.undoredo_extension(False, chtype, change):
                 raise Bug(f"Invalid Redo-change: {chtype}")
 
-        # +
         if self.enabled and self.index < len(self.changes):
             self.blocked = True
             chtype, change = self.changes[self.index]
@@ -522,7 +522,8 @@ class EdiTableWidget(QTableWidget):
         #        self.cellChanged.connect(self.cell_changed)
         self.cellClicked.connect(self.cell_clicked)
         #        self.cellActivated.connect(self.newline_press)
-        self.cellDoubleClicked.connect(self.newline_press)
+#        self.cellDoubleClicked.connect(self.newline_press)
+        self.cellDoubleClicked.connect(self.click2)
 
     def init0(self, rows, columns):
         """Set the initial number of rows and columns and check that
@@ -763,12 +764,19 @@ class EdiTableWidget(QTableWidget):
         else:
             self.add_change = self.undoredo.change
 
+    def click2(self):
+        """Double-click"""
+        print("click2")
+        self.editItem(self.currentItem())
+#        self.activated(self.currentRow(), self.currentColumn())
+
     def cell_clicked(self, row, col):
         """Ctrl-Click "activates" the cell."""
         if (
             QApplication.keyboardModifiers() & Qt.ControlModifier
         ) and self.get_selection()[0] == 1:
             self.activated(row, col)
+#        self.editItem(self.item(row, col))
 
     def activated(self, row, col):
         # This is called when a cell is left-clicked or when the (single)
@@ -816,8 +824,12 @@ class EdiTableWidget(QTableWidget):
                 if self.cut_selection() is None:
                     self.set_text(self.currentRow(), self.currentColumn(), "")
                 return  # in this case don't call the base class method
-            if key == Qt.Key_Return:
-                self.newline_press(self.currentRow(), self.currentColumn())
+            if key == Qt.Key_Return and self.get_selection()[0] == 1:
+                if QApplication.keyboardModifiers() & Qt.ControlModifier:
+                    self.activated(self.currentRow(), self.currentColumn())
+                else:
+                    self.editItem(self.currentItem())
+#                self.newline_press(self.currentRow(), self.currentColumn())
         super().keyPressEvent(event)
 
     def copyCellsToClipboard(self):
@@ -1148,7 +1160,7 @@ if __name__ == "__main__":
     rows = ["Row %02d" % n for n in range(7)]
     tablewidget = EdiTableWidget()
 
-    tablewidget.installEventFilter(tablewidget)
+#    tablewidget.installEventFilter(tablewidget)
     tablewidget.setup(colheaders=cols, rowheaders=rows, on_changed=is_modified1)
 
     tablewidget.setWindowTitle("EdiTableWidget")
