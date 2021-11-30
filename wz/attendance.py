@@ -2,7 +2,7 @@
 """
 attendance.py
 
-Last updated:  2021-11-29
+Last updated:  2021-11-30
 
 Gui editor for attendance tables.
 
@@ -40,7 +40,12 @@ COLOUR_HOLIDAY = "00CC00"
 COLOUR_NO_DAY = "99FFFF"
 
 ### Messages
-PROGRAM_NAME = "Attendance"
+
+_CLASS = "Klasse {klass}"
+_SAVE_CLASS = "Daten speichern"
+_PAGE = "Seite:"
+#?
+#_PROGRAM_NAME = "Attendance"
 #_OPEN_TABLETYPE = "Tabellendatei"
 #_INVALID_DATATABLE = "Ungültige DataTable: {path}\n ... {message}"
 
@@ -71,7 +76,8 @@ if __name__ == "__main__":
         builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
 
 from ui.ui_base import APP, run, openDialog, saveDialog, get_icon, \
-        QWidget, QVBoxLayout, QDialog, QPushButton, QButtonGroup, Qt
+        QWidget, QVBoxLayout, QDialog, QPushButton, QButtonGroup, Qt, \
+        QToolBar, QAction, QKeySequence, KeySelector, QLabel, QFrame
 
 # This seems to deactivate activate-on-single-click in filedialog
 # (presumably elsewhere as well?)
@@ -147,9 +153,57 @@ class AttendanceEditor(QWidget):
     def is_modified(self, changed):
         print("CHANGED:", changed)
 
+    def new_action(self, icon, text, shortcut):
+        action = QAction(self)
+        if shortcut:
+            text += f" – [{shortcut.toString()}]"
+            action.setShortcut(shortcut)
+        action.setText(text)
+        action.setIcon(get_icon(icon))
+        return action
+
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
+        self.toolbar = QToolBar()
+        layout.addWidget(self.toolbar)
+        # Class label
+        self.class_label = QLabel()
+        self.class_label.setFrameStyle(QFrame.Box | QFrame.Raised)
+        self.class_label.setLineWidth(3)
+        self.class_label.setMidLineWidth(2)
+        self.toolbar.addWidget(self.class_label)
+        # Page (month)
+        self.toolbar.addWidget(QLabel("   "))
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(QLabel("   "))
+        month1 = Month(SCHOOLYEAR)
+        months = []
+        i = 12
+        while True:
+            months.append((month1.month, str(month1)))
+            i -= 1
+            if i == 0:
+                break
+            month1.increment()
+        self.month_select = KeySelector(
+            value_mapping=months,
+            changed_callback=self.switch_month
+        )
+        self.toolbar.addWidget(QLabel(_PAGE))
+        self.toolbar.addWidget(self.month_select)
+        # File actions
+        self.toolbar.addWidget(QLabel("   "))
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(QLabel("   "))
+        self.action_save = self.new_action(
+            "save", _SAVE_CLASS, QKeySequence(Qt.CTRL + Qt.Key_S)
+        )
+        self.action_save.triggered.connect(self.on_save)
+        self.toolbar.addAction(self.action_save)
+
+
+
         self.table = AttendanceTable(self)
         layout.addWidget(self.table)
         self.table.horizontalHeader().setStyleSheet(
@@ -164,8 +218,10 @@ class AttendanceEditor(QWidget):
     def setup(self, klass):
         """Load the attendance data for the given class.
         """
+        self.class_label.setText(_CLASS.format(klass=klass))
         self.all_pupils = Pupils()
         self.pupils = self.all_pupils.class_pupils(klass)
+        self.hols = readHols()
 
         row = 0
         trows = []
@@ -192,19 +248,22 @@ class AttendanceEditor(QWidget):
 # So maybe the best way to proceed is to remember the window geometry
 # from one run to another?
 
-    def todo_formatting(self, month):
+        self.month_select.trigger()
+
+    def switch_month(self, month):
         _month = Month(SCHOOLYEAR, month)
 #?
-        hols = readHols()
         col_colour = []
+        dates = []
         for day in range(1, 32):
             try:
                 date = datetime.date(_month.year(), month, day)
+                dates.append(date.isoformat())
                 if date.weekday() > 4:
                     # Weekend
 # What about school Saturdays?
                     col_colour.append(COLOUR_WEEKEND)
-                elif date in hols:
+                elif date in self.hols:
                     # Holiday weekday
                     col_colour.append(COLOUR_HOLIDAY)
                 else:
@@ -228,9 +287,14 @@ class AttendanceEditor(QWidget):
                 else:
                     item.setFlags(item.flags() | Qt.ItemIsEditable)
                     item.setBackground(GraphicsSupport.getBrush())
+                    text = pupil_data.get(dates[col])
+                    if text:
+                        self.table.set_text(row, col, text)
                 col += 1
             row += 1
 
+    def on_save(self):
+        print("TODO – SAVE")
 
 
 
@@ -348,7 +412,8 @@ class AttendancePrinter(QWidget):
     def set_title(self, changed):
         x = " *" if changed else ""
         title = (
-            f"{PROGRAM_NAME} – {self.filename}{x}" if self.filename else PROGRAM_NAME
+            f"{_PROGRAM_NAME} – {self.filename}{x}" if self.filename \
+                    else _PROGRAM_NAME
         )
         self.setWindowTitle(title)
 
@@ -445,6 +510,18 @@ def readHols():
     return hols
 
 
+#TODO
+# Perhaps on failure the choice pop-up (with an appropriate message)
+# would be better. Would that be possible?
+def validate(value):
+    """Validate an entry against the CHOICE_ITEMS list.
+    Return <None> if it passes, otherwise an error message.
+    """
+    if value == "v":
+        return "invalid value"
+    return None
+
+
 class Month:
     """Manage information, especially names for the months of the school year.
     The calendar year is adjusted to the month of the school year.
@@ -508,7 +585,6 @@ if __name__ == "__main__":
     icon = get_icon("attendance")
     edit.setWindowIcon(icon)
     edit.setup("12G")
-    edit.todo_formatting(10)
     edit.show()
     edit.resize(900, 700)
     run(edit)

@@ -2,7 +2,7 @@
 """
 ui/ui_extra.py
 
-Last updated:  2021-11-18
+Last updated:  2021-11-30
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -144,8 +144,8 @@ class StandalonePage(StackPage):
             event.ignore()
 
 
-class KeySelector:
-    """Modifies the behaviour of an existing (pristine) QComboBox:
+class KeySelector(QComboBox):
+    """A modified QComboBox:
     A selection widget for key-description pairs. The key is the
     actual selection item, but the description is displayed for
     human consumption.
@@ -155,15 +155,14 @@ class KeySelector:
     return a true value, the selection will be reset to the last value.
     """
 
-    def __init__(self, widget_name, value_mapping=None, changed_callback=None):
-        self.name = widget_name
-        self.widget = getattr(WINDOW, widget_name)
+    def __init__(self, value_mapping=None, changed_callback=None):
+        super().__init__()
         self._selected = None
         self._cb = changed_callback
-        self.widget.set_items(value_mapping)
+        self.set_items(value_mapping)
         # Qt note: If connecting after adding the items, there seems
         # to be no signal; if before, then the first item is signalled.
-        self.widget.currentIndexChanged.connect(self._new)
+        self.currentIndexChanged.connect(self._new)
 
     def selected(self, display=False):
         try:
@@ -178,7 +177,7 @@ class KeySelector:
                 self._selected = index
             else:
                 self.changed_callback = None
-                self.widget.setCurrentIndex(self._selected)
+                self.setCurrentIndex(self._selected)
                 self.changed_callback = self._cb
 
     def reset(self, key):
@@ -186,7 +185,7 @@ class KeySelector:
         i = 0
         for k, _ in self.value_mapping:
             if k == key:
-                self.widget.setCurrentIndex(i)
+                self.setCurrentIndex(i)
                 self._selected = i
                 break
             i += 1
@@ -196,7 +195,7 @@ class KeySelector:
         self.changed_callback = self._cb  # reenable callback
 
     def trigger(self):
-        self._new(self.widget.currentIndex())
+        self._new(self.currentIndex())
 
     def set_items(self, value_mapping, index=0):
         """Set / reset the items.
@@ -205,10 +204,10 @@ class KeySelector:
         """
         self.changed_callback = None  # suppress callback
         self.value_mapping = value_mapping
-        self.widget.clear()
+        self.clear()
         if value_mapping:
-            self.widget.addItems([text for _, text in value_mapping])
-            self.widget.setCurrentIndex(index)
+            self.addItems([text for _, text in value_mapping])
+            self.setCurrentIndex(index)
             self._selected = index
         self.changed_callback = self._cb  # reenable callback
 
