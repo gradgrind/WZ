@@ -25,16 +25,17 @@ Copyright 2021 Michael Towers
 """
 
 TITLE_HEIGHT = 25
-ROWS0 = (25, 3)
+ROWS0 = (22, 3)
 ROWi0 = len(ROWS0)
-ROWn = (25,)
+ROWn = (22,)
 COLS0 = (120, 3)
-COLS = (120, 3) + (25,) * 31
+COLS = COLS0 + (25,) * 31
 COLi0 = len(COLS0)
 
 #?
 TCOLS = [f"{n:02d}" for n in range(1, 32)]
 
+HEADER_BG = "FFFF80"
 COLOUR_WEEKEND = "DDDDDD"
 COLOUR_HOLIDAY = "00CC00"
 COLOUR_NO_DAY = "99FFFF"
@@ -44,6 +45,7 @@ _FILE_TYPE = "*.attendance"
 ### Messages
 
 #_WINDOW_TITLE = "Abwesenheit"
+_PRINT_TITLE = "Abwesenheiten"
 _PROGRAM_NAME = "Abwesenheiten"
 _CLASS = "Klasse {klass}"
 _OPEN_CLASS = "Datei öffnen"
@@ -51,6 +53,7 @@ _ATTENDANCE_FILE = "Abwesenheitsdaten"
 _SAVE_CLASS = "Datei speichern"
 _SAVE_CLASS_AS = "Datei speichern unter"
 _PAGE = "Seite:"
+_PRINT = "Drucken"
 #?
 #_OPEN_TABLETYPE = "Tabellendatei"
 #_INVALID_DATATABLE = "Ungültige DataTable: {path}\n ... {message}"
@@ -91,11 +94,10 @@ APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
 from core.base import Dates
 from core.pupils import Pupils
-#from ui.grid0 import GridViewRescaling
-from ui.grid0 import GridViewHFit
 
 from ui.editable import EdiTableWidget
-#?
+from ui.grid0 import GridViewRescaling as GridView
+#from ui.grid0 import GridViewHFit as GridView
 from ui.grid0 import GraphicsSupport
 
 ### -----
@@ -187,9 +189,13 @@ class AttendanceEditor(QWidget):
         self.toolbar.addWidget(QLabel("   "))
         month1 = Month(SCHOOLYEAR)
         months = []
+        self.month_colours = {}
         i = 12
+        self.hols = readHols()
         while True:
             months.append((month1.month, str(month1)))
+            self.month_colours[month1.month]  = \
+                    month1.column_colours(self.hols)
             i -= 1
             if i == 0:
                 break
@@ -227,12 +233,20 @@ class AttendanceEditor(QWidget):
         )
         self.action_save_as.triggered.connect(self.on_save_as)
         self.toolbar.addAction(self.action_save_as)
+        # Printing
+        self.action_print = self.new_action(
+            "print", _PRINT,
+            QKeySequence(Qt.CTRL + Qt.Key_P)
+        )
+        self.action_print.triggered.connect(self.on_print)
+        self.toolbar.addAction(self.action_print)
+
         # The table
         self.table = AttendanceTable(self)
         layout.addWidget(self.table)
         self.table.horizontalHeader().setStyleSheet(
             "QHeaderView::section{"
-            "background-color:#FFFF80;"
+            f"background-color:#{HEADER_BG};"
             "padding: 2px;"
             "border: 1px solid #808080;"
             "border-bottom: 2px solid #0000C0;"
@@ -281,25 +295,25 @@ class AttendanceEditor(QWidget):
     def setup(self, klass):
         """Load the attendance data for the given class.
         """
+        self.klass = klass
         self.class_label.setText(_CLASS.format(klass=klass))
         self.all_pupils = Pupils()
         self.pupils = self.all_pupils.class_pupils(klass)
-        self.hols = readHols()
 
         row = 0
-        trows = []
+        self.row_headers = []
 
 #TODO: Actually this should be the absence data for each pupil ...
         self.pupilmap = {}
         for pdata in self.pupils:
             pid, pname = pdata["PID"], pdata.name()
             self.pupilmap[pid] = {}
-            trows.append(pname)
+            self.row_headers.append(pname)
             row += 1
 
         self.table.setup(
             colheaders=TCOLS,
-            rowheaders=trows,
+            rowheaders=self.row_headers,
             undo_redo=True,
             cut=True,
             paste=True,
@@ -314,28 +328,98 @@ class AttendanceEditor(QWidget):
         self.month_select.trigger()
 
     def switch_month(self, month):
-        _month = Month(SCHOOLYEAR, month)
-#?
-        col_colour = []
-        dates = []
-        for day in range(1, 32):
-            try:
-                date = datetime.date(_month.year(), month, day)
-                dates.append(date.isoformat())
-                if date.weekday() > 4:
-                    # Weekend
-# What about school Saturdays?
-                    col_colour.append(COLOUR_WEEKEND)
-                elif date in self.hols:
-                    # Holiday weekday
-                    col_colour.append(COLOUR_HOLIDAY)
-                else:
-                    # A normal schoolday
-                    col_colour.append(None)
-            except ValueError:
-                # date out of range – grey out cell.
-                col_colour.append(COLOUR_NO_DAY)
+        col_colour, dates = self.month_colours[month]
 
+#TODO
+        self.table.init_sparse_data(len(self.pupilmap), 31, [])
+        row = 0
+        for pid, pupil_data in self.pupilmap.items():
+            col = 0
+            for colour in col_colour:
+                item = self.table.item(row, col)
+                if colour:
+                    item.setFlags(item.flags() & ~ Qt.ItemIsEditable)
+                    item.setBackground(GraphicsSupport.getBrush(colour))
+                else:
+                    item.setFlags(item.flags() | Qt.ItemIsEditable)
+                    item.setBackground(GraphicsSupport.getBrush())
+                    text = pupil_data.get(dates[col])
+                    if text:
+                        self.table.set_text(row, col, text)
+                col += 1
+            row += 1
+        return True
+
+    def open_file(self, filepath):
+        """Read in the attendance table (json) for a class from the
+        given path.
+        """
+        try:
+            datatable = read_DataTable(filepath)
+        except TableError as e:
+            SHOW_ERROR(
+                _INVALID_DATATABLE.format(path=str(filepath),
+                    message=str(e)
+                )
+            )
+            return
+        except:
+            SHOW_ERROR(
+                f"BUG while reading {str(filepath)}:\n" \
+                        f" ... {traceback.format_exc()}"
+            )
+            return
+        self.set_current_file(filepath)
+        self.open_table(datatable)
+        self.action_save_as.setEnabled(True)
+        self.saved = False
+        self.modified(False)
+
+    def on_open(self):
+        print("TODO – OPEN")
+
+    def on_save(self):
+        print("TODO – SAVE")
+
+    def on_save_as(self):
+        print("TODO – SAVE AS")
+
+    def on_print(self):
+        dialog = AttendancePrinter(
+            self.klass,
+            self.row_headers,
+            self.pupilmap,
+            self.month_colours
+        )
+        dialog.exec()
+
+
+class AttendancePrinter(QDialog):
+    def __init__(self, klass, rowheaders, pupilmap, month_colours):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        self.pupilmap = pupilmap
+        self.month_colours = month_colours
+        self.grid = GridView()
+        layout.addWidget(self.grid)
+
+#???
+        rows = ROWS0 + ROWn * len(rowheaders)
+        self.grid.init(rows, COLS, TITLE_HEIGHT)
+        col = COLi0
+        for day in TCOLS:
+            self.grid.basic_tile(0, col, text=day)
+            col += 1
+        row = ROWi0
+        for pname in rowheaders:
+            self.grid.basic_tile(row, 0, text=pname, halign="l")
+            row += 1
+        title_l = self.grid.add_title(f"Klasse {klass}", halign="l")
+        title = self.grid.add_title(_PRINT_TITLE)
+        title_r = self.grid.add_title("MONTH YEAR", halign="r")
+
+    def set_month(self, month):
+        col_colour, dates = self.month_colours[month]
 
 #TODO
         self.table.init_sparse_data(len(self.pupilmap), 31, [])
@@ -356,43 +440,18 @@ class AttendanceEditor(QWidget):
                 col += 1
             row += 1
 
-    def open_file(self, filepath):
-        """Read in the attendance table (json) for a class from the
-        given path.
-        """
-        try:
-            datatable = read_DataTable(filepath)
-        except TableError as e:
-            SHOW_ERROR(_INVALID_DATATABLE.format(path=str(filepath), message=str(e)))
-            return
-        except:
-            SHOW_ERROR(
-                f"BUG while reading {str(filepath)}:\n" f" ... {traceback.format_exc()}"
-            )
-            return
-        self.set_current_file(filepath)
-        self.open_table(datatable)
-        self.action_save_as.setEnabled(True)
-        self.saved = False
-        self.modified(False)
-
-    def on_open(self):
-        print("TODO – OPEN")
-
-    def on_save(self):
-        print("TODO – SAVE")
-
-    def on_save_as(self):
-        print("TODO – SAVE AS")
 
 
 
-class AttendancePrinter(QWidget):
+
+
+
+class _AttendancePrinter(QDialog):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
-#        self.grid = GridViewRescaling()
-        self.grid = GridViewHFit()
+        self.grid = GridViewRescaling()
+#        self.grid = GridViewHFit()
         layout.addWidget(self.grid)
 
     def setup(self, klass):
@@ -522,11 +581,13 @@ class AttendancePrinter(QWidget):
         try:
             datatable = read_DataTable(filepath)
         except TableError as e:
-            SHOW_ERROR(_INVALID_DATATABLE.format(path=str(filepath), message=str(e)))
+            SHOW_ERROR(_INVALID_DATATABLE.format(path=str(filepath),
+                    message=str(e)))
             return
         except:
             SHOW_ERROR(
-                f"BUG while reading {str(filepath)}:\n" f" ... {traceback.format_exc()}"
+                f"BUG while reading {str(filepath)}:\n" \
+                        f" ... {traceback.format_exc()}"
             )
             return
         self.set_current_file(filepath)
@@ -539,13 +600,19 @@ class AttendancePrinter(QWidget):
         endings = make_DataTable_filetypes()
         ftypes = " ".join(["*." + e for e in endings])
         filepath = saveDialog(
-            f"{_OPEN_TABLETYPE} ({ftypes})", self.current_file, SAVE_FILE
+            f"{_OPEN_TABLETYPE} ({ftypes})",
+            self.current_file,
+            SAVE_FILE
         )
         if filepath:
             fpath, ending = filepath.rsplit(".", 1)
             if ending in endings:
                 data = self.get_data()
-                fbytes = make_DataTable(data, ending, __MODIFIED__=Dates.timestamp())
+                fbytes = make_DataTable(
+                    data,
+                    ending,
+                    __MODIFIED__=Dates.timestamp()
+                )
                 with open(filepath, "wb") as fh:
                     fh.write(fbytes)
                 self.current_file = filepath
@@ -616,14 +683,9 @@ class Month:
     """
     def __init__(self, schoolyear, num=None):
         self.SCHOOLYEAR_MONTH_1 = int(CONFIG["SCHOOLYEAR_MONTH_1"])
-        self.month1 = self.boundmonth(num or self.SCHOOLYEAR_MONTH_1)
+        self.month0 = self.boundmonth(num or self.SCHOOLYEAR_MONTH_1)
         self.schoolyear = schoolyear
-        self.month = self.month1
-
-    def month(self):
-        """Return the index of the month, in the range 1 to 12.
-        """
-        return self.month
+        self.month = self.month0
 
     def __str__(self):
         return calendar.month_name[self.month]
@@ -644,7 +706,30 @@ class Month:
         self.month = self.boundmonth(self.month + delta)
 
     def last_tag(self):
-        return calendar.month_abbr[self.boundmonth(self.month1 - 1) - 1]
+        return calendar.month_abbr[self.boundmonth(self.month0 - 1) - 1]
+
+    def column_colours(self, hols):
+        col_colour = []
+        dates = []
+        year = self.year()
+        for day in range(1, 32):
+            try:
+                date = datetime.date(year, self.month, day)
+                dates.append(date.isoformat())
+                if date.weekday() > 4:
+                    # Weekend
+# What about school Saturdays?
+                    col_colour.append(COLOUR_WEEKEND)
+                elif date in hols:
+                    # Holiday weekday
+                    col_colour.append(COLOUR_HOLIDAY)
+                else:
+                    # A normal schoolday
+                    col_colour.append(None)
+            except ValueError:
+                # date out of range – grey out cell.
+                col_colour.append(COLOUR_NO_DAY)
+        return col_colour, dates
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
