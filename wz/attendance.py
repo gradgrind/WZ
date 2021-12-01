@@ -2,7 +2,7 @@
 """
 attendance.py
 
-Last updated:  2021-11-30
+Last updated:  2021-12-01
 
 Gui editor for attendance tables.
 
@@ -39,23 +39,29 @@ COLOUR_WEEKEND = "DDDDDD"
 COLOUR_HOLIDAY = "00CC00"
 COLOUR_NO_DAY = "99FFFF"
 
+_FILE_TYPE = "*.attendance"
+
 ### Messages
 
+#_WINDOW_TITLE = "Abwesenheit"
+_PROGRAM_NAME = "Abwesenheiten"
 _CLASS = "Klasse {klass}"
-_SAVE_CLASS = "Daten speichern"
+_OPEN_CLASS = "Datei öffnen"
+_ATTENDANCE_FILE = "Abwesenheitsdaten"
+_SAVE_CLASS = "Datei speichern"
+_SAVE_CLASS_AS = "Datei speichern unter"
 _PAGE = "Seite:"
 #?
-#_PROGRAM_NAME = "Attendance"
 #_OPEN_TABLETYPE = "Tabellendatei"
 #_INVALID_DATATABLE = "Ungültige DataTable: {path}\n ... {message}"
 
 #_SAVE_AS_TSV = "Als tsv-Datei speichern?\n\n{path}"
 #_UNSUPPORTED_SAVE = "Tabelle speichern – Dateityp '.{ending}'" " wird nicht unterstützt"
 
-#_LOSE_CHANGES = "Es gibt ungespeicherte Änderungen.\n" "Wirklich schließen?"
-#_LOSE_CHANGES_OPEN = (
-#    "Es gibt ungespeicherte Änderungen.\n" "Neue Datei trotzdem öffnen?"
-#)
+_LOSE_CHANGES = "Es gibt ungespeicherte Änderungen.\n" "Wirklich schließen?"
+_LOSE_CHANGES_OPEN = (
+    "Es gibt ungespeicherte Änderungen.\n" "Neue Datei trotzdem öffnen?"
+)
 #_SAVING_FORMAT = (
 #    "Formatierungen werden möglicherweise verloren gehen:" "\n{path}\nÜberschreiben?"
 #)
@@ -63,7 +69,7 @@ _PAGE = "Seite:"
 
 ########################################################################
 
-import sys, os, builtins, traceback, datetime
+import sys, os, builtins, traceback, datetime, calendar, json
 
 if __name__ == "__main__":
     import locale
@@ -94,6 +100,8 @@ from ui.grid0 import GraphicsSupport
 
 ### -----
 
+#TODO: Summary page and Notices page
+
 CHOICE_ITEMS = (
     ("", "anwesend"),
     ("A", "ganztägig abwesend"),
@@ -114,7 +122,7 @@ class Choice(QDialog):
 
     def __init__(self, parent, x, y):
         super().__init__(parent)
-        self.setWindowTitle("Abwesenheit")
+#        self.setWindowTitle(_WINDOW_TITLE)
         group = QButtonGroup(self)
         group.buttonClicked.connect(self.on_clicked)
         layout = QVBoxLayout(self)
@@ -162,7 +170,7 @@ class AttendanceEditor(QWidget):
         action.setIcon(get_icon(icon))
         return action
 
-    def __init__(self):
+    def __init__(self, ofile=None):
         super().__init__()
         layout = QVBoxLayout(self)
         self.toolbar = QToolBar()
@@ -192,18 +200,34 @@ class AttendanceEditor(QWidget):
         )
         self.toolbar.addWidget(QLabel(_PAGE))
         self.toolbar.addWidget(self.month_select)
+        # If dealing with the current year, set the month for today
+#!!!
+#TODO: I might need to modify this so that I can start the program
+# with another school year ... That would mean a different data folder.
+        today = Dates.today()
+        if Dates.check_schoolyear(SCHOOLYEAR, today):
+            self.month_select.reset(int(today.split('-')[1]))
         # File actions
         self.toolbar.addWidget(QLabel("   "))
         self.toolbar.addSeparator()
         self.toolbar.addWidget(QLabel("   "))
+        self.action_open = self.new_action(
+            "open", _OPEN_CLASS, QKeySequence(Qt.CTRL + Qt.Key_O)
+        )
+        self.action_open.triggered.connect(self.get_file)
+        self.toolbar.addAction(self.action_open)
         self.action_save = self.new_action(
             "save", _SAVE_CLASS, QKeySequence(Qt.CTRL + Qt.Key_S)
         )
         self.action_save.triggered.connect(self.on_save)
         self.toolbar.addAction(self.action_save)
-
-
-
+        self.action_save_as = self.new_action(
+            "saveas", _SAVE_CLASS_AS,
+            QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_S)
+        )
+        self.action_save_as.triggered.connect(self.on_save_as)
+        self.toolbar.addAction(self.action_save_as)
+        # The table
         self.table = AttendanceTable(self)
         layout.addWidget(self.table)
         self.table.horizontalHeader().setStyleSheet(
@@ -214,6 +238,45 @@ class AttendanceEditor(QWidget):
             "border-bottom: 2px solid #0000C0;"
             "}"
         )
+
+#TODO
+        self.set_current_file(None)
+        self.modified(False)
+        self.action_save_as.setEnabled(False)
+        if ofile:
+            self.open_file(ofile)
+
+
+
+    def modified(self, mod):
+        # print("MOD:", mod)
+        self.__modified = mod
+        self.action_save.setEnabled(mod)
+        self.set_title(mod)
+
+    def set_title(self, changed):
+        x = " *" if changed else ""
+        title = (
+            f"{_PROGRAM_NAME} – {self.filename}{x}" if self.filename \
+                    else _PROGRAM_NAME
+        )
+        self.setWindowTitle(title)
+
+    def set_current_file(self, path):
+        self.current_file = path
+        self.filename = os.path.basename(path) if path else None
+
+    def get_file(self):
+        if self.__modified and not SHOW_CONFIRM(_LOSE_CHANGES_OPEN):
+            return
+        ofile = openDialog(f"{_ATTENDANCE_FILE} ({_FILE_TYPE})", _OPEN_CLASS)
+        if ofile:
+            self.open_file(ofile)
+
+
+
+
+
 
     def setup(self, klass):
         """Load the attendance data for the given class.
@@ -293,9 +356,34 @@ class AttendanceEditor(QWidget):
                 col += 1
             row += 1
 
+    def open_file(self, filepath):
+        """Read in the attendance table (json) for a class from the
+        given path.
+        """
+        try:
+            datatable = read_DataTable(filepath)
+        except TableError as e:
+            SHOW_ERROR(_INVALID_DATATABLE.format(path=str(filepath), message=str(e)))
+            return
+        except:
+            SHOW_ERROR(
+                f"BUG while reading {str(filepath)}:\n" f" ... {traceback.format_exc()}"
+            )
+            return
+        self.set_current_file(filepath)
+        self.open_table(datatable)
+        self.action_save_as.setEnabled(True)
+        self.saved = False
+        self.modified(False)
+
+    def on_open(self):
+        print("TODO – OPEN")
+
     def on_save(self):
         print("TODO – SAVE")
 
+    def on_save_as(self):
+        print("TODO – SAVE AS")
 
 
 
@@ -575,7 +663,6 @@ if __name__ == "__main__":
     for d in sorted(readHols()):
         print (" ---", d.isoformat())
 
-    import calendar
     print(calendar.day_name[1])
     print(calendar.day_abbr[1])
     print(calendar.month_name[1])
@@ -584,6 +671,9 @@ if __name__ == "__main__":
     edit = AttendanceEditor()
     icon = get_icon("attendance")
     edit.setWindowIcon(icon)
+
+#TODO: How to start with an empty table and no class?
+
     edit.setup("12G")
     edit.show()
     edit.resize(900, 700)
