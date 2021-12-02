@@ -242,7 +242,7 @@ class AttendanceEditor(QWidget):
         self.toolbar.addAction(self.action_print)
 
         # The table
-        self.table = AttendanceTable(self)
+        self.table = AttendanceTable(self, align_centre=True)
         layout.addWidget(self.table)
         self.table.horizontalHeader().setStyleSheet(
             "QHeaderView::section{"
@@ -330,12 +330,13 @@ class AttendanceEditor(QWidget):
     def switch_month(self, month):
         col_colour, dates = self.month_colours[month]
 
-#TODO
+#TODO?
         self.table.init_sparse_data(len(self.pupilmap), 31, [])
         row = 0
         for pid, pupil_data in self.pupilmap.items():
             col = 0
             for colour in col_colour:
+#TODO: Move some of the details to editable.py?
                 item = self.table.item(row, col)
                 if colour:
                     item.setFlags(item.flags() & ~ Qt.ItemIsEditable)
@@ -418,8 +419,24 @@ class AttendancePrinter(QDialog):
         title = self.grid.add_title(_PRINT_TITLE)
         title_r = self.grid.add_title("MONTH YEAR", halign="r")
 
+
+
     def set_month(self, month):
         col_colour, dates = self.month_colours[month]
+        # Build data array (of row-arrays)
+        r = 0
+        for pmap in self.pupilmap.values():
+            for c in range(31):
+                date = dates[c]
+                colour = col_colour[c]
+                if colour:
+                    text = ""
+                else:
+                    text = pmap.get(date) or ""
+                self.grid.basic_tile(ROWi0 + r, COLi0 + c,
+                        text=text, bg=colour)
+            r += 1
+        return
 
 #TODO
         self.table.init_sparse_data(len(self.pupilmap), 31, [])
@@ -728,6 +745,7 @@ class Month:
                     col_colour.append(None)
             except ValueError:
                 # date out of range – grey out cell.
+                dates.append(None)
                 col_colour.append(COLOUR_NO_DAY)
         return col_colour, dates
 

@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-11-29
+Last updated:  2021-12-02
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -340,11 +340,14 @@ class EdiTableWidget(QTableWidget):
         """
         return False
 
-    def __init__(self, parent=None, on_selection_state_change=None):
+    def __init__(self, parent=None,
+            align_centre = False,
+            on_selection_state_change=None):
         super().__init__(parent=parent)
         self.setItemPrototype(ValidatingWidgetItem())
         self.setSelectionMode(self.ContiguousSelection)
         self.has_selection = False
+        self.align_centre = align_centre
         self.on_selection_state_change = (
             on_selection_state_change
             if on_selection_state_change
@@ -563,13 +566,15 @@ class EdiTableWidget(QTableWidget):
         # Disable change reporting
         self.set_change_report(dummy)
         # Enter data
-        data_model = self.model()
         for r in range(rows):
             for c in range(columns):
                 val = data[r][c]
                 # print("SET", r, c, repr(val))
                 if isinstance(val, str):
-                    data_model.setData(data_model.index(r, c), val)
+                    item = ValidatingWidgetItem(val)
+                    if self.align_centre:
+                        item.setTextAlignment(Qt.AlignCenter)
+                    self.setItem(r, c, item)
                 else:
                     raise Bug("Only string data is accepted")
         # Enable change reporting
@@ -1158,7 +1163,7 @@ if __name__ == "__main__":
 
     cols = ["Column %02d" % n for n in range(10)]
     rows = ["Row %02d" % n for n in range(7)]
-    tablewidget = EdiTableWidget()
+    tablewidget = EdiTableWidget(align_centre=True)
 
 #    tablewidget.installEventFilter(tablewidget)
     tablewidget.setup(colheaders=cols, rowheaders=rows, on_changed=is_modified1)
