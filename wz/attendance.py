@@ -2,7 +2,7 @@
 """
 attendance.py
 
-Last updated:  2021-12-01
+Last updated:  2021-12-03
 
 Gui editor for attendance tables.
 
@@ -32,7 +32,6 @@ COLS0 = (120, 3)
 COLS = COLS0 + (25,) * 31
 COLi0 = len(COLS0)
 
-#?
 TCOLS = [f"{n:02d}" for n in range(1, 32)]
 
 HEADER_BG = "FFFF80"
@@ -53,7 +52,7 @@ _ATTENDANCE_FILE = "Abwesenheitsdaten"
 _SAVE_CLASS = "Datei speichern"
 _SAVE_CLASS_AS = "Datei speichern unter"
 _PAGE = "Seite:"
-_PRINT = "Drucken"
+_PDF = "als PDF exportieren"
 #?
 #_OPEN_TABLETYPE = "Tabellendatei"
 #_INVALID_DATATABLE = "Ungültige DataTable: {path}\n ... {message}"
@@ -72,7 +71,7 @@ _LOSE_CHANGES_OPEN = (
 
 ########################################################################
 
-import sys, os, builtins, traceback, datetime, calendar, json
+import sys, os, builtins, traceback, datetime, calendar, json, tempfile
 
 if __name__ == "__main__":
     import locale
@@ -99,6 +98,7 @@ from ui.editable import EdiTableWidget
 from ui.grid0 import GridViewRescaling as GridView
 #from ui.grid0 import GridViewHFit as GridView
 from ui.grid0 import GraphicsSupport
+from template_engine.template_sub import merge_pdf
 
 ### -----
 
@@ -124,7 +124,6 @@ class Choice(QDialog):
 
     def __init__(self, parent, x, y):
         super().__init__(parent)
-#        self.setWindowTitle(_WINDOW_TITLE)
         group = QButtonGroup(self)
         group.buttonClicked.connect(self.on_clicked)
         layout = QVBoxLayout(self)
@@ -137,7 +136,6 @@ class Choice(QDialog):
             group.addButton(p)
 
     def on_clicked(self, btn):
-        print("§§§", btn.entry)
         self.entry = btn.entry
         self.accept()
 
@@ -235,7 +233,7 @@ class AttendanceEditor(QWidget):
         self.toolbar.addAction(self.action_save_as)
         # Printing
         self.action_print = self.new_action(
-            "print", _PRINT,
+            "printpdf", _PDF,
             QKeySequence(Qt.CTRL + Qt.Key_P)
         )
         self.action_print.triggered.connect(self.on_print)
@@ -244,10 +242,12 @@ class AttendanceEditor(QWidget):
         # The table
         self.table = AttendanceTable(self, align_centre=True)
         layout.addWidget(self.table)
-        self.table.horizontalHeader().setStyleSheet(
+        horizontalHeader = self.table.horizontalHeader()
+        horizontalHeader.setMinimumSectionSize(-1)
+        horizontalHeader.setStyleSheet(
             "QHeaderView::section{"
             f"background-color:#{HEADER_BG};"
-            "padding: 2px;"
+            "padding: 3px;"
             "border: 1px solid #808080;"
             "border-bottom: 2px solid #0000C0;"
             "}"
@@ -412,20 +412,30 @@ class AttendancePrinter(QDialog):
             self.grid.basic_tile(0, col, text=day)
             col += 1
         row = ROWi0
+        self.cells = []
         for pname in rowheaders:
+            rowcells = []
+            self.cells.append(rowcells)
             self.grid.basic_tile(row, 0, text=pname, halign="l")
+            col = COLi0
+            for day in TCOLS:
+                rowcells.append(self.grid.basic_tile(row, col))
+                col += 1
             row += 1
         title_l = self.grid.add_title(f"Klasse {klass}", halign="l")
         title = self.grid.add_title(_PRINT_TITLE)
-        title_r = self.grid.add_title("MONTH YEAR", halign="r")
+        self.date = self.grid.add_title("MONTH YEAR", halign="r")
 
+        self.pdfout()
 
 
     def set_month(self, month):
-        col_colour, dates = self.month_colours[month]
+        col_colour, dates = self.month_colours[month.month]
+        self.date.setText(f"{str(month)} {month.year()}")
         # Build data array (of row-arrays)
         r = 0
         for pmap in self.pupilmap.values():
+            rowcells = self.cells[r]
             for c in range(31):
                 date = dates[c]
                 colour = col_colour[c]
@@ -433,8 +443,9 @@ class AttendancePrinter(QDialog):
                     text = ""
                 else:
                     text = pmap.get(date) or ""
-                self.grid.basic_tile(ROWi0 + r, COLi0 + c,
-                        text=text, bg=colour)
+                cell = rowcells[c]
+                cell.setText(text)
+                cell.set_background(colour)
             r += 1
         return
 
@@ -458,9 +469,27 @@ class AttendancePrinter(QDialog):
             row += 1
 
 
+    def pdfout(self):
+        month = Month(SCHOOLYEAR)
 
+#testing:
+        outdir = DATAPATH("testing/tmp/pdf_tmp")
+        os.makedirs(outdir, exist_ok=True)
+        files = []
+        if True:
 
+#        with tempfile.TemporaryDirectory() as outdir:
+            for i in range(12):
+                self.set_month(month)
+                fpath = os.path.join(outdir, f"file_{i:02}.pdf")
+                self.grid.to_pdf(fpath, landscape=True, can_rotate=False)
+                files.append(fpath)
+                month.increment()
 
+#testing:
+        pdfbytes = merge_pdf(files)
+        with open(os.path.join(outdir, "months.pdf"), "wb") as fh:
+            fh.write(pdfbytes)
 
 
 class _AttendancePrinter(QDialog):

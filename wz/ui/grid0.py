@@ -2,7 +2,7 @@
 """
 ui/grid0.py
 
-Last updated:  2021-11-28
+Last updated:  2021-12-03
 
 Widget with tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -263,10 +263,10 @@ class GridView(QGraphicsView):
             raise GridError(
                 _TILE_OUT_OF_BOUNDS.format(row=row, col=col, cspan=cspan, rspan=rspan)
             )
-        x = self.xmarks[col]
-        y = self.ymarks[row]
-        w = self.xmarks[col + cspan] - x
-        h = self.ymarks[row + rspan] - y
+        x = self.xmarks[col] + 0.5
+        y = self.ymarks[row] + 0.5
+        w = self.xmarks[col + cspan] - x - 0.5
+        h = self.ymarks[row + rspan] - y - 0.5
         t = Tile(self, x, y, w, h, **kargs)
         self.scene.addItem(t)
         return t
@@ -291,18 +291,11 @@ class GridView(QGraphicsView):
         true.
         If the table is still too big for the page, it will be shrunk to
         fit.
-        The sizing is quite difficult to understand because it is related
-        to various display parameters. The table uses points as units,
-        while the QGraphicsScene uses pixels – whose size can vary.
-        The GridView class tries to manage physicalDPI and logicalDPI so
-        that the font size and grid size remain in a fairly constant
-        relationship to each other. The table size on the screen is very
-        probably not the same as in the pdf which is to be produced. The
-        pdf should use the point sizes which are used as input to GridView.
-        To avoid too much complexity here, I rely largely on the automatic
-        scaling of the scene.render() method. I convert all measurements
-        to "pixels", as that is what is needed for setting the scene
-        rectangle.
+        To avoid too much complexity here, the automatic scaling of the
+        <scene.render()> method is used. All sizes (points) are converted
+        to "pixels" (using method <pt2px>), as that is what is needed for
+        setting the scene rectangle. It ensures that the font size and
+        grid size remain in a fairly constant relationship to each other.
         """
         # print(f"TABLE: {self.px2mm(self.grid_width)} X"
         #        f" {self.px2mm(self.grid_height)}")
