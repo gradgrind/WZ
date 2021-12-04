@@ -1,7 +1,7 @@
 """
 core/base.py
 
-Last updated:  2021-11-19
+Last updated:  2021-12-04
 
 Basic configuration and structural stuff.
 
@@ -26,7 +26,8 @@ Copyright 2021 Michael Towers
 ### Messages
 _NO_SCHOOLYEAR = "Kein Schuljahr"
 _MISSING_LAST_DAY = "Feld „LAST_DAY“ fehlt im Kalender"
-_BAD_DATE = "Ungültiges Datum im Kalender: {line}"
+_BAD_DATE = "Ungültiges Datum: {date}"
+_BAD_DATE_CAL = "Ungültiges Datum im Kalender: {line}"
 _INVALID_SCHOOLYEAR = "Ungültiges Schuljahr: {year}"
 _DODGY_SCHOOLYEAR = "[?] Möglicherweise fehlerhaftes Schuljahr: {year}"
 _BAD_CONFIG_LINE = "In Konfigurationsdatei {cfile}:\n  ungültige Zeile: {line}"
@@ -138,7 +139,7 @@ class Dates:
             return d.strftime(CONFIG["DATEFORMAT"])
         except:
             if trap:
-                raise DataError("Ungültiges Datum: '%s'" % date)
+                raise DataError(_BAD_DATE.format(date=date))
         return None
 
     # TODO: deprecated (because the conversion is done by/for the template)?
@@ -188,24 +189,30 @@ class Dates:
     def day1(schoolyear):
         """Return the date of the first day of the school year."""
         m1 = int(CONFIG["SCHOOLYEAR_MONTH_1"])
-        return "%s-%02d-01" % (schoolyear if m1 == 1 else str(int(schoolyear) - 1), m1)
+        y = schoolyear if m1 == 1 else str(int(schoolyear) - 1)
+        return f"{y}-{m1:02}-01"
 
     @classmethod
-    def check_schoolyear(cls, schoolyear, d=None):
+    def lastday(cls, schoolyear):
+        d = datetime.date.fromisoformat(cls.day1(str(int(schoolyear) + 1)))
+        return (d - datetime.timedelta(days=1)).isoformat()
+
+    @classmethod
+    def check_schoolyear(cls, schoolyear, d):
         """Test whether the given date <d> lies within the schoolyear.
+        <d> must be in isoformat.
         Return true/false.
-        If no date is supplied, return a tuple (first day, last day).
         """
         d1 = cls.day1(schoolyear)
         oneday = datetime.timedelta(days=1)
-        d2 = datetime.date.fromisoformat(cls.day1(str(int(schoolyear) + 1)))
-        d2 -= oneday
-        d2 = d2.isoformat()
-        if d:
-            if d < d1:
-                return False
-            return d <= d2
-        return (d1, d2)
+        d2 = cls.lastday(schoolyear)
+        try:
+            datetime.date.fromisoformat(d)
+        except ValueError:
+            raise DataError(_BAD_DATE.format(date=d))
+        if d < d1:
+            return False
+        return d <= d2
 
     @classmethod
     def get_schoolyear(cls, d=None):
@@ -275,7 +282,7 @@ class Dates:
                 # single day, check validity
                 if k[0] == "~" or cls.check_schoolyear(schoolyear, v):
                     continue
-            raise DataError(_BAD_DATE.format(line="%s: %s" % (k, v)))
+            raise DataError(_BAD_DATE_CAL.format(line="%s: %s" % (k, v)))
         return calendar
 
     @staticmethod

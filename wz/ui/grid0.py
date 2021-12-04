@@ -2,7 +2,7 @@
 """
 ui/grid0.py
 
-Last updated:  2021-12-03
+Last updated:  2021-12-04
 
 Widget with tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -44,7 +44,7 @@ be rendered to the right and below the mathematical point.
 ##### Configuration #####################
 # ?
 FONT_DEFAULT = "Droid Sans"
-FONT_SIZE_DEFAULT = 11
+FONT_SIZE_DEFAULT = 12
 FONT_COLOUR = "442222"  # rrggbb
 GRID_COLOUR = "000088"  # rrggbb
 # MARK_COLOUR = 'E00000'      # rrggbb
@@ -511,7 +511,7 @@ class Tile(QGraphicsRectItem):
 
     def margin(self):
         #        return 0.4 * self._grid._gview.MM2PT
-        return self._grid.pt2px(2)
+        return self._grid.pt2px(1.5)
 
     def value(self):
         return self.text

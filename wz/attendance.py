@@ -2,7 +2,7 @@
 """
 attendance.py
 
-Last updated:  2021-12-03
+Last updated:  2021-12-04
 
 Gui editor for attendance tables.
 
@@ -22,13 +22,39 @@ Copyright 2021 Michael Towers
    limitations under the License.
 
 =-LICENCE=================================
+
+For the current school year (as determined by the <SCHOOLYEAR> global –
+a "builtin", initialized in core/base.py) the pupil data is extracted
+from the pupil database. Thus, when a file is loaded, any changes in
+the pupil database will be reflected in the attendance table.
+
+It is also possible to start without a data file, but only for dates
+within the current school year. This is necessary when beginning the
+attendance table for a class.
+
+The data files can also be used outside of their school year, but then
+no changing of the basic paramaters is (easily) possible. To enable this
+feature, the pupil list and calendar data must be saved in the data file.
 """
+
+#TODO: Add facility to edit pupil list and calendar independently of
+# the database? It might be confusing ...
+# When started without a file, it should be possible to select a class
+# from the WZ database. Only the current year is supported in this case(?).
+# If no database is available, a file dialog can be presented, quitting
+# if no file is selected – maybe with a message.
+# It would also be possible to  open a file from the toolbar.
+# When started with a file argument, this should be opened. If there is
+# data for this year & class available (in the WZ database) that should
+# be taken as the basis, the absence info from the file then being
+# added to it.
+
 
 TITLE_HEIGHT = 25
 ROWS0 = (22, 3)
 ROWi0 = len(ROWS0)
 ROWn = (22,)
-COLS0 = (120, 3)
+COLS0 = (150, 3)
 COLS = COLS0 + (25,) * 31
 COLi0 = len(COLS0)
 
@@ -53,6 +79,14 @@ _SAVE_CLASS = "Datei speichern"
 _SAVE_CLASS_AS = "Datei speichern unter"
 _PAGE = "Seite:"
 _PDF = "als PDF exportieren"
+_PDF_FILE = "PDF-Datei"
+_PDF_FILE_NAME = "Anwesenheit_{year}_{klass}.pdf"
+
+_BAD_DATE = "Ungültiges Datum: {key}: {val}"
+_BAD_RANGE = "Ungültiges Datumsbereich: {key}: {val}"
+_DATE_NOT_IN_YEAR = "Datum liegt nicht im aktuellen Schuljahr: {key}: {val}"
+_FILE_MISSING_FIELD = "Ungültige Datei: Feld '{field}' fehlt in \n {path}"
+_FILE_TYPE_ERROR = "Ungültiger Dateityp: {path}"
 #?
 #_OPEN_TABLETYPE = "Tabellendatei"
 #_INVALID_DATATABLE = "Ungültige DataTable: {path}\n ... {message}"
@@ -62,7 +96,8 @@ _PDF = "als PDF exportieren"
 
 _LOSE_CHANGES = "Es gibt ungespeicherte Änderungen.\n" "Wirklich schließen?"
 _LOSE_CHANGES_OPEN = (
-    "Es gibt ungespeicherte Änderungen.\n" "Neue Datei trotzdem öffnen?"
+    "Es gibt ungespeicherte Änderungen, die dann verloren werden.\n"
+    "Neue Datei trotzdem öffnen?"
 )
 #_SAVING_FORMAT = (
 #    "Formatierungen werden möglicherweise verloren gehen:" "\n{path}\nÜberschreiben?"
@@ -72,6 +107,8 @@ _LOSE_CHANGES_OPEN = (
 ########################################################################
 
 import sys, os, builtins, traceback, datetime, calendar, json, tempfile
+
+from pikepdf import Pdf, Page
 
 if __name__ == "__main__":
     import locale
@@ -92,13 +129,14 @@ from ui.ui_base import APP, run, openDialog, saveDialog, get_icon, \
 APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
 from core.base import Dates
-from core.pupils import Pupils
 
 from ui.editable import EdiTableWidget
 from ui.grid0 import GridViewRescaling as GridView
 #from ui.grid0 import GridViewHFit as GridView
 from ui.grid0 import GraphicsSupport
-from template_engine.template_sub import merge_pdf
+
+class AttendanceError(Exception):
+    pass
 
 ### -----
 
@@ -158,8 +196,17 @@ class AttendanceTable(EdiTableWidget):
 
 
 class AttendanceEditor(QWidget):
-    def is_modified(self, changed):
-        print("CHANGED:", changed)
+    def closeEvent(self, event):
+        if self.__modified:
+            if SHOW_CONFIRM(_LOSE_CHANGES):
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
+
+    def is_modified(self):
+        return self.__modified
 
     def new_action(self, icon, text, shortcut):
         action = QAction(self)
@@ -185,32 +232,9 @@ class AttendanceEditor(QWidget):
         self.toolbar.addWidget(QLabel("   "))
         self.toolbar.addSeparator()
         self.toolbar.addWidget(QLabel("   "))
-        month1 = Month(SCHOOLYEAR)
-        months = []
-        self.month_colours = {}
-        i = 12
-        self.hols = readHols()
-        while True:
-            months.append((month1.month, str(month1)))
-            self.month_colours[month1.month]  = \
-                    month1.column_colours(self.hols)
-            i -= 1
-            if i == 0:
-                break
-            month1.increment()
-        self.month_select = KeySelector(
-            value_mapping=months,
-            changed_callback=self.switch_month
-        )
+        self.month_select = KeySelector(changed_callback=self.switch_month)
         self.toolbar.addWidget(QLabel(_PAGE))
         self.toolbar.addWidget(self.month_select)
-        # If dealing with the current year, set the month for today
-#!!!
-#TODO: I might need to modify this so that I can start the program
-# with another school year ... That would mean a different data folder.
-        today = Dates.today()
-        if Dates.check_schoolyear(SCHOOLYEAR, today):
-            self.month_select.reset(int(today.split('-')[1]))
         # File actions
         self.toolbar.addWidget(QLabel("   "))
         self.toolbar.addSeparator()
@@ -252,6 +276,8 @@ class AttendanceEditor(QWidget):
             "border-bottom: 2px solid #0000C0;"
             "}"
         )
+        #verticalHeader = self.table.verticalHeader()
+        #verticalHeader.setMinimumSectionSize(150)
 
 #TODO
         self.set_current_file(None)
@@ -260,6 +286,50 @@ class AttendanceEditor(QWidget):
         if ofile:
             self.open_file(ofile)
 
+    def set_month_select(self, month1, hols):
+        """Initialize the calendar data for the current (<self.schoolyear>)
+        year. <month1> is the first month of the school-year (range 1-12).
+        """
+        self.month1 = f"{int(month1):02}"
+        months = []
+        self.month_colours = {}
+        month = self.month1
+        while True:
+            year = month2year(self.schoolyear, self.month1, month)
+            col_colour = []
+            dates = []
+            for day in range(1, 32):
+                try:
+                    date = f"{year}-{month}-{day:02}"
+                    dates.append(date)
+                    if datetime.date.fromisoformat(date).weekday() > 4:
+                        # Weekend
+#TODO: What about school Saturdays?
+                        col_colour.append(COLOUR_WEEKEND)
+                    elif date in hols:
+                        # Holiday weekday
+                        col_colour.append(COLOUR_HOLIDAY)
+                    else:
+                        # A normal schoolday
+                        col_colour.append(None)
+                except ValueError:
+                    # date out of range – grey out cell.
+                    dates.append(None)
+                    col_colour.append(COLOUR_NO_DAY)
+            m = int(month)
+            months.append((month, calendar.month_name[m]))
+            self.month_colours[month] = (
+                col_colour,
+                dates
+            )
+            month = f"{(m % 12) + 1:02}"
+            if month == self.month1:
+                break
+        self.month_select.set_items(months)
+        # If dealing with the current year, set the month for today
+        today = Dates.today()
+        if Dates.check_schoolyear(self.schoolyear, today):
+            self.month_select.reset(today.split('-')[1])
 
 
     def modified(self, mod):
@@ -301,23 +371,25 @@ class AttendanceEditor(QWidget):
         self.pupils = self.all_pupils.class_pupils(klass)
 
         row = 0
-        self.row_headers = []
+        self.pupilnames = []
+        row_headers = []
 
 #TODO: Actually this should be the absence data for each pupil ...
         self.pupilmap = {}
         for pdata in self.pupils:
             pid, pname = pdata["PID"], pdata.name()
             self.pupilmap[pid] = {}
-            self.row_headers.append(pname)
+            self.pupilnames.append((pid, pname))
+            row_headers.append(pname)
             row += 1
 
         self.table.setup(
             colheaders=TCOLS,
-            rowheaders=self.row_headers,
+            rowheaders=row_headers,
             undo_redo=True,
             cut=True,
             paste=True,
-            on_changed=self.is_modified,
+            on_changed=self.modified,
         )
 
         self.table.resizeColumnsToContents()
@@ -326,6 +398,7 @@ class AttendanceEditor(QWidget):
 # from one run to another?
 
         self.month_select.trigger()
+        self.action_save_as.setEnabled(True)
 
     def switch_month(self, month):
         col_colour, dates = self.month_colours[month]
@@ -351,25 +424,57 @@ class AttendanceEditor(QWidget):
             row += 1
         return True
 
+
+
+    def save_file(self, filepath):
+        """Save the holiday data, the pupil list and the attendance data
+        to an "attendance" file, using json.
+        """
+        data = {
+            "TYPE": "ATTENDANCE",
+            "SCHOOLYEAR": self.schoolyear,
+            "MONTH1": self.month1,
+            "CLASS": self.klass,
+            "HOLIDAYS": self.hols,
+            "PUPILS": self.pupilnames,
+            "DATA": self.pupilmap
+        }
+        with open(filepath, "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+
+
+
+
+
     def open_file(self, filepath):
         """Read in the attendance table (json) for a class from the
         given path.
         """
-        try:
-            datatable = read_DataTable(filepath)
-        except TableError as e:
-            SHOW_ERROR(
-                _INVALID_DATATABLE.format(path=str(filepath),
-                    message=str(e)
-                )
-            )
-            return
-        except:
-            SHOW_ERROR(
-                f"BUG while reading {str(filepath)}:\n" \
-                        f" ... {traceback.format_exc()}"
-            )
-            return
+        def read_field(field):
+            try:
+                return data[field]
+            except ValueError:
+                raise AttendanceError(_FILE_MISSING_FIELD.format(
+                        field=field, path=filepath))
+
+        with open(filepath, 'rb') as fh:
+            data = json.load(fh)
+        if read_field("TYPE") != "ATTENDANCE":
+            raise AttendanceError(_FILE_TYPE_ERROR.format(
+                    path=filepath))
+        self.schoolyear = read_field("SCHOOLYEAR")
+        self.klass = read_field("CLASS")
+        self.hols = read_field("HOLIDAYS")
+        self.pupilnames = read_field("PUPILS")
+        self.pupilmap = read_field("DATA")
+
+        print("TODO – OPEN")
+        return
+
+        if self.schoolyear == SCHOOLYEAR:
+            self.update()
+
+#?
         self.set_current_file(filepath)
         self.open_table(datatable)
         self.action_save_as.setEnabled(True)
@@ -377,7 +482,11 @@ class AttendanceEditor(QWidget):
         self.modified(False)
 
     def on_open(self):
-        print("TODO – OPEN")
+        if self.__modified and not SHOW_CONFIRM(_LOSE_CHANGES_OPEN):
+            return
+        ofile = openDialog(f"{_ATTENDANCE_FILE} (*.attendance)", _OPEN_CLASS)
+        if ofile:
+            self.open_file(ofile)
 
     def on_save(self):
         print("TODO – SAVE")
@@ -387,8 +496,10 @@ class AttendanceEditor(QWidget):
 
     def on_print(self):
         dialog = AttendancePrinter(
+            self.schoolyear,
+            self.month1,
             self.klass,
-            self.row_headers,
+            self.pupilnames,
             self.pupilmap,
             self.month_colours
         )
@@ -396,7 +507,11 @@ class AttendanceEditor(QWidget):
 
 
 class AttendancePrinter(QDialog):
-    def __init__(self, klass, rowheaders, pupilmap, month_colours):
+    def __init__(self, schoolyear, month1, klass,
+            pupilnames, pupilmap, month_colours):
+        self.schoolyear = schoolyear
+        self.month1 = month1
+        self.klass = klass
         super().__init__()
         layout = QVBoxLayout(self)
         self.pupilmap = pupilmap
@@ -405,7 +520,7 @@ class AttendancePrinter(QDialog):
         layout.addWidget(self.grid)
 
 #???
-        rows = ROWS0 + ROWn * len(rowheaders)
+        rows = ROWS0 + ROWn * len(pupilnames)
         self.grid.init(rows, COLS, TITLE_HEIGHT)
         col = COLi0
         for day in TCOLS:
@@ -413,7 +528,7 @@ class AttendancePrinter(QDialog):
             col += 1
         row = ROWi0
         self.cells = []
-        for pname in rowheaders:
+        for pid, pname in pupilnames:
             rowcells = []
             self.cells.append(rowcells)
             self.grid.basic_tile(row, 0, text=pname, halign="l")
@@ -426,12 +541,14 @@ class AttendancePrinter(QDialog):
         title = self.grid.add_title(_PRINT_TITLE)
         self.date = self.grid.add_title("MONTH YEAR", halign="r")
 
+#TODO ... ?
         self.pdfout()
 
 
     def set_month(self, month):
-        col_colour, dates = self.month_colours[month.month]
-        self.date.setText(f"{str(month)} {month.year()}")
+        col_colour, dates = self.month_colours[month]
+        self.date.setText(f"{calendar.month_name[int(month)]}"
+                f" {month2year(self.schoolyear, self.month1, month)}")
         # Build data array (of row-arrays)
         r = 0
         for pmap in self.pupilmap.values():
@@ -447,49 +564,25 @@ class AttendancePrinter(QDialog):
                 cell.setText(text)
                 cell.set_background(colour)
             r += 1
-        return
-
-#TODO
-        self.table.init_sparse_data(len(self.pupilmap), 31, [])
-        row = 0
-        for pid, pupil_data in self.pupilmap.items():
-            col = 0
-            for colour in col_colour:
-                item = self.table.item(row, col)
-                if colour:
-                    item.setFlags(item.flags() & ~ Qt.ItemIsEditable)
-                    item.setBackground(GraphicsSupport.getBrush(colour))
-                else:
-                    item.setFlags(item.flags() | Qt.ItemIsEditable)
-                    item.setBackground(GraphicsSupport.getBrush())
-                    text = pupil_data.get(dates[col])
-                    if text:
-                        self.table.set_text(row, col, text)
-                col += 1
-            row += 1
-
 
     def pdfout(self):
-        month = Month(SCHOOLYEAR)
-
-#testing:
-        outdir = DATAPATH("testing/tmp/pdf_tmp")
-        os.makedirs(outdir, exist_ok=True)
+        month = self.month1
         files = []
-        if True:
-
-#        with tempfile.TemporaryDirectory() as outdir:
+        with tempfile.TemporaryDirectory() as outdir:
             for i in range(12):
                 self.set_month(month)
                 fpath = os.path.join(outdir, f"file_{i:02}.pdf")
                 self.grid.to_pdf(fpath, landscape=True, can_rotate=False)
                 files.append(fpath)
-                month.increment()
-
-#testing:
-        pdfbytes = merge_pdf(files)
-        with open(os.path.join(outdir, "months.pdf"), "wb") as fh:
-            fh.write(pdfbytes)
+                month = f"{(int(month) % 12) + 1:02}"
+            filepath = saveDialog(
+                f"{_PDF_FILE} (*.pdf)",
+                _PDF_FILE_NAME.format(year=SCHOOLYEAR, klass=self.klass)
+            )
+            if filepath:
+                if not filepath.endswith(".pdf"):
+                    filepath += ".pdf"
+                merge_pdf(files, filepath)
 
 
 class _AttendancePrinter(QDialog):
@@ -686,25 +779,35 @@ class _AttendancePrinter(QDialog):
         self.reset_modified()
 
 
-def readHols():
-    """Return a <set> of <datetime.date> instances for all holidays in
-    the calendar file for the current year. The dates are initially in
-    isoformat (YYYY-MM-DD).
+def readHols(calendar):
+    """Return a set of dates for all holidays in the calendar file for
+    the current year. The dates are in isoformat (YYYY-MM-DD).
+    Also weekends are marked.
+    The information is returned as a mapping {date: tag}
     """
+    schoolyear = Dates.calendar_year(calendar)
     deltaday = datetime.timedelta(days = 1)
-    hols = set()
-    for k, v in CALENDAR.items():
+    hols = {}
+    for k, v in calendar.items():
         if k[0] == '_':
             if type(v) == str:
                 # single date
-                hols.add(datetime.date.fromisoformat(v))
+                try:
+                    d = datetime.date.fromisoformat(v)
+                except ValueError:
+                    raise AttendanceError(_BAD_DATE.format(
+                            key=k, val=v))
+                if not Dates.check_schoolyear(schoolyear, d=v):
+                    raise AttendanceError(_DATE_NOT_IN_YEAR.format(
+                            key=k, val=v))
+                hols[v] = k
             else:
                 d1, d2 = map(datetime.date.fromisoformat, v)
                 if d1 >= d2:
                     raise AttendanceError(_BAD_RANGE.format(
-                            key = k, val = v))
+                            key=k, val=v))
                 while True:
-                    hols.add(d1)
+                    hols[d1.isoformat()] = k
                     d1 += deltaday
                     if d1 > d2:
                         break
@@ -760,9 +863,9 @@ class Month:
         year = self.year()
         for day in range(1, 32):
             try:
-                date = datetime.date(year, self.month, day)
-                dates.append(date.isoformat())
-                if date.weekday() > 4:
+                date = f"{year}-{self.month:02}-{day:02}"
+                dates.append(date)
+                if datetime.date.fromisoformat(date).weekday() > 4:
                     # Weekend
 # What about school Saturdays?
                     col_colour.append(COLOUR_WEEKEND)
@@ -778,6 +881,40 @@ class Month:
                 col_colour.append(COLOUR_NO_DAY)
         return col_colour, dates
 
+def Update():
+    """Refer to the WZ database to update calendar and pupil information,
+    if possible.
+    """
+    pass
+
+
+def merge_pdf(ifile_list, filepath, pad2sided = False):
+    """Join the pdf-files in the input list <ifile_list> to produce a
+    single pdf-file, saved at <filepath>.
+    The parameter <pad2sided> allows blank pages to be added
+    when input files have an odd number of pages – to ensure that
+    double-sided printing works properly.
+    """
+    pdf = Pdf.new()
+    for ifile in ifile_list:
+        src = Pdf.open(ifile)
+        pdf.pages.extend(src.pages)
+        if pad2sided and (len(src.pages) & 1):
+            page = Page(src.pages[0])
+            w = page.trimbox[2]
+            h = page.trimbox[3]
+            pdf.add_blank_page(page_size = (w, h))
+    pdf.save(filepath)
+
+
+def month2year(schoolyear, month1, month):
+    """Return the year of month <month>. <month1> is the first month in
+    the school-year. All values are strings, months always have two digits.
+    """
+    return schoolyear if (month < month1 or month1 == "01") \
+            else f"{int(schoolyear) - 1:02}"
+
+
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
@@ -792,8 +929,9 @@ if __name__ == "__main__":
     start.setup(os.path.join(basedir, "DATA"))
     print("§§§", CALENDAR)
 
-    for d in sorted(readHols()):
-        print (" ---", d.isoformat())
+    holidays = readHols(CALENDAR)
+    for d in sorted(holidays):
+        print (" ---", d, holidays[d])
 
     print(calendar.day_name[1])
     print(calendar.day_abbr[1])
@@ -804,9 +942,13 @@ if __name__ == "__main__":
     icon = get_icon("attendance")
     edit.setWindowIcon(icon)
 
+    edit.schoolyear = SCHOOLYEAR
+    edit.set_month_select(CONFIG["SCHOOLYEAR_MONTH_1"], holidays)
+
 #TODO: How to start with an empty table and no class?
 
-    edit.setup("12G")
+    from core.pupils import Pupils
+    edit.setup("11G")
     edit.show()
     edit.resize(900, 700)
     run(edit)
