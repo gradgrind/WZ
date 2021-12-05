@@ -39,6 +39,7 @@ feature, the pupil list and calendar data must be saved in the data file.
 
 #TODO: Add facility to edit pupil list and calendar independently of
 # the database? It might be confusing ...
+
 # When started without a file, it should be possible to select a class
 # from the WZ database. Only the current year is supported in this case(?).
 # If no database is available, a file dialog can be presented, quitting
@@ -217,7 +218,7 @@ class AttendanceEditor(QWidget):
         action.setIcon(get_icon(icon))
         return action
 
-    def __init__(self, ofile=None):
+    def __init__(self, data_base=None):
         super().__init__()
         layout = QVBoxLayout(self)
         self.toolbar = QToolBar()
@@ -278,6 +279,8 @@ class AttendanceEditor(QWidget):
         )
         #verticalHeader = self.table.verticalHeader()
         #verticalHeader.setMinimumSectionSize(150)
+
+        self.dbinfo = DBinfo(data_base or "DATA")
 
 #TODO
         self.set_current_file(None)
@@ -367,8 +370,12 @@ class AttendanceEditor(QWidget):
         """
         self.klass = klass
         self.class_label.setText(_CLASS.format(klass=klass))
-        self.all_pupils = Pupils()
-        self.pupils = self.all_pupils.class_pupils(klass)
+#TODO
+        if klass in self.dbinfo.classes():
+            self.pupils = self.dbinfo.pupils.class_pupils(klass)
+        else:
+            self.pupils = []
+# ...
 
         row = 0
         self.pupilnames = []
@@ -484,7 +491,7 @@ class AttendanceEditor(QWidget):
     def on_open(self):
         if self.__modified and not SHOW_CONFIRM(_LOSE_CHANGES_OPEN):
             return
-        ofile = openDialog(f"{_ATTENDANCE_FILE} (*.attendance)", _OPEN_CLASS)
+        ofile = openDialog(f"{_ATTENDANCE_FILE} ({_FILE_TYPE})", _OPEN_CLASS)
         if ofile:
             self.open_file(ofile)
 
@@ -504,6 +511,55 @@ class AttendanceEditor(QWidget):
             self.month_colours
         )
         dialog.exec()
+
+
+############# old
+
+    def _save_as_file(self):
+        endings = make_DataTable_filetypes()
+        ftypes = " ".join(["*." + e for e in endings])
+        filepath = saveDialog(
+            f"{_OPEN_TABLETYPE} ({ftypes})",
+            self.current_file,
+            SAVE_FILE
+        )
+        if filepath:
+            fpath, ending = filepath.rsplit(".", 1)
+            if ending in endings:
+                data = self.get_data()
+                fbytes = make_DataTable(
+                    data,
+                    ending,
+                    __MODIFIED__=Dates.timestamp()
+                )
+                with open(filepath, "wb") as fh:
+                    fh.write(fbytes)
+                self.current_file = filepath
+                self.reset_modified()
+            else:
+                SHOW_ERROR(_UNSUPPORTED_SAVE.format(ending=ending))
+
+    def _save_file(self):
+        fpath, ending = self.current_file.rsplit(".", 1)
+        if ending == "tsv":
+            filepath = self.current_file
+        else:
+            if ending in read_DataTable_filetypes():
+                filepath = fpath + ".tsv"
+            else:
+                filepath = self.current_file + ".tsv"
+            if not SHOW_CONFIRM(_SAVE_AS_TSV.format(path=filepath)):
+                self.save_as_file()
+                return
+        data = self.get_data()
+        tsvbytes = make_DataTable(data, "tsv", __MODIFIED__=Dates.timestamp())
+        with open(filepath, "wb") as fh:
+            fh.write(tsvbytes)
+        self.current_file = filepath
+        self.reset_modified()
+
+
+
 
 
 class AttendancePrinter(QDialog):
@@ -583,200 +639,6 @@ class AttendancePrinter(QDialog):
                 if not filepath.endswith(".pdf"):
                     filepath += ".pdf"
                 merge_pdf(files, filepath)
-
-
-class _AttendancePrinter(QDialog):
-    def __init__(self):
-        super().__init__()
-        layout = QVBoxLayout(self)
-        self.grid = GridViewRescaling()
-#        self.grid = GridViewHFit()
-        layout.addWidget(self.grid)
-
-    def setup(self, klass):
-        """Load the attendance data for the given class.
-        """
-        self.all_pupils = Pupils()
-        self.pupils = self.all_pupils.class_pupils(klass)
-        rows = ROWS0 + ROWn * len(self.pupils)
-        self.grid.init(rows, COLS, TITLE_HEIGHT)
-        col = COLi0
-        for day in range(1, 32):
-            self.grid.basic_tile(0, col, text=str(day))
-            col += 1
-        row = ROWi0
-        pupilmap = {}
-        for pdata in self.pupils:
-            pid, pname = pdata["PID"], pdata.name()
-            pupilmap[pid] = row
-            self.grid.basic_tile(row, 0, text=pname, halign="l")
-            row += 1
-
-
-        self.grid.add_title("This is the title", halign="l")
-
-#        self.set_current_file(None)
-#        self.modified(False)
-#        self.action_save_as.setEnabled(False)
-        return int(self.grid.grid_width), int(self.grid.grid_height)
-
-
-
-# For a large class this will probably lead to a scaling, which might
-# be the best way to deal with printing, but possibly not for editing
-# on screen – a vertical scrollbar might be useful here, i.e. yet
-# another grid variant that only scales on the width ...
-# However, then I would lose the title lines. Do I really want to
-# implement a fixed header? ... how?!
-# An alternative might be a sort of paged table on screen (at least for
-# editing, if not also for printing). That could be done using a row of
-# toggle buttons to select the page.
-# Could it be that a standard table editor would be better suited for
-# the screen part? I could still use the above for printing to one page.
-
-#TODO: Use the pupil db to get the pupils, according to class.
-# The attendance data could be a mapping for each pupil-id to a mapping
-# of date -> info.
-    def open_file(self, filepath):
-        pupils = (
-            ("0006", "Henry King"),
-            ("1001", "Catherine d'Aragon"),
-            ("1002", "Anne Boleyn"),
-        )
-
-        rows = ROWS0
-        row0 = len(rows)
-        rows += (25,) * len(pupils)
-        cols = COLS0
-        col0 = len(cols)
-        cols += (25,) * 31
-        self.grid.init(rows, cols, 25)
-
-        col = col0
-        for day in range(1, 32):
-            self.grid.basic_tile(0, col, text=str(day))
-            col += 1
-        row = row0
-        pupilmap = {}
-        for pupil in pupils:
-            pupilmap[pupil[0]] = row
-            self.grid.basic_tile(row, 0, text=pupil[1], halign="l")
-            row += 1
-
-
-        self.grid.add_title("This is the title", halign="l")
-
-#        self.set_current_file(None)
-#        self.modified(False)
-#        self.action_save_as.setEnabled(False)
-        return int(self.grid.grid_width), int(self.grid.grid_height)
-
-    def closeEvent(self, event):
-        return
-
-        w = APP.focusWidget()
-        if w and isinstance(w, QLineEdit) and w.isModified():
-            # Editing cell
-            if SHOW_CONFIRM(_EDITING_CELL):
-                event.accept()
-            else:
-                event.ignore()
-        elif self.__modified:
-            if SHOW_CONFIRM(_LOSE_CHANGES):
-                event.accept()
-            else:
-                event.ignore()
-        else:
-            event.accept()
-
-    def modified(self, mod):
-        # print("MOD:", mod)
-        self.__modified = mod
-        self.action_save.setEnabled(mod)
-        self.set_title(mod)
-
-    def set_title(self, changed):
-        x = " *" if changed else ""
-        title = (
-            f"{_PROGRAM_NAME} – {self.filename}{x}" if self.filename \
-                    else _PROGRAM_NAME
-        )
-        self.setWindowTitle(title)
-
-    def set_current_file(self, path):
-        self.current_file = path
-        self.filename = os.path.basename(path) if path else None
-
-    def get_file(self):
-        if self.__modified and not SHOW_CONFIRM(_LOSE_CHANGES_OPEN):
-            return
-        filetypes = " ".join(["*." + fte for fte in Spreadsheet.filetype_endings()])
-        ofile = openDialog(f"{_OPEN_TABLETYPE} ({filetypes})", OPEN_FILE)
-        if ofile:
-            self.open_file(ofile)
-
-    def _open_file(self, filepath):
-        """Read in a DataTable from the given path."""
-        try:
-            datatable = read_DataTable(filepath)
-        except TableError as e:
-            SHOW_ERROR(_INVALID_DATATABLE.format(path=str(filepath),
-                    message=str(e)))
-            return
-        except:
-            SHOW_ERROR(
-                f"BUG while reading {str(filepath)}:\n" \
-                        f" ... {traceback.format_exc()}"
-            )
-            return
-        self.set_current_file(filepath)
-        self.open_table(datatable)
-        self.action_save_as.setEnabled(True)
-        self.saved = False
-        self.modified(False)
-
-    def save_as_file(self):
-        endings = make_DataTable_filetypes()
-        ftypes = " ".join(["*." + e for e in endings])
-        filepath = saveDialog(
-            f"{_OPEN_TABLETYPE} ({ftypes})",
-            self.current_file,
-            SAVE_FILE
-        )
-        if filepath:
-            fpath, ending = filepath.rsplit(".", 1)
-            if ending in endings:
-                data = self.get_data()
-                fbytes = make_DataTable(
-                    data,
-                    ending,
-                    __MODIFIED__=Dates.timestamp()
-                )
-                with open(filepath, "wb") as fh:
-                    fh.write(fbytes)
-                self.current_file = filepath
-                self.reset_modified()
-            else:
-                SHOW_ERROR(_UNSUPPORTED_SAVE.format(ending=ending))
-
-    def save_file(self):
-        fpath, ending = self.current_file.rsplit(".", 1)
-        if ending == "tsv":
-            filepath = self.current_file
-        else:
-            if ending in read_DataTable_filetypes():
-                filepath = fpath + ".tsv"
-            else:
-                filepath = self.current_file + ".tsv"
-            if not SHOW_CONFIRM(_SAVE_AS_TSV.format(path=filepath)):
-                self.save_as_file()
-                return
-        data = self.get_data()
-        tsvbytes = make_DataTable(data, "tsv", __MODIFIED__=Dates.timestamp())
-        with open(filepath, "wb") as fh:
-            fh.write(tsvbytes)
-        self.current_file = filepath
-        self.reset_modified()
 
 
 def readHols(calendar):
@@ -881,11 +743,32 @@ class Month:
                 col_colour.append(COLOUR_NO_DAY)
         return col_colour, dates
 
-def Update():
+
+#TODO
+class DBinfo:
     """Refer to the WZ database to update calendar and pupil information,
     if possible.
     """
-    pass
+    def __init__(self, data_base):
+        try:
+            from core.base import start
+        except:
+            builtins.CALENDAR = None
+            self.hols = None
+            self.pupils = None
+            return
+        start.setup(os.path.join(basedir, data_base))
+        self.hols = readHols(CALENDAR)
+        try:
+            from core.pupils import Pupils
+            self.pupils = Pupils()
+        except ImportError:
+            self.pupils = None
+
+    def get_classes(self):
+        if self.pupils:
+            return self.pupils.classes()
+        return []
 
 
 def merge_pdf(ifile_list, filepath, pad2sided = False):
@@ -923,31 +806,48 @@ if __name__ == "__main__":
     this = sys.path[0]
     basedir = os.path.dirname(this)
 #    sys.path[0] = appdir
-    from core.base import start
+
+    ofile = None
+    if len(sys.argv) == 2:
+        _ofile = sys.argv[1]
+        if os.path.isfile(_ofile) and _ofile.endswith(_FILE_TYPE):
+            ofile = _ofile
+
+#    dbinfo = DBinfo("TESTDATA")
+#    dbinfo = DBinfo()
+
+#    from core.base import start
 #TODO:
 #    start.setup(os.path.join(basedir, "TESTDATA"))
-    start.setup(os.path.join(basedir, "DATA"))
-    print("§§§", CALENDAR)
+#    start.setup(os.path.join(basedir, "DATA"))
+#    print("§§§", CALENDAR)
 
-    holidays = readHols(CALENDAR)
-    for d in sorted(holidays):
-        print (" ---", d, holidays[d])
+#    holidays = readHols(CALENDAR)
+#    holidays = dbinfo.get_hols()
+#    if holidays:
+#        for d in sorted(holidays):
+#            print (" ---", d, holidays[d])
 
-    print(calendar.day_name[1])
-    print(calendar.day_abbr[1])
-    print(calendar.month_name[1])
-    print(calendar.month_abbr[1])
+#    print(calendar.day_name[1])
+#    print(calendar.day_abbr[1])
+#    print(calendar.month_name[1])
+#    print(calendar.month_abbr[1])
 
+#    edit = AttendanceEditor("TESTDATA")
     edit = AttendanceEditor()
+
     icon = get_icon("attendance")
     edit.setWindowIcon(icon)
 
+#TODO ...
     edit.schoolyear = SCHOOLYEAR
     edit.set_month_select(CONFIG["SCHOOLYEAR_MONTH_1"], holidays)
 
 #TODO: How to start with an empty table and no class?
 
-    from core.pupils import Pupils
+    if ofile:
+        pass
+
     edit.setup("11G")
     edit.show()
     edit.resize(900, 700)
