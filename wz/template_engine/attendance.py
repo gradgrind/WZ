@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-template_engine/attendance.py - last updated 2021-12-05
+template_engine/attendance.py - last updated 2021-12-07
 
 Create attendance table for a class.
 
@@ -49,6 +49,14 @@ _TEMPLATE_NEED_MORE_LINES = "die Vorlage braucht mehr Zeilen"\
 _BAD_DATE = "Ungültiges Datum: {key}: {val}"
 _BAD_RANGE = "Ungültiges Datumsbereich: {key}: {val}"
 _DATE_NOT_IN_YEAR = "Datum liegt nicht im aktuellen Schuljahr: {key}: {val}"
+_BAD_SHEET_HEADER = "Ungültiger \"Monatsschlüssel\" (Spalte A) im"\
+        " Monat {sheet}\n  Datei: {path}"
+_PID_COLUMN_NONZERO = "Tabellendatei {path}:\n  Schülernummer nicht" \
+        " in erster Spalte"
+_NAME_MISMATCH = "Schüler hat unterschiedliche Namen: {name1}" \
+        "und {name2} in\n  {path}"
+_CLASS_MISMATCH = "Klasse hat unterschiedliche Namen: {class1}" \
+        "und {class2} in\n  {path}"
 
 ########################################################################
 
@@ -73,11 +81,11 @@ import datetime, calendar
 
 from openpyxl import load_workbook
 #from openpyxl.worksheet.properties import WorksheetProperties, PageSetupProperties
-#from openpyxl.utils import get_column_letter, column_index_from_string
+from openpyxl.utils import column_index_from_string#, get_column_letter
 from openpyxl.styles import PatternFill
 
 from core.pupils import Pupils
-#from tables.spreadsheet import Spreadsheet
+from tables.spreadsheet import Spreadsheet
 
 class AttendanceError(Exception):
     pass
@@ -198,7 +206,8 @@ def read_hols(calendar_data):
 
 
 class Table:
-    """openpyxl based spreadsheet handler ('.xlsx'-files).
+    """openpyxl based spreadsheet template handler ('.xlsx'-file) for
+    attendance tables.
     """
     def reload_template(self):
         self.workbook = load_workbook(self.template)
@@ -315,6 +324,9 @@ class Table:
         for month, year, month_name, col_colour, dates in month_colours:
             ws = self.workbook.copy_worksheet(self.sheet0)
             ws.title = month_name
+            # Tag the first column for machine-reading:
+            ws[f"A{self.row0}"].value = f"#{year}-{month:02}_{klass}"
+            # The header for human-reading:
             ws[f"{col_title}{self.row0}"].value = _PAGE_TITLE.format(
                     klass=klass, month=f"{month_name} {year}")
             row = self.row1
@@ -340,11 +352,94 @@ class Table:
         self.workbook.remove(self.sheet0)
         self.sheet0 = None
 
+    def update_table(self, filepath):
+        """Take the data from the given attendance file and regenerate
+        the file using the pupil data from the database. This allows
+        new pupils to be added easily, but also name changes are possible.
+        Pupils should probably not be removed, however, as the table is
+        supposed to be a record of the whole year.
+        """
+        last_year_month, klass, pupildata = attendanceTable(filepath,
+                self.columns)
+#TODO ...
+
 
 class PupilInfo(Pupils):
     def pupil_list(self, klass):
         pdatalist = self.class_pupils(klass)
         return [(pdata["PID"], pdata.name()) for pdata in pdatalist]
+
+
+def attendanceTable(filepath, columnmap):
+    """Read the file at <filepath> as an attendance table.
+    The columns are passed as a mapping: {column-header: column-letter}
+    (the letters being those of the columns in a spreadsheet).
+    """
+    columns = []
+    for hdr, col in columnmap.items():
+        i = column_index_from_string(col) - 1
+        if i == 0:
+            if hdr != "***":
+                raise AttendanceError(_PID_COLUMN_NONZERO.format(
+                        path=filepath))
+        else:
+            columns.append((hdr, i))
+    table = Spreadsheet(filepath)
+    pupildata = {}
+    klass = None
+    last_year_month = ""
+    for sheetname in table.getTableNames():
+        table.setTable(sheetname)
+        sheet = table.table()
+        rows = []
+        year_month = None
+        for row in sheet:
+            c1 = row[0]
+            if not c1:
+                continue
+            if year_month:
+                # The header line has already been found.
+                pid = row[0]
+                try:
+                    pdata = pupildata[pid]
+                except KeyError:
+                    pdata = {}
+                    pupildata[pid] = pdata
+                for f, i in columns:
+                    v = row[i]
+                    if v:
+                        if f == "TITLE":
+                            name = pdata.get("__NAME__")
+                            if name:
+                                if v != name:
+                                    raise AttendanceError(
+                                        _NAME_MISMATCH.format(
+                                            name1=name, name2=v,
+                                            path=filepath))
+                            else:
+                                pdata["__NAME__"] = v
+                        else:
+                            key = f"{year_month}-{f}"
+                            try:
+                                pupildata[pid][key] = v
+                            except KeyError:
+                                pupildata[pid] = {key: v}
+            else:
+                if c1[0] == "#":
+                    try:
+                        year_month, k = c1[1:].split("_")
+                    except ValueError:
+                        raise AttendanceError(_BAD_SHEET_HEADER.format(
+                                sheet=name, path = filepath))
+                    if klass:
+                        if k != klass:
+                            raise AttendanceError(_CLASS_MISMATCH.format(
+                                class1=klass, class2=k, path = filepath))
+                    else:
+                        klass = k
+                    if year_month > last_year_month:
+                        last_year_month = year_month
+    return last_year_month, klass, pupildata
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -353,7 +448,7 @@ if __name__ == '__main__':
     table = Table()
     month_data = get_month_data(CALENDAR)
     pupils = PupilInfo()
-    klass = "12G"
+    klass = "11G"
     pupilnames = pupils.pupil_list(klass)
 
 #    pupilnames = [
@@ -366,3 +461,17 @@ if __name__ == '__main__':
     outfile = DATAPATH(f"testing/tmp/Anwesenheit_{SCHOOLYEAR}_{klass}.xlsx")
     table.save(outfile)
     print("SAVED TO", outfile)
+
+    infile = DATAPATH("testing/Anwesenheit_test.xlsx")
+    indata = attendanceTable(infile, table.columns)
+    print(f"\nINPUT FROM {infile}:")
+    print(indata)
+
+    quit(0)
+    datatable = read_DataTable(outfile)
+    print("\n -------------------------------\n")
+    print("FIELDS:", datatable["__FIELDS__"])
+    i = 0
+    for r in datatable["__ROWS__"]:
+        i += 1
+        print(f"\n{i:02}:", r)
