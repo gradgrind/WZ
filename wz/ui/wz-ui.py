@@ -1,18 +1,31 @@
 # -*- coding: utf-8 -*-
 
+#Last updated: 2021-12-10
+
 _TITLE = "WZ"
 
 ########################################################################
 
-import sys, os
+import sys, os, builtins
 
 if __name__ == '__main__':
     # Enable package import if running as module
     #print(sys.path)
     this = sys.path[0]
-    sys.path[0] = os.path.dirname(this)
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    import locale
+    print("LOCALE:", locale.setlocale(locale.LC_ALL, ''))
+    try:
+        builtins.PROGRAM_DATA = os.environ["PROGRAM_DATA"]
+    except KeyError:
+        basedir = os.path.dirname(appdir)
+        builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
+    from core.base import start
+#    start.setup(os.path.join(basedir, 'TESTDATA'))
+    start.setup(os.path.join(basedir, 'DATA'))
 
-from ui.ui_extra import QWidget, QVBoxLayout, QHBoxLayout, \
+from ui.ui_base import QWidget, QVBoxLayout, QHBoxLayout, \
         QLabel, QStackedWidget, QFrame, QPushButton, HLine, run
 
 ### -----
@@ -44,7 +57,10 @@ class MainWindow(QWidget):
         self.buttonbox = QVBoxLayout()
         tab_box_layout.addLayout(self.buttonbox)
         self.widgetstack = QStackedWidget()
-        self.widgetstack.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+#        self.widgetstack.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self.widgetstack.setFrameStyle(QFrame.Box | QFrame.Raised)
+#        self.widgetstack.setLineWidth(3)
+#        self.widgetstack.setMidLineWidth(2)
         tab_box_layout.addWidget(self.widgetstack)
         self.tab_buttons = []
         self.index = -1
@@ -107,36 +123,39 @@ class MainWindow(QWidget):
     def select_tab(self, index):
         """Select the tab (module) with given index.
         """
-        print(f"SELECT TAB {index}")
-
 # initially this will probably be the first widget
         i0 = self.widgetstack.currentIndex()
+        print("???", i0)
         if i0 == index:
-            # No change
-            self.tab_buttons[i0].setChecked(True)
-#
-            print(" ... no change")
-            return
+            # No change of stack widget
+            if self.tab_buttons[i0].isChecked():
+                print(" ... no change")
+                return
+
+            print(f"Current tab ({i0}): button not 'checked'")
         elif i0 >= 0:
+            print(f"SELECT TAB {index}")
             # Check that the old tab can be left
             tab0 = self.widgetstack.widget(i0)
             if tab0.leave_ok():
                 tab0.leave()
                 # Deselect old button
                 self.tab_buttons[i0].setChecked(False)
+                self.widgetstack.setCurrentIndex(index)
             else:
                 # Deselect new button
                 self.tab_buttons[index].setChecked(False)
 #
                 print(" ... deselect new button")
                 return
+        else:
+            raise Bug("??? tab index = %d" % i0)
         # Select new button
         self.tab_buttons[index].setChecked(True)
         # Enter new tab
-        self.widgetstack.setCurrentIndex(index)
         tab = self.widgetstack.widget(index)
         tab.enter()
-        self.title_label.setText(f'<b>{tab.name}</b>')
+        self.title_label.setText(f'<b>{tab.title}</b>')
 
 
 class TabButton(QPushButton):
@@ -155,7 +174,7 @@ class TabButton(QPushButton):
         MAIN_WIDGET.select_tab(self.index)
 
 
-
+########################################################################
 # I probably won't use this code in this form, but it might be helpful
 # somehow ...
 class MainWindowUI(QWidget):
@@ -490,18 +509,22 @@ class MainWindowUI(QWidget):
 
 
 if __name__ == "__main__":
-    from ui.ui_extra import StackPage
-    class Page2(StackPage):
-        name = "Another module"
+    from ui.ui_base import StackPage, APP
 
     MAIN_WIDGET = MainWindow()
+    builtins.MAIN_WIDGET = MAIN_WIDGET
     MAIN_WIDGET.add_tab(StackPage())
-    MAIN_WIDGET.add_tab(Page2())
+#    from importlib import import_module
+#    import_module("ui.module_attendance").init()
+    import ui.modules
+
     MAIN_WIDGET.add_stretch()
 # A bodge to get the tab title set initially ...
-    MAIN_WIDGET.widgetstack.setCurrentIndex(1)
+#    MAIN_WIDGET.widgetstack.setCurrentIndex(1)
     MAIN_WIDGET.select_tab(0)
     MAIN_WIDGET.year_term.setText("2022.1")
-
-    if SHOW_CONFIRM("Shall I do this?"):
-        run(MAIN_WIDGET)
+    geometry = APP.primaryScreen().availableGeometry()
+    MAIN_WIDGET.resize(int(geometry.width() * 0.7), int(geometry.height() * 0.7))
+    run(MAIN_WIDGET)
+#    if SHOW_CONFIRM("Shall I do this?"):
+#        run(MAIN_WIDGET)

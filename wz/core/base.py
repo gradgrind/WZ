@@ -1,7 +1,7 @@
 """
 core/base.py
 
-Last updated:  2021-12-04
+Last updated:  2021-12-19
 
 Basic configuration and structural stuff.
 
@@ -52,26 +52,28 @@ if __name__ == "__main__":
 
 ### +++++
 
-# builtins.NONE = ''
-
-
 class Bug(Exception):
     pass
-
-
 builtins.Bug = Bug
+
+class DataError(Exception):
+    pass
 
 from minion2 import Minion
 
 _Minion = Minion()
 builtins.MINION = _Minion.parse_file
 
-
-class DataError(Exception):
-    pass
-
-
 ### -----
+
+def report(mtype, text):
+    """The default reporting function prints to stdout.
+    It can be overridden later.
+    """
+    print("%s: %s" % (mtype, text), flush=True)
+
+builtins.REPORT = report
+
 
 # TODO: configuration/settings file?
 # posix: os.path.expanduser('~/.config/WZ')
@@ -114,16 +116,6 @@ class start:
         <path> is a '/'-separated path relative to this folder.
         """
         return os.path.join(cls.__DATA, "RESOURCES", *path.split("/"))
-
-
-def report(mtype, text):
-    """The default reporting function prints to stdout.
-    It can be overridden later.
-    """
-    print("%s: %s" % (mtype, text), flush=True)
-
-
-builtins.REPORT = report
 
 
 class Dates:
@@ -245,7 +237,7 @@ class Dates:
         text = header + text
         if save:
             if not fpath:
-                fpath = DATAPATH(CONFIG["CALENDAR_FILE"])
+                fpath = DATAPATH("CONFIG/Calendar")
             os.makedirs(os.path.dirname(fpath), exist_ok=True)
             with open(fpath, "w", encoding="utf-8") as fh:
                 fh.write(text)
@@ -354,11 +346,6 @@ def archive_testdata():
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    print("§§§", os.name)
-    print("§§§", sys.platform)
-    import platform
-
-    print("§§§", platform.system())
 
 # TODO: use TESTDATA?
     #    start.setup(os.path.join(basedir, 'TESTDATA'))

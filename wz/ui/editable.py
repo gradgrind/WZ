@@ -3,7 +3,7 @@
 """
 ui/editable.py
 
-Last updated:  2021-12-02
+Last updated:  2021-12-21
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -336,7 +336,7 @@ class EdiTableWidget(QTableWidget):
 
     def undoredo_extension(self, undo, chtype, change):
         """Allows external undo/redo operations to be handled.
-        OVERRIDE to use
+        OVERRIDE to use.
         """
         return False
 
@@ -522,7 +522,7 @@ class EdiTableWidget(QTableWidget):
         self.setContextMenuPolicy(Qt.ActionsContextMenu)
 
         self.set_change_report()
-        #        self.cellChanged.connect(self.cell_changed)
+        self.cellChanged.connect(self.cell_changed)
         self.cellClicked.connect(self.cell_clicked)
         #        self.cellActivated.connect(self.newline_press)
 #        self.cellDoubleClicked.connect(self.newline_press)
@@ -635,6 +635,13 @@ class EdiTableWidget(QTableWidget):
             top += 1
             rows.append(rowdata)
         return rows
+
+    def cell_changed(self, r, c):
+        """Handle cell-value changed. The arguments are row and column.
+        OVERRIDE to use.
+        """
+        pass
+        #print("§§§", r, c, repr(self.get_text(r, c)))
 
     def read_all(self):
         """Read all the table data.
@@ -789,10 +796,10 @@ class EdiTableWidget(QTableWidget):
         # See 'activate-on-singleclick' below.
         print("ACTIVATED:", row, col)
 
-    def newline_press(self, row, col):
-        if self.get_selection()[0] == 1:
-            # if self.get_selection()[0] <= 1:
-            self.activated(row, col)
+#    def newline_press(self, row, col):
+#        if self.get_selection()[0] == 1:
+#            # if self.get_selection()[0] <= 1:
+#            self.activated(row, col)
 
     @staticmethod
     def _get_point(event):

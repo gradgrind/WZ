@@ -1,6 +1,6 @@
 #+++ __TITLE__   : Ferien und andere Jahresdaten
 #+++ __MINION__  : 2.0
-#+++ __MODIFIED__: 2021-12-25
+#+++ __MODIFIED__: 2021-11-14
 #+++###########################################################
 #+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
 #+++# wird beim Speichern (in WZ) automatisch aktualisiert.
@@ -12,9 +12,8 @@
 #!!! Folgende Angaben müssen vorhanden und gültig sein !!!#
 
 # Schuljahr (das Jahr, in dem das Schuljahresende fällt):
-# SCHOOLYEAR: 2016
+SCHOOLYEAR: 2016
 ~SCHOOLYEAR_PRINT: "2015 – 2016" # für Ausgabefelder
-YEAR_BEGIN: 2015-08-01
 
 # Erster Schultag:
 FIRST_DAY: 2015-09-03

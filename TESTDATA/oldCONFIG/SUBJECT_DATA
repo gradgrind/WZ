@@ -1,0 +1,32 @@
+#+++ __TITLE__   : Felder der Schülertabellen (eine Tabelle pro Klasse)
+#+++ __MINION__  :  2.0
+#+++ __MODIFIED__: 2021-11-14
+#--------------------------------------------------------------
+
+INFO_FIELDS: [
+    {NAME: SCHOOLYEAR   DISPLAY_NAME: Schuljahr     REQUIRED: true}
+    {NAME: CLASS        DISPLAY_NAME: Klasse        REQUIRED: true}
+    {NAME: NAME         DISPLAY_NAME: Name}
+    {NAME: GROUPS       DISPLAY_NAME: Gruppen}
+    {NAME: CLASSROOMS   DISPLAY_NAME: Klassenräume}
+]
+
+TABLE_FIELDS: [
+    {NAME: SID          DISPLAY_NAME: Fach-Kürzel   REQUIRED: true}
+    {NAME: SNAME        DISPLAY_NAME: Fach          REQUIRED: true}
+    {NAME: TIDS         DISPLAY_NAME: Lehrer-Kürzel} # darf mehrere sein, durch Leerzeichen getrennt
+    {NAME: GROUP        DISPLAY_NAME: Gruppe}
+    {NAME: LENGTHS      DISPLAY_NAME: Längen}
+    {NAME: BLOCK        DISPLAY_NAME: Epoche}
+    {NAME: ROOMS        DISPLAY_NAME: Räume}
+    {NAME: TAG          DISPLAY_NAME: Kennung}
+    {NAME: COMPOSITE    DISPLAY_NAME: Sammelfach} # darf mehrere sein, durch Leerzeichen getrennt
+    {NAME: SGROUP       DISPLAY_NAME: Fachgruppe}
+]
+
+### Fachnamen
+NAMES: [
+    {NAME: SID          DISPLAY_NAME: Kürzel        REQUIRED: true}
+    {NAME: NAME         DISPLAY_NAME: Name          REQUIRED: true}
+    {NAME: FLAGS        DISPLAY_NAME: Merkmale}
+]

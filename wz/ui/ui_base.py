@@ -2,7 +2,7 @@
 """
 ui/ui_extra.py
 
-Last updated:  2021-11-30
+Last updated:  2021-12-10
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -106,6 +106,7 @@ class StackPage(QWidget):
     """
 
     name = "StackPage"
+    title = "Page Title"
 
     def enter(self):
         """Called when a tab page is activated (selected) and when there

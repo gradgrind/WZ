@@ -1,0 +1,113 @@
+#Fachliste
+#__MODIFIED__:       2021-12-25
+
+# „normale“ Fächer
+Awt:    Arbeit-Wirtschaft-Technik
+Bv:     Berufsvorbereitung
+Bio:    Biologie
+Bb:     Buchbinden
+Bh:     Bildhauen
+Ch:     Chemie
+Chp:    Chemiepraktikum
+Chor:   Chor
+Cmp:    Computerkunde
+De:     Deutsch
+DeGt:   Deutsch-Goethe
+Emb:    Embryologie
+En:     Englisch
+Eu:     Eurythmie
+Fl:     Flöten
+Fr:     Französisch
+Gb:     Gartenbau
+Ghw:    Gartenbau/Handarbeit/Werken
+Geo:    Geographie
+Ges:    Geschichte
+Ha:     Handarbeit
+Hw:     Hauswirtschaft
+Hwk:    Hauswirtschaft/Kochen
+Ku:     Kunst
+Kbe:    Kunstbetrachtung
+Kge:    Kunstgeschichte
+Ktr:    Kupfertreiben
+KtrMz:  Kupfertreiben/Malen-Zeichnen
+Lk:     Lebenskunde
+Mal:    Malen
+Mz:     Malen/Zeichnen
+Ma:     Mathematik
+Mk:     Medienkunde
+Mu:     Musik
+Nrp:    Neurophysiologie
+Orc:    Orchester
+OrCh:   Orchester/Chor
+Ocw:    Orchester/Chor/Werkstatt
+Orf:    Orchester/Flöten
+Ors:    Orchester/Streicherstunde
+Pd:     Pädagogik
+Ph:     Physik
+Pls:    Plastizieren
+Rel:    Religion
+Rle:    "Evangelische Religion"
+Snd:    Schneidern
+Snt:    Schnitzen
+Sgpf:   Säuglingspflege
+Soz:    Sozialkunde
+Spt:    Spielturnen
+Sp:     Sport
+Sth:    Steinhauen
+Str:    Streicherstunde
+Txg:    "Textiles Gestalten"
+Tln:    Tischlern
+TlSt:   Tischlern/Steinhauen
+Th:     Theater
+Tz:     "Technisches Zeichnen"
+Web:    Weben
+Wrk:    Werken
+Ws:     Werkstatt
+Zn:     Zeichnen
+
+# Praktika
+pBt:    Betriebspraktikum
+pF:     Forstpraktikum
+pK:     Küchenpraktikum
+pLw:    Landwirtschaftspraktikum
+pSz:    Sozialpraktikum
+pVm:    Vermessungspraktikum
+
+# Besonderes
+Hu:     Hauptunterricht
+Kl:     Klassenlehrer
+Kp:     Künstlerisch-Praktisches
+Ueb:    Übstunde
+Uem:    Übstunde/Malen
+Uo:     Übstunde/Orchester
+UeSt:   Übstunde/Streicherstunde
+Fdu:    Förderunterricht
+Ja:     Jahresarbeit
+ZwE:    Zweitepoche
+HwkSnd: Hauswirtschaft/Kochen/Schneidern
+Bet:    Betreuerstunde
+$Ku:    Kunst   # nur Notenzeugnisse („Sammelfach“)
+ChpVb:  Chemiepraktikum-Vorbereitung
+KoRa:   Koordinationsrat
+
+# Abitur
+De.e:   Deutsch*eA
+En.e:   Englisch*eA
+Ges.e:  Geschichte*eA
+Ma.e:   Mathematik*eA
+Bio.e:  Biologie*eA
+Ma.eg:  Mathematik*eA+gA
+
+De.g:   Deutsch*gA
+En.g:   Englisch*gA
+Ges.g:  Geschichte*gA
+Ma.g:   Mathematik*gA
+
+De.m:   Deutsch*mdl
+En.m:   Englisch*mdl
+Fr.m:   Französisch*mdl
+Bio.m:  Biologie*mdl
+
+Mu.n:   Musik*HjN
+Ku.n:   Kunst*HjN
+Sp.n:   Sport*HjN

@@ -1,6 +1,6 @@
 #+++ __TITLE__   : Felder der Schülertabellen (eine Tabelle pro Klasse)
 #+++ __MINION__  :  2.0
-#+++ __MODIFIED__: 2021-12-23
+#+++ __MODIFIED__: 2021-11-14
 #--------------------------------------------------------------
 
 INFO_FIELDS: [
@@ -11,7 +11,7 @@ INFO_FIELDS: [
 TABLE_FIELDS: [
 #    {NAME: CLASS        DISPLAY_NAME: Klasse        REQUIRED: true}
     {NAME: PID          DISPLAY_NAME: ID            REQUIRED: true}
-#    {NAME: PSORT        DISPLAY_NAME: Sortiername}
+    {NAME: PSORT        DISPLAY_NAME: Sortiername}
     {NAME: FIRSTNAME    DISPLAY_NAME: Rufname       REQUIRED: true}
     {NAME: LASTNAME     DISPLAY_NAME: Name          REQUIRED: true}
     {NAME: GROUPS       DISPLAY_NAME: Gruppen}

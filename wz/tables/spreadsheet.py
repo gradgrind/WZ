@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-11-18
+Last updated:  2021-12-23
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -44,7 +44,8 @@ _INVALID_FILE = "Ungültige oder fehlerhafte Datei"
 _NO_TYPE_EXTENSION = "Dateityp-Erweiterung fehlt: {fname}"
 _DUPLICATE_COLUMN_NAME = "Spaltenname doppelt vorhanden: {name}"
 _ESSENTIAL_FIELD_MISSING = "Feld (Spalte) '{field}' fehlt in der Tabelle"
-_ESSENTIAL_FIELD_EMPTY = "Feld (Spalte) '{field}' darf nicht leer sein"
+_ESSENTIAL_FIELD_EMPTY = "Feld (Spalte) '{field}' darf nicht leer sein," \
+        " Zeile:\n  {row}"
 _ESSENTIAL_INFO_MISSING = "Info-Feld '{field}' fehlt in der Tabelle"
 _ESSENTIAL_INFO_EMPTY = "Info-Feld '{field}' darf nicht leer sein"
 _INFO_IN_BODY = "Info-Zeilen müssen vor der Kopfzeile stehen"
@@ -497,7 +498,8 @@ def filter_DataTable(data, fields, extend=True, notranslate=False):
         for k, t, needed in newcols:
             val = row.get(t)
             if needed and not val:
-                raise TableError(_ESSENTIAL_FIELD_EMPTY.format(field=t))
+                raise TableError(_ESSENTIAL_FIELD_EMPTY.format(field=t,
+                        row=repr(row)))
             rowmap[k] = val or ""
     return {
         "__INFO__": newinfo,

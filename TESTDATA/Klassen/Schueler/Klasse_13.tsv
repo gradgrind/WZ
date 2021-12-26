@@ -1,0 +1,12 @@
+	Schülerliste										
+											
++++	SCHOOLYEAR	2016									
++++	CLASS	13									
++++	__MODIFIED__	2021-12-26									
+											
+PID	FIRSTNAME	LASTNAME	GROUPS	FIRSTNAMES	DOB_D	POB	SEX	HOME	ENTRY_D	EXIT_D	QUALI_D
+200301	Stefan	Böllermann		Stefan	1997-04-07	Hannover	m	Hannover	2003-08-01		2014-09-11
+200302	Lucie	Lieblich		Lucie Marie	1997-01-16	Gehrden	w	Hannover	2003-08-01		2014-09-11
+200305	Martin	Musterschüler		Martin	1996-11-05	Rothenburg ob der Tauber	m	Hannover	2003-08-01		2014-09-11
+200854	Lara	Riemann		Lara	1997-03-18	Stuttgart	w	Hannover	2008-12-11		2014-09-11
+200307	Olivia	van der Veldt		Olivia Persephone	1996-08-27	Hannover	w	Hannover	2003-08-01		2014-09-11

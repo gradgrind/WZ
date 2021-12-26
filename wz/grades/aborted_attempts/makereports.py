@@ -4,7 +4,7 @@
 """
 grades/makereports.py
 
-Last updated:  2021-01-05
+Last updated:  2021-04-29
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -38,7 +38,7 @@ Copyright 2021 Michael Towers
 #       Sozialpraktikum:        3 Wochen
 #TODO: Maybe component courses (& eurythmy?) merely as "teilgenommen"?
 
-_REPORT_TYPE_FIELD = '*ZA'
+_REPORT_TYPE_FIELD = '+ZA'
 
 import sys, os
 if __name__ == '__main__':
@@ -60,14 +60,14 @@ _BAD_REPORT_TYPE = "Ungültiger Zeugnistyp: '{rtype}'"
 
 
 from core.base import Dates
-from core.pupils import Pupils
-from local.base_config import year_path, class_year, \
-        print_schoolyear, LINEBREAK
+from core.pupils import PUPILS, sortkey
+from local.base_config import year_path, class_year, print_schoolyear
 from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
-        GradeConfigError, NO_SUBJECT
+        GradeConfigError, NO_SUBJECT, GradeBase
+from local.abitur_config import AbiCalc
 from local.grade_template import info_extend
 from template_engine.template_sub import Template, TemplateError
-from grades.gradetable import GradeTable, Grades, GradeTableError
+from grades.gradetable import GradeTable, GradeTableError
 
 
 class GradeReports:
@@ -75,25 +75,28 @@ class GradeReports:
     The group must be a valid grade-report group (which can be a class
     name or a class name with a group tag, e.g. '12.G') – the valid
     groups are specified (possibly dependant on the term) in the
-    'grade_config' module.
+    'GRADE_TERMS' configuration file.
     The grade information is extracted from the database for the given
     school-year and "term".
     """
-    def __init__(self, schoolyear, group, term):
-        self.grade_table = GradeTable(schoolyear, group, term)
+    def __init__(self, schoolyear, group, term, tag):
+        self.grade_table = GradeTable(schoolyear, group, term, tag)
         self.gmap0 = {  ## data shared by all pupils in the group
             'GROUP': group,
             'TERM': term,
-            'CYEAR': class_year(group),
-            'issue_d': self.grade_table.issue_d,  # for file-names
-            'ISSUE_D': Dates.print_date(self.grade_table.issue_d,
-                    trap = False),
-            'GRADES_D': Dates.print_date(self.grade_table.grades_d,
-                    trap = False),
-            'SCHOOL': SCHOOL_DATA.SCHOOL_NAME,
-            'SCHOOLBIG': SCHOOL_DATA.SCHOOL_NAME.upper(),
-            'schoolyear': schoolyear,
-            'SCHOOLYEAR': print_schoolyear(schoolyear)
+#            'CYEAR': class_year(group),
+#            'issue_d': self.grade_table.issue_d,  # for file-names
+#            'ISSUE_D': Dates.print_date(self.grade_table.issue_d,
+#                    trap = False),
+            'ISSUE_D': self.grade_table.issue_d,
+            'GRADES_D': self.grade_table.grades_d,
+#            'GRADES_D': Dates.print_date(self.grade_table.grades_d,
+#                    trap = False),
+            'SCHOOL': SCHOOL_DATA['SCHOOL_NAME'],
+#            'SCHOOLBIG': SCHOOL_DATA['SCHOOL_NAME'].upper(),
+#            'schoolyear': schoolyear,
+#            'SCHOOLYEAR': print_schoolyear(schoolyear)
+            'SCHOOLYEAR': schoolyear
         }
 #
     def makeReports(self, pids = None):
@@ -106,13 +109,20 @@ class GradeReports:
         """
         greport_type = {}
         no_report_type = []
+        if self.grade_table.term == 'Abitur':
+            self.abicalc = {}
+#TODO: Could the Abi calculations be instigated by the template configuration?
+
         for pid, grades in self.grade_table.items():
             # <forGroupTerm> accepts only valid grade-groups.
             # Check pupil filter, <pids>:
             if pids and (pid not in pids):
                 continue
-            if self.grade_table.term == 'A':
-                rtype = grades.abicalc.calculate()['REPORT_TYPE']
+            if self.grade_table.term == 'Abitur':
+                _ac = AbiCalc(self.grade_table, pid)
+                _acc = _ac.calculate()
+                self.abicalc[pid] = (_ac, _acc)
+                rtype = _acc['REPORT_TYPE']
                 if not rtype:
                     REPORT("ERROR", _NOT_COMPLETE.format(
                             pupil = self.grade_table.name[pid]))
@@ -143,6 +153,7 @@ class GradeReports:
                         grades.report_name(
                                 group = self.grade_table.group,
                                 term = self.grade_table.term,
+                                subselect = self.grade_table.subselect,
                                 rtype = rtype
                         ),
                         year_path(self.grade_table.schoolyear,
@@ -159,7 +170,7 @@ class GradeReports:
         Return a tuple: (template object, list of slot-mappings).
         """
         ### Pupil data
-        pupils = Pupils(self.grade_table.schoolyear)
+        pupils = PUPILS(self.grade_table.schoolyear)
         # The individual pupil data can be fetched using pupils[pid].
         # Fetching the whole class may not be good enough, as it is vaguely
         # possible that a pupil has changed class.
@@ -167,7 +178,8 @@ class GradeReports:
         # and <self.sid2subject_data>.
         ### Grade report template
         try:
-            template_tag = Grades.report_template(self.grade_table.group, rtype)
+            template_tag = GradeBase.report_template(
+                    self.grade_table.group, rtype)
         except GradeConfigError:
             REPORT('ERROR', _BAD_REPORT_TYPE.format(rtype = rtype))
             return None
@@ -176,35 +188,33 @@ class GradeReports:
         gmaplist = []
         for pid in pid_list:
             gmap = self.gmap0.copy()
-            # Get pupil data
+            # Add pupil data
             pdata = pupils[pid]
-# could just do gmap[k] = pdata[k] or '' and later substitute all dates?
-            for k in pdata.keys():
-                v = pdata[k]
-                if v:
-                    if k.endswith('_D'):
-                        v = Dates.print_date(v)
-                else:
-                    v = ''
-                gmap[k] = v
+            gmap.update(pdata)
+            # Alphabetical name-tag
+            gmap['PSORT'] = sortkey(pdata)
+
             grades = self.grade_table[pid]
             # Grade parameters
             gmap['STREAM'] = grades.stream
             gmap['SekII'] = grades.sekII
-            comment = grades.pop('*B', '')
-            if comment:
-                comment = comment.replace(LINEBREAK, '\n')
-            gmap['COMMENT'] = comment
+#            comment = grades.pop('+B', '')
+#            if comment:
+#                comment = comment.replace(LINEBREAK, '\n')
+#            gmap['COMMENT'] = comment
 
             ## Process the grades themselves ...
-            if self.grade_table.term == 'A':
-                showgrades = {k: UNGRADED if v == NO_GRADE else v
-                        for k, v in grades.abicalc.tags.items()}
-                gmap.update(showgrades)
-                gmap.update(grades.abicalc.calculate())
+            if self.grade_table.term == 'Abitur':
+                _ac, _acc = self.abicalc[pid]
+#                showgrades = {k: UNGRADED if v == NO_GRADE else v
+#                        for k, v in _ac.tags.items()}
+#                gmap.update(showgrades)
+                gmap.update(_ac.tags)
+                gmap.update(_acc)
             else:
                 # Sort into grade groups
-                grade_map = self.sort_grade_keys(pdata.name(), grades, gTemplate)
+                grade_map = self.sort_grade_keys(pupils.name(pdata),
+                        grades, gTemplate)
                 gmap.update(grade_map)
                 gmap['REPORT_TYPE'] = rtype
 
@@ -214,6 +224,10 @@ class GradeReports:
 
         return (gTemplate, gmaplist)
 #
+
+#TODO: Could this be instigated / driven by the template configuration?
+# E.g. Field type GRADE_GROUP + G looks for the next subject/grade in
+# group G? If the subjects need to be searched, perhaps a cache could help?
     def sort_grade_keys(self, name, grades, template):
         """Allocate the subjects and grades to the appropriate slots in the
         template.
@@ -221,14 +235,15 @@ class GradeReports:
         <grades> is the <Grades> instance,
         <template> is a <Template> (or subclass) instance.
         """
-        _grp2indexes = group_grades(template.all_keys())
+        _keys = template.all_keys()
+        _grp2indexes = group_grades(_keys)
         for rg in grades.group_info(self.grade_table.group, 'Nullgruppen'):
             _grp2indexes[rg] = None
         sbj_grades = _grp2indexes[None] # "direct" grade slots
         gmap = {}   # for the result
         for sid, grade in grades.items():
             # Get the print representation of the grade
-            if sid[0] == '*':
+            if sid[0] == '+':
                 gmap[sid] = grade
                 continue
             g = grades.print_grade(grade)
@@ -332,8 +347,8 @@ if __name__ == '__main__':
     _year = '2016'
 
     # Build reports for a group
-#    greports = GradeReports(_year, '13', 'A')
-#    greports = GradeReports(_year, '11.G', '2')
-    greports = GradeReports(_year, '13', '1')
+#    greports = GradeReports(_year, '13', 'Abitur', None)
+    greports = GradeReports(_year, '11.G', '2._Halbjahr', None)
+#    greports = GradeReports(_year, '13', '1._Halbjahr', None)
     for f in greports.makeReports():
         print("\n$$$: %s\n" % f)

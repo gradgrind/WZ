@@ -1,12 +1,12 @@
 #+++ __TITLE__   : Allgemeine Konfiguration
 #+++ __MINION__  : 2.0
-#+++ __MODIFIED__: 2021-12-26
+#+++ __MODIFIED__: 2021-11-14
 #+++###########################################################
 #+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
 #+++# wird beim Speichern (in WZ) automatisch aktualisiert.
 #--------------------------------------------------------------
 
-SCHOOL_NAME: "Freie Michaelschule"
+SCHOOL_NAME: "Freie Waldorfschule Hannover-Bothfeld"
 FONT: "Droid Sans"
 
 ###########################################################
@@ -15,9 +15,6 @@ DECIMAL_SEP: ,
 
 # Erster Monat des Schuljahres (Jan. -> 1, Dez. -> 12):
 SCHOOLYEAR_MONTH_1: 8
-
-# Format for "school year":
-PRINT_SCHOOLYEAR: "{year1} – {year2}"
 
 # Wie ein gedrucktes Datum formatiert werden soll.
 # Hier wird es für <datetime.datetime.strftime> in Python angegeben:
@@ -50,20 +47,9 @@ T_GROUPS:       Gruppen
 SCHOOL_DATA: Schuldaten/Schule
 TEACHER_DATA: Schuldaten/Lehrer
 SUBJECT_DATA: Schuldaten/Fachliste
+CALENDAR_FILE: Schuldaten/Kalender
 CLASS_TABLE: Klassen/Schueler
-COURSE_TABLE: Klassen/Kursdaten
+SUBJECT_TABLE: Klassen/Kursdaten
 CLASS_TIMES: Klassen/Zeiten
-ATTENDANCE: "Klassen/Anwesenheit/Anwesenheit_{klass}.json"
 
-# "Resources"
-CLASS_ATTENDANCE_TEMPLATE: templates/Vorlage_Klassenbuch.xlsx
-
-PUPIL_TABLE: "Klassen/Schueler/Klasse_{klass}.tsv"
-SUBJECT_TABLE: "Klassen/Kursdaten/Fachliste-{klass}"
-
-LEAVING_GROUPS: {
-# Gruppen, die am Ende des Schuljahres die Schule verlassen
-    13: *
-    12K: *
-    12G: [R]
-}
+PUPIL_TABLE: "Klasse_{klass}"

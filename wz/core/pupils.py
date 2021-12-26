@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2021-11-27
+core/pupils.py - last updated 2021-12-23
 
 Manage pupil data.
 
@@ -33,87 +33,89 @@ The info keys are, at present:
     __MODIFIED__: <date-time> (not used in code)
 """
 
+_TITLE = "Schülerdaten"
+
 ### Messages
 _SCHOOLYEAR_MISMATCH_DB = "Schüler-Datenbank-Fehler: falsches Jahr in\n{path}"
 _CLASS_MISMATCH_DB = "Schüler-Datenbank-Fehler: falsche Klasse in\n{path}"
-_DOUBLE_PID_DB = "Schüler-Datenbank-Fehler: Schüler-ID {pid} doppelt" \
-        " vorhanden, in Klassen {k1} und {k2}"
+_DOUBLE_PID_DB = (
+    "Schüler-Datenbank-Fehler: Schüler-ID {pid} doppelt"
+    " vorhanden, in Klassen {k1} und {k2}"
+)
 _CLASS_MISSING = "In importierten Daten: Klasse fehlt für {name}"
-_FILTER_ERROR = "Schülerdaten-Fehler: {mesg}"
+_FILTER_ERROR = "Schülerdaten-Fehler: {msg}"
 _PID_INVALID = "Ungültige Schülerkennung für {name}: '{pid}'"
 _MISSING_FIELDS = "Diese Felder dürfen nicht leer sein:\n  {fields}"
-
-
-#???
-_SCHOOLYEAR_MISMATCH = "Schülerdaten: falsches Jahr in:\n  {filename}"
-_NO_SCHOOLYEAR = "Kein '{year}' angegeben in Schülertabelle:\n  {filename}"
-_NO_SCHOOLYEAR_DB = "Schüler-Datenbank-Fehler: kein 'SCHOOLYEAR'"
-_PID_DUPLICATE = "Schülerkennung {pid} mehrfach vorhanden:\n" \
-        "  Klasse {c1} – {p1}\n  Klasse {c2} – {p2}"
-_BACKUP_FILE = "Schülerdaten für Klasse {klass} gespeichert als:\n  {path}"
-_FULL_BACKUP_FILE = "Alle Schülerdaten gespeichert als:\n  {path}"
-
-_TITLE = 'Schülerdaten'
+_INVALID_CLASS = (
+    "Importierte Schülerdaten: Ungültige Klasse ({klass}),"
+    " Zeile\n  {row}\n ... in\n {path}"
+)
 
 ###############################################################
 
 import sys, os
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Enable package import if running as module
     this = sys.path[0]
     appdir = os.path.dirname(this)
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
-#    start.setup(os.path.join(basedir, 'TESTDATA'))
-    start.setup(os.path.join(basedir, 'DATA'))
+
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    start.setup(os.path.join(basedir, "DATA"))
 
 ### +++++
 
-#import io
 import re
 import tarfile
 from glob import glob
 
-#from local.base_config import PupilError, PupilsBase, sortkey
 from core.base import Dates
-from tables.spreadsheet import read_DataTable, filter_DataTable, \
-        make_DataTable, make_DataTable_filetypes, TableError
+from local.local_pupils import asciify, check_pid_valid, next_class
+from tables.spreadsheet import (
+    read_DataTable,
+    filter_DataTable,
+    make_DataTable,
+    make_DataTable_filetypes,
+    TableError,
+)
 
 class PupilError(Exception):
     pass
 
+
 ### -----
 
-#TODO: I suppose the program should start with the stored data? If there is
+# TODO: I suppose the program should start with the stored data? If there is
 # none (or if it is dodgy) there can be a question dialog to load from
 # file.
 # What about updating from file, with update selections?
 
 ### **************************************************************** ###
 
+
 class PupilData(dict):
     def __init__(self, fromdict, klass=None):
         super().__init__()
         self.update(fromdict)
         if klass:
-            self['CLASS'] = klass
+            self["CLASS"] = klass
 
     def __str__(self):
-        """A visual representation of a pupil-data mapping.
-        """
-        items = ['{k}={v}'.format(k = f, v = v) for f, v in self.items()]
-        return 'Pupil Data: <%s>' % '; '.join(items)
+        """A visual representation of a pupil-data mapping."""
+        items = ["{k}={v}".format(k=f, v=v) for f, v in self.items()]
+        return "Pupil Data: <%s>" % "; ".join(items)
 
     def lastname(self):
         """A '|' may be present to separate a prefix ("tussenvoegsel")
         from the main name (see method <sorting_name> below).
         """
-        return self['LASTNAME'].replace('|', '')
+        return self["LASTNAME"].replace("|", "")
 
     def name(self):
-        """Return the short-name of the pupil.
-        """
+        """Return the short-name of the pupil."""
         return f"{self['FIRSTNAME']} {self.lastname()}"
 
     def sorting_name(self):
@@ -131,19 +133,24 @@ class PupilData(dict):
         component is actually present.
         In addition, non-ASCII characters are substituted.
         """
-        _lastname = self['LASTNAME']
+        _lastname = self["LASTNAME"]
         try:
-            tv, _lastname = _lastname.split('|', 1)
+            tv, _lastname = _lastname.split("|", 1)
             tv, _lastname = tv.rstrip(), _lastname.lstrip()
         except ValueError:
             return asciify(f"{_lastname}_{self['FIRSTNAME']}")
         return asciify(f"{_lastname}_{tv}_{self['FIRSTNAME']}")
 
 
-#TODO: Need a similar reader for importing pupil data. Maybe just a
-# dict: pid -> PupilData (including CLASS field)
+def Pupils():
+    return __Pupils._get()
 
-class Pupils(dict):
+
+def clear_cache():
+    __Pupils._clear_cache()
+
+
+class __Pupils(dict):
     """Handler for pupil data.
     The internal pupil data should be read and written only through this
     interface.
@@ -155,6 +162,19 @@ class Pupils(dict):
     The list of pupil-ids for a class is available via the method
     <class_pupils> (alphabetically ordered).
     """
+
+    __pupils = None  # cache
+
+    @classmethod
+    def _get(cls):
+        if not cls.__pupils:
+            cls.__pupils = cls()
+        return cls.__pupils
+
+    @classmethod
+    def _clear_cache(cls):
+        cls.__pupils = None
+
     def __init__(self):
         self.__classes = {}
         super().__init__()
@@ -167,26 +187,26 @@ class Pupils(dict):
             if k == "CLASS":
                 self.all_fields["CLASS"] = (
                     f.get("DISPLAY_NAME") or k,
-                    bool(f.get("REQUIRED"))
+                    bool(f.get("REQUIRED")),
                 )
         for f in config["TABLE_FIELDS"]:
             k = f["NAME"]
             self.fields[k] = (
                 f.get("DISPLAY_NAME") or k,
-                bool(f.get("REQUIRED"))
+                bool(f.get("REQUIRED")),
             )
         self.all_fields.update(self.fields)
         # Each class has a table-file (substitute {klass}):
         self.class_path = DATAPATH(CONFIG["PUPIL_TABLE"])
         for fpath in glob(self.class_path.format(klass="*")):
-            #print("READING", fpath)
+            # print("READING", fpath)
             class_table = read_DataTable(fpath)
             try:
-                class_table = filter_DataTable(class_table, config,
-                        notranslate=True)
+                class_table = filter_DataTable(
+                    class_table, config, notranslate=True
+                )
             except TableError as e:
-                raise PupilError(_FILTER_ERROR.format(
-                        msg = f"{e} in\n {fpath}"))
+                raise PupilError(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
 
             # The data should already be alphabetically ordered here.
             info = class_table["__INFO__"]
@@ -200,18 +220,20 @@ class Pupils(dict):
             for row in class_table["__ROWS__"]:
                 pid = row["PID"]
                 if pid in self:
-                    raise PupilError(_DOUBLE_PID_DB.format(pid=pid,
-                            k1=self[pid]["CLASS"], k2=klass))
+                    raise PupilError(
+                        _DOUBLE_PID_DB.format(
+                            pid=pid, k1=self[pid]["CLASS"], k2=klass
+                        )
+                    )
                 pdata = PupilData(row, klass)
                 self[pid] = pdata
                 pdata_list.append(pdata)
 
     def classes(self):
-        """Return a sorted list of class names.
-        """
+        """Return a sorted list of class names."""
         return sorted(self.__classes)
 
-    def class_pupils(self, klass, groups = None, date = None):
+    def class_pupils(self, klass, groups=None, date=None):
         """Read the pupil data for the given school-class (possibly with
         group filter).
         Return a list of mappings {field -> value} (the table rows), the
@@ -242,15 +264,15 @@ class Pupils(dict):
 
     def final_year_pupils(self):
         """Return lists of pupils in their final year:
-            {class: [(pid, name), ... ], ...}
+        {class: [(pid, name), ... ], ...}
         """
-        collect =  {}
+        collect = {}
         for k, l in CONFIG["LEAVING_GROUPS"].items():
-            if l == '*':
+            if l == "*":
                 plist = self.class_pupils(k)
             else:
-                plist = self.class_pupils(k, groups = l)
-            collect[k] = [(pdata['PID'], pdata.name()) for pdata in plist]
+                plist = self.class_pupils(k, groups=l)
+            collect[k] = [(pdata["PID"], pdata.name()) for pdata in plist]
         return collect
 
     def sort_class(self, klass, nosave=False):
@@ -262,14 +284,14 @@ class Pupils(dict):
             return sorted(self.__classes[klass], key=PupilData.sorting_name)
         self.__classes[klass].sort(key=PupilData.sorting_name)
 
-    def save(self, klass):
+    def save(self, klass=None):
         """Save the data for the pupils in the given class to the
-        pupil-database.
+        pupil-database. If no class is supplied, save all classes.
         The first save of a day causes the current data (all classes) to
         be backed up.
         """
         timestamp = Dates.timestamp()
-        today = timestamp.split('_', 1)[0]
+        today = timestamp.split("_", 1)[0]
         folder = os.path.dirname(self.class_path)
         buname = os.path.basename(folder)
         bufolder = os.path.join(folder, "backup")
@@ -281,18 +303,24 @@ class Pupils(dict):
             for fpath in glob(self.class_path.format(klass="*")):
                 tar.add(fpath, f"{buname}/{os.path.basename(fpath)}")
             tar.close()
-#TODO: Remove older backups?
+            # TODO: Remove older backups?
             print(f"BACKED UP @ {bufile}")
-        self.save_data(
-            klass,
-            self.__classes[klass],
-            self.class_path.format(klass=klass),
-            SCHOOLYEAR,
-            timestamp
-        )
+        if klass:
+            classes = [klass]
+        else:
+            classes = self.classes()
+        for k in classes:
+            self.save_data(
+                k,
+                self.__classes[k],
+                self.class_path.format(klass=k),
+                SCHOOLYEAR,
+                timestamp,
+            )
 
-    def save_data(self, klass, pupil_list, filepath, schoolyear,
-            timestamp=None):
+    def save_data(
+        self, klass, pupil_list, filepath, schoolyear, timestamp=None
+    ):
         if not timestamp:
             timestamp = Dates.timestamp()
         data = {
@@ -301,17 +329,13 @@ class Pupils(dict):
                 "__TITLE__": _TITLE,
                 "SCHOOLYEAR": schoolyear,
                 "CLASS": klass,
-                "__MODIFIED__": timestamp
+                "__MODIFIED__": timestamp,
             },
-            "__ROWS__": pupil_list
+            "__ROWS__": pupil_list,
         }
         tsvbytes = make_DataTable(data, "tsv")
         with open(filepath, "wb") as fh:
             fh.write(tsvbytes)
-
-
-
-
 
     def compare_update(self, newdata):
         """Compare the new data with the existing data and compile a list
@@ -328,32 +352,32 @@ class Pupils(dict):
             try:
                 klass = pdata["CLASS"]
             except KeyError:
-                raise PupilError(_CLASS_MISSING.format(name = pdata.name()))
+                raise PupilError(_CLASS_MISSING.format(name=pdata.name()))
             try:
                 odata = rest_pids.pop(pid)
             except KeyError:
                 # New pupil
                 try:
-                    class_delta[klass].append(('NEW', pdata))
+                    class_delta[klass].append(("NEW", pdata))
                 except KeyError:
-                    class_delta[klass] = [('NEW', pdata)]
+                    class_delta[klass] = [("NEW", pdata)]
                 continue
             # Compare data
             delta = self.compare(odata, pdata)
             if delta:
                 # CLASS changes are registered in the new class.
-#TODO: Should they also be registered in the old class?
+                # TODO: Should they also be registered in the old class?
                 try:
-                    class_delta[klass].append(('DELTA', odata, delta))
+                    class_delta[klass].append(("DELTA", odata, delta))
                 except KeyError:
-                    class_delta[klass] = [('DELTA', odata, delta)]
+                    class_delta[klass] = [("DELTA", odata, delta)]
         # Add removed pupils to list
         for pid, pdata in rest_pids.items():
             klass = pdata["CLASS"]
             try:
-                class_delta[klass].append(('REMOVE', pdata))
+                class_delta[klass].append(("REMOVE", pdata))
             except KeyError:
-                class_delta[klass] = [('REMOVE', pdata)]
+                class_delta[klass] = [("REMOVE", pdata)]
         return class_delta
 
     @staticmethod
@@ -385,15 +409,15 @@ class Pupils(dict):
             count += len(change_list)
             for d in change_list:
                 pdata = d[1]
-                if d[0] == 'NEW':
+                if d[0] == "NEW":
                     # Add to pupils
-                    self[pdata['PID']] = pdata
-                elif d[0] == 'REMOVE':
+                    self[pdata["PID"]] = pdata
+                elif d[0] == "REMOVE":
                     # Remove from pupils
-                    del(self[pdata['PID']])
-                elif d[0] == 'DELTA':
+                    del self[pdata["PID"]]
+                elif d[0] == "DELTA":
                     # changes field values
-                    self[pdata['PID']].update(d[2])
+                    self[pdata["PID"]].update(d[2])
                 else:
                     raise Bug("Bad delta key: %s" % d[0])
         if count > 0:
@@ -403,8 +427,7 @@ class Pupils(dict):
             self.save()
 
     def fill_classes(self):
-        """The pupils are allocated to classes and sorted within these.
-        """
+        """The pupils are allocated to classes and sorted within these."""
         self.__classes = {}
         for pid, pdata in self.items():
             klass = pdata["CLASS"]
@@ -421,8 +444,8 @@ class Pupils(dict):
         i = 0
         for pd in self.__classes[klass]:
             if pd["PID"] == pid:
-                del(self.__classes[klass][i])
-#TODO: if class now empty, remove it?
+                del self.__classes[klass][i]
+                # TODO: if class now empty, remove it?
                 break
             i += 1
         # Make changes persistent
@@ -445,30 +468,33 @@ class Pupils(dict):
                 if pid not in self:
                     # A new pupil ... check PID validity
                     if not check_pid_valid(pid):
-                        REPORT("ERROR", _PID_INVALID.format(
-                            name=pdata.name(), pid=pid))
+                        REPORT(
+                            "ERROR",
+                            _PID_INVALID.format(name=pdata.name(), pid=pid),
+                        )
                         return False
             else:
                 pid = new_pid(self)
             # Check that essential fields are present
             missing = []
             for f, fdata in self.all_fields.items():
-                if fdata[1]:    # an essential field
+                if fdata[1]:  # an essential field
                     if not pdata.get(f):
                         missing.append(fdata[0])
             if missing:
-                REPORT("ERROR", _MISSING_FIELDS.format(
-                        fields = "\n  ".join(missing)))
+                REPORT(
+                    "ERROR", _MISSING_FIELDS.format(fields="\n  ".join(missing))
+                )
                 return False
             # Rebuild pupil entry
-            self[pid] = {f: pupil_data.get(f) or "" for f in self.all_fields}
+            self[pid] = {f: pdata.get(f) or "" for f in self.all_fields}
         # Regenerate class lists
         self.fill_classes()
         # Make changes persistent
         self.save()
         return True
 
-    def migrate(self, repeat_pids = [], save_in = None):
+    def migrate(self, repeat_pids=[], save_in=None):
         """Create a pupil-data structure for the following year.
         If <save_in> is provided, it should be a folder-path: the new
         pupil data will be saved here (as DataTables) instead of in the
@@ -481,14 +507,14 @@ class Pupils(dict):
         """
         stay_pids = set(repeat_pids)
         nextyear = str(int(SCHOOLYEAR) + 1)
-        day1 = Dates.day1(nextyear) # for filtering out pupils who have left
+        day1 = Dates.day1(nextyear)  # for filtering out pupils who have left
         newpupils = {}
         _class_path = DATAPATH(CONFIG["PUPIL_TABLE"], base="NEXT")
         # Filter out pupils from final classes, tweak pupil data
         for klass in self.classes():
-            for _pdata in self.class_pupils(klass, date = day1):
+            for _pdata in self.class_pupils(klass, date=day1):
                 pdata = _pdata.copy()
-                pid = pdata['PID']
+                pid = pdata["PID"]
                 if pid in stay_pids:
                     new_klass = klass
                 else:
@@ -510,169 +536,65 @@ class Pupils(dict):
                 pdlist,
                 _class_path.format(klass=klass),
                 nextyear,
-                timestamp
+                timestamp,
             )
 
 
-#TODO: Custom functions ... where to put these?
-def next_class(pdata):
-    """Adjust the pupil data to the next class.
-    Note that this is an "in-place" operation, so if the original data
-    should remain unchanged, pass in a copy.
-    """
-    klass = pdata['CLASS']
-    leaving_groups = CONFIG["LEAVING_GROUPS"].get(klass)
-    if leaving_groups:
-        if leaving_groups == "*":
-            return "X"
-        for g in pdata['GROUPS'].split():
-            if g in leaving_groups:
-                return "X"
-    # Progress to next class ...
-    k_year = class_year(klass)
-    k_new = int(k_year) + 1
-    k_suffix = klass[2:]
-    klass = f"{k_new:02}{k_suffix}"
-    # Handle entry into "Qualifikationsphase"
-    if k_new == 12 and 'G' in pdata['GROUPS'].split():
-        try:
-            pdata['QUALI_D'] = CALENDAR['~NEXT_FIRST_DAY']
-        except KeyError:
-            pass
-    return klass
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
+if __name__ == "__main__":
+    from local.local_pupils import new_pid, read_pupils_source
+#TODO: switch to test data ...
+    y2, pmap = read_pupils_source(
+        DATAPATH("Schülerdaten2022_2021-12-21.xlsx"),
+        PupilData)
+    if y2 != SCHOOLYEAR:
+        print("School year mismatch:", y2)
+        quit(1)
+    # print(y2, pmap)
+    # quit(0)
 
-def class_year(klass):
-    """Get just the year part of a class name, as <str>, padded to
-    2 digits.
-    """
-    try:
-        k = int(klass[:2])
-    except:
-        k = int(klass[0])
-    return f'{k:02}'
+    # ************** Start new year from raw data **************#
+    # TODO
+    #    init(os.path.join(os.path.dirname(os.path.dirname(this)), 'DATA'))
+    ##   year = '2021'
+    #    pupils = PUPILS()
 
+    # TODO: year_path ?
+    #    _ptables = Pupils_File(_year, filepath = year_path(_year,
+    #            'Quelldaten/PUPILS_2021.tsv'), norm_fields = False)
+    #    _delta = pupils.compare_update(_ptables)
+    #    for k, dlist in _delta.items():
+    #        print("\n --- KLASSE:", k)
+    #        for d in dlist:
+    #            print("  ", d)
+    #    pupils.update_classes(_delta)
+    #    quit(0)
+    # ----------------------------------------------------------#
 
-def new_pid(pupils):
-    """Generate a new pid conforming to the requirements of
-    function <check_pid_valid>.
-    """
-    # Base the new pid on today's date, adding a number to the end.
-    today = Dates.today().replace("-", "")  # it must be an integer
-    collect = []
-    for pid in pupils:
-        if pid.startswith(today):
-            try:
-                i = int(pid[8:])
-            except ValueError:
-                continue
-            collect.append(i)
-    if collect:
-        collect.sort()
-        i = str(collect[-1] + 1)
-    else:
-        i = "1"
-    return today + i
-
-
-def check_pid_valid(pid):
-    """Check that the pid is of the correct form.
-    """
-    # Accept any integer.
-    try:
-        int(pid)
-        return True
-    except:
-        return False
-
-
-def asciify(string, invalid_re = None):
-    """This converts a utf-8 string to ASCII, e.g. to ensure portable
-    filenames are used when creating files.
-    Also spaces are replaced by underlines.
-    Of course that means that the result might look quite different from
-    the input string!
-    A few explicit character conversions are given in the mapping
-    <ASCII_SUB>.
-    By supplying <invalid_re>, an alternative set of exclusion characters
-    can be used.
-    """
-    # regex for characters which should be substituted:
-    if not invalid_re:
-        invalid_re = r'[^A-Za-z0-9_.~-]'
-    def rsub (m):
-        c = m.group (0)
-        if c == ' ':
-            return '_'
-        try:
-            return lookup[c]
-        except:
-            return '^'
-
-    lookup = ASCII_SUB
-    return re.sub(invalid_re, rsub, string)
-
-
-# Substitute characters used to convert utf-8 strings to ASCII, e.g. for
-# portable filenames. Non-ASCII characters which don't have
-# entries here will be substituted by '^':
-ASCII_SUB = {
-    'ä': 'ae',
-    'ö': 'oe',
-    'ü': 'ue',
-    'ß': 'ss',
-    'Ä': 'AE',
-    'Ö': 'OE',
-    'Ü': 'UE',
-    'ø': 'oe',
-    'ô': 'o',
-    'ó': 'o',
-    'é': 'e',
-    'è': 'e',
-    # Latin:
-    'ë': 'e',
-    # Cyrillic (looks like the previous character, but is actually different).
-    'ё': 'e',
-    'ñ': 'n'
-}
-
-#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
-
-if __name__ == '__main__':
-
-#************** Start new year from raw data **************#
-#TODO
-#    init(os.path.join(os.path.dirname(os.path.dirname(this)), 'DATA'))
-##   year = '2021'
-#    pupils = PUPILS()
-
-#TODO: year_path ?
-#    _ptables = Pupils_File(_year, filepath = year_path(_year,
-#            'Quelldaten/PUPILS_2021.tsv'), norm_fields = False)
-#    _delta = pupils.compare_update(_ptables)
-#    for k, dlist in _delta.items():
-#        print("\n --- KLASSE:", k)
-#        for d in dlist:
-#            print("  ", d)
-#    pupils.update_classes(_delta)
-#    quit(0)
-#----------------------------------------------------------#
-
-# Overwrite the current database.
-#    _ptables = Pupil_File(DATAPATH('testing/PUPILS_2016.tsv')) # original table
-#    _ptables.save()
+    # Overwrite the current database.
+    #    _ptables = Pupil_File(DATAPATH('testing/PUPILS_2016.tsv')) # original table
+    #    _ptables.save()
 
     pupils = Pupils()
     print("\nCLASSES (db):", pupils.classes())
     for k, l in pupils.final_year_pupils().items():
         print(f"\nLEAVING in {k}: {repr(l)}")
 
-#    for klass in pupils.classes():
-#        print(f"\nSORT {klass}:")
-#        for pdata in pupils.sort_class(klass, nosave=True):
-#            print(f"  {pdata.sorting_name()}")
+    #    for klass in pupils.classes():
+    #        print(f"\nSORT {klass}:")
+    #        for pdata in pupils.sort_class(klass, nosave=True):
+    #            print(f"  {pdata.sorting_name()}")
 
-#    pupils.save("12G")
+    #    pupils.save("12G")
+
+    _delta = pupils.compare_update(pmap)
+    for k, dlist in _delta.items():
+        print("\n --- KLASSE:", k)
+        for d in dlist:
+            print("  ", d)
+
+    #    pupils.update_classes(_delta)
 
     pupils.migrate()
 
@@ -681,11 +603,14 @@ if __name__ == '__main__':
     quit(0)
     ### Make a trial migration to next school-year.
     ### This also makes a back-up of the current pupil data.
-    pupils.migrate(repeat_pids = ('200888', '200301'),
-            save_as = DATAPATH(f'testing/tmp/PUPILS_NEXT_{SCHOOLYEAR}'))
+    pupils.migrate(
+        repeat_pids=("200888", "200301"),
+        save_as=DATAPATH(f"testing/tmp/PUPILS_NEXT_{SCHOOLYEAR}"),
+    )
 
-    _ptables = Pupil_File(DATAPATH('testing/delta_test_pupils_2016.ods'),
-            extend = False)
+    _ptables = Pupil_File(
+        DATAPATH("testing/delta_test_pupils_2016.ods"), extend=False
+    )
 
     _delta = pupils.compare_update(_ptables)
     for k, dlist in _delta.items():
@@ -695,22 +620,23 @@ if __name__ == '__main__':
     pupils.update_classes(_delta)
 
     ### Show the information for all pupils in a class
-    _klass = '12'
+    _klass = "12"
     print("\n $$$", _klass)
     plist = pupils.class_pupils(_klass)
     for pdata in plist:
         print("\n :::", pdata)
 
     ### Show the information for a single pupil, keyed by pid
-    _pid = '200502'
+    _pid = "200502"
     _pdata = pupils[_pid]
-    print("\n PUPIL %s (class %s)" % (_pdata['PID'], _pdata['CLASS']))
+    print("\n PUPIL %s (class %s)" % (_pdata["PID"], _pdata["CLASS"]))
     print("  ", _pdata)
 
     ### Update the pupil data with some changes from a new "master" table
     print("\n§§§ CHECK PUPILS UPDATE §§§")
-    _ptables = Pupil_File(DATAPATH('testing/delta_test_pupils_2016.ods'),
-            extend = False)
+    _ptables = Pupil_File(
+        DATAPATH("testing/delta_test_pupils_2016.ods"), extend=False
+    )
     _delta = pupils.compare_update(_ptables)
     for klass, changes in _delta.items():
         print("CLASS %s:" % klass)
@@ -719,7 +645,7 @@ if __name__ == '__main__':
     pupils.update_classes(_delta)
 
     ### Revert the changes by "updating" from a saved table
-    _ptables = Pupil_File(DATAPATH('testing/PUPILS_2016.tsv'))
+    _ptables = Pupil_File(DATAPATH("testing/PUPILS_2016.tsv"))
     _delta = pupils.compare_update(_ptables)
     for k, dlist in _delta.items():
         print("\n --- KLASSE:", k)
