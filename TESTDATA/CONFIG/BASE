@@ -1,6 +1,6 @@
 #+++ __TITLE__   : Allgemeine Konfiguration
 #+++ __MINION__  : 2.0
-#+++ __MODIFIED__: 2021-12-26
+#+++ __MODIFIED__: 2021-12-28
 #+++###########################################################
 #+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
 #+++# wird beim Speichern (in WZ) automatisch aktualisiert.
@@ -50,16 +50,15 @@ T_GROUPS:       Gruppen
 SCHOOL_DATA: Schuldaten/Schule
 TEACHER_DATA: Schuldaten/Lehrer
 SUBJECT_DATA: Schuldaten/Fachliste
-CLASS_TABLE: Klassen/Schueler
-COURSE_TABLE: Klassen/Kursdaten
 CLASS_TIMES: Klassen/Zeiten
 ATTENDANCE: "Klassen/Anwesenheit/Anwesenheit_{klass}.json"
 
-# "Resources"
-CLASS_ATTENDANCE_TEMPLATE: templates/Vorlage_Klassenbuch.xlsx
-
 PUPIL_TABLE: "Klassen/Schueler/Klasse_{klass}.tsv"
 SUBJECT_TABLE: "Klassen/Kursdaten/Fachliste-{klass}"
+CHOICE_TABLE: "Klassen/Kurswahl/Wahl-{klass}"
+
+# "Resources"
+CLASS_ATTENDANCE_TEMPLATE: templates/Vorlage_Klassenbuch.xlsx
 
 LEAVING_GROUPS: {
 # Gruppen, die am Ende des Schuljahres die Schule verlassen

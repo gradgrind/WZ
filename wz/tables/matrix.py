@@ -1,7 +1,7 @@
 ### python >= 3.7
 # -*- coding: utf-8 -*-
 """
-tables/matrix.py - last updated 2021-05-03
+tables/matrix.py - last updated 2021-12-29
 
 Edit a table template (xlsx).
 
@@ -26,184 +26,194 @@ Copyright 2021 Michael Towers
 """
 
 # Messages
-_TOO_MANY_INFOLINES = "Zu viele Infozeilen ('#, ...'), {n} erforderlich, in:\n  {path}"
-_TOO_FEW_INFOLINES = "Zu wenige Infozeilen ('#, ...'), {n} erforderlich, in:\n  {path}"
+_INFO_EXCESS_ITEMS = (
+    "Für Vorlage {path} unerwartete Info-Einträge:\n" "  {items}"
+)
+_INFO_ITEM_MISSING = "In Vorlage {path} unerwartete Info-Zeile: {key}"
 _TOO_FEW_COLUMNS = "Noteneingabe-Vorlage hat zu wenige Spalten:\n  {path}"
 _TOO_FEW_ROWS = "Noteneingabe-Vorlage hat zu wenige Zeilen:\n  {path}"
+_WARN_HIDE_NOT_WORKING = (
+    "Das Verbergen von Spalten ist aufgrund eines"
+    " Programm-Mangels (noch) nicht möglich"
+)
 
+from typing import Dict, List
 
 import datetime
 from io import BytesIO
 
 from openpyxl import load_workbook
-from openpyxl.utils import get_column_letter#, column_index_from_string
-from openpyxl.styles import Protection
+from openpyxl.utils import get_column_letter  # , column_index_from_string
+
+# from openpyxl.styles import Protection
 
 ### +++++
 
+
+class MatrixError(Exception):
+    pass
+
+
+### -----
+
+
 class Table:
-    """openpyxl based spreadsheet handler ('.xlsx'-files).
-    """
+    """openpyxl based spreadsheet handler ('.xlsx'-files)."""
+
     @staticmethod
-    def columnLetter(i):
-        """Return the column letter(s) for the given (0-based) index.
-        """
-        return get_column_letter(i+1)
-#
-    def __init__(self, filepath):
-        self.template = filepath + '.xlsx'
+    def columnLetter(i: int) -> str:
+        """Return the column letter(s) for the given (0-based) index."""
+        return get_column_letter(i + 1)
+
+    def __init__(self, filepath: str) -> None:
+        self.template: str = filepath
         self._wb = load_workbook(self.template)
-        self.rows = []
+        self.rows: List = [List[str]]
         for row in self._wb.active.iter_rows():
-            values = []
+            values: List[str] = []
             for cell in row:
                 v = cell.value
                 if isinstance(v, datetime.datetime):
                     v = v.strftime("%Y-%m-%d")
                 elif isinstance(v, str):
                     v = v.strip()
-                    if v == '':
-                         v = None
-                elif v != None:
+                elif v == None:
+                    v = ""
+                else:
                     v = str(v)
                 values.append(v)
             self.rows.append(values)
-        self.protected = Protection(locked = True)
-        self.unprotected = Protection(locked = False)
-#
-    def getCell(self, celltag):
-        return self._wb.active[celltag].value
-#
-    def read(self, row, col):
-        """Read the cell at the given position (0-based indexes).
-        """
-        coltag = self.columnLetter(col)
-        return self.getCell(coltag + str(row+1))
-#
-    def setCell(self, celltag, value=None, style=None):
+        # self.protected = Protection(locked=True)
+        # self.unprotected = Protection(locked=False)
+
+    #    def getCell(self, celltag: str) -> Any:
+    #        return self._wb.active[celltag].value
+
+    #    def read(self, row: int, col: int) -> Any:
+    #        """Read the cell at the given position (0-based indexes).
+    #        """
+    #        return self.getCell(f"{self.columnLetter(col)}{row+1}")
+
+    def setCell(self, celltag: str, value: str) -> None:
         cell = self._wb.active[celltag]
         cell.value = value
-        if style:
-            cell.style = style
-#
-    def write(self, row, col, val, protect = None):
-        """Write to the cell at the given position (0-based indexes).
-        """
-        coltag = self.columnLetter(col)
-        cell = self._wb.active[coltag + str(row+1)]
+        # To set some "style" (see openpyxl docs):
+        # cell.style = style
+
+    def write(self, row: int, col: int, val: str) -> None:
+        """Write to the cell at the given position (0-based indexes)."""
+        cell = self._wb.active[f"{self.columnLetter(col)}{row+1}"]
         cell.value = val
-#TODO: test!!!
-        if protect != None:
-            cell.protection = self.protected if protect else self.unprotected
-#
-    def delEndCols(self, col0):
-        """Delete last columns, starting at index <col0> (0-based).
-        """
-        ndel = len(self.rows[0]) - col0
+        # To set/clear cell protection
+        # cell.protection = self.protected if protect else self.unprotected
+
+    def delEndCols(self, col0: int) -> None:
+        """Delete last columns, starting at index <col0> (0-based)."""
+        ndel: int = len(self.rows[0]) - col0
         if ndel > 0:
-            self._wb.active.delete_cols(col0+1, ndel)
-#
-    def delEndRows(self, row0):
-        """Delete last rows, starting at index <row0> (0-based).
-        """
+            self._wb.active.delete_cols(col0 + 1, ndel)
+
+    def delEndRows(self, row0: int) -> None:
+        """Delete last rows, starting at index <row0> (0-based)."""
         ndel = len(self.rows) - row0
         if ndel > 0:
-            self._wb.active.delete_rows(row0+1, ndel)
-#
-    def protectSheet (self, pw=None):
+            self._wb.active.delete_rows(row0 + 1, ndel)
+
+    def protectSheet(self, pw: str = None) -> None:
         if pw:
             self._wb.active.protection.set_password(pw)
         else:
             self._wb.active.protection.enable()
-#
-    def save (self, filepath=None):
-        if filepath:
-            self._wb.save(filepath + '.xlsx')
-            return None
-        else:
-            virtual_workbook = BytesIO()
-            self._wb.save(virtual_workbook)
-            return virtual_workbook.getvalue()
 
-###
+    def save(self, filepath: str) -> str:
+        if not filepath.endswith(".xlsx"):
+            filepath += ".xlsx"
+        self._wb.save(filepath)
+        return filepath
+
+    def save_bytes(self) -> bytes:
+        virtual_workbook = BytesIO()
+        self._wb.save(virtual_workbook)
+        return virtual_workbook.getvalue()
+
 
 class KlassMatrix(Table):
-    """An extension of the <Table> class to deal with pupil-subject tables.
-    """
-    def setTitle(self, title):
-        """The title cell is at a fixed position, "B1". "A1" contains "#".
-        """
-        self.setCell('B1', title)
-#
-    def setTitle2(self, title2):
-        """The subtitle cell is at a fixed position, "F1".
-        """
-        self.setCell('F1', title2)
-#
-    def setInfo(self, info):
-        i, x = 0, 0
+    """An extension of the <Table> class to deal with pupil-subject tables."""
+
+    def setTitle(self, title: str) -> None:
+        """The title cell is at a fixed position, "B1". "A1" is empty."""
+        self.setCell("B1", title)
+
+    def setInfo(self, info: Dict[str, str]) -> None:
+        i: int = 0
         for row in self.rows:
             i += 1
-            c0 = row[0]
-            if c0 == '+++':
+            c0: str = row[0]
+            if c0 == "+++":
+                k: str = row[1]
                 try:
-                    k, v = info[x]
-                except IndexError:
-                    REPORT.Fail(_TOO_MANY_INFOLINES, n = len(info),
-                            path = self.template)
-                x += 1
-                self.setCell('B%d' % i, k)
-                self.setCell('C%d' % i, v)
-            elif c0 and c0 != '#':
+                    v: str = info.pop(k)
+                except KeyError:
+                    REPORT(
+                        "ERROR",
+                        _INFO_ITEM_MISSING.format(key=k, path=self.template),
+                    )
+                    v = "?"
+                self.setCell(f"C{i}", v)
+            elif c0:
                 # The subject key line
                 break
-        if x < len(info):
-            REPORT.Fail(_TOO_FEW_INFOLINES, n = len(info),
-                    path = self.template)
+        if info:
+            REPORT(
+                "ERROR",
+                _INFO_EXCESS_ITEMS.format(
+                    items=", ".join(info), path=self.template
+                ),
+            )
         # <row> is the header row
-        self.headers = row
+        self.headers: List[str] = row
         # <i> is the row index of the next row (0-based),
         # initially immediately after the headers
-        self._header_rowindex = i - 1
-        self.rowindex = i
+        self.header_rowindex: List[int] = [i - 1]
+        while True:
+            c0 = row[0]
+            if c0:
+                if c0 == "$":
+                    self.header_rowindex.append(i)
+                else:
+                    break
+            i += 1
+        self.rowindex: int = i
         # column index for header column iteration
-        self.hcol = 0
-#
-    def row0(self):
-        """Return the index (0-based) of the header row – the first row
-        with a non-empty, non-'#' first cell.
-        """
-        return self._header_rowindex
-#
-    def hideCol(self, index, clearheader=False):
-        """Hide the given column (0-indexed). Optionally clear the subject.
-        """
-        letter = self.columnLetter(index)
-#TODO: disabled pending hidden column fix ...
-#        self._wb.active.column_dimensions[letter].hidden = True
+        self.hcol: int = 0
+
+    def hideCol(self, index: int, clearheader: bool = False) -> None:
+        """Hide the given column (0-indexed). Optionally clear the subject."""
+        REPORT("WARNING", _WARN_HIDE_NOT_WORKING)
+        # TODO: disabled pending hidden column fix in openpyxl ...
+        #        letter: str = self.columnLetter(index)
+        #        self._wb.active.column_dimensions[letter].hidden = True
         if clearheader:
             # Clear any existing "subject"
-            self.write(self.rowindex-1, index, None)
-            self.write(self.rowindex, index, None)
-#
-    def nextcol(self):
-        """Iterate over header columns with 'X' in template.
-        """
+            for i in self.header_rowindex:
+                self.write(1, index, "")
+
+    def nextcol(self) -> int:
+        """Iterate over header columns with 'X' in template."""
         while True:
             self.hcol += 1
             try:
-                if self.headers[self.hcol] == 'X':
+                if self.headers[self.hcol] == "X":
                     return self.hcol
             except:
-                REPORT.Fail(_TOO_FEW_COLUMNS, path=self.template)
-#
-    def nextrow(self):
-        """Iterate over pupil rows ('X' in first column).
-        """
+                raise MatrixError(_TOO_FEW_COLUMNS.format(path=self.template))
+
+    def nextrow(self) -> int:
+        """Iterate over pupil rows ('X' in first column)."""
         while True:
             self.rowindex += 1
             try:
-                if self.rows[self.rowindex][0] == 'X':
+                if self.rows[self.rowindex][0] == "X":
                     return self.rowindex
             except:
-                REPORT.Fail(_TOO_FEW_ROWS, path=self.template)
+                raise MatrixError(_TOO_FEW_ROWS.format(path=self.template))

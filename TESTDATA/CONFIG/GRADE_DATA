@@ -1,0 +1,36 @@
+#+++ __TITLE__   : Felder der Notentabellen, weitere Konfiguration der Notenzeugnisse
+#+++ __MINION__  :  2.0
+#+++ __MODIFIED__: 2021-12-30
+#--------------------------------------------------------------
+
+INFO_FIELDS: [
+    {NAME: SCHOOLYEAR   DISPLAY_NAME: Schuljahr      REQUIRED: true}
+    {NAME: GROUP        DISPLAY_NAME: Klasse/Gruppe  REQUIRED: true}
+    {NAME: TERM         DISPLAY_NAME: Anlass         REQUIRED: true}
+    {NAME: ISSUE_D      DISPLAY_NAME: Notendatum}
+    {NAME: GRADES_D     DISPLAY_NAME: Ausgabedatum}
+]
+
+TABLE_FIELDS: [
+    {NAME: PID          DISPLAY_NAME: id   REQUIRED: true}
+    {NAME: PNAME        DISPLAY_NAME: Schüler(in)}
+    {NAME: GROUPS       DISPLAY_NAME: Gruppen}
+]
+
+UNCHOSEN:   /  # abgewähltes Fach
+NO_GRADE:   *  # keine Note wird in dem Fach erteilt
+NO_SUBJECT: ––––––––––  # Eintrag im Zeugnis: unbenutztes Fach-/NotenFeld
+
+PRINT_GRADE: [
+    [1 "sehr gut"]
+    [2 "gut"]
+    [3 "befriedigend"]
+    [4 "ausreichend"]
+    [5 "mangelhaft"]
+    [6 "ungenügend"]
+    [* "––––––"]
+    [nt "nicht teilgenommen"]
+    [t "teilgenommen"]
+#    [ne "nicht erteilt"]
+    [nb "kann nicht beurteilt werden"]
+]

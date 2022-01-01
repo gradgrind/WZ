@@ -2,7 +2,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2021-12-23
+Last updated:  2022-01-01
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -15,7 +15,7 @@ For writing, only simple unformatted xlsx files and tsv files
 Dates are read and written as strings in the format 'yyyy-mm-dd'.
 
 =+LICENCE=============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -44,8 +44,9 @@ _INVALID_FILE = "Ungültige oder fehlerhafte Datei"
 _NO_TYPE_EXTENSION = "Dateityp-Erweiterung fehlt: {fname}"
 _DUPLICATE_COLUMN_NAME = "Spaltenname doppelt vorhanden: {name}"
 _ESSENTIAL_FIELD_MISSING = "Feld (Spalte) '{field}' fehlt in der Tabelle"
-_ESSENTIAL_FIELD_EMPTY = "Feld (Spalte) '{field}' darf nicht leer sein," \
-        " Zeile:\n  {row}"
+_ESSENTIAL_FIELD_EMPTY = (
+    "Feld (Spalte) '{field}' darf nicht leer sein," " Zeile:\n  {row}"
+)
 _ESSENTIAL_INFO_MISSING = "Info-Feld '{field}' fehlt in der Tabelle"
 _ESSENTIAL_INFO_EMPTY = "Info-Feld '{field}' darf nicht leer sein"
 _INFO_IN_BODY = "Info-Zeilen müssen vor der Kopfzeile stehen"
@@ -171,7 +172,7 @@ def spreadsheet_file_complete(filepath):
         fp = f"{filepath}.{x}"
         if os.path.isfile(fp):
             if found:
-                raise TableError(_MULTIPLEMATCHINGFILES.format(path=fpbase))
+                raise TableError(_MULTIPLEMATCHINGFILES.format(path=filepath))
             found = fp
     if found:
         return found
@@ -415,12 +416,18 @@ def read_DataTable(filepath_or_stream):
     return {"__INFO__": info, "__FIELDS__": fields, "__ROWS__": rows}
 
 
-def filter_DataTable(data, fields, extend=True, notranslate=False):
+def filter_DataTable(
+    data, fields, matrix=False, extend=True, notranslate=False
+):
     """Process the table data into mappings based on the entries in the
     mapping <fields>. This has (at least) the two entries
     'INFO_FIELDS' and 'TABLE_FIELDS'. These allow translation of the
-    field/key names to internal versions. Only those fields which are
-    in these lists will be retained.
+    field/key names to internal versions.
+    <matrix>: Normally only those fields which are in the TABLE_FIELDS
+    list will be included in the data in __ROWS__. However, if <matrix>
+    is true, all the fields in the input file will be included, but the
+    field names will not be in __FIELDS__ and __FIELD_NAMES__. Instead
+    they are listed in __XFIELDS__.
     Empty fields are guaranteed to contain ''.
     If <extend> is true, fields which are in the lists but not in
     the table will be added (though empty).
@@ -490,6 +497,12 @@ def filter_DataTable(data, fields, extend=True, notranslate=False):
         newcols.append((k, t2, r))
         fmap[k] = t
         _fields.append(k)
+    _xfields = []
+    if matrix:
+        # Add any fields from the input data which are not in TABLE_FIELDS
+        for f in tfields:
+            newcols.append((f, f, False))
+            _xfields.append(f)
     # Add the data rows
     rowmaps = []
     for row in data["__ROWS__"]:
@@ -498,12 +511,14 @@ def filter_DataTable(data, fields, extend=True, notranslate=False):
         for k, t, needed in newcols:
             val = row.get(t)
             if needed and not val:
-                raise TableError(_ESSENTIAL_FIELD_EMPTY.format(field=t,
-                        row=repr(row)))
+                raise TableError(
+                    _ESSENTIAL_FIELD_EMPTY.format(field=t, row=repr(row))
+                )
             rowmap[k] = val or ""
     return {
         "__INFO__": newinfo,
         "__FIELDS__": _fields,
+        "__XFIELDS__": _xfields,
         "__ROWS__": rowmaps,
         "__FIELD_NAMES__": fmap,
         "__INFO_NAMES__": imap,
@@ -552,10 +567,7 @@ def make_DataTable(data, filetype, fields=None, **xinfo):
             except KeyError:
                 if item.get("REQUIRED"):
                     raise TableError(_ESSENTIAL_INFO_MISSING.format(field=t))
-                if extend:
-                    v = ""
-                else:
-                    continue
+                v = ""
             else:
                 if (not v) and item.get("REQUIRED"):
                     raise TableError(_ESSENTIAL_INFO_EMPTY.format(field=t))
@@ -627,7 +639,9 @@ class NewTable:
         all be read as strings.
         """
         if items:
-            self._rowlist.append("\t".join([self._filter(item) for item in items]))
+            self._rowlist.append(
+                "\t".join([self._filter(item) for item in items])
+            )
         else:
             self._rowlist.append("")
 

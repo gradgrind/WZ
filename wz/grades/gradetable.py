@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """
-grades/gradetable.py - last updated 2021-12-25
+grades/gradetable.py - last updated 2022-01-01
 
 Access grade data, read and build grade tables.
 
 ==============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -28,6 +27,9 @@ _ISSUE_D = 'Ausgabedatum'      # or 'Ausstellungsdatum'?
 _GRADES_D = 'Notendatum'
 
 ### Messages
+_NO_INFO_FOR_GROUP = "Klasse/Gruppe {group}: Notenzeugnisse sind nicht" \
+        " vorgesehen"
+
 _TABLE_CLASS_MISMATCH = "Falsche Klasse/Gruppe in Notentabelle:\n  {filepath}"
 _TABLE_TERM_MISMATCH = "Falscher \"Anlass\" in Notentabelle:\n  {filepath}"
 _TABLE_YEAR_MISMATCH = "Falsches Schuljahr in Notentabelle:\n  {filepath}"
@@ -42,7 +44,7 @@ _BAD_GRADE = "Ungültige Note im Fach {sid}: {g}"
 _NO_DATE = "Kein Ausgabedatum angegeben"
 _DATE_EXISTS = "Ausgabedatum existiert schon"
 
-_TITLE2 = "Tabelle erstellt am {time}"
+_TITLE = "Notentabelle, erstellt {time}"
 
 
 import sys, os
@@ -61,6 +63,8 @@ if __name__ == '__main__':
 ### +++++
 
 
+from typing import Dict, List, Optional
+
 import datetime
 from fractions import Fraction
 from collections import namedtuple
@@ -68,11 +72,12 @@ from collections import namedtuple
 from core.base import Dates
 from core.pupils import Pupils
 from core.courses import Subjects
-from tables.spreadsheet import Spreadsheet, TableError, make_db_table
+from tables.spreadsheet import Spreadsheet, TableError, \
+        read_DataTable, filter_DataTable, make_DataTable
 from tables.matrix import KlassMatrix
-from local.base_config import DECIMAL_SEP, USE_XLSX, year_path
-from local.grade_config import GradeBase, UNCHOSEN, NO_GRADE
-from local.abitur_config import AbiCalc
+#from local.base_config import DECIMAL_SEP, USE_XLSX, year_path
+from local.local_grades import GradeBase, UNCHOSEN, NO_GRADE
+#from local.abitur_config import AbiCalc
 
 class GradeTableError(Exception):
     pass
@@ -82,6 +87,7 @@ class FailedSave(Exception):
 
 ###
 
+# Without base class???
 class Grades(GradeBase):
     """A <Grades> instance manages the set of grades in the database for
     a pupil and "term".
@@ -178,7 +184,7 @@ class _GradeTable(dict):
     It is used rather to specify the "occasion" determining the issue
     of the reports.
     For each possible, valid combination of "term" and group there is
-    a grade table (pupil-subject, with some general information).
+    a grade table (pupil-subject, plus some general information).
     The class instance is a mapping: {pid -> <Grades> instance}. The
     stream is available in the <Grades> instance.
     Additional information is available as attributes:
@@ -333,28 +339,30 @@ class _GradeTable(dict):
             grades[xsid] = gmap.get(xsid) or ''
         return grades
 #
-    def make_grade_table(self):
+    def make_grade_table(self, title: str = None):
         """Build a basic pupil/subject table for grade input.
         The field names will be localized.
         It will contain the existing grades. To get an empty table,
         initialize the <GradeTable> instance using method <new_group_table>.
         """
         ### Get template file
+#        group_info = MINION(DATAPATH("CONFIG/GRADE_GROUPS"))
+
+
         template = GradeBase.group_info(self.group, 'NotentabelleVorlage')
         template_path = os.path.join(RESOURCES, 'templates',
                     *template.split('/'))
         table = KlassMatrix(template_path)
 
         ### Set title line
-#        table.setTitle("???")
         dt = datetime.datetime.now()
-        table.setTitle2(_TITLE2.format(time = dt.isoformat(
+        table.setTitle(_TITLE.format(time=dt.isoformat(
                     sep=' ', timespec='minutes')))
 
         ### Translate and enter general info
         info = (
-            (_SCHOOLYEAR,    str(self.schoolyear)),
-            (_GROUP,         self.group),
+            ("SCHOOLYEAR",   SCHOOLYEAR),
+            (_GROUP,         group),
             (_TERM,          GradeBase.term2text(self.term)),
             (_GRADES_D,      self.grades_d),
             (_ISSUE_D,       self.issue_d)
@@ -373,7 +381,7 @@ class _GradeTable(dict):
         # Enforce minimum number of columns
         while col < 18:
             col = table.nextcol()
-            table.write(rowix, col, None)
+            table.write(rowix, col, "")
         # Delete excess columns
         table.delEndCols(col + 1)
         ### Add pupils
@@ -519,8 +527,147 @@ class _GradeTable(dict):
         else:
             return '–––'
 
-###
 
+def rawGradeTableFile(filepath: str) -> dict:
+        """Read the header info and pupils' grades from the given grade
+        table (file).
+        The "spreadsheet" module is used as backend so .ods, .xlsx and .tsv
+        formats are possible. The filename may be passed without extension –
+        <Spreadsheet> then looks for a file with a suitable extension.
+        Return a "DataTable" structure.
+        """
+        dbt = read_DataTable(filepath)
+        return filter_DataTable(
+            dbt,
+            MINION(DATAPATH("CONFIG/GRADE_DATA")),
+            matrix=True,
+            extend=False
+        )
+
+
+def gradeTable(group: str, preset: Optional[dict] = None) -> dict:
+    """
+    """
+    # Needed?
+    pass
+
+
+def calculateGrades(gradetable: dict) -> None:
+    """Add the calculated fields (subject tag '$...') to the grade data.
+    Initially only the calculation of averages is supported – with
+    various rounding choices.
+    Further calculations may be added as "local" extensions for handling
+    specific subject tags.
+    """
+    #todo
+    pass
+
+
+def getSubjectData(group):
+#TODO: pending changes to courses module
+    subjects = Subjects().class_subjects(group.split('.', 1)[0]
+    for sdata in subjects["__PUPILS__"]:
+        pass
+
+
+# Where to put the file?
+def makeGradeTable(term: str, group: str) -> bytes:
+    """Build a basic pupil/subject table for grade input using a
+    template appropriate for the given group.
+
+#TODO: Also possible to include the existing grades?
+    """
+    ### Get template file
+    group_info = MINION(DATAPATH("CONFIG/GRADE_GROUP_INFO"))
+    try:
+        grade_info = group_info[group]
+    except KeyError:
+        raise GradeTableError(_NO_INFO_FOR_GROUP.format(group=group))
+    template = grade_info["NotentabelleVorlage"]
+    template_path = RESOURCEPATH("templates/{template}.xlsx")
+    table = KlassMatrix(template_path)
+    ### Set title line
+    table.setTitle(_TITLE.format(
+            time=datetime.datetime.now().isoformat(
+                sep=' ', timespec='minutes')
+        )
+    )
+    ### Gather general info
+    info = {
+        "SCHOOLYEAR":  SCHOOLYEAR,
+        "GROUP":       group,
+        "TERM":        term,
+#TODO:
+        "GRADES_D":    "Notendatum",
+        "ISSUE_D":     "Ausgabedatum"
+    }
+    table.setInfo(info)
+#TODO: ...
+
+
+    ### Get class/group info
+    klass: str
+    kgroup: str
+    try:
+        klass, kgroup = group.rsplit(".", 1)
+    except ValueError:
+        klass, kgroup = group, ""
+    pupils = Pupils()
+# Use date (GRADES_D or ISSUE_D?) ?
+    group_pupils = pupils.class_pupils(
+        klass,
+        group=[group] if group else None,
+        date=None
+    )
+
+
+    subjects = Subjects()
+    class_subjects = subjects.class_subjects(klass)
+# For choice table, I would need extra parameter grades=False
+    if kgroup:
+        # Filter subjects for the given group
+        for pdata in group_pupils:
+            pid = pdata["PID"]
+
+
+
+    ### Go through the template columns and check if they are needed:
+    sidcol = []
+    col = 0
+    rowix: List[int] = table.header_rowindex() # indexes of header rows
+
+
+    for sid, sname in self.subjects.items():
+        # Add subject
+        col = table.nextcol()
+        sidcol.append((sid, col))
+        table.write(rowix, col, sid)
+        table.write(rowix + 1, col, sname)
+    # Enforce minimum number of columns
+    while col < 18:
+        col = table.nextcol()
+        table.write(rowix, col, "")
+    # Delete excess columns
+    table.delEndCols(col + 1)
+    ### Add pupils
+    for pid, gmap in self.items():
+        row = table.nextrow()
+        table.write(row, 0, pid)
+        table.write(row, 1, self.name[pid])
+        table.write(row, 2, gmap.stream)
+        for sid, col in sidcol:
+            g = gmap.get(sid)
+            if g:
+                table.write(row, col, g)
+    # Delete excess rows
+    row = table.nextrow()
+    table.delEndRows(row)
+    ### Save file
+    table.protectSheet()
+    return table.save_bytes()
+
+
+#? I alread have gradeTableFile to read a raw table.
 class GradeTableFile(_GradeTable):
     def __init__(self, schoolyear, filepath, full_table = True):
         """Read the header info and pupils' grades from the given table file.
@@ -536,9 +683,17 @@ class GradeTableFile(_GradeTable):
         non-empty cells from the source table will be included.
         """
         super().__init__(schoolyear)
-        ss = Spreadsheet(filepath)
-        self.filepath = ss.filepath
-        dbt = ss.dbTable()
+#        ss = Spreadsheet(filepath)
+#        self.filepath = ss.filepath
+#        dbt = ss.dbTable()
+        dbt = read_DataTable(filepath)
+        dbt = filter_DataTable(dbt, MINION(DATAPATH("CONFIG/GRADE_DATA")),
+            matrix=True, extend=False)
+        #print("????", dbt)
+        return
+
+
+#?
         info = {row[0]: row[1] for row in dbt.info if row[0]}
         self.issue_d = info.get(_ISSUE_D)
         self.grades_d = info.get(_GRADES_D)
@@ -557,8 +712,10 @@ class GradeTableFile(_GradeTable):
                     if f in self.subjects or f in self.extras:
                         sid2col.append((f, col))
                     else:
-                        REPORT('WARN', _WARN_EXTRA_SUBJECT.format(sid = f,
-                                tfile = self.filepath))
+                        REPORT('WARNING', _WARN_EXTRA_SUBJECT.format(
+                            sid = f,
+                            tfile = self.filepath)
+                        )
             col += 1
         if full_table:
             self._readtable(dbt, sid2col)
@@ -575,10 +732,12 @@ class GradeTableFile(_GradeTable):
                     self.name[pid] = row[1]
                     self[pid] = gmap
 
-###
 
 gtable_info = namedtuple('gtable_info', ('schoolyear', 'group', 'term',
         'filepath'))
+
+
+
 
 class NewGradeTable(_GradeTable):
     """An empty grade table.
@@ -657,7 +816,7 @@ class GradeTable(_GradeTable):
                 try:
                     pgrades = self[pid]
                 except KeyError:
-                    REPORT('WARN', _WARN_EXTRA_PUPIL.format(
+                    REPORT('WARNING', _WARN_EXTRA_PUPIL.format(
                             name = gtable.name[pid],
                             tfile = gtable.filepath))
                     continue
@@ -684,15 +843,25 @@ class GradeTable(_GradeTable):
         self.save()
 
 
+
+
+
+
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
+    _GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
+    _filepath = DATAPATH("testing/Noten/NOTEN_A/Noten_13_A")
+    _filepath = DATAPATH("testing/Noten/NOTEN_2/Noten_12.R_2")
+    _gdata = read_DataTable(_filepath)
+    _gdata = filter_DataTable(_gdata, _GRADE_DATA, matrix=True, extend=False)
+    print(_gdata)
+    quit(0)
 
     if True:
 #    if False:
-        _filepath = os.path.join(DATA, 'testing', 'NOTEN', 'NOTEN_A',
-                'Noten_13_A')
-        _gtable = GradeTableFile(_schoolyear, _filepath)
+        _filepath = DATAPATH('testing/Noten/NOTEN_A/Noten_13_A')
+        _gtable = GradeTableFile(SCHOOLYEAR, _filepath)
         print("SUBJECTS:", _gtable.subjects)
         print("GROUP:", _gtable.group)
         print("TERM:", _gtable.term)
