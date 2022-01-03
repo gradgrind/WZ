@@ -22,33 +22,7 @@ Copyright 2022 Michael Towers
    See the License for the specific language governing permissions and
    limitations under the License.
 =-LICENCE========================================
-
-Use "data-tables" to contain the subject data for the classes as a mapping.
-
-CHOICE TABLES?
-
-It comprises two main areas: class-subjects and pupil-choices.
-There is also general information, keyed by '__INFO__':
-    __TITLE__: 'Subject Data' (for example, not used in code)
-    SCHOOLYEAR: '2016' (year in which the end of the school year falls)
-    __MODIFIED__: <date-time> (not used in code)
-
-The class-subjects part has the following structure:
-    __SUBJECTS__: {class: [<sdata>, ...], ... }
-           <sdata> is a mapping, {field: value}
-The pupil-choices part has the following structure:
-    __CHOICES__: {pid: [sid, ... ], ... }
-Only the sids of non-chosen courses are included. Also, only pupils
-who have non-chosen courses are included there.
 """
-# TODO: It would probably be good to have a gui-editor for such files, but
-# the data could be exported as a table (tsv or xlsx).
-# At the moment only the choice tables can be exported (xlsx) for editing.
-# This can be edited with a separate tool and the result read in as an
-# "update".
-# I currently assume that subject input tables will be retained in
-# "source" format (xlsx/ods), so that these files can be edited and
-# reloaded.
 
 ### Messages
 _FILTER_ERROR = "Fachdaten-Fehler: {msg}"
@@ -67,15 +41,17 @@ _NAME_MISMATCH = (
     " ({name2}), der vom voreingestellten Namen ({name1}) abweicht"
 )
 _UNKNOWN_GROUP = "Klasse {klass}: unbekannte Gruppe – '{group}'"
-_INVALID_PUPIL_GROUPS = "Klasse {klass}:{pname} hat ungültige Gruppe(n):" \
-        " {groups}"
+_INVALID_PUPIL_GROUPS = (
+    "Klasse {klass}:{pname} hat ungültige Gruppe(n):" " {groups}"
+)
 
-#?
+# ?
 _YEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {path}"
 _INFO_MISSING = "Info-Feld „{field}“ fehlt in Fachtabelle:\n  {fpath}"
 
 ### Fields
 _TITLE = "Fachdaten"
+_TITLE_COURSE_CHOICE = "Fächerwahl"
 
 ###############################################################
 
@@ -118,80 +94,41 @@ class CourseError(Exception):
 WHOLE_CLASS = "*"
 NULL = "X"
 UNCHOSEN = "/"
-NOT_GRADED = "-"
+#NOT_GRADED = "-"
 
 ### -----
 
 
-def clear_cache():
-    __SubjectsCache._instance = None
+def Subjects():
+    return __SubjectsCache._instance()
 
 
 class __SubjectsCache:
-    _instance = None
+    """Manage the course/subject tables.
+
+    This is a "singleton" class, i.e. there should be only one instance,
+    which is accessible via the <_instance> method.
+    """
+
+    __instance = None
 
     @classmethod
-    def instance(cls):
-        if not cls._instance:
-            cls._instance = cls()
-        return cls._instance
+    def _clear_cache(cls):
+        cls.__instance = None
 
-    def __init__(self):
-        self.schoolyear = SCHOOLYEAR
-        # ?
-        self.subject_names = None
-
-    #        self.cache_class_subjects: Dict[Tuple[], ] = {}
-
-    #    subjects: List[Tuple[str, str]]
-    #    sgmap: dict
-    #    group_data: dict
-
-    def sid2name(self, sid):
-        pass
-
-        #    def class_subjects(self, klass:str, grades:bool) -> Tuple[]:
-        if self.schoolyear == SCHOOLYEAR:
-            try:
-                return self.cache_class_subjects[(klass, grades)]
-            except KeyError:
-                pass
-        else:
-            clear_cache()
-
-
-# def Subjects():
-
-# def class_subjects(klass, grades=True):
-#    try:
-#        return
-#    __SubjectsCache.instance().class_subjects(klass, grades)
-
-
-def subject_name(sid):
-    s = __SubjectsCache.instance()
-
-
-# TODO: use cache for Subjects (resetting when year changes, or explicitly)
-
-
-class Subjects:
-    """Manage the course/subject tables."""
-
-    #    __subjects = None  # cache for the classes' subject data
-    #    __subject_names = None  # cache for the subject name data
-
-    #    @classmethod
-    #    def fetch(cls, reset=False):
-    #        """This is the main method for fetching the current data, which
-    #        is then cached in memory.
-    #        """
-    #        if reset:
-    #            cls.__subjects = None
-    #            return None
-    #        if not cls.__subjects:
-    #            cls.__subjects = cls()
-    #        return cls.__subjects
+    @classmethod
+    def _instance(cls):
+        """Fetch the cached instance of this class.
+        If the school-year has changed, reinitialize the instance.
+        """
+        try:
+            if cls.__instance.__schoolyear == SCHOOLYEAR:
+                return cls.__instance
+        except:
+            pass
+        cls.__instance = cls()
+        cls.__instance.__schoolyear = SCHOOLYEAR
+        return cls.__instance
 
     def __init__(self):
         # All subject names: {sid: subject-name, ... }
@@ -371,10 +308,7 @@ class Subjects:
     # matching set of course data (this is certainly not ideal, though).
 
     def filter_pupil_group(
-        self,
-        class_group: str,
-        grades: bool = True,
-        date: Optional[str] = None
+        self, class_group: str, grades: bool = True, date: Optional[str] = None
     ) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str, dict]]]:
         """Return the subject data for all pupils in the given group.
         The first return value is the ordered subject list:
@@ -410,24 +344,28 @@ class Subjects:
             pname = pdata.name()
             # Determine pupil's minimal group, as far as possible
             try:
-                pset = frozenset.intersection(*[group_data.element_groups[pg]
-                    for pg in pgroups]
+                pset = frozenset.intersection(
+                    *[group_data.element_groups[pg] for pg in pgroups]
                 )
             except KeyError:
-                raise CourseError(_INVALID_PUPIL_GROUPS.format(klass=klass,
-                        pname=pname, groups=_pgroups))
+                raise CourseError(
+                    _INVALID_PUPIL_GROUPS.format(
+                        klass=klass, pname=pname, groups=_pgroups
+                    )
+                )
 
-#TODO: include groups for course / pupil???
-# subject for whole class is certainly valid
-# for pupil is valid ... if also for subject? Is a conflict possible?
-# Surely the pupil must be at least as restrictive ...
+            # TODO: include groups for course / pupil???
+            # subject for whole class is certainly valid
+            # for pupil is valid ... if also for subject? Is a conflict possible?
+            # Surely the pupil must be at least as restrictive ...
             psids = {}
             table.append((pid, pname, _pgroups, psids))
             for sid, gmap in sgmap.items():
                 for g, sdata in gmap.items():
                     if g == WHOLE_CLASS or (
-#                        pgset & group_data.element_groups[g]
-                        pset & group_data.element_groups[g]
+                        #                        pgset & group_data.element_groups[g]
+                        pset
+                        & group_data.element_groups[g]
                     ):
                         if sid in psids:
                             # raise CourseError(
@@ -803,6 +741,91 @@ class GroupData:
 
     #
 
+########################################################################
+
+# Where to put the file?
+def makeChoiceTable(klass: str) -> bytes:
+    """Build a basic pupil/subject table for course-choice input using a
+        template.
+
+    #TODO: Also possible to include the existing choices?
+    """
+    ### Get template file
+    template_path: str = RESOURCEPATH(CONFIG["COURSE_CHOICE_TEMPLATE"])
+    table = KlassMatrix(template_path)
+    choice_info: dict = MINION(DATAPATH("CONFIG/COURSE_CHOICE_DATA"))
+
+    ### Set title line
+    table.setTitle(
+        _TITLE_COURSE_CHOICE.format(
+            time=datetime.datetime.now().isoformat(sep=" ", timespec="minutes")
+        )
+    )
+
+    ### Gather general info
+    info_transl: Dict[str, str] = {}
+    info_item: dict
+    for info_item in choice_info["INFO_FIELDS"]:
+        f = info_item["NAME"]
+        t = info_item["DISPLAY_NAME"]
+        info_transl[f] = t
+    info: Dict[str, str] = {
+        info_transl["SCHOOLYEAR"]: SCHOOLYEAR,
+        info_transl["CLASS"]: klass,
+    }
+    table.setInfo(info)
+
+    ### Get subjects for text reports ... assuming this covers
+    ### all needed subjects!
+    subjects = Subjects()
+    class_subjects: List[Tuple[str, str]]
+    class_pupils: List[Tuple[str, str, dict]]
+    class_subjects, class_pupils = subjects.filter_pupil_group(
+        klass, grades=False
+    )
+
+    ### Go through the template columns and check if they are needed:
+    rowix: List[int] = table.header_rowindex  # indexes of header rows
+    if len(rowix) != 2:
+        raise GradeTableError(_TEMPLATE_HEADER_WRONG.format(path=template_path))
+    sidcol: List[Tuple[str, int]] = []
+    sid: str
+    sname: str
+    for sid, sname in class_subjects:
+        # Add subject
+        col: int = table.nextcol()
+        sidcol.append((sid, col))
+        table.write(rowix[0], col, sid)
+        table.write(rowix[1], col, sname)
+    # Enforce minimum number of columns
+    while col < 18:
+        col = table.nextcol()
+        table.write(rowix[0], col, "")
+    # Delete excess columns
+    table.delEndCols(col + 1)
+
+    ### Add pupils
+    for pid, pname, pgroups, sdata in class_pupils:
+        row = table.nextrow()
+        table.write(row, 0, pid)
+        table.write(row, 1, pname)
+        table.write(row, 2, pgroups)
+        for sid, col in sidcol:
+            if sid in sdata:
+                # TODO: Get existing value ...
+                g = ""
+                if g:
+                    table.write(row, col, g)
+            else:
+                table.write(row, col, "X", protect=True)
+    # Delete excess rows
+    row = table.nextrow()
+    table.delEndRows(row)
+
+    ### Save file
+    table.protectSheet()
+    return table.save_bytes()
+
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
@@ -843,6 +866,15 @@ if __name__ == "__main__":
     print("\n*** divisions:\n", _gdata.divisions)
     print("\n*** class_groups:\n", _gdata.class_groups)
     print("\n*** groupsets_class:\n", _gdata.groupsets_class)
+
+    _tbytes = makeChoiceTable("12G")
+    _tpath = DATAPATH("testing/tmp/ChoiceTable.xlsx")
+    _tdir = os.path.dirname(_tpath)
+    if not os.path.isdir(_tdir):
+        os.makedirs(_tdir)
+    with open(_tpath, "wb") as _fh:
+        _fh.write(_tbytes)
+    print(f"\nWROTE SUBJECT CHOICE TABLE TO {_tpath}\n")
 
     quit(0)
     ########################################################################

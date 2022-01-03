@@ -1,10 +1,10 @@
 """
-core/pupils.py - last updated 2021-12-23
+core/pupils.py - last updated 2022-01-03
 
 Manage pupil data.
 
 =+LICENCE=================================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -143,14 +143,10 @@ class PupilData(dict):
 
 
 def Pupils():
-    return __Pupils._get()
+    return __PupilsCache._instance()
 
 
-def clear_cache():
-    __Pupils._clear_cache()
-
-
-class __Pupils(dict):
+class __PupilsCache(dict):
     """Handler for pupil data.
     The internal pupil data should be read and written only through this
     interface.
@@ -159,21 +155,30 @@ class __Pupils(dict):
     The fields defined for a pupil are read from the configuration file
     CONFIG/PUPIL_DATA. For convenience, a field CLASS is added
     internally to each pupil record.
-    The list of pupil-ids for a class is available via the method
-    <class_pupils> (alphabetically ordered).
+    The list of pupil-data mappings for a class is available via the
+    method <class_pupils> (alphabetically ordered).
+    This is a "singleton" class, i.e. there should be only one instance,
+    which is accessible via the <_instance> method.
     """
-
-    __pupils = None  # cache
-
-    @classmethod
-    def _get(cls):
-        if not cls.__pupils:
-            cls.__pupils = cls()
-        return cls.__pupils
+    __instance = None
 
     @classmethod
     def _clear_cache(cls):
-        cls.__pupils = None
+        cls.__instance = None
+
+    @classmethod
+    def _instance(cls):
+        """Fetch the cached instance of this class.
+        If the school-year has changed, reinitialize the instance.
+        """
+        try:
+            if cls.__instance.__schoolyear == SCHOOLYEAR:
+                return cls.__instance
+        except:
+            pass
+        cls.__instance = cls()
+        cls.__instance.__schoolyear = SCHOOLYEAR
+        return cls.__instance
 
     def __init__(self):
         self.__classes = {}
