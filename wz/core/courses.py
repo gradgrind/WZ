@@ -44,6 +44,7 @@ _UNKNOWN_GROUP = "Klasse {klass}: unbekannte Gruppe – '{group}'"
 _INVALID_PUPIL_GROUPS = (
     "Klasse {klass}:{pname} hat ungültige Gruppe(n):" " {groups}"
 )
+_TEMPLATE_HEADER_WRONG = "Fehler bei den Kopfzeilen der Vorlage:\n {path}"
 
 # ?
 _YEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {path}"
@@ -56,7 +57,7 @@ _TITLE_COURSE_CHOICE = "Fächerwahl"
 ###############################################################
 
 import sys, os, re
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Set
 
 if __name__ == "__main__":
     # Enable package import if running as module
@@ -71,7 +72,6 @@ if __name__ == "__main__":
 ### +++++
 
 import datetime
-from glob import glob
 
 from core.base import Dates, class_group_split
 from core.pupils import Pupils
@@ -84,7 +84,6 @@ from tables.spreadsheet import (
     spreadsheet_file_complete,
 )
 from tables.matrix import KlassMatrix
-from tables.datapack import get_pack, save_pack
 
 
 class CourseError(Exception):
@@ -93,8 +92,8 @@ class CourseError(Exception):
 
 WHOLE_CLASS = "*"
 NULL = "X"
-UNCHOSEN = "/"
-#NOT_GRADED = "-"
+# UNCHOSEN = "/"
+# NOT_GRADED = "-"
 
 ### -----
 
@@ -190,19 +189,23 @@ class __SubjectsCache:
         <class_info> and <class_subjects>.
         """
         fpath = self.class_path.format(klass=klass)
-        # print("READING", fpath)
-        class_table = read_DataTable(fpath)
+        info, table = self.read_subject_table(fpath)
+        check_year_class(info, klass, fpath)
+        self.__class_info[klass] = info
+        self.__classes[klass] = table
+
+    def read_subject_table(
+        self, filepath: str
+    ) -> Tuple[Dict[str, str], List[Dict[str, str]]]:
+        """Read the class subject data from the given file.
+        Return the info-mapping and the list of subject-data mappings.
+        """
+        # print("READING", filepath)
+        class_table = read_DataTable(filepath)
         try:
             class_table = filter_DataTable(class_table, self.config)
         except TableError as e:
-            raise CourseError(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
-        info = class_table["__INFO__"]
-        if info["SCHOOLYEAR"] != SCHOOLYEAR:
-            raise CourseError(_SCHOOLYEAR_MISMATCH.format(path=fpath))
-        if klass != info["CLASS"]:
-            raise CourseError(_CLASS_MISMATCH.format(path=fpath))
-        self.__class_info[klass] = info
-
+            raise CourseError(_FILTER_ERROR.format(msg=f"{e} in\n {filepath}"))
         # TODO: Really remove subject names?
         # Remove and check the subject names (the subject names are not
         # stored in the internal table).
@@ -216,7 +219,7 @@ class __SubjectsCache:
                     "WARNING",
                     _NAME_MISMATCH.format(sid=sid, name1=sname0, name2=sname),
                 )
-        self.__classes[klass] = table
+        return class_table["__INFO__"], table
 
     def group_info(self, klass):
         """Return the <GroupData> instance for the given class."""
@@ -257,7 +260,6 @@ class __SubjectsCache:
         If <grades> is true, also "composite" subjects will be included,
         but subjects with SGROUP='-' will be excluded.
         """
-        table = []
         # Get all subject data
         sclist = self.class_subjects(klass)
         subjects = []
@@ -328,7 +330,9 @@ class __SubjectsCache:
             subjects = []
             for sid, sname in slist:
                 for sg, sdata in sgmap[sid].items():
-                    if sg == "*" or (pgset & group_data.element_groups[sg]):
+                    if sg == WHOLE_CLASS or (
+                        pgset & group_data.element_groups[sg]
+                    ):
                         subjects.append((sid, sname))
                         break
         # Get pupil-data list
@@ -381,163 +385,6 @@ class __SubjectsCache:
                         else:
                             psids[sid] = sdata
         return subjects, table
-
-
-class GroupData:
-    def __init__(self, klass, raw_groups):
-        """Parse the GROUPS info-field (passed as <raw_groups>) for the
-        given class. This is a '|'-separated list of mutually exclusive
-        class divisions.
-        A division is a space-separated list of groups. These groups
-        may contain '.' characters, in which case they are intersections
-        of "atomic" groups (no dot). Neither these atomic groups nor the
-        dotted intersections may appear in more than one division.
-        A division might be "A.G B.G B.R".
-        The following attributes are set:
-            klass: The class, same as the parameter <klass>.
-            divisions: List of lists of division entries (the first entry
-                    is always ['*'] for the whole class).
-            minimal_subgroups: An alphabetical list of the non-intersecting
-                    subgroups.
-            element_groups: Map the atomic groups (no dot) to the
-                    corresponding set of minimal subgroups (note that
-                    '*' is not included here as an atomic group – nor is
-                    any other representation of the whole class).
-            class_groups: As element_groups, but the minimal subgroups
-                    have the class as prefix (followed by '.').
-            groupsets_class: Basically the reverse of class_groups, mapping
-                    sets of minimal subgroups to an atomic group, but here
-                    the atomic groups have the class as prefix (followed
-                    by '.'). In addition, the set of all minimal subgroups
-                    maps to the class itself and '*' maps to the set of
-                    all minimal subgroups – if there is one, otherwise
-                    to the class itself.
-        """
-        if klass.startswith("XX"):
-            return
-        ### Add declared class divisions (and their groups).
-        self.klass = klass
-        self.divisions = [["*"]]
-        divs = []
-        atomic_groups = [frozenset()]
-        all_atoms = set()
-        for glist in raw_groups.split("|"):
-            dgroups = glist.split()
-            self.divisions.append(dgroups)
-            division = [frozenset(item.split(".")) for item in dgroups]
-            divs.append(division)
-            ag2 = []
-            for item in atomic_groups:
-                for item2 in division:
-                    all_atoms |= item2
-                    ag2.append(item | item2)
-            atomic_groups = ag2
-        # print("§§§ DIVISIONS:", klass, self.divisions)
-        # All (dotted) atomic groups:
-        self.minimal_subgroups = [".".join(sorted(ag)) for ag in atomic_groups]
-        self.minimal_subgroups.sort()
-        # print(f'$$$ "Atomic" groups in class {klass}:', self.minimal_subgroups)
-        ### Make a mapping of single, undotted groups to sets of dotted
-        ### atomic groups.
-        self.element_groups = {
-            a: frozenset(
-                [".".join(sorted(ag)) for ag in atomic_groups if a in ag]
-            )
-            for a in all_atoms
-        }
-        # print(f'$$$ "Element" groups in class {klass}:', self.element_groups)
-        #
-        #        ### The same for the dotted groups from the divisions (if any)
-        #        self.extended_groups = {}
-        #        for division in divs:
-        #            for item in division:
-        #                if item not in self.element_groups:
-        #                    self.extended_groups['.'.join(sorted(item))] = \
-        #                        frozenset.intersection(
-        #                            *[self.element_groups[i] for i in item])
-        #        print(f'$$$ "Extended" groups in class {klass}:', self.extended_groups)
-
-        self.class_groups = {}
-        #        for _map in self.element_groups, self.extended_groups:
-        #            for k, v in _map.items():
-        #                self.class_groups[k] = frozenset([f'{self.klass}.{ag}'
-        #                        for ag in v])
-        for k, v in self.element_groups.items():
-            self.class_groups[k] = frozenset([f"{self.klass}.{ag}" for ag in v])
-            # print(")))", self.class_groups[k])
-        # And now a reverse map, avoiding duplicate values (use the
-        # first occurrence, which is likely to be simpler)
-        self.groupsets_class = {}
-        for k, v in self.class_groups.items():
-            if v not in self.groupsets_class:
-                self.groupsets_class[v] = f"{self.klass}.{k}"
-        # TODO: It is not clear where the whole-class entries should occur, and in
-        # which form.
-        fs_whole = frozenset([self.klass])
-        self.groupsets_class[fs_whole] = self.klass
-        # Add "whole class" minimal subgroups to the reverse mapping
-        all_groups = frozenset(
-            [f"{self.klass}.{msg}" for msg in self.minimal_subgroups]
-        )
-        if all_groups:
-            self.groupsets_class["*"] = all_groups
-            self.groupsets_class[all_groups] = self.klass
-        else:
-            self.groupsets_class["*"] = fs_whole
-
-    #        print("+++", klass, self.class_groups)
-    #        print("---", klass, self.groupsets_class)
-
-    def group_classgroups(self, group):
-        """Return the (frozen)set of "full" groups for the given group.
-        The group may be dotted. Initially only the "elemental"
-        groups, including the full class, are available, but dotted
-        groups will be added if they are not already present.
-        This method may need to be overridden in the back-end (see
-        <make_class_groups>)
-        """
-        try:
-            return self.class_groups[group]
-        except KeyError:
-            pass
-        gsplit = group.split(".")
-        if len(gsplit) > 1:
-            group = ".".join(sorted(gsplit))
-            try:
-                return self.class_groups[group]
-            except KeyError:
-                pass
-            try:
-                gset = frozenset.intersection(
-                    *[self.class_groups[g] for g in gsplit]
-                )
-            except KeyError:
-                pass
-            else:
-                if gset:
-                    # Add to group mapping
-                    self.class_groups[group] = gset
-                    # and to reverse mapping
-                    grev = self.groupsets_class
-                    if gset not in grev:
-                        # ... if there isn't already an entry
-                        grev[gset] = f"{self.klass}.{group}"
-                    return gset
-        raise CourseError(_UNKNOWN_GROUP.format(klass=self.klass, group=group))
-
-    #
-
-    # TODO: Do I need this?
-    # What is here a "group"? Can it be dotted?
-    #    @staticmethod
-    #    def split_class_group(group):
-    #        """Given a "full" group (with class), return class and group
-    #        separately.
-    #        This method may need to be overridden in the back-end (see
-    #        <make_class_groups>)
-    #        """
-    #        k_g = group.split(".", 1)
-    #        return k_g if len(k_g) == 2 else (group, "")
 
     # -------------------------------------------------------
 
@@ -642,7 +489,6 @@ class GroupData:
                 # This should be a subject tag
                 sid2col.append((f, col))
             col += 1
-        table = []
         for row in dbtable:
             pid = row[0]
             if pid and pid != "$":
@@ -741,10 +587,162 @@ class GroupData:
 
     #
 
+
 ########################################################################
 
-# Where to put the file?
-def makeChoiceTable(klass: str) -> bytes:
+def check_year_class(info, klass, fpath):
+    if info["SCHOOLYEAR"] != SCHOOLYEAR:
+        raise CourseError(_SCHOOLYEAR_MISMATCH.format(path=fpath))
+    if klass != info["CLASS"]:
+        raise CourseError(_CLASS_MISMATCH.format(path=fpath))
+
+
+class GroupData:
+    def __init__(self, klass, raw_groups):
+        """Parse the GROUPS info-field (passed as <raw_groups>) for the
+        given class. This is a '|'-separated list of mutually exclusive
+        class divisions.
+        A division is a space-separated list of groups. These groups
+        may contain '.' characters, in which case they are intersections
+        of "atomic" groups (no dot). Neither these atomic groups nor the
+        dotted intersections may appear in more than one division.
+        A division might be "A.G B.G B.R".
+        The following attributes are set:
+            klass: The class, same as the parameter <klass>.
+            divisions: List of lists of division entries (the first entry
+                    is always ['*'] for the whole class).
+            minimal_subgroups: An alphabetical list of the non-intersecting
+                    subgroups.
+            element_groups: Map the atomic groups (no dot) to the
+                    corresponding set of minimal subgroups (note that
+                    '*' is not included here as an atomic group – nor is
+                    any other representation of the whole class).
+            class_groups: As element_groups, but the minimal subgroups
+                    have the class as prefix (followed by '.').
+            groupsets_class: Basically the reverse of class_groups, mapping
+                    sets of minimal subgroups to an atomic group, but here
+                    the atomic groups have the class as prefix (followed
+                    by '.'). In addition, the set of all minimal subgroups
+                    maps to the class itself and '*' maps to the set of
+                    all minimal subgroups – if there is one, otherwise
+                    to the class itself.
+        """
+        if klass.startswith("XX"):
+            return
+        ### Add declared class divisions (and their groups).
+        self.klass = klass
+        self.divisions = [[WHOLE_CLASS]]
+        divs = []
+        atomic_groups = [frozenset()]
+        all_atoms = set()
+        for glist in raw_groups.split("|"):
+            dgroups = glist.split()
+            self.divisions.append(dgroups)
+            division = [frozenset(item.split(".")) for item in dgroups]
+            divs.append(division)
+            ag2 = []
+            for item in atomic_groups:
+                for item2 in division:
+                    all_atoms |= item2
+                    ag2.append(item | item2)
+            atomic_groups = ag2
+        # print("§§§ DIVISIONS:", klass, self.divisions)
+        # All (dotted) atomic groups:
+        self.minimal_subgroups = [".".join(sorted(ag)) for ag in atomic_groups]
+        self.minimal_subgroups.sort()
+        # print(f'$$$ "Atomic" groups in class {klass}:', self.minimal_subgroups)
+        ### Make a mapping of single, undotted groups to sets of dotted
+        ### atomic groups.
+        self.element_groups = {
+            a: frozenset(
+                [".".join(sorted(ag)) for ag in atomic_groups if a in ag]
+            )
+            for a in all_atoms
+        }
+        # print(f'$$$ "Element" groups in class {klass}:', self.element_groups)
+        #
+        #        ### The same for the dotted groups from the divisions (if any)
+        #        self.extended_groups = {}
+        #        for division in divs:
+        #            for item in division:
+        #                if item not in self.element_groups:
+        #                    self.extended_groups['.'.join(sorted(item))] = \
+        #                        frozenset.intersection(
+        #                            *[self.element_groups[i] for i in item])
+        #        print(f'$$$ "Extended" groups in class {klass}:', self.extended_groups)
+
+        self.class_groups = {}
+        #        for _map in self.element_groups, self.extended_groups:
+        #            for k, v in _map.items():
+        #                self.class_groups[k] = frozenset([f'{self.klass}.{ag}'
+        #                        for ag in v])
+        for k, v in self.element_groups.items():
+            self.class_groups[k] = frozenset([f"{self.klass}.{ag}" for ag in v])
+            # print(")))", self.class_groups[k])
+        # And now a reverse map, avoiding duplicate values (use the
+        # first occurrence, which is likely to be simpler)
+        self.groupsets_class = {}
+        for k, v in self.class_groups.items():
+            if v not in self.groupsets_class:
+                self.groupsets_class[v] = f"{self.klass}.{k}"
+        # TODO: It is not clear where the whole-class entries should occur, and in
+        # which form.
+        fs_whole = frozenset([self.klass])
+        self.groupsets_class[fs_whole] = self.klass
+        # Add "whole class" minimal subgroups to the reverse mapping
+        all_groups = frozenset(
+            [f"{self.klass}.{msg}" for msg in self.minimal_subgroups]
+        )
+        if all_groups:
+            self.groupsets_class[WHOLE_CLASS] = all_groups
+            self.groupsets_class[all_groups] = self.klass
+        else:
+            self.groupsets_class[WHOLE_CLASS] = fs_whole
+
+    #        print("+++", klass, self.class_groups)
+    #        print("---", klass, self.groupsets_class)
+
+    def group_classgroups(self, group):
+        """Return the (frozen)set of "full" groups for the given group.
+        The group may be dotted. Initially only the "elemental"
+        groups, including the full class, are available, but dotted
+        groups will be added if they are not already present.
+        This method may need to be overridden in the back-end (see
+        <make_class_groups>)
+        """
+        try:
+            return self.class_groups[group]
+        except KeyError:
+            pass
+        gsplit = group.split(".")
+        if len(gsplit) > 1:
+            group = ".".join(sorted(gsplit))
+            try:
+                return self.class_groups[group]
+            except KeyError:
+                pass
+            try:
+                gset = frozenset.intersection(
+                    *[self.class_groups[g] for g in gsplit]
+                )
+            except KeyError:
+                pass
+            else:
+                if gset:
+                    # Add to group mapping
+                    self.class_groups[group] = gset
+                    # and to reverse mapping
+                    grev = self.groupsets_class
+                    if gset not in grev:
+                        # ... if there isn't already an entry
+                        grev[gset] = f"{self.klass}.{group}"
+                    return gset
+        raise CourseError(_UNKNOWN_GROUP.format(klass=self.klass, group=group))
+
+
+# Where to put the file? DATAPATH(CONFIG["CHOICE_TABLE"]) + ending
+#TODO: get existing choice data
+def makeChoiceTable(klass: str, empty:bool = False) -> bytes:
     """Build a basic pupil/subject table for course-choice input using a
         template.
 
@@ -754,6 +752,9 @@ def makeChoiceTable(klass: str) -> bytes:
     template_path: str = RESOURCEPATH(CONFIG["COURSE_CHOICE_TEMPLATE"])
     table = KlassMatrix(template_path)
     choice_info: dict = MINION(DATAPATH("CONFIG/COURSE_CHOICE_DATA"))
+
+    ### Get existing data, if required
+    choices = {} if empty else readChoices(klass)
 
     ### Set title line
     table.setTitle(
@@ -787,7 +788,7 @@ def makeChoiceTable(klass: str) -> bytes:
     ### Go through the template columns and check if they are needed:
     rowix: List[int] = table.header_rowindex  # indexes of header rows
     if len(rowix) != 2:
-        raise GradeTableError(_TEMPLATE_HEADER_WRONG.format(path=template_path))
+        raise CourseError(_TEMPLATE_HEADER_WRONG.format(path=template_path))
     sidcol: List[Tuple[str, int]] = []
     sid: str
     sname: str
@@ -817,7 +818,7 @@ def makeChoiceTable(klass: str) -> bytes:
                 if g:
                     table.write(row, col, g)
             else:
-                table.write(row, col, "X", protect=True)
+                table.write(row, col, NULL, protect=True)
     # Delete excess rows
     row = table.nextrow()
     table.delEndRows(row)
@@ -825,6 +826,39 @@ def makeChoiceTable(klass: str) -> bytes:
     ### Save file
     table.protectSheet()
     return table.save_bytes()
+
+
+def readChoices(klass:str) -> dict:
+    filepath = DATAPATH(CONFIG["CHOICE_TABLE"].format(klass=klass))
+    try:
+        data = choiceTableFile(filepath)
+    except TableError:
+        return {}
+    check_year_class(data["__INFO__"], klass, filepath)
+    return data["__PUPILS__"]
+
+
+def choiceTableFile(filepath: str) -> dict:
+    """Read the header info and pupils' subject choices from the given
+    choices table (file).
+    The "spreadsheet" module is used as backend so .ods, .xlsx and .tsv
+    formats are possible. The filename may be passed without extension –
+    <Spreadsheet> then looks for a file with a suitable extension.
+    Return a "DataTable" structure with added pid-mapping.
+    """
+    dbt = read_DataTable(filepath)
+    dbt = filter_DataTable(
+        dbt,
+        MINION(DATAPATH("CONFIG/COURSE_CHOICE_DATA")),
+        matrix=True,
+        extend=False,
+    )
+    pchoices = {}
+    for pdata in dbt["__ROWS__"]:
+        pid = pdata.pop("PID")
+        pchoices[pid] = pdata
+    dbt["__PUPILS__"] = pchoices
+    return dbt
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -854,7 +888,7 @@ if __name__ == "__main__":
     print("\n *****************************************\n")
 
     _table = _subjects.filter_pupil_group("11G.G")
-    print(f"\n Class 11G, subjects for group 'G':\n", _table[0])
+    print("\n Class 11G, subjects for group 'G':\n", _table[0])
     print("\n Class 11G, pupils for group 'G':")
     for _pid, _pname, _pgroups, _smap in _table[1]:
         print(f"\n   +++++ {_pname}: {repr(_smap)}")
@@ -876,7 +910,11 @@ if __name__ == "__main__":
         _fh.write(_tbytes)
     print(f"\nWROTE SUBJECT CHOICE TABLE TO {_tpath}\n")
 
+    print("\nREAD CHOICE TABLE:\n",
+            choiceTableFile(DATAPATH("testing/ChoiceTable_12G.xlsx")))
+
     quit(0)
+
     ########################################################################
 
     print("\nIMPORT SUBJECT TABLES:")

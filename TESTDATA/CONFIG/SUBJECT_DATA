@@ -1,6 +1,6 @@
-#+++ __TITLE__   : Felder der Schülertabellen (eine Tabelle pro Klasse)
+#+++ __TITLE__   : Felder der Fächertabellen (eine Tabelle pro Klasse)
 #+++ __MINION__  :  2.0
-#+++ __MODIFIED__: 2021-11-14
+#+++ __MODIFIED__: 2022-01-03
 #--------------------------------------------------------------
 
 INFO_FIELDS: [
