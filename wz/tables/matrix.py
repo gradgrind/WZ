@@ -1,16 +1,16 @@
-### python >= 3.7
-# -*- coding: utf-8 -*-
 """
-tables/matrix.py - last updated 2021-12-29
+tables/matrix.py
+
+Last updated:  2022-01-03
 
 Edit a table template (xlsx).
 
 The base class is <Table>.
 
-<KlassMatrix> handles pupil-subject matrices.
+<KlassMatrix> handles writing to xlsx templates for pupil-subject matrices.
 
-==============================
-Copyright 2021 Michael Towers
+=+LICENCE=============================
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ Copyright 2021 Michael Towers
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+=-LICENCE========================================
 """
 
 # Messages
@@ -37,15 +38,14 @@ _WARN_HIDE_NOT_WORKING = (
     " Programm-Mangels (noch) nicht möglich"
 )
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import datetime
 from io import BytesIO
 
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter  # , column_index_from_string
-
-# from openpyxl.styles import Protection
+from openpyxl.styles import Protection
 
 ### +++++
 
@@ -68,7 +68,7 @@ class Table:
     def __init__(self, filepath: str) -> None:
         self.template: str = filepath
         self._wb = load_workbook(self.template)
-        self.rows: List = [List[str]]
+        self.rows: LIst[List[str]] = []
         for row in self._wb.active.iter_rows():
             values: List[str] = []
             for cell in row:
@@ -83,8 +83,8 @@ class Table:
                     v = str(v)
                 values.append(v)
             self.rows.append(values)
-        # self.protected = Protection(locked=True)
-        # self.unprotected = Protection(locked=False)
+        self.protected = Protection(locked=True)
+        self.unprotected = Protection(locked=False)
 
     #    def getCell(self, celltag: str) -> Any:
     #        return self._wb.active[celltag].value
@@ -100,12 +100,14 @@ class Table:
         # To set some "style" (see openpyxl docs):
         # cell.style = style
 
-    def write(self, row: int, col: int, val: str) -> None:
+    def write(self, row: int, col: int, val: str,
+            protect: Optional[bool] = None) -> None:
         """Write to the cell at the given position (0-based indexes)."""
         cell = self._wb.active[f"{self.columnLetter(col)}{row+1}"]
         cell.value = val
         # To set/clear cell protection
-        # cell.protection = self.protected if protect else self.unprotected
+        if protect != None:
+            cell.protection = self.protected if protect else self.unprotected
 
     def delEndCols(self, col0: int) -> None:
         """Delete last columns, starting at index <col0> (0-based)."""
@@ -176,14 +178,14 @@ class KlassMatrix(Table):
         # initially immediately after the headers
         self.header_rowindex: List[int] = [i - 1]
         while True:
-            c0 = row[0]
+            c0 = self.rows[i][0]
             if c0:
                 if c0 == "$":
                     self.header_rowindex.append(i)
                 else:
                     break
             i += 1
-        self.rowindex: int = i
+        self.rowindex: int = i - 1
         # column index for header column iteration
         self.hcol: int = 0
 

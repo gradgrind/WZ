@@ -1,6 +1,6 @@
 #+++ __TITLE__   : Allgemeine Konfiguration
 #+++ __MINION__  : 2.0
-#+++ __MODIFIED__: 2021-12-28
+#+++ __MODIFIED__: 2022-01-02
 #+++###########################################################
 #+++# Diese Kopfzeilen sollten nicht geändert werden, das Datum
 #+++# wird beim Speichern (in WZ) automatisch aktualisiert.
@@ -59,6 +59,7 @@ CHOICE_TABLE: "Klassen/Kurswahl/Wahl-{klass}"
 
 # "Resources"
 CLASS_ATTENDANCE_TEMPLATE: templates/Vorlage_Klassenbuch.xlsx
+COURSE_CHOICE_TEMPLATE: templates/Fachwahl.xlsx
 
 LEAVING_GROUPS: {
 # Gruppen, die am Ende des Schuljahres die Schule verlassen

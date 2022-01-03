@@ -1,0 +1,20 @@
+#+++ __TITLE__   : Felder der Kurswahltabellen
+#+++ __MINION__  :  2.0
+#+++ __MODIFIED__: 2022-01-02
+#--------------------------------------------------------------
+
+INFO_FIELDS: [
+    {NAME: SCHOOLYEAR   DISPLAY_NAME: Schuljahr      REQUIRED: true}
+    {NAME: CLASS        DISPLAY_NAME: Klasse  REQUIRED: true}
+]
+
+TABLE_FIELDS: [
+    {NAME: PID          DISPLAY_NAME: id   REQUIRED: true}
+    {NAME: PNAME        DISPLAY_NAME: Schüler(in)}
+#?
+    {NAME: GROUPS       DISPLAY_NAME: Gruppen}
+]
+
+UNCHOSEN:   /  # abgewähltes Fach
+NOT_AVAILABLE:  X  # Fach steht nicht zur Verfügung
+#TODO: Consider whether a positive choice might be better than a negative one ...

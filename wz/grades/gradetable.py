@@ -1,9 +1,11 @@
 """
-grades/gradetable.py - last updated 2022-01-01
+grades/gradetable.py
+
+Last updated:  2022-01-03
 
 Access grade data, read and build grade tables.
 
-==============================
+=+LICENCE=============================
 Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +19,7 @@ Copyright 2022 Michael Towers
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+=-LICENCE========================================
 """
 
 ### Grade table "info" items
@@ -29,6 +32,7 @@ _GRADES_D = 'Notendatum'
 ### Messages
 _NO_INFO_FOR_GROUP = "Klasse/Gruppe {group}: Notenzeugnisse sind nicht" \
         " vorgesehen"
+_TEMPLATE_HEADER_WRONG = "Fehler bei den Kopfzeilen der Vorlage:\n {path}"
 
 _TABLE_CLASS_MISMATCH = "Falsche Klasse/Gruppe in Notentabelle:\n  {filepath}"
 _TABLE_TERM_MISMATCH = "Falscher \"Anlass\" in Notentabelle:\n  {filepath}"
@@ -45,7 +49,7 @@ _NO_DATE = "Kein Ausgabedatum angegeben"
 _DATE_EXISTS = "Ausgabedatum existiert schon"
 
 _TITLE = "Notentabelle, erstellt {time}"
-
+_TITLE_COURSE_CHOICE = "Fächerwahl"
 
 import sys, os
 if __name__ == '__main__':
@@ -87,6 +91,188 @@ class FailedSave(Exception):
 
 ###
 
+# Where to put the file?
+def makeChoiceTable(klass: str) -> bytes:
+    """Build a basic pupil/subject table for course-choice input using a
+    template.
+
+#TODO: Also possible to include the existing choices?
+    """
+    ### Get template file
+    template_path: str = RESOURCEPATH(CONFIG["COURSE_CHOICE_TEMPLATE"])
+    table = KlassMatrix(template_path)
+    choice_info: dict = MINION(DATAPATH("CONFIG/COURSE_CHOICE_DATA"))
+
+    ### Set title line
+    table.setTitle(_TITLE_COURSE_CHOICE.format(
+            time=datetime.datetime.now().isoformat(
+                sep=' ', timespec='minutes')
+        )
+    )
+
+    ### Gather general info
+    info_transl: Dict[str,str] = {}
+    info_item: dict
+    for info_item in choice_info["INFO_FIELDS"]:
+        f = info_item["NAME"]
+        t = info_item["DISPLAY_NAME"]
+        info_transl[f] = t
+    info: Dict[str,str] = {
+        info_transl["SCHOOLYEAR"]: SCHOOLYEAR,
+        info_transl["CLASS"]: klass
+    }
+    table.setInfo(info)
+
+    ### Get subjects for text reports ... assuming this covers
+    ### all needed subjects!
+    subjects = Subjects()
+    class_subjects: List[Tuple[str, str]]
+    class_pupils: List[Tuple[str, str, dict]]
+    class_subjects, class_pupils = subjects.filter_pupil_group(
+            klass, grades=False)
+
+    ### Go through the template columns and check if they are needed:
+    rowix: List[int] = table.header_rowindex # indexes of header rows
+    if len(rowix) != 2:
+        raise GradeTableError(_TEMPLATE_HEADER_WRONG.format(path=template_path))
+    sidcol: List[Tuple[str, int]] = []
+    sid: str
+    sname: str
+    for sid, sname in class_subjects:
+        # Add subject
+        col: int = table.nextcol()
+        sidcol.append((sid, col))
+        table.write(rowix[0], col, sid)
+        table.write(rowix[1], col, sname)
+    # Enforce minimum number of columns
+    while col < 18:
+        col = table.nextcol()
+        table.write(rowix[0], col, "")
+    # Delete excess columns
+    table.delEndCols(col + 1)
+
+    ### Add pupils
+    for pid, pname, pgroups, sdata in class_pupils:
+        row = table.nextrow()
+        table.write(row, 0, pid)
+        table.write(row, 1, pname)
+        table.write(row, 2, pgroups)
+        for sid, col in sidcol:
+            if sid in sdata:
+#TODO: Get existing value ...
+                g = ""
+                if g:
+                    table.write(row, col, g)
+            else:
+                table.write(row, col, "X", protect=True)
+    # Delete excess rows
+    row = table.nextrow()
+    table.delEndRows(row)
+
+    ### Save file
+    table.protectSheet()
+    return table.save_bytes()
+
+
+#TODO ...
+# Where to put the file?
+def makeGradeTable(term: str, group: str,
+        ISSUE_D: Optional[str] = None,
+        GRADES_D: Optional[str] = None) -> bytes:
+    """Build a basic pupil/subject table for grade input using a
+    template appropriate for the given group.
+
+#TODO: Also possible to include the existing grades?
+    """
+    ### Get template file
+    group_info = MINION(DATAPATH("CONFIG/GRADE_GROUP_INFO"))
+    try:
+        grade_info = group_info[group]
+    except KeyError:
+        raise GradeTableError(_NO_INFO_FOR_GROUP.format(group=group))
+    template = grade_info["GradeTableTemplate"]
+    template_path = RESOURCEPATH(f"templates/{template}.xlsx")
+    table = KlassMatrix(template_path)
+
+    ### Set title line
+    table.setTitle(_TITLE.format(
+            time=datetime.datetime.now().isoformat(
+                sep=' ', timespec='minutes')
+        )
+    )
+    ### Gather general info
+    group_info: dict = MINION(DATAPATH("CONFIG/GRADE_DATA"))
+    if not ISSUE_D:
+        ISSUE_D = Dates.today()
+    if not GRADES_D:
+        GRADES_D = ISSUE_D
+    info_transl: Dict[str,str] = {}
+    info_item: dict
+    for info_item in group_info["INFO_FIELDS"]:
+        f = info_item["NAME"]
+        t = info_item["DISPLAY_NAME"]
+        info_transl[f] = t
+    info: Dict[str,str] = {
+        info_transl["SCHOOLYEAR"]: SCHOOLYEAR,
+        info_transl["GROUP"]: group,
+#TODO:
+        info_transl["TERM"]: term,
+        info_transl["GRADES_D"]: GRADES_D,
+        info_transl["ISSUE_D"]: ISSUE_D
+    }
+    table.setInfo(info)
+
+    ### Get subjects for grade reports
+    subjects = Subjects()
+    class_subjects: List[Tuple[str, str]]
+    class_pupils: List[Tuple[str, str, dict]]
+    class_subjects, class_pupils = subjects.filter_pupil_group(group,
+            date=GRADES_D)
+
+    ### Go through the template columns and check if they are needed:
+    rowix: List[int] = table.header_rowindex # indexes of header rows
+    if len(rowix) != 2:
+        raise GradeTableError(_TEMPLATE_HEADER_WRONG.format(path=template_path))
+    sidcol: List[Tuple[str, int]] = []
+    sid: str
+    sname: str
+    for sid, sname in class_subjects:
+        # Add subject
+        col: int = table.nextcol()
+        sidcol.append((sid, col))
+        table.write(rowix[0], col, sid)
+        table.write(rowix[1], col, sname)
+    # Enforce minimum number of columns
+    while col < 18:
+        col = table.nextcol()
+        table.write(rowix[0], col, "")
+    # Delete excess columns
+    table.delEndCols(col + 1)
+
+    ### Add pupils
+    for pid, pname, pgroups, sdata in class_pupils:
+        row = table.nextrow()
+        table.write(row, 0, pid)
+        table.write(row, 1, pname)
+        table.write(row, 2, pgroups)
+        for sid, col in sidcol:
+            if sid in sdata:
+#TODO: Get existing value ...
+                g = ""
+                if g:
+                    table.write(row, col, g)
+            else:
+                table.write(row, col, "X", protect=True)
+    # Delete excess rows
+    row = table.nextrow()
+    table.delEndRows(row)
+
+    ### Save file
+    table.protectSheet()
+    return table.save_bytes()
+
+
+########################################################################
 # Without base class???
 class Grades(GradeBase):
     """A <Grades> instance manages the set of grades in the database for
@@ -565,106 +751,9 @@ def calculateGrades(gradetable: dict) -> None:
 
 def getSubjectData(group):
 #TODO: pending changes to courses module
-    subjects = Subjects().class_subjects(group.split('.', 1)[0]
+    subjects = Subjects().class_subjects(group.split('.', 1)[0])
     for sdata in subjects["__PUPILS__"]:
         pass
-
-
-# Where to put the file?
-def makeGradeTable(term: str, group: str) -> bytes:
-    """Build a basic pupil/subject table for grade input using a
-    template appropriate for the given group.
-
-#TODO: Also possible to include the existing grades?
-    """
-    ### Get template file
-    group_info = MINION(DATAPATH("CONFIG/GRADE_GROUP_INFO"))
-    try:
-        grade_info = group_info[group]
-    except KeyError:
-        raise GradeTableError(_NO_INFO_FOR_GROUP.format(group=group))
-    template = grade_info["NotentabelleVorlage"]
-    template_path = RESOURCEPATH("templates/{template}.xlsx")
-    table = KlassMatrix(template_path)
-    ### Set title line
-    table.setTitle(_TITLE.format(
-            time=datetime.datetime.now().isoformat(
-                sep=' ', timespec='minutes')
-        )
-    )
-    ### Gather general info
-    info = {
-        "SCHOOLYEAR":  SCHOOLYEAR,
-        "GROUP":       group,
-        "TERM":        term,
-#TODO:
-        "GRADES_D":    "Notendatum",
-        "ISSUE_D":     "Ausgabedatum"
-    }
-    table.setInfo(info)
-#TODO: ...
-
-
-    ### Get class/group info
-    klass: str
-    kgroup: str
-    try:
-        klass, kgroup = group.rsplit(".", 1)
-    except ValueError:
-        klass, kgroup = group, ""
-    pupils = Pupils()
-# Use date (GRADES_D or ISSUE_D?) ?
-    group_pupils = pupils.class_pupils(
-        klass,
-        group=[group] if group else None,
-        date=None
-    )
-
-
-    subjects = Subjects()
-    class_subjects = subjects.class_subjects(klass)
-# For choice table, I would need extra parameter grades=False
-    if kgroup:
-        # Filter subjects for the given group
-        for pdata in group_pupils:
-            pid = pdata["PID"]
-
-
-
-    ### Go through the template columns and check if they are needed:
-    sidcol = []
-    col = 0
-    rowix: List[int] = table.header_rowindex() # indexes of header rows
-
-
-    for sid, sname in self.subjects.items():
-        # Add subject
-        col = table.nextcol()
-        sidcol.append((sid, col))
-        table.write(rowix, col, sid)
-        table.write(rowix + 1, col, sname)
-    # Enforce minimum number of columns
-    while col < 18:
-        col = table.nextcol()
-        table.write(rowix, col, "")
-    # Delete excess columns
-    table.delEndCols(col + 1)
-    ### Add pupils
-    for pid, gmap in self.items():
-        row = table.nextrow()
-        table.write(row, 0, pid)
-        table.write(row, 1, self.name[pid])
-        table.write(row, 2, gmap.stream)
-        for sid, col in sidcol:
-            g = gmap.get(sid)
-            if g:
-                table.write(row, col, g)
-    # Delete excess rows
-    row = table.nextrow()
-    table.delEndRows(row)
-    ### Save file
-    table.protectSheet()
-    return table.save_bytes()
 
 
 #? I alread have gradeTableFile to read a raw table.
@@ -855,7 +944,30 @@ if __name__ == '__main__':
     _filepath = DATAPATH("testing/Noten/NOTEN_2/Noten_12.R_2")
     _gdata = read_DataTable(_filepath)
     _gdata = filter_DataTable(_gdata, _GRADE_DATA, matrix=True, extend=False)
-    print(_gdata)
+    print(_gdata, "\n")
+
+    _tbytes = makeChoiceTable("12G")
+    _tpath = DATAPATH("testing/tmp/ChoiceTable.xlsx")
+    _tdir = os.path.dirname(_tpath)
+    if not os.path.isdir(_tdir):
+        os.makedirs(_tdir)
+    with open(_tpath, "wb") as _fh:
+        _fh.write(_tbytes)
+    print(f"\nWROTE SUBJECT CHOICE TABLE TO {_tpath}\n")
+
+    _group = "12G.G"
+    _tbytes = makeGradeTable(term = "1", group = _group)
+#        ISSUE_D: Optional[str] = None,
+#        GRADES_D: Optional[str] = None)
+
+    _tpath = DATAPATH(f"testing/tmp/GradeTable-{_group}.xlsx")
+    _tdir = os.path.dirname(_tpath)
+    if not os.path.isdir(_tdir):
+        os.makedirs(_tdir)
+    with open(_tpath, "wb") as _fh:
+        _fh.write(_tbytes)
+    print(f"\nWROTE GRADE TABLE TO {_tpath}\n")
+
     quit(0)
 
     if True:

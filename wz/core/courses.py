@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
 """
-core/courses.py - last updated 2022-01-01
+core/courses.py
+
+Last updated:  2022-01-03
 
 Manage course/subject data.
 
-==============================
+=+LICENCE=============================
 Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +21,7 @@ Copyright 2022 Michael Towers
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+=-LICENCE========================================
 
 Use "data-tables" to contain the subject data for the classes as a mapping.
 
@@ -55,11 +58,6 @@ _MULTIPLE_SID = (
     "Fach-Kürzel {sid} wird in Klasse {klass} in sich"
     " überschneidenden Schülergruppen benutzt: {group1}, {group2}"
 )
-_UNKNOWN_GROUP = "Klasse {klass}: unbekannte Gruppe – '{group}'"
-
-_BAD_LINE = "Ungültige Zeile:\n  {line}\n  ... in {path}"
-_UNKNOWN_SID = "Unbekanntes Fach-Kürzel: {sid}"
-# _SCHOOLYEAR_MISMATCH = "Fachdaten: falsches Jahr ({year})"
 _MULTIPLE_PID_SID = (
     "Fach-Kürzel {sid} wird für {pname} (Klasse {klass})"
     " mehrfach definiert: Gruppen {groups}"
@@ -68,26 +66,21 @@ _NAME_MISMATCH = (
     "Fach-Kürzel {sid} hat in der Eingabe einen Namen"
     " ({name2}), der vom voreingestellten Namen ({name1}) abweicht"
 )
+_UNKNOWN_GROUP = "Klasse {klass}: unbekannte Gruppe – '{group}'"
+_INVALID_PUPIL_GROUPS = "Klasse {klass}:{pname} hat ungültige Gruppe(n):" \
+        " {groups}"
 
+#?
 _YEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {path}"
 _INFO_MISSING = "Info-Feld „{field}“ fehlt in Fachtabelle:\n  {fpath}"
-_FIELD_MISSING = "Feld „{field}“ fehlt in Fachtabelle:\n  {fpath}"
-_MULTI_COMPOSITE = (
-    "Fach mit Kürzel „{sid}“ ist Unterfach für mehrere" " Sammelfächer"
-)
-_NO_COMPONENTS = "Sammelfach {sid} hat keine Unterfächer"
-_NOT_A_COMPOSITE = "Unterfach {sid}: „{sidc}“ ist kein Sammelfach"
-_COMPOSITE_IS_COMPONENT = (
-    "Fach-Kürzel „{sid}“ ist sowohl als „Sammelfach“"
-    " als auch als „Unterfach“ definiert"
-)
 
 ### Fields
 _TITLE = "Fachdaten"
 
 ###############################################################
 
-import sys, os
+import sys, os, re
+from typing import Dict, List, Tuple, Optional
 
 if __name__ == "__main__":
     # Enable package import if running as module
@@ -104,7 +97,7 @@ if __name__ == "__main__":
 import datetime
 from glob import glob
 
-from core.base import Dates
+from core.base import Dates, class_group_split
 from core.pupils import Pupils
 from tables.spreadsheet import (
     read_DataTable,
@@ -116,8 +109,6 @@ from tables.spreadsheet import (
 )
 from tables.matrix import KlassMatrix
 from tables.datapack import get_pack, save_pack
-
-# year_path !
 
 
 class CourseError(Exception):
@@ -132,162 +123,198 @@ NOT_GRADED = "-"
 ### -----
 
 
+def clear_cache():
+    __SubjectsCache._instance = None
+
+
+class __SubjectsCache:
+    _instance = None
+
+    @classmethod
+    def instance(cls):
+        if not cls._instance:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+        self.schoolyear = SCHOOLYEAR
+        # ?
+        self.subject_names = None
+
+    #        self.cache_class_subjects: Dict[Tuple[], ] = {}
+
+    #    subjects: List[Tuple[str, str]]
+    #    sgmap: dict
+    #    group_data: dict
+
+    def sid2name(self, sid):
+        pass
+
+        #    def class_subjects(self, klass:str, grades:bool) -> Tuple[]:
+        if self.schoolyear == SCHOOLYEAR:
+            try:
+                return self.cache_class_subjects[(klass, grades)]
+            except KeyError:
+                pass
+        else:
+            clear_cache()
+
+
+# def Subjects():
+
+# def class_subjects(klass, grades=True):
+#    try:
+#        return
+#    __SubjectsCache.instance().class_subjects(klass, grades)
+
+
+def subject_name(sid):
+    s = __SubjectsCache.instance()
+
+
+# TODO: use cache for Subjects (resetting when year changes, or explicitly)
+
+
 class Subjects:
     """Manage the course/subject tables."""
 
-    __subjects = None  # cache for the classes' subject data
-    __subject_names = None  # cache for the subject name data
+    #    __subjects = None  # cache for the classes' subject data
+    #    __subject_names = None  # cache for the subject name data
 
-    @classmethod
-    def fetch(cls, reset=False):
-        """This is the main method for fetching the current data, which
-        is then cached in memory.
-        """
-        if reset:
-            cls.__subjects = None
-            return None
-        if not cls.__subjects:
-            cls.__subjects = cls()
-        return cls.__subjects
+    #    @classmethod
+    #    def fetch(cls, reset=False):
+    #        """This is the main method for fetching the current data, which
+    #        is then cached in memory.
+    #        """
+    #        if reset:
+    #            cls.__subjects = None
+    #            return None
+    #        if not cls.__subjects:
+    #            cls.__subjects = cls()
+    #        return cls.__subjects
 
-    # +
-    @classmethod
-    def subject_name(cls, sid=None, reset=False):
-        """If reset is true, clear the cache, return <None>.
-        Otherwise return the subject name for the given subject-id.
-        If the subject-id is not supplied, return the whole subject list
-        as a mapping: {subject-id: subject-name}.
-        """
-        if reset:
-            cls.__subject_names = None
-            return None
-        if not cls.__subject_names:
-            cls.__subject_names = MINION(DATAPATH(CONFIG["SUBJECT_DATA"]))
-        if sid:
-            try:
-                return cls.__subject_names[sid]
-            except KeyError as e:
-                raise CourseError(_UNKNOWN_SID.format(sid=sid))
-        return cls.__subject_names
-
-    #
     def __init__(self):
-        self.subject_names = MINION(DATAPATH(CONFIG["SUBJECT_DATA"]))
+        # All subject names: {sid: subject-name, ... }
+        self.sid2name: Dict[str, str]
+        #        self.class_info: Dict[str,str]
+        self.sid2name = MINION(DATAPATH(CONFIG["SUBJECT_DATA"]))
+        #        self.class_info = {}
+
+        # Cache for class "info" fields, access via method <class_info>:
+        # {class: {key: value, ... }, ...}
+        self.__class_info: Dict[str, Dict[str, str]]
+        self.__class_info = {}
+
+        # Cache for class course definition lines, access via method
+        # <class_subjects>: {class: [{field: value, ... }, ... ], ... }
+        self.__classes: Dict[str, List[Dict[str, str]]]
         self.__classes = {}
-        self.class_info = {}
+
+        # Cache for processed class group info: {class: GroupData()}
+        self.__group_info: Dict[str, GroupData]
+        self.__group_info = {}
+
+        # Caches for report subject data (whole class), access via methods
+        # report_subjects and report_sgmap
+        self.__report_subjects: Dict[Tuple[str, bool], List[Tuple[str, str]]]
+        self.__report_subjects = {}
+        self.__report_sgmap: Dict[Tuple[str, bool], Dict[str, Dict[str, dict]]]
+        self.__report_sgmap = {}
+
         # Fields:
-        config = MINION(DATAPATH("CONFIG/SUBJECT_DATA"))
+        self.config = MINION(DATAPATH("CONFIG/SUBJECT_DATA"))
         # Each class has a table-file (substitute {klass}):
         self.class_path = DATAPATH(CONFIG["SUBJECT_TABLE"])
-        for fpath in glob(self.class_path.format(klass="*")):
-            # print("READING", fpath)
-            class_table = read_DataTable(fpath)
-            try:
-                class_table = filter_DataTable(class_table, config)
-            except TableError as e:
-                raise CourseError(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
-            info = class_table["__INFO__"]
-            if info["SCHOOLYEAR"] != SCHOOLYEAR:
-                raise CourseError(_SCHOOLYEAR_MISMATCH.format(path=fpath))
-            klass = info["CLASS"]
-            if self.class_path.format(klass=klass) != fpath.split(".", 1)[0]:
-                raise CourseError(_CLASS_MISMATCH.format(path=fpath))
-            self.class_info[klass] = info
 
-            # TODO: manage groups ... for intersection testing ...
-
-            # TODO: Really remove subject names?
-            # Remove and check the subject names (the subject names are not
-            # stored in the internal table).
-            table = class_table["__ROWS__"]
-            for row in table:
-                sname = row.pop("SNAME")
-                sid = row["SID"]
-                sname0 = self.subject_names.get(sid) or "---"
-                if sname != sname0:
-                    REPORT(
-                        "WARNING",
-                        _NAME_MISMATCH.format(
-                            sid=sid, name1=sname0, name2=sname
-                        ),
-                    )
-            self.__classes[klass] = table
-
-    def classes(self):
+    def classes(self) -> List[str]:
         """Return a sorted list of class names."""
-        return sorted(self.__classes)
+        tpl = os.path.basename(self.class_path).format(klass="([^.]+)")
+        clist: List[str] = []
+        for f in os.listdir(os.path.dirname(self.class_path)):
+            rm = re.match(tpl, f)
+            if rm:
+                clist.append(rm.group(1))
+        clist.sort()
+        return clist
 
-    #
-    # TODO: May want to provide gui editor ... would then also need an exporter!
-    # TODO: Do I want to check the class before saving???
+    def class_subjects(self, klass: str) -> List[Dict[str, str]]:
+        if klass not in self.__classes:
+            self.__read_class_data(klass)
+        return self.__classes[klass]
 
-    # TODO: If using formatted source tables, I won't be able to edit and
-    # save them within WZ! – except by starting (e.g.) LibreOffice ...
-    def save(self):
-        """Save the couse data.
-        The first save of a day causes the current data to be backed up.
+    def class_info(self, klass: str) -> Dict[str, str]:
+        if klass not in self.__class_info:
+            self.__read_class_data(klass)
+        return self.__class_info[klass]
+
+    def __read_class_data(self, klass):
+        """Read the class subject data from the "database" for the
+        current year. The results are cached for access by the methods
+        <class_info> and <class_subjects>.
         """
-        timestamp = Dates.timestamp()
-        today = timestamp.split("_", 1)[0]
-        data = {
-            "__INFO__": {
-                "__TITLE__": _TITLE,
-                "SCHOOLYEAR": SCHOOLYEAR,
-                "__MODIFIED__": timestamp,
-            },
-            "__SUBJECTS__": self.__klasses,
-            "__CHOICES__": self.__optouts,
-        }
-        save_pack(self.filepath, data, today)
-        self.__modified = timestamp
+        fpath = self.class_path.format(klass=klass)
+        # print("READING", fpath)
+        class_table = read_DataTable(fpath)
+        try:
+            class_table = filter_DataTable(class_table, self.config)
+        except TableError as e:
+            raise CourseError(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
+        info = class_table["__INFO__"]
+        if info["SCHOOLYEAR"] != SCHOOLYEAR:
+            raise CourseError(_SCHOOLYEAR_MISMATCH.format(path=fpath))
+        if klass != info["CLASS"]:
+            raise CourseError(_CLASS_MISMATCH.format(path=fpath))
+        self.__class_info[klass] = info
 
-    #
-    # TODO: deprecated? see <class_subjects>
-    def grade_subjects(self, klass, grouptag=None):
-        """Return a mapping {sid -> subject-data} for the given group.
-        subject-data is also a mapping ({field -> value}).
-        An iterator over the subject-data mappings is available using
-        the <values> method of the result mapping. This should retain
-        the input order (automatic using the <dict> class).
+        # TODO: Really remove subject names?
+        # Remove and check the subject names (the subject names are not
+        # stored in the internal table).
+        table = class_table["__ROWS__"]
+        for row in table:
+            sname = row.pop("SNAME")
+            sid = row["SID"]
+            sname0 = self.sid2name.get(sid) or "---"
+            if sname != sname0:
+                REPORT(
+                    "WARNING",
+                    _NAME_MISMATCH.format(sid=sid, name1=sname0, name2=sname),
+                )
+        self.__classes[klass] = table
 
-        Note that the COMPOSITE field can contain multiple, space-
-        separated entries. Normally these are just the tag (~sid) of a
-        dependent special field, but they may take an optional argument
-        after a ':' (no spaces!). This could, for example, be used to
-        provide a weighting for averaging, e.g. '$D:2'.
-        Weights should be <int>, to preserve exact rounding.
+    def group_info(self, klass):
+        """Return the <GroupData> instance for the given class."""
+        try:
+            return self.__group_info[klass]
+        except KeyError:
+            pass
+        gi = GroupData(klass, self.class_info(klass)["GROUPS"])
+        self.__group_info[klass] = gi
+        return gi
+
+    def report_subjects(self, klass: str, grades=True) -> List[Tuple[str, str]]:
+        """Return a subject list: [(sid, subject-name), ... ]."""
+        try:
+            return self.__report_subjects[(klass, grades)]
+        except KeyError:
+            pass
+        return self.__report_subject_data(klass, grades)[0]
+
+    def report_sgmap(
+        self, klass: str, grades=True
+    ) -> Dict[str, Dict[str, dict]]:
+        """Return a mapping from subject and group to the subject data:
+        {sid: {group: subject-data (dict), ... }, ...}
         """
-        table = {}
-        # Read table rows
-        sclist = self._klasses.get(klass)
-        if sclist:
-            for sdata in sclist:
-                # Filter on GROUP and SGROUP fields
-                g = sdata["GROUP"]
-                if g != WHOLE_CLASS:
-                    if not grouptag:
-                        continue
-                    if grouptag != g:
-                        continue
-                sgroup = sdata["SGROUP"]
-                if sgroup and sgroup != "-":
-                    sid = sdata["SID"]
-                    if sid in table:
-                        # Only a single entry per sid is permitted
-                        raise CourseError(
-                            _MULTIPLE_SID.format(
-                                klass=klass, group=grouptag, sid=sid
-                            )
-                        )
-                    table[sid] = sdata
-        return table
+        try:
+            return self.__report_sgmap[(klass, grades)]
+        except KeyError:
+            pass
+        return self.__report_subject_data(klass, grades)[1]
 
-    def class_subjects(self, klass, grades=True):
-        """Return report-subject data for the given class:
-            (   [(sid, subject-name), ... ],
-
-                {sid: {group: subject-data (dict), ... }, ...}
-            )
+    def __report_subject_data(self, klass: str, grades: bool):
+        """Cache report subject data for the given class.
+        If <grades> is true, then the data is for grade reports, otherwise
+        text reports.
         Only the subjects with an entry in the SGROUP field, i.e.
         those for direct inclusion in reports, are included.
         If <grades> is true, also "composite" subjects will be included,
@@ -295,12 +322,12 @@ class Subjects:
         """
         table = []
         # Get all subject data
-        sclist = self.__classes.get(klass)
+        sclist = self.class_subjects(klass)
         subjects = []
         sgmap = {}
-        # Process group data
-        group_data = GroupData(klass, self.class_info[klass]["GROUPS"])
         if sclist:
+            # Get processed group data
+            group_data = self.group_info(klass)
             for sdata in sclist:
                 sg = sdata["GROUP"]
                 srs = sdata["SGROUP"]
@@ -315,7 +342,7 @@ class Subjects:
                         gmap = sgmap[sid]
                     except KeyError:
                         sgmap[sid] = {sg: sdata}
-                        subjects.append((sid, self.subject_name(sid)))
+                        subjects.append((sid, self.sid2name[sid]))
                         continue
                     # Check for overlapping with any existing entry.
                     s0 = group_data.element_groups[sg]
@@ -327,65 +354,95 @@ class Subjects:
                                 )
                             )
                     gmap[sg] = sdata
-        return subjects, sgmap, group_data
+        self.__report_subjects[(klass, grades)] = subjects
+        self.__report_sgmap[(klass, grades)] = sgmap
+        return subjects, sgmap
 
-# This was an attempt to list subject data for the pupils
+    # TODO: There should perhaps also be a function to check that a pupil
+    # is not in mutually exclusive groups.
+
+    # Consider a group G with members also in A and B, then consider a subject
+    # with distinct entries for A and B! Without complete group data for the
+    # pupils it may be impossible to determine whether a given pupil is in
+    # group A or group B. Thus, which course data to choosemay not be clear.
+    # This problem should be reported. The user can then decide whether to
+    # add a pupil group or adapt the course table. If the report doesn't
+    # break off execution, there would be a third choice: use the first
+    # matching set of course data (this is certainly not ideal, though).
+
+    def filter_pupil_group(
+        self,
+        class_group: str,
+        grades: bool = True,
+        date: Optional[str] = None
+    ) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str, dict]]]:
+        """Return the subject data for all pupils in the given group.
+        The first return value is the ordered subject list:
+            [(sid, subject-name), ... ]
+        The second return value is the ordered pupil list:
+            [(pid, pupil-name, pupil-groups, {sid: subject-data, ... }), ... ]
+        """
+        klass: str
+        group: str
+        klass, group = class_group_split(class_group)
+        subjects: List[Tuple[str, str]] = self.report_subjects(klass, grades)
+        sgmap: Dict[str, Dict[str, dict]] = self.report_sgmap(klass, grades)
+        group_data = self.group_info(klass)
+        if group:
+            pgset: Set[str] = group_data.element_groups[group]
+            slist = subjects
+            subjects = []
+            for sid, sname in slist:
+                for sg, sdata in sgmap[sid].items():
+                    if sg == "*" or (pgset & group_data.element_groups[sg]):
+                        subjects.append((sid, sname))
+                        break
         # Get pupil-data list
-        pupils = Pupils()
-        plist = pupils.class_pupils(klass)
+        plist: List[dict] = Pupils().class_pupils(klass, date=date)
+        table: List[Tuple[str, str, str, dict]] = []
         for pdata in plist:
+            _pgroups: str = pdata["GROUPS"]
+            pgroups: List[str] = _pgroups.split()
+            if group and group not in pgroups:
+                # The given group must be explicitly set for the pupil
+                continue
             pid = pdata["PID"]
-            pgroups = pdata["GROUPS"].split()
+            pname = pdata.name()
+            # Determine pupil's minimal group, as far as possible
+            try:
+                pset = frozenset.intersection(*[group_data.element_groups[pg]
+                    for pg in pgroups]
+                )
+            except KeyError:
+                raise CourseError(_INVALID_PUPIL_GROUPS.format(klass=klass,
+                        pname=pname, groups=_pgroups))
+
+#TODO: include groups for course / pupil???
+# subject for whole class is certainly valid
+# for pupil is valid ... if also for subject? Is a conflict possible?
+# Surely the pupil must be at least as restrictive ...
             psids = {}
-            table.append((pid, psids))
+            table.append((pid, pname, _pgroups, psids))
             for sid, gmap in sgmap.items():
                 for g, sdata in gmap.items():
-                    if g == WHOLE_CLASS or g in pgroups:
-                        try:
-                            sd0 = psids[sid]
-                        except KeyError:
-                            # ok!!
-                            psids[sid] = sdata
-                        else:
-                            g0 = sd0["GROUP"]
-                            raise CourseError(
+                    if g == WHOLE_CLASS or (
+#                        pgset & group_data.element_groups[g]
+                        pset & group_data.element_groups[g]
+                    ):
+                        if sid in psids:
+                            # raise CourseError(
+                            REPORT(
+                                "WARNING",
                                 _MULTIPLE_PID_SID.format(
                                     klass=klass,
-                                    pname=pdata.name(),
+                                    pname=pname,
                                     sid=sid,
-                                    groups=f"[{g0}, {g}]",
-                                )
+                                    groups=f"[{psids[sid]['GROUP']}, {g}]",
+                                ),
                             )
-        return {"__SUBJECTS__": subjects, "__PUPILS__": table}
-
-#TODO: There should perhaps also be a function to check that a pupil
-# is not in mutually exclusive groups.
-
-
-def filter_group(group, subjects, sgmap, group_data):
-    """Filter the subjects from <Subjects.class_subjects> for the
-    given group.
-    """
-    subjects2 = []
-    smap = {}
-    s0 = group_data.element_groups[group]
-    for sid, sname in subjects:
-        for sg, sdata in sgmap[sid].items():
-            if sg == '*' or (s0 & group_data.element_groups[sg]):
-
-                if sid in smap:
-                    raise CourseError(
-#??? ... klass???
-                        _MULTIPLE_FILTER_SID.format(
-                            klass=klass, sid=sid, group1=g, group2=sg
-                        )
-                    )
-
-                subjects2.append((sid, sname))
-                smap[sid] = sdata
-    return subjects2, smap
-
-
+                        else:
+                            psids[sid] = sdata
+        return subjects, table
 
 
 class GroupData:
@@ -720,35 +777,64 @@ class GroupData:
         table.protectSheet()
         return table.save()
 
+    #
+    # TODO: May want to provide gui editor ... would then also need an exporter!
+    # TODO: Do I want to check the class before saving???
+
+    # TODO: If using formatted source tables, I won't be able to edit and
+    # save them within WZ! – except by starting (e.g.) LibreOffice ...
+    def save(self):
+        """Save the couse data.
+        The first save of a day causes the current data to be backed up.
+        """
+        timestamp = Dates.timestamp()
+        today = timestamp.split("_", 1)[0]
+        data = {
+            "__INFO__": {
+                "__TITLE__": _TITLE,
+                "SCHOOLYEAR": SCHOOLYEAR,
+                "__MODIFIED__": timestamp,
+            },
+            "__SUBJECTS__": self.__klasses,
+            "__CHOICES__": self.__optouts,
+        }
+        save_pack(self.filepath, data, today)
+        self.__modified = timestamp
+
+    #
+
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
     #    import io
     _subjects = Subjects()
-    print("SUBJECTS:", _subjects.subject_names)
+    print("SUBJECTS:", _subjects.sid2name)
 
     print("\nINITIAL CLASSES:", _subjects.classes())
 
     _klass = "11G"
-    # clsubjs = _subjects.class_subjects(_klass, grades=False)
-    _slist, _sgmap, _gdata = _subjects.class_subjects(_klass)
+    _sgmap = _subjects.report_sgmap(_klass)
+    _slist = _subjects.report_subjects(_klass)
     print(f"\n Class {_klass}, subjects:")
     for _sid, _sname in _slist:
         print(f"   +++++ {_sid}: {_sname}")
         for _sg, _sdata in _sgmap[_sid].items():
             print(f"      -- {_sg}: {repr(_sdata)}")
 
+    _gdata = _subjects.group_info(_klass)
     print("\n*** minimal_subgroups:\n", _gdata.minimal_subgroups)
     print("\n*** element_groups:\n", _gdata.element_groups)
     print("\n*** divisions:\n", _gdata.divisions)
     print("\n*** class_groups:\n", _gdata.class_groups)
     print("\n*** groupsets_class:\n", _gdata.groupsets_class)
+    print("\n *****************************************\n")
 
-    _slist2, _smap = filter_group("R", _slist, _sgmap, _gdata)
-    print(f"\n Class {_klass}, subjects for group 'R':")
-    for _sid, _sname in _slist2:
-        print(f"   +++++ {_sid}: {_sname}\n  {repr(_smap[_sid])}")
+    _table = _subjects.filter_pupil_group("11G.G")
+    print(f"\n Class 11G, subjects for group 'G':\n", _table[0])
+    print("\n Class 11G, pupils for group 'G':")
+    for _pid, _pname, _pgroups, _smap in _table[1]:
+        print(f"\n   +++++ {_pname}: {repr(_smap)}")
 
     print("\n *****************************************")
     _gdata = GroupData("12G", "A.G B.G B.R | P Q")
@@ -759,6 +845,7 @@ if __name__ == "__main__":
     print("\n*** groupsets_class:\n", _gdata.groupsets_class)
 
     quit(0)
+    ########################################################################
 
     print("\nIMPORT SUBJECT TABLES:")
     sdir = DATAPATH("testing/FACHLISTEN")

@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 tables/spreadsheet.py
 
-Last updated:  2022-01-01
+Last updated:  2022-01-02
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -28,7 +27,6 @@ Copyright 2022 Michael Towers
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
-
 =-LICENCE========================================
 """
 

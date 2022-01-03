@@ -1,12 +1,12 @@
 """
 core/base.py
 
-Last updated:  2021-12-19
+Last updated:  2022-01-03
 
 Basic configuration and structural stuff.
 
 =+LICENCE=================================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ NO_DATE = "*"  # an unspecified date
 ########################################################################
 
 import sys, os, re, builtins, datetime
+from typing import Optional, Tuple
 
 if __name__ == "__main__":
     # Enable package import if running module directly
@@ -311,6 +312,25 @@ class Dates:
         rematch = r"([0-9]{4})"
         text = re.sub(rematch, fn_sub, caltext)
         return cls.save_calendar(text, save=False)
+
+
+def class_group_split(class_group: str) -> Tuple[str,str]:
+    """Split a full group descriptor (class.group) into class and group.
+    """
+    try:
+        class_group, g = class_group.split(".", 1)
+    except ValueError:
+        g = ""
+    return class_group, g
+
+
+def class_group_join(klass:str, group: Optional[str] = None) -> str:
+    """Make a full group descriptor (class or class.group) from the
+    given class and optional group.
+    """
+    if group:
+        return f"{klass}.{group}"
+    return klass
 
 
 # TODO:

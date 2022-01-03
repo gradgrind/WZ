@@ -1,18 +1,23 @@
 #+++ __TITLE__   : Konfiguration der Notenzeugnisse, abhängig von der Schülergruppe
 #+++ __MINION__  :  2.0
-#+++ __MODIFIED__: 2021-12-30
+#+++ __MODIFIED__: 2022-01-03
 #--------------------------------------------------------------
+
+&NORMAL_GRADES: [1+ 1 1- 2+ 2 2- 3+ 3 3- 4+ 4 4- 5+ 5 5- 6
+        * nt t nb /]
+&ABITUR_GRADES: [15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00
+        * nt t nb /]
 
 # Voreinstellungen ("defaults")
 __DEFAULT__: {
-    # Es gibt "SekI" und "SekII".
-    Stufe: SekI
+    # Stufe, es gibt "SekI" und "SekII".
+    Level: SekI
 
-    # (engl. "grade table template"):
+    # Vorlage für die Notentabellen:
     GradeTableTemplate: Noten/Noteneingabe
 
-    # (engl. "grade report template"):
-    NotenzeugnisVorlage: [
+    # Vorlagen für die Notenzeugnisse:
+    GradeReportTemplate: [
         [Zeugnis      SekI]
         [Abgang       SekI-Abgang]
         [Abschluss    SekI-Abschluss]
@@ -20,16 +25,14 @@ __DEFAULT__: {
     ]
 
     # Notengruppen, deren Noten nicht im Zeugnis erscheinen:
-    Nullgruppen: []
+    Nongraded: []
 
-    # Welche Bewertungsmaßstäbe (engl. "streams") in dieser Gruppe
-    # zulässig sind:
+    # Welche Bewertungsmaßstäbe in dieser Gruppe zulässig sind:
     # leer => keine Untergruppen in dieser Klasse/Gruppe
-    Maßstäbe: []
+    Streams: []
 
-    # (extra "grade" fields in internal table):
-    # Zusätzliche "Notenfelder" in interner Notentabelle
-    Notenfelder_X: [
+    # Zusätzliche "Notenfelder" in "interner" Notentabelle:
+    GradeFields_X: [
         # Zulässige Zeugnisarten (je nach Anlass)
         [*ZA "Zeugnis (Art)"]
         # Angeben, dass es Bemerkungen gibt:
@@ -41,14 +44,14 @@ __DEFAULT__: {
     # Berechnete Felder, z.B. Durchschnitte für Notenkonferenz:
     Calc: []
     # gültige "Noten":
-    NotenWerte: &NORMAL_GRADES
+    ValidGrades: &NORMAL_GRADES
 }
 
 # Gruppe '13':
 13: {
-    Stufe: SekII
+    Level: SekII
     GradeTableTemplate: Noten/Noteneingabe-Abitur
-    NotenzeugnisVorlage: [
+    GradeReportTemplate: [
         [Zeugnis SekII-13_1]
         [Abgang  SekII-13-Abgang]
         [Abi     Abitur]
@@ -56,7 +59,7 @@ __DEFAULT__: {
         [NA      Abitur-nicht-bestanden]
     ]
 
-    Notenfelder_X: [
+    GradeFields_X: [
         # Zulässige Zeugnisarten (je nach Anlass)
         [*ZA "Zeugnis (Art)"]
         # Datum des Zeugnisses (kann von den anderen Datumsfeldern abweichen!)
@@ -76,20 +79,20 @@ __DEFAULT__: {
     ]
     .Q/Abitur: RESULT
 
-    NotenWerte: &ABITUR_GRADES
+    ValidGrades: &ABITUR_GRADES
 }
 
-12.G: {
-    Stufe: SekII
+12G.G: {
+    Level: SekII
     GradeTableTemplate: Noten/Noteneingabe-SII
-    NotenzeugnisVorlage: [
+    GradeReportTemplate: [
         [Zeugnis  SekII-12]
         [Abgang   SekII-12-Abgang]
     ]
-    Nullgruppen: [X]
-    Maßstäbe: [Gym]
+    Nongraded: [X]
+    Streams: [G]
 
-    Notenfelder_X: [
+    GradeFields_X: [
         # Zulässige Zeugnisarten (je nach Anlass):
         [*ZA "Zeugnis (Art)"]
         # Versetzung, usw.:
@@ -103,13 +106,13 @@ __DEFAULT__: {
     *Q/2._Halbjahr: [Erw RS HS]
     *Q: [HS]
 
-    NotenWerte: &ABITUR_GRADES
+    ValidGrades: &ABITUR_GRADES
 }
 
-12.R: {
-    Maßstäbe: [RS HS]
+12G.R: {
+    Streams: [R H]
 
-    Notenfelder_X: [
+    GradeFields_X: [
         # Zulässige Zeugnisarten (je nach Anlass):
         [*ZA "Zeugnis (Art)"]
         # Abschluss, usw.:
@@ -131,10 +134,10 @@ __DEFAULT__: {
     .Dx: AVERAGE
 }
 
-11.G: {
-    Maßstäbe: [Gym]
+11G.G: {
+    Streams: [G]
 
-    Notenfelder_X: [
+    GradeFields_X: [
         # Zulässige Zeugnisarten (je nach Anlass):
         [*ZA "Zeugnis (Art)"]
         # Abschluss, usw.:
@@ -153,10 +156,10 @@ __DEFAULT__: {
     .D: AVERAGE
 }
 
-11.R: {
-    Maßstäbe: [RS HS]
+11G.R: {
+    Streams: [R H]
 
-    Notenfelder_X: [
+    Grade_Fields_X: [
         # Zulässige Zeugnisarten (je nach Anlass):
         [*ZA <<<Zeugnis (Art)>>>]
         # Abschluss, usw.:
@@ -177,8 +180,8 @@ __DEFAULT__: {
     .Dx: AVERAGE
 }
 
-10: {
-    Notenfelder_X: [
+10G: {
+    GradeFields_X: [
         # Zulässige Zeugnisarten (je nach Anlass):
         [*ZA "Zeugnis (Art)"]
         # Abschluss, usw.:
