@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-01-05
+Last updated:  2022-01-06
 
 Access grade data, read and build grade tables.
 
@@ -35,6 +35,7 @@ _NO_INFO_FOR_GROUP = (
 )
 _TEMPLATE_HEADER_WRONG = "Fehler bei den Kopfzeilen der Vorlage:\n {path}"
 _MISSING_KEY = "Eintrag fehlt in Konfigurationsdatei: {key}"
+_GRADE_MISSING = "Leeres Notenfeld im Fach {sid}, Tabelle:\n  {path}"
 
 _TABLE_CLASS_MISMATCH = "Falsche Klasse/Gruppe in Notentabelle:\n  {filepath}"
 _TABLE_TERM_MISMATCH = 'Falscher "Anlass" in Notentabelle:\n  {filepath}'
@@ -119,7 +120,9 @@ class FailedSave(Exception):
     pass
 
 
-###
+NO_GRADE = '*'
+
+### -----
 
 
 def get_with_default(
@@ -257,7 +260,7 @@ def rawGradeTableFile(filepath: str) -> dict:
     )
 
 
-def readGradeFile(filepath: str):
+def readGradeFile(filepath: str, check_complete: bool = False) -> Dict[str,Any]:
     dtable = rawGradeTableFile(filepath)
     subject_tags = dtable["__XFIELDS__"]
     #    print("info:", dtable["__INFO__"])
@@ -275,125 +278,197 @@ def readGradeFile(filepath: str):
             gdata[pid] = grades
         for sid in subject_tags:
             g = pdata[sid]
-            if g and g not in (NULL, UNCHOSEN):
-                grades[sid] = g
-    #        print(f"\nPID {pid}: {repr(grades)}")
+            if (not g) and check_complete:
+                REPORT("WARNING", _GRADE_MISSING.format(sid=sid,
+                        path=filepath))
+#            if g and g not in (NULL, UNCHOSEN):
+            grades[sid] = g
     dtable["__GRADEMAP__"] = gdata
     return dtable
 
 
-#TODO: Collect the grade stuff as a class instance? read_subject_details?
-def completeGradeTable(gradetable):
-    """Use the subject/course information to handle "composite" subjects
-    and other special cases (e.g. averages).
+class GradeTable:
+    """Manage the grade data for one group in one "term" – corresponding
+    to the contents of a single grade table.
     """
-    info: Dict[str, str] = gradetable["__INFO__"]
-    group = info["GROUP"]
-    if info["SCHOOLYEAR"] != SCHOOLYEAR:
-        raise GradeTableError(
-            _TABLE_YEAR_MISMATCH.format(filepath=info["__FILEPATH__"])
+    def __init__(self, gradetable: dict):
+        """Use the subject/course information to handle "composite" subjects
+        and other special cases (e.g. averages).
+        <gradetable> is a structure such as is return by the function
+        <readGradeFile>.
+        """
+        info: Dict[str, str] = gradetable["__INFO__"]
+        self.group = info["GROUP"]
+        self.term = info["TERM"]
+        self.grades_date = info["GRADES_D"]
+        self.issue_data = info["ISSUE_D"]
+        if info["SCHOOLYEAR"] != SCHOOLYEAR:
+            raise GradeTableError(
+                _TABLE_YEAR_MISMATCH.format(filepath=info["__FILEPATH__"])
+            )
+        ### Get subjects for grade reports
+        subjects = Subjects()
+        # Check the subject names in the input file
+        for sid, name in gradetable["__SUBJECT_NAMES__"].items():
+            subjects.check_subject_name(sid, name)
+        class_subjects: List[Tuple[str, str]]
+        class_pupils: List[Tuple[str, str, dict]]
+        class_subjects, class_pupils = subjects.filter_pupil_group(
+            self.group, date=self.grades_date
         )
-    ### Get subjects for grade reports
-    subjects = Subjects()
-    # Check the subject names in the input file
-    for sid, name in gradetable["__SUBJECT_NAMES__"].items():
-        subjects.check_subject_name(sid, name)
-    class_subjects: List[Tuple[str, str]]
-    class_pupils: List[Tuple[str, str, dict]]
-    class_subjects, class_pupils = subjects.filter_pupil_group(
-        group, date=info["GRADES_D"]
-    )
-    # Do I really need to go through the subject lists for each pupil?
-    # I suppose, in principle, the calculations could vary from pupil to
-    # pupil. That would be unintended, but perhaps difficult to avoid as
-    # an error-prone possibility ...
+        # Do I really need to go through the subject lists for each pupil?
+        # I suppose, in principle, the calculations could vary from pupil to
+        # pupil. That would be unintended, but perhaps difficult to avoid as
+        # an error-prone possibility ...
+        self.pupils_grade_data = [
+            PupilGradeData(
+                pupilid=pid,
+                pupilname=pname,
+                pupilgroups=pgroups,
+                subjectdata=sdata,
+                grades=gradetable["__GRADEMAP__"][pid],
+            )
+            for pid, pname, pgroups, sdata in class_pupils
+        ]
 
-    pupil_grade_data: List[
-        Tuple[str, str, str, Dict[str, List[str]], Dict[str, Dict[str, str]]]
-    ] = []
-    for pid, pname, pgroups, sdata in class_pupils:
-        calcs, psdata = read_subject_details(sdata)
-        pupil_grade_data.append((pid, pname, pgroups, calcs, psdata))
 
-#TODO: Where are the grades, what about doing the calculations?
+# TODO: Where are the grades, what about doing the calculations?
 # The latter presumably as a separate function, so that it can be repeated
 # on changed data.
 
-    return pupil_grade_data
 
-
-def read_subject_details(
-    sdata: Dict[str, Dict[str, str]]
-) -> Tuple[Dict[str, List[str]], Dict[str, Dict[str, str]]]:
-    """Extract and process the subject data needed for grade reports.
-    The dependencies of composite and calculated fields are determined.
+class PupilGradeData:
+    """Manage the grades for a single pupil
     """
-    components: Dict[str, List[str]] = {}
-    composites: Set[str] = set()
-    psdata: Dict[str, Dict[str, str]] = {}
-    for sid, smap in sdata.items():
-        psmap = {
-            "TIDS": smap["TIDS"],
-            "GROUP": smap["GROUP"],
-            "SGROUP": smap["SGROUP"],
-        }
-        psdata[sid] = psmap
-        # TODO: allow weighting?
-        cmpst = smap["COMPOSITE"]
-        dependers: List[str] = cmpst.split() if cmpst else []
-        if dependers:
-            for d in dependers:
-                if d[0] != "$":
-                    # Entries must be COMPOSITE or CALC
-                    raise GradeTableError(_BAD_DEPENDER.format(sid=d))
-                if len(d) > 1 and d[1] == "$":
-                    # A CALC
+    def __init__(
+        self,
+        pupilid: str,
+        pupilname: str,
+        pupilgroups: str,
+        subjectdata: Dict[str, Dict[str, str]],
+        grades: Dict[str, str],
+    ):
+        """Extract and process the subject data needed for grade reports.
+        The dependencies of composite and calculated fields are determined.
+        """
+        self.pid = pupilid
+        self.name = pupilname
+        self.groups = pupilgroups.split()
+        self.grades = grades
+        components: Dict[str, List[str]] = {}
+        specials: Set[str] = set()
+        self.pupil_subjects: Dict[str, Dict[str, str]] = {}
+        for sid, smap in subjectdata.items():
+            psmap = {
+                "TIDS": smap["TIDS"],
+                "GROUP": smap["GROUP"],
+                "SGROUP": smap["SGROUP"],
+            }
+            self.pupil_subjects[sid] = psmap
+            # TODO: allow weighting?
+            cmpst = smap["COMPOSITE"]
+            dependers: List[str] = cmpst.split() if cmpst else []
+            if dependers:
+                for d in dependers:
+                    if d[0] != "$":
+                        # Entries must be COMPOSITE or CALC
+                        raise GradeTableError(_BAD_DEPENDER.format(sid=d))
+                    if len(d) > 1 and d[1] == "$":
+                        # A CALC
+                        try:
+                            psmap["CALCS"].append(d)
+                        except KeyError:
+                            psmap["CALCS"] = [d]
+                        # psmap["COMPOSITE"] = None
+                    else:
+                        # A COMPOSITE, possibly "$"
+                        if sid[0] == "$":
+                            # A composite may not be a component of another composite
+                            raise GradeTableError(
+                                _COMPOSITE_COMPONENT.format(sid=sid, comp=d)
+                            )
+                        if len(dependers) != 1:
+                            # A composite must be the only entry
+                            raise GradeTableError(
+                                _COMPOSITE_NOT_ALONE.format(sid=sid, comp=d)
+                            )
+                        # The COMPOSITE field is correct
+                        psmap["COMPOSITE"] = cmpst
                     try:
-                        psmap["CALCS"].append(d)
+                        components[d].append(sid)
                     except KeyError:
-                        psmap["CALCS"] = [d]
-                    # psmap["COMPOSITE"] = None
+                        components[d] = [sid]
+            if sid[0] == "$":
+                if len(sid) == 1:
+                    raise GradeTableError(_NULL_COMPOSITE)
+                if sid[1] == "$":
+                    # CALC item – should not have an entry in the subjects table
+                    raise GradeTableError(_BAD_COMPOSITE.format(sid=sid))
                 else:
-                    # A COMPOSITE, possibly "$"
-                    if sid[0] == "$":
-                        # A composite may not be a component of another composite
-                        raise GradeTableError(
-                            _COMPOSITE_COMPONENT.format(sid=sid, comp=d)
-                        )
-                    if len(dependers) != 1:
-                        # A composite must be the only entry
-                        raise GradeTableError(
-                            _COMPOSITE_NOT_ALONE.format(sid=sid, comp=d)
-                        )
-                    # The COMPOSITE field is correct
-                    psmap["COMPOSITE"] = cmpst
-                try:
-                    components[d].append(sid)
-                except KeyError:
-                    components[d] = [sid]
-        if sid[0] == "$":
-            if len(sid) == 1:
-                raise GradeTableError(_NULL_COMPOSITE)
-            if sid[1] == "$":
-                # CALC item – should not have an entry in the subjects table
-                raise GradeTableError(_BAD_COMPOSITE.format(sid=sid))
+                    # COMPOSITE item
+                    specials.add(sid)
+        self.calcs: Dict[str, List[str]] = {}
+        self.composites: Dict[str, List[str]] = {}
+        for c, clist in components.items():
+            try:
+                specials.remove(c)
+            except KeyError:
+                if c.startswith("$$"):
+                    # CALC item
+                    # The handler should be provided by "local" code.
+                    self.calcs[c] = clist
             else:
-                # COMPOSITE item
-                composites.add(sid)
-    calcs: Dict[str, List[str]] = {}
-    for c, clist in components.items():
-        try:
-            composites.remove(c)
-        except KeyError:
-            if c.startswith("$$"):
-                # CALC item
-                # The handler should be provided by "local" code.
-                calcs[c] = clist
+                self.composites[c] = clist
+        for c in specials:
+            REPORT("WARNING", _EMPTY_COMPOSITE.format(sid=c))
+
+    def calculate(self):
+        """Perform the calculations demanded by the COMPOSITES and the
+        CALCS.
+        """
+        ### Start with the composites
+        for csid, clist in self.composites.items():
+            self.grades[csid] = self.composite_calc(clist)
+            print("\n???", self.name, csid, self.grades[csid])
+#TODO ...
+
+
+# TODO: local?
+    def composite_calc(self, clist):
+        """Recalculate a composite grade.
+        <sdata> is the subject-data for the composite, the (weighted)
+        average of the components will be calculated, if possible.
+        If there are no numeric grades, choose NO_GRADE, unless all
+        components are UNCHOSEN (in which case also the composite will
+        be UNCHOSEN).
+        """
+#TODO: allow weighting of components?
+        weight = 1
+        asum = 0
+        ai = 0
+        non_grade = UNCHOSEN
+        for csid in clist:
+# Can the netry be missing?
+            g = self.grades[csid]
+            if g:
+                try:
+                    gi = int(g.rstrip("+-"))
+                except ValueError:
+                    if g not in (UNCHOSEN, NULL):
+                        non_grade = NO_GRADE
+                    continue
+                ai += weight
+                asum += gi * weight
+            else:
+                non_grade = NO_GRADE
+        if ai:
+            g = Frac(asum, ai).round()
+            return g
+#TODO: return g.zfill(2) if self.sekII else g.zfill(1)
+            return self.grade_format(g)
         else:
-            psdata[c]["COMPONENTS"] = clist
-    for c in composites:
-        REPORT("WARNING", _EMPTY_COMPOSITE.format(sid=c))
-    return calcs, psdata
+            return non_grade
+
 
 
 # TODO
@@ -423,31 +498,6 @@ def grade_average(grades: List[str], rounding: int = 2):
         return "–––"
 
 
-# TODO
-def composite_calc(sdata):
-    """Recalculate a composite grade.
-    <sdata> is the subject-data for the composite, the (weighted)
-    average of the components will be calculated, if possible.
-    If there are no numeric grades, choose NO_GRADE, unless all
-    components are UNCHOSEN (in which case also the composite will
-    be UNCHOSEN).
-    """
-    asum = 0
-    ai = 0
-    non_grade = UNCHOSEN
-    for csid, weight in sdata.composite:
-        gi = self.i_grade[csid]
-        if gi >= 0:
-            ai += weight
-            asum += gi * weight
-        elif self[csid] != UNCHOSEN:
-            non_grade = NO_GRADE
-    if ai:
-        g = Frac(asum, ai).round()
-        self[sdata.sid] = self.grade_format(g)
-        self.i_grade[sdata.sid] = int(g)
-    else:
-        self[sdata.sid] = non_grade
 
 
 class Frac(Fraction):
@@ -1028,7 +1078,7 @@ class NewGradeTable(_GradeTable):
 ###
 
 
-class GradeTable(_GradeTable):
+class __GradeTable(_GradeTable):
     def __init__(self, schoolyear, group, term, ok_new=False):
         """If <ok_new> is true, a new table may be created, otherwise
         the table must already exist.
@@ -1141,18 +1191,20 @@ if __name__ == "__main__":
     _GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
     _filepath = DATAPATH("testing/Noten/NOTEN_1/Noten_12G.G_1")
     _filepath = DATAPATH("testing/Noten/NOTEN_1/Noten_12G.R_1")
-    _gdata = readGradeFile(_filepath)
+    _gdata = readGradeFile(_filepath, check_complete=True)
     for key, val in _gdata.items():
         print(f"\n** {key}: {repr(val)}")
     print("\n ... complete grade table")
-    _cgtable = completeGradeTable(_gdata)
-    for pid, pname, pgroups, calcs, psdata in _cgtable:
-        print("\n???X", pid, pname)
-        for sid, smap in psdata.items():
+    _cgtable = GradeTable(_gdata)
+    for pgdata in _cgtable.pupils_grade_data:
+        print("\n???X", pgdata.pid, pgdata.name)
+        for sid, smap in pgdata.pupil_subjects.items():
             print(f"§§§ {sid}: {repr(smap)}")
-        print("\n--- CALCS:", calcs)
-        print("\n--- GRADES:", _gdata["__GRADEMAP__"][pid])
+        print("\n--- COMPOSITES:", pgdata.composites)
+        print("\n--- CALCS:", pgdata.calcs)
+        print("\n--- GRADES:", pgdata.grades)
 
+        pgdata.calculate()
     #    _gdata = read_DataTable(_filepath)
     #    _gdata = filter_DataTable(_gdata, _GRADE_DATA, matrix=True, extend=False)
     quit(0)
