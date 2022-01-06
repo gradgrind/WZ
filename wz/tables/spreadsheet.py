@@ -1,7 +1,7 @@
 """
 tables/spreadsheet.py
 
-Last updated:  2022-01-02
+Last updated:  2022-01-04
 
 Spreadsheet file reader, returning all cells as strings.
 For reading, simple tsv files (no quoting, no escapes), Excel files (.xlsx)
@@ -380,9 +380,10 @@ def read_DataTable(filepath_or_stream):
     The records are returned as a list of mappings {field: value}. This
     list is available as the '__ROWS__' value.
     """
-    table = Spreadsheet(filepath_or_stream).table()
+    ss = Spreadsheet(filepath_or_stream)
+    table = ss.table()
     rows = []
-    info = {}
+    info = {"__FILEPATH__": ss.filepath}
     header = []
     fields = []
     for row in table:

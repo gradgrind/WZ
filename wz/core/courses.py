@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
-
 """
 core/courses.py
 
-Last updated:  2022-01-03
+Last updated:  2022-01-04
 
 Manage course/subject data.
 
@@ -26,8 +24,8 @@ Copyright 2022 Michael Towers
 
 ### Messages
 _FILTER_ERROR = "Fachdaten-Fehler: {msg}"
-_SCHOOLYEAR_MISMATCH = "Fachdaten: falsches Jahr in\n{path}"
-_CLASS_MISMATCH = "Fachdaten: falsche Klasse in\n{path}"
+_SCHOOLYEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {path}"
+_CLASS_MISMATCH = "Falsche Klasse in\n{path}"
 _MULTIPLE_SID = (
     "Fach-Kürzel {sid} wird in Klasse {klass} in sich"
     " überschneidenden Schülergruppen benutzt: {group1}, {group2}"
@@ -40,18 +38,15 @@ _NAME_MISMATCH = (
     "Fach-Kürzel {sid} hat in der Eingabe einen Namen"
     " ({name2}), der vom voreingestellten Namen ({name1}) abweicht"
 )
+SUBJECT_NOT_REGISTERED = "Fach-Kürzel {sid} ({name}) ist nicht in der Fachliste"
 _UNKNOWN_GROUP = "Klasse {klass}: unbekannte Gruppe – '{group}'"
 _INVALID_PUPIL_GROUPS = (
     "Klasse {klass}:{pname} hat ungültige Gruppe(n):" " {groups}"
 )
 _TEMPLATE_HEADER_WRONG = "Fehler bei den Kopfzeilen der Vorlage:\n {path}"
 
-# ?
-_YEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {path}"
-_INFO_MISSING = "Info-Feld „{field}“ fehlt in Fachtabelle:\n  {fpath}"
-
 ### Fields
-_TITLE = "Fachdaten"
+# _TITLE = "Fachdaten"
 _TITLE_COURSE_CHOICE = "Fächerwahl"
 
 ###############################################################
@@ -73,16 +68,9 @@ if __name__ == "__main__":
 
 import datetime
 
-from core.base import Dates, class_group_split
-from core.pupils import Pupils
-from tables.spreadsheet import (
-    read_DataTable,
-    filter_DataTable,
-    make_DataTable,
-    make_DataTable_filetypes,
-    TableError,
-    spreadsheet_file_complete,
-)
+from core.base import class_group_split
+from core.pupils import Pupils, PupilData
+from tables.spreadsheet import read_DataTable, filter_DataTable, TableError
 from tables.matrix import KlassMatrix
 
 
@@ -92,7 +80,7 @@ class CourseError(Exception):
 
 WHOLE_CLASS = "*"
 NULL = "X"
-# UNCHOSEN = "/"
+UNCHOSEN = "/"
 # NOT_GRADED = "-"
 
 ### -----
@@ -262,8 +250,8 @@ class __SubjectsCache:
         """
         # Get all subject data
         sclist = self.class_subjects(klass)
-        subjects = []
-        sgmap = {}
+        subjects: List[Tuple[str, str]] = []
+        sgmap: Dict[str, Dict[str, dict]] = {}
         if sclist:
             # Get processed group data
             group_data = self.group_info(klass)
@@ -303,15 +291,16 @@ class __SubjectsCache:
     # Consider a group G with members also in A and B, then consider a subject
     # with distinct entries for A and B! Without complete group data for the
     # pupils it may be impossible to determine whether a given pupil is in
-    # group A or group B. Thus, which course data to choosemay not be clear.
-    # This problem should be reported. The user can then decide whether to
-    # add a pupil group or adapt the course table. If the report doesn't
-    # break off execution, there would be a third choice: use the first
-    # matching set of course data (this is certainly not ideal, though).
+    # group A or group B. Thus, it may not be clear which course data to
+    # choose This problem should be reported. The user can then decide
+    # whether to add a pupil group or adapt the course table. If the
+    # report doesn't break off execution, there would be a third choice:
+    # use the first matching set of course data (this is certainly not
+    # ideal, though).
 
     def filter_pupil_group(
         self, class_group: str, grades: bool = True, date: Optional[str] = None
-    ) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str, dict]]]:
+    ) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str, str, dict]]]:
         """Return the subject data for all pupils in the given group.
         The first return value is the ordered subject list:
             [(sid, subject-name), ... ]
@@ -336,7 +325,7 @@ class __SubjectsCache:
                         subjects.append((sid, sname))
                         break
         # Get pupil-data list
-        plist: List[dict] = Pupils().class_pupils(klass, date=date)
+        plist: List[PupilData] = Pupils().class_pupils(klass, date=date)
         table: List[Tuple[str, str, str, dict]] = []
         for pdata in plist:
             _pgroups: str = pdata["GROUPS"]
@@ -362,7 +351,7 @@ class __SubjectsCache:
             # subject for whole class is certainly valid
             # for pupil is valid ... if also for subject? Is a conflict possible?
             # Surely the pupil must be at least as restrictive ...
-            psids = {}
+            psids: Dict[str, Dict[str, str]] = {}
             table.append((pid, pname, _pgroups, psids))
             for sid, gmap in sgmap.items():
                 for g, sdata in gmap.items():
@@ -386,209 +375,20 @@ class __SubjectsCache:
                             psids[sid] = sdata
         return subjects, table
 
-    # -------------------------------------------------------
-
-    # TODO
-    def migrate(self):
-        self.schoolyear = str(int(self.schoolyear) + 1)
-        self.filepath = year_path(self.schoolyear, self.COURSE_TABLE)
-        self.save()
-
-    #
-    # TODO: It is not clear that this method is actually needed!
-    def chosen(self, pid):
-        """Return a mapping {sid -> subject-data} for chosen, valid sids
-        for the given pupil.
-        All subjects are included which are valid for the pupil's groups
-        and which are not marked in the choices table.
-        The values are cached, and the cache must be initialized by
-        calling this method with pid = <None>.
-        """
-        if not pid:
-            # Initialization
-            self._pid_choices = None
-            return
-        if not self._pid_choices:
-            self._pid_choices = {}
-            # klass???
-            pid_sidmap, sid_name = self.class_subjects(klass)
-            # Note that this includes "composite" subjects
-            pupils = PUPILS(SCHOOLYEAR)
-            for pid, sid_sdata in pid_sidmap.items():
-                pdata = pupils[pid]
-                pid = pdata["PID"]
-                # Get saved choices
-                pchoice = self.optouts(pid)
-                clist = {
-                    sid: sdata
-                    for sid, sdata in sid_sdata.items()
-                    if sid not in pchoice
-                }
-                self._pid_choices[pid] = clist
-        return self._pid_choices[pid]
-
-    #
-    def optouts(self, pid):
-        """Return a set of subjects which the given pupil has opted out of."""
+    def check_subject_name(self, sid, name):
         try:
-            return set(self.__optouts[pid])
+            if self.sid2name[sid] != name:
+                REPORT(
+                    "WARNING",
+                    _NAME_MISMATCH.format(
+                        sid=sid, name1=self.sid2name[sid], name2=name
+                    ),
+                )
         except KeyError:
-            return set()
+            REPORT(
+                "WARNING", _SUBJECT_NOT_REGISTERED.format(sid=sid, name=name)
+            )
 
-    #
-    # TODO
-    def save_choices(self, klass, data):
-        """Save the choices for the given class.
-        Note that the parameter <klass> is not used here, as choices
-        are saved purely on the basis of their pid.
-        Thus <data> must contain an entry for all pupils whose choices
-        are to be updated:
-            [[pid, [sid, ...]], ... ]
-        """
-        for pid, clist in data:
-            if clist:
-                self.__optouts[pid] = clist
-            else:
-                self.__optouts.pop(pid, None)
-        self.save()
-
-    #
-    # TODO
-    def import_choice_table(self, filepath):
-        """Read in the file containing the course choices and save the
-        data to the internal representation.
-        The field names are "localized".
-        The file-path can be passed with or without type-extension.
-        If no type-extension is given, the folder will be searched for a
-        suitable file.
-        Alternatively, <filepath> may be an in-memory binary stream
-        (io.BytesIO) with attribute 'filename' (so that the
-        type-extension can be read).
-        """
-        dbtable = Spreadsheet(filepath).dbTable()
-        info = {r[0]: r[1] for r in dbtable.info}
-        try:
-            _year = info[self.SCHOOLYEAR]
-        except KeyError as e:
-            raise TableError(
-                _INFO_MISSING.format(field=self.SCHOOLYEAR, fpath=filepath)
-            ) from e
-        if _year != self.schoolyear:
-            raise TableError(_YEAR_MISMATCH.format(path=filepath))
-        try:
-            klass = info[self.CLASS]
-        except KeyError as e:
-            raise TableError(
-                _INFO_MISSING.format(field=self.CLASS, fpath=filepath)
-            ) from e
-        # Build a sid:column relationship
-        sid2col = []
-        col = 3
-        for f in dbtable.fieldnames()[3:]:
-            if f[0] != "$":
-                # This should be a subject tag
-                sid2col.append((f, col))
-            col += 1
-        for row in dbtable:
-            pid = row[0]
-            if pid and pid != "$":
-                clist = [sid for sid, col in sid2col if row[col]]
-                if clist:
-                    self._optouts[pid] = clist
-                else:
-                    self._optouts.pop(pid, None)
-        self.save()
-        return klass
-
-    #
-    # TODO
-    def make_choice_table(self, klass):
-        """Build a basic pupil/subject table for course choices:
-
-        Non-taken courses will be marked with <UNCHOSEN>.
-        The field names will be localized.
-        """
-        ### Get template file
-        template_path = os.path.join(
-            RESOURCES, "templates", *self.CHOICE_TEMPLATE.split("/")
-        )
-        table = KlassMatrix(template_path)
-        ### Set title line
-        # table.setTitle("???")
-        table.setTitle2(Dates.timestamp())
-        ### Translate and enter general info
-        info = ((self.SCHOOLYEAR, str(self.schoolyear)), (self.CLASS, klass))
-        table.setInfo(info)
-        ### Go through the template columns and check if they are needed:
-        sidcol = []
-        col = 0
-        rowix = table.row0()  # index of header row
-        pid_sidmap, sid_name = self.class_subjects(klass)
-        # Note that this includes "composite" subjects
-        for sid, sname in sid_name.items():
-            # Add subject
-            col = table.nextcol()
-            sidcol.append((sid, col))
-            table.write(rowix, col, sid)
-            table.write(rowix + 1, col, sname)
-        # Enforce minimum number of columns
-        while col < 18:
-            col = table.nextcol()
-            table.write(rowix, col, None)
-        # Delete excess columns
-        table.delEndCols(col + 1)
-        ### Add pupils
-        pupils = PUPILS(self.schoolyear)
-        for pid, sid_sdata in pid_sidmap.items():
-            pdata = pupils[pid]
-            pid = pdata["PID"]
-            row = table.nextrow()
-            table.write(row, 0, pid)
-            table.write(row, 1, pupils.name(pdata))
-            table.write(row, 2, pdata["GROUPS"])
-            # Get saved choices
-            pchoice = self.optouts(pid)
-            for sid, col in sidcol:
-                if sid in sid_sdata:
-                    if sid in pchoice:
-                        table.write(row, col, UNCHOSEN)
-                else:
-                    table.write(row, col, NULL, protect=True)
-        # Delete excess rows
-        row = table.nextrow()
-        table.delEndRows(row)
-        ### Save file
-        table.protectSheet()
-        return table.save()
-
-    #
-    # TODO: May want to provide gui editor ... would then also need an exporter!
-    # TODO: Do I want to check the class before saving???
-
-    # TODO: If using formatted source tables, I won't be able to edit and
-    # save them within WZ! – except by starting (e.g.) LibreOffice ...
-    def save(self):
-        """Save the couse data.
-        The first save of a day causes the current data to be backed up.
-        """
-        timestamp = Dates.timestamp()
-        today = timestamp.split("_", 1)[0]
-        data = {
-            "__INFO__": {
-                "__TITLE__": _TITLE,
-                "SCHOOLYEAR": SCHOOLYEAR,
-                "__MODIFIED__": timestamp,
-            },
-            "__SUBJECTS__": self.__klasses,
-            "__CHOICES__": self.__optouts,
-        }
-        save_pack(self.filepath, data, today)
-        self.__modified = timestamp
-
-    #
-
-
-########################################################################
 
 def check_year_class(info, klass, fpath):
     if info["SCHOOLYEAR"] != SCHOOLYEAR:
@@ -741,8 +541,8 @@ class GroupData:
 
 
 # Where to put the file? DATAPATH(CONFIG["CHOICE_TABLE"]) + ending
-#TODO: get existing choice data
-def makeChoiceTable(klass: str, empty:bool = False) -> bytes:
+# TODO: get existing choice data
+def makeChoiceTable(klass: str, empty: bool = False) -> bytes:
     """Build a basic pupil/subject table for course-choice input using a
         template.
 
@@ -780,7 +580,7 @@ def makeChoiceTable(klass: str, empty:bool = False) -> bytes:
     ### all needed subjects!
     subjects = Subjects()
     class_subjects: List[Tuple[str, str]]
-    class_pupils: List[Tuple[str, str, dict]]
+    class_pupils: List[Tuple[str, str, str, dict]]
     class_subjects, class_pupils = subjects.filter_pupil_group(
         klass, grades=False
     )
@@ -828,7 +628,7 @@ def makeChoiceTable(klass: str, empty:bool = False) -> bytes:
     return table.save_bytes()
 
 
-def readChoices(klass:str) -> dict:
+def readChoices(klass: str) -> dict:
     filepath = DATAPATH(CONFIG["CHOICE_TABLE"].format(klass=klass))
     try:
         data = choiceTableFile(filepath)
@@ -838,7 +638,7 @@ def readChoices(klass:str) -> dict:
     return data["__PUPILS__"]
 
 
-def choiceTableFile(filepath: str) -> dict:
+def choiceTableFile(filepath: str) -> Dict[str, Dict[str, str]]:
     """Read the header info and pupils' subject choices from the given
     choices table (file).
     The "spreadsheet" module is used as backend so .ods, .xlsx and .tsv
@@ -910,8 +710,10 @@ if __name__ == "__main__":
         _fh.write(_tbytes)
     print(f"\nWROTE SUBJECT CHOICE TABLE TO {_tpath}\n")
 
-    print("\nREAD CHOICE TABLE:\n",
-            choiceTableFile(DATAPATH("testing/ChoiceTable_12G.xlsx")))
+    print(
+        "\nREAD CHOICE TABLE:\n",
+        choiceTableFile(DATAPATH("testing/ChoiceTable_12G.xlsx")),
+    )
 
     quit(0)
 

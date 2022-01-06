@@ -1,7 +1,7 @@
 """
 tables/matrix.py
 
-Last updated:  2022-01-03
+Last updated:  2022-01-04
 
 Edit a table template (xlsx).
 
@@ -68,7 +68,7 @@ class Table:
     def __init__(self, filepath: str) -> None:
         self.template: str = filepath
         self._wb = load_workbook(self.template)
-        self.rows: LIst[List[str]] = []
+        self.rows: List[List[str]] = []
         for row in self._wb.active.iter_rows():
             values: List[str] = []
             for cell in row:
