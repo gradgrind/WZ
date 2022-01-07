@@ -23,6 +23,8 @@ Copyright 2022 Michael Towers
 """
 
 ### Messages
+_MISSING_GRADE = "Keine Note im Fach {sid}"
+
 _BAD_INFOTAG = "Ungültige Konfiguration für Notegruppe {group}: {tag}"
 _BAD_GROUP = "Ungültige Schülergruppe: {group}"
 _BAD_TERMTAG = "Ungültige Konfiguration für Notenanlass {term}: {tag}"
@@ -67,7 +69,24 @@ GRADE_INFO_FIELDS = {
     'GRADES_D': 'Notendatum'
 }
 
-import os
+### +++++
+
+import sys, os
+
+if __name__ == "__main__":
+    import locale
+
+    print("LOCALE:", locale.setlocale(locale.LC_ALL, ""))
+    # Enable package import if running as module
+    this = sys.path[0]
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+    from core.base import start
+
+    start.setup(os.path.join(basedir, "TESTDATA"))
+#    start.setup(os.path.join(basedir, 'DATA'))
+
 from fractions import Fraction
 
 from core.base import class_group_split
@@ -105,10 +124,8 @@ class GradeBase:
     """This class provides information specific to the locality
     concerning grade handling.
     """
-    def __init__(self, info):
-        self.group = info["GROUP"]
-        self.term = info["TERM"]
-        klass, g = class_group_split(self.group)
+    def __init__(self, term, group):
+        klass, g = class_group_split(group)
         self.sekII = klass >= "13" or (klass >= "12" and g == "G")
 
     def grade_format(self, g):
@@ -121,27 +138,29 @@ class GradeBase:
         The (weighted) average of the components will be calculated,
         if possible.
         If there are no numeric grades, choose NO_GRADE, unless all
-        components are UNCHOSEN (in which case also the composite will
-        be UNCHOSEN).
+        components are UNCHOSEN/NULL, in which choose UNCHOSEN unless
+        all are NULL (then NULL).
         """
-#TODO: Distinguish UNCHOSEN and NULL?
         asum = 0
         ai = 0
-        non_grade = UNCHOSEN
+        non_grade = NULL
         for csid, weight in clist:
-# Can the entry be missing?
-            g = grades[csid]
+            g = grades.get(csid)
             if g:
                 try:
                     gi = int(g.rstrip("+-"))
                 except ValueError:
-                    if g not in (UNCHOSEN, NULL):
+                    if g == NULL or non_grade == NO_GRADE:
+                        continue
+                    if g == UNCHOSEN:
+                        non_grade = UNCHOSEN
+                    else:
                         non_grade = NO_GRADE
                     continue
                 ai += weight
                 asum += gi * weight
             else:
-                non_grade = NO_GRADE
+                raise GradeConfigError(_MISSING_GRADE.format(sid=csid))
         if ai:
             g = Frac(asum, ai).round()
             return self.grade_format(g)
@@ -156,8 +175,7 @@ class GradeBase:
         asum = 0
         ai = 0
         for csid, weight in clist:
-# Can the entry be missing?
-            g = grades[csid]
+            g = grades.get(csid)
             if g:
                 try:
                     gi = int(g.rstrip("+-"))
@@ -165,6 +183,8 @@ class GradeBase:
                     continue
                 ai += weight
                 asum += gi * weight
+            else:
+                raise GradeConfigError(_MISSING_GRADE.format(sid=csid))
         if ai:
             g = Frac(asum, ai).round(2)
             return g
@@ -501,3 +521,10 @@ class _GradeBase(dict):
     @staticmethod
     def double_sided(group, rtype):
         return rtype != 'Orientierung'
+
+
+
+if __name__ == "__main__":
+    _fr = Frac(123456, 10000)
+    print(f"Truncate {_fr.round(5)}: {_fr.truncate(2)}")
+    print(f"Round {_fr.round(5)}: {_fr.round(2)}")
