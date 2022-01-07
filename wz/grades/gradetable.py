@@ -92,12 +92,11 @@ if __name__ == "__main__":
 from typing import Dict, List, Optional, Any, Set, Tuple
 
 import datetime
-from fractions import Fraction
 from collections import namedtuple
 
 from core.base import Dates
 from core.pupils import Pupils
-from core.courses import Subjects, NULL, UNCHOSEN
+from core.courses import Subjects#, NULL, UNCHOSEN
 from tables.spreadsheet import (
     Spreadsheet,
     TableError,
@@ -108,7 +107,7 @@ from tables.spreadsheet import (
 from tables.matrix import KlassMatrix
 
 # from local.base_config import DECIMAL_SEP, USE_XLSX, year_path
-# from local.local_grades import GradeBase, UNCHOSEN, NO_GRADE
+from local.local_grades import GradeBase
 
 # from local.abitur_config import AbiCalc
 
@@ -299,8 +298,7 @@ class GradeTable:
         <readGradeFile>.
         """
         info: Dict[str, str] = gradetable["__INFO__"]
-        self.group = info["GROUP"]
-        self.term = info["TERM"]
+        self.gradeBase = GradeBase(info)
         self.grades_date = info["GRADES_D"]
         self.issue_data = info["ISSUE_D"]
         if info["SCHOOLYEAR"] != SCHOOLYEAR:
@@ -315,7 +313,7 @@ class GradeTable:
         class_subjects: List[Tuple[str, str]]
         class_pupils: List[Tuple[str, str, dict]]
         class_subjects, class_pupils = subjects.filter_pupil_group(
-            self.group, date=self.grades_date
+            self.gradeBase.group, date=self.grades_date
         )
         # Do I really need to go through the subject lists for each pupil?
         # I suppose, in principle, the calculations could vary from pupil to
@@ -323,6 +321,7 @@ class GradeTable:
         # an error-prone possibility ...
         self.pupils_grade_data = [
             PupilGradeData(
+                gradeBase=self.gradeBase,
                 pupilid=pid,
                 pupilname=pname,
                 pupilgroups=pgroups,
@@ -338,6 +337,7 @@ class PupilGradeData:
     """
     def __init__(
         self,
+        gradeBase: GradeBase,
         pupilid: str,
         pupilname: str,
         pupilgroups: str,
@@ -347,6 +347,7 @@ class PupilGradeData:
         """Extract and process the subject data needed for grade reports.
         The dependencies of composite and calculated fields are determined.
         """
+        self.gradeBase = gradeBase
         self.pid = pupilid
         self.name = pupilname
         self.groups = pupilgroups.split()
@@ -435,104 +436,14 @@ class PupilGradeData:
         """
         ### Start with the COMPOSITES
         for csid, clist in self.composites.items():
-            self.grades[csid] = self.composite_calc(clist)
+            self.grades[csid] = self.gradeBase.composite_calc(clist,
+                    self.grades)
             #print("\n???", self.name, csid, self.grades[csid])
         ### Now the CALCS
         for csid, clist in self.calcs.items():
-            self.grades[csid] = self.calc_calc(clist)
+            self.grades[csid] = self.gradeBase.calc_calc(clist,
+                    self.grades)
             #print("\n???", self.name, csid, self.grades[csid])
-
-
-# TODO: local?
-    def composite_calc(self, clist):
-        """Recalculate a composite grade.
-        The (weighted) average of the components will be calculated,
-        if possible.
-        If there are no numeric grades, choose NO_GRADE, unless all
-        components are UNCHOSEN (in which case also the composite will
-        be UNCHOSEN).
-        """
-#TODO: Distinguish UNCHOSEN and NULL?
-        asum = 0
-        ai = 0
-        non_grade = UNCHOSEN
-        for csid, weight in clist:
-# Can the entry be missing?
-            g = self.grades[csid]
-            if g:
-                try:
-                    gi = int(g.rstrip("+-"))
-                except ValueError:
-                    if g not in (UNCHOSEN, NULL):
-                        non_grade = NO_GRADE
-                    continue
-                ai += weight
-                asum += gi * weight
-            else:
-                non_grade = NO_GRADE
-        if ai:
-            g = Frac(asum, ai).round()
-            return g
-#TODO: return g.zfill(2) if self.sekII else g.zfill(1)
-            return self.grade_format(g)
-        else:
-            return non_grade
-
-
-# TODO: local?
-    def calc_calc(self, clist):
-        """Recalculate a CALC value.
-        The (weighted) average of the components will be calculated,
-        if possible.
-        """
-        asum = 0
-        ai = 0
-        for csid, weight in clist:
-# Can the entry be missing?
-            g = self.grades[csid]
-            if g:
-                try:
-                    gi = int(g.rstrip("+-"))
-                except ValueError:
-                    continue
-                ai += weight
-                asum += gi * weight
-        if ai:
-            g = Frac(asum, ai).round(2)
-            return g
-        else:
-            return "–––"
-
-
-class Frac(Fraction):
-    """A <Fraction> subclass with custom <truncate> and <round> methods
-    returning strings.
-    """
-
-    def truncate(self, decimal_places: int = 0) -> str:
-        if not decimal_places:
-            return str(int(self))
-        v = int(self * 10 ** decimal_places)
-        # Ensure there are enough leading zeroes
-        sval = f"{v:0{decimal_places + 1}d}"
-        return (
-            sval[:-decimal_places]
-            + CONFIG["DECIMAL_SEP"]
-            + sval[-decimal_places:]
-        )
-
-    def round(self, decimal_places: int = 0) -> str:
-        f = Fraction(1, 2) if self >= 0 else Fraction(-1, 2)
-        if not decimal_places:
-            return str(int(self + f))
-        v = int(self * 10 ** decimal_places + f)
-        # Ensure there are enough leading zeroes
-        sval = f"{v:0{decimal_places + 1}d}"
-        return (
-            sval[:-decimal_places]
-            + CONFIG["DECIMAL_SEP"]
-            + sval[-decimal_places:]
-        )
 
 
 ########################################################################
@@ -1206,9 +1117,11 @@ if __name__ == "__main__":
             print(f"§§§ {sid}: {repr(smap)}")
         print("\n--- COMPOSITES:", pgdata.composites)
         print("\n--- CALCS:", pgdata.calcs)
-        print("\n--- GRADES:", pgdata.grades)
 
         pgdata.calculate()
+        print("\n--- GRADES:", pgdata.grades)
+
+
     #    _gdata = read_DataTable(_filepath)
     #    _gdata = filter_DataTable(_gdata, _GRADE_DATA, matrix=True, extend=False)
     quit(0)
