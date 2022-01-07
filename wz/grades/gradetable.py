@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-01-06
+Last updated:  2022-01-07
 
 Access grade data, read and build grade tables.
 
@@ -53,6 +53,7 @@ _BAD_GRADE = "Ungültige Note im Fach {sid}: {g}"
 _NO_DATE = "Kein Ausgabedatum angegeben"
 _DATE_EXISTS = "Ausgabedatum existiert schon"
 _BAD_DEPENDER = "Ungültiges Sonderfach-Kürzel: {sid}"
+_BAD_WEIGHT = "Gewichtung des Faches ({sid}) muss eine Zahl sein: '{d}'"
 _NULL_COMPOSITE = "'$' ist nicht gültig als Fach-Kürzel"
 _BAD_COMPOSITE = "Ungültiges Fach-Kürzel: {sid}"
 _MISSING_COMPOSITE = "Fach-Kürzel {sid} hat keinen Eintrag"
@@ -332,11 +333,6 @@ class GradeTable:
         ]
 
 
-# TODO: Where are the grades, what about doing the calculations?
-# The latter presumably as a separate function, so that it can be repeated
-# on changed data.
-
-
 class PupilGradeData:
     """Manage the grades for a single pupil
     """
@@ -355,7 +351,7 @@ class PupilGradeData:
         self.name = pupilname
         self.groups = pupilgroups.split()
         self.grades = grades
-        components: Dict[str, List[str]] = {}
+        components: Dict[str, List[Tuple[str, int]]] = {}
         specials: Set[str] = set()
         self.pupil_subjects: Dict[str, Dict[str, str]] = {}
         for sid, smap in subjectdata.items():
@@ -365,14 +361,24 @@ class PupilGradeData:
                 "SGROUP": smap["SGROUP"],
             }
             self.pupil_subjects[sid] = psmap
-            # TODO: allow weighting?
             cmpst = smap["COMPOSITE"]
             dependers: List[str] = cmpst.split() if cmpst else []
             if dependers:
-                for d in dependers:
-                    if d[0] != "$":
+                for _d in dependers:
+                    if _d[0] != "$":
                         # Entries must be COMPOSITE or CALC
-                        raise GradeTableError(_BAD_DEPENDER.format(sid=d))
+                        raise GradeTableError(_BAD_DEPENDER.format(sid=_d))
+                    # Split off weighting
+                    try:
+                        d, _w = _d.split("*", 1)
+                    except ValueError:
+                        d, w = _d, 1
+                    else:
+                        try:
+                            w = int(_w)
+                        except ValueError:
+                            raise GradeTableError(_BAD_WEIGHT.format(
+                                    sid=sid, d=_d))
                     if len(d) > 1 and d[1] == "$":
                         # A CALC
                         try:
@@ -392,12 +398,11 @@ class PupilGradeData:
                             raise GradeTableError(
                                 _COMPOSITE_NOT_ALONE.format(sid=sid, comp=d)
                             )
-                        # The COMPOSITE field is correct
-                        psmap["COMPOSITE"] = cmpst
+                        psmap["COMPOSITE"] = d
                     try:
-                        components[d].append(sid)
+                        components[d].append((sid, w))
                     except KeyError:
-                        components[d] = [sid]
+                        components[d] = [(sid, w)]
             if sid[0] == "$":
                 if len(sid) == 1:
                     raise GradeTableError(_NULL_COMPOSITE)
@@ -407,8 +412,8 @@ class PupilGradeData:
                 else:
                     # COMPOSITE item
                     specials.add(sid)
-        self.calcs: Dict[str, List[str]] = {}
-        self.composites: Dict[str, List[str]] = {}
+        self.calcs: Dict[str, List[Tuple[str, int]]] = {}
+        self.composites: Dict[str, List[Tuple[str, int]]] = {}
         for c, clist in components.items():
             try:
                 specials.remove(c)
@@ -421,34 +426,38 @@ class PupilGradeData:
                 self.composites[c] = clist
         for c in specials:
             REPORT("WARNING", _EMPTY_COMPOSITE.format(sid=c))
+        #print("\n§§§calcs:", self.calcs)
+        #print("\n§§§composites:", self.composites)
 
     def calculate(self):
         """Perform the calculations demanded by the COMPOSITES and the
         CALCS.
         """
-        ### Start with the composites
+        ### Start with the COMPOSITES
         for csid, clist in self.composites.items():
             self.grades[csid] = self.composite_calc(clist)
-            print("\n???", self.name, csid, self.grades[csid])
-#TODO ...
+            #print("\n???", self.name, csid, self.grades[csid])
+        ### Now the CALCS
+        for csid, clist in self.calcs.items():
+            self.grades[csid] = self.calc_calc(clist)
+            #print("\n???", self.name, csid, self.grades[csid])
 
 
 # TODO: local?
     def composite_calc(self, clist):
         """Recalculate a composite grade.
-        <sdata> is the subject-data for the composite, the (weighted)
-        average of the components will be calculated, if possible.
+        The (weighted) average of the components will be calculated,
+        if possible.
         If there are no numeric grades, choose NO_GRADE, unless all
         components are UNCHOSEN (in which case also the composite will
         be UNCHOSEN).
         """
-#TODO: allow weighting of components?
-        weight = 1
+#TODO: Distinguish UNCHOSEN and NULL?
         asum = 0
         ai = 0
         non_grade = UNCHOSEN
-        for csid in clist:
-# Can the netry be missing?
+        for csid, weight in clist:
+# Can the entry be missing?
             g = self.grades[csid]
             if g:
                 try:
@@ -470,34 +479,29 @@ class PupilGradeData:
             return non_grade
 
 
-
-# TODO
-def grade_average(grades: List[str], rounding: int = 2):
-    """Calculate the average of all grades, including composites,
-    but ignoring components and non-numerical grades.
-    """
-    asum = 0
-    ai = 0
-    grades = self[pid]
-    for sid in self.subjects:
-        if self.sid2subject_data[sid].composite:
-            # A component
-            continue
-        gi = grades.i_grade[sid]
-        if gi >= 0:
-            asum += gi
-            ai += 1
-    for sid in self.composites:
-        gi = grades.i_grade[sid]
-        if gi >= 0:
-            asum += gi
-            ai += 1
-    if ai:
-        return Frac(asum, ai).round(2)
-    else:
-        return "–––"
-
-
+# TODO: local?
+    def calc_calc(self, clist):
+        """Recalculate a CALC value.
+        The (weighted) average of the components will be calculated,
+        if possible.
+        """
+        asum = 0
+        ai = 0
+        for csid, weight in clist:
+# Can the entry be missing?
+            g = self.grades[csid]
+            if g:
+                try:
+                    gi = int(g.rstrip("+-"))
+                except ValueError:
+                    continue
+                ai += weight
+                asum += gi * weight
+        if ai:
+            g = Frac(asum, ai).round(2)
+            return g
+        else:
+            return "–––"
 
 
 class Frac(Fraction):

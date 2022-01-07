@@ -1,6 +1,6 @@
 #+++ __TITLE__   : Felder der Notentabellen, weitere Konfiguration der Notenzeugnisse
 #+++ __MINION__  :  2.0
-#+++ __MODIFIED__: 2021-12-30
+#+++ __MODIFIED__: 2022-01-06
 #--------------------------------------------------------------
 
 INFO_FIELDS: [
@@ -17,8 +17,8 @@ TABLE_FIELDS: [
     {NAME: GROUPS       DISPLAY_NAME: Gruppen}
 ]
 
-UNCHOSEN:   /  # abgewähltes Fach
-NO_GRADE:   *  # keine Note wird in dem Fach erteilt
+#UNCHOSEN:   /  # abgewähltes Fach
+#NO_GRADE:   *  # keine Note wird in dem Fach erteilt
 NO_SUBJECT: ––––––––––  # Eintrag im Zeugnis: unbenutztes Fach-/NotenFeld
 
 PRINT_GRADE: [
