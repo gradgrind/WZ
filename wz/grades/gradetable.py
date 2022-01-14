@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-01-07
+Last updated:  2022-01-14
 
 Access grade data, read and build grade tables.
 
@@ -33,7 +33,6 @@ _GRADE_CONFLICT = (
     "Widersprüchliche Noten für Schüler {pid} im Fach {sid}"
     "\n  {path1}\n  {path2}"
 )
-
 _TABLE_CLASS_MISMATCH = (
     "Falsche Klasse/Gruppe in Notentabelle:\n"
     "  erwartet '{group}' ... Datei:\n    {filepath}"
@@ -60,8 +59,10 @@ _COMPOSITE_COMPONENT = (
     " anderen Sammelfaches ({comp}) sein"
 )
 
-#
+### Fields
 _TITLE = "Notentabelle, erstellt {time}"
+
+###############################################################
 
 import sys, os
 
@@ -91,45 +92,42 @@ from core.courses import Subjects, NULL, UNCHOSEN
 from tables.spreadsheet import read_DataTable, filter_DataTable
 from tables.matrix import KlassMatrix
 
-# from local.base_config import DECIMAL_SEP, USE_XLSX, year_path
-from local.local_grades import GradeBase
-
-# from local.abitur_config import AbiCalc
+from local.local_grades import GradeBase, GradeConfigError
 
 
 class GradeTableError(Exception):
     pass
 
 
-class FailedSave(Exception):
-    pass
-
-
 ### -----
 
 
-def get_with_default(
-    mapping: Dict[str, Any], key: str, default: Dict[str, Any]
+def get_group_info(
+    group_info: Dict[str, Dict[str, Any]], group: str, key: str
 ) -> Any:
-    """Read a value from a "key -> value" mapping when default values
-    are available in a second mapping.
+    """Read a value for a given group and key from a mapping with an
+    "inheritance" mechanism.
     """
-    try:
-        return mapping[key]
-    except KeyError:
-        pass
-    try:
-        return default["__DEFAULT__"][key]
-    except KeyError:
-        pass
-    raise GradeTableError(_MISSING_KEY.format(key=key))
+    while True:
+        try:
+            mapping: Dict[str, Any] = group_info[group]
+        except KeyError:
+            raise GradeTableError(_NO_INFO_FOR_GROUP.format(group=group))
+        try:
+            return mapping[key]
+        except KeyError:
+            pass
+        try:
+            group = mapping["__INHERIT__"]
+        except KeyError:
+            raise GradeTableError(_MISSING_KEY.format(key=key))
 
 
 def makeGradeTable(
     term: str,
     group: str,
-    ISSUE_D: Optional[str] = None,
-    GRADES_D: Optional[str] = None,
+    ISSUE_D: str = "",
+    GRADES_D: str = "",
     grades: Optional[Dict[str, Dict[str, str]]] = None,
 ) -> bytes:
     """Build a basic pupil/subject table for grade input using a
@@ -139,11 +137,7 @@ def makeGradeTable(
     """
     ### Get template file
     group_info = MINION(DATAPATH("CONFIG/GRADE_GROUP_INFO"))
-    try:
-        grade_info = group_info[group]
-    except KeyError:
-        raise GradeTableError(_NO_INFO_FOR_GROUP.format(group=group))
-    template = get_with_default(grade_info, "GradeTableTemplate", group_info)
+    template = get_group_info(group_info, group, "GradeTableTemplate")
     template_path = RESOURCEPATH(f"templates/{template}.xlsx")
     table = KlassMatrix(template_path)
 
@@ -178,7 +172,7 @@ def makeGradeTable(
     ### Get subjects for grade reports
     subjects = Subjects()
     class_subjects: List[Tuple[str, str]]
-    class_pupils: List[Tuple[str, str, dict]]
+    class_pupils: List[Tuple[str, str, str, dict]]
     class_subjects, class_pupils = subjects.filter_pupil_group(
         group, date=GRADES_D
     )
@@ -208,6 +202,7 @@ def makeGradeTable(
 
     ### Add pupils
     for pid, pname, pgroups, sdata in class_pupils:
+        pgrades: Dict[str, str]
         try:
             pgrades = grades[pid]
         except:
@@ -233,7 +228,7 @@ def makeGradeTable(
     return table.save_bytes()
 
 
-def rawGradeTableFile(filepath: str) -> dict:
+def rawGradeTableFile(filepath: str) -> Dict[str, Any]:
     """Read the header info and pupils' grades from the given grade
     table (file).
     The "spreadsheet" module is used as backend so .ods, .xlsx and .tsv
@@ -248,6 +243,11 @@ def rawGradeTableFile(filepath: str) -> dict:
 
 
 def readGradeFile(filepath: str) -> Dict[str, Any]:
+    """Use <rawGradeTableFile> to read a grade table, then extract the
+    subject names and the grade data as dictionaries.
+        Attribute "__SUBJECT_NAMES__": {sid: subject-name}
+        Attribute "__GRADEMAP__": {pid: {sid: grade}}
+    """
     dtable = rawGradeTableFile(filepath)
     subject_tags = dtable["__XFIELDS__"]
     #    print("info:", dtable["__INFO__"])
@@ -283,7 +283,7 @@ class GradeTable:
         self.group = info["GROUP"]
         self.term = info["TERM"]
         self.grades_date = info["GRADES_D"]
-        self.issue_data = info["ISSUE_D"]
+        self.issue_date = info["ISSUE_D"]
         self.gradeBase = GradeBase(self.term, self.group)
         if info["SCHOOLYEAR"] != SCHOOLYEAR:
             raise GradeTableError(
@@ -297,8 +297,8 @@ class GradeTable:
         for sid, name in gradetable["__SUBJECT_NAMES__"].items():
             subjects.check_subject_name(sid, name)
         class_subjects: List[Tuple[str, str]]
-        class_pupils: List[Tuple[str, str, dict]]
-        class_subjects, class_pupils = subjects.filter_pupil_group(
+        class_pupils: List[Tuple[str, str, str, dict]]
+        self.class_subjects, class_pupils = subjects.filter_pupil_group(
             self.group, date=self.grades_date
         )
         # Do I really need to go through the subject lists for each pupil?
@@ -342,7 +342,7 @@ class PupilGradeData:
         specials: Set[str] = set()
         self.pupil_subjects: Dict[str, Dict[str, str]] = {}
         for sid, smap in subjectdata.items():
-            psmap = {
+            psmap: Dict[str, Any] = {
                 "TIDS": smap["TIDS"],
                 "GROUP": smap["GROUP"],
                 "SGROUP": smap["SGROUP"],
@@ -421,13 +421,19 @@ class PupilGradeData:
         """
         ### Start with the COMPOSITES
         for csid, clist in self.composites.items():
-            self.grades[csid] = self.gradeBase.composite_calc(
-                clist, self.grades
-            )
+            try:
+                self.grades[csid] = self.gradeBase.composite_calc(
+                    clist, self.grades
+                )
+            except GradeConfigError as e:
+                REPORT("ERROR", f"{self.name}: {e}")
         ### Now the CALCS
         for csid, clist in self.calcs.items():
-            self.grades[csid] = self.gradeBase.calc_calc(clist, self.grades)
-
+            try:
+                self.grades[csid] = self.gradeBase.calc_calc(clist,
+                        self.grades)
+            except GradeConfigError as e:
+                REPORT("ERROR", f"{self.name}: {e}")
 
 def collate_grade_tables(
     files: List[str],
@@ -498,7 +504,7 @@ def collate_grade_tables(
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    _GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
+    #_GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
     _group = "12G.R"
     _filepath = DATAPATH(f"testing/Noten/NOTEN_1/Noten_{_group}_1")
     _gdata = readGradeFile(_filepath)

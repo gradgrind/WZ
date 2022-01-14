@@ -1,7 +1,7 @@
 """
 local/local_grades.py
 
-Last updated:  2022-01-07
+Last updated:  2022-01-14
 
 Configuration (location-specific information) for grade handling.
 
@@ -69,6 +69,14 @@ GRADE_INFO_FIELDS = {
     'GRADES_D': 'Notendatum'
 }
 
+# Specify widths of special columns in grade tables explicitly (in points):
+XCOL_WIDTH = {
+    '*ZA': 90,
+    '*Q': 24,
+    '*F_D': 60,
+    '*B': 24,
+}
+
 ### +++++
 
 import sys, os
@@ -118,6 +126,17 @@ def all_streams(klass):
         if c >= 5:
             return ['FS', 'HS']
         return ['FS']
+
+
+def class_year(klass:str) -> str:
+    """Return the "year" (Br. "form") (Am. "grade") of the given class.
+    The result is returned without leading zeros.
+    """
+    try:
+        y = int(klass[:2])
+    except ValueError:
+        y = int(klass[0])
+    return str(y)
 
 
 class GradeBase:
@@ -528,3 +547,8 @@ if __name__ == "__main__":
     _fr = Frac(123456, 10000)
     print(f"Truncate {_fr.round(5)}: {_fr.truncate(2)}")
     print(f"Round {_fr.round(5)}: {_fr.round(2)}")
+
+    _g = "12G"
+    print(f"Year of class {_g} = {class_year(_g)}")
+    _g = "03K"
+    print(f"Year of class {_g} = {class_year(_g)}")

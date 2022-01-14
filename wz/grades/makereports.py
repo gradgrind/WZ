@@ -1,10 +1,7 @@
-### python >= 3.7
-# -*- coding: utf-8 -*-
-
 """
 grades/makereports.py
 
-Last updated:  2021-01-05
+Last updated:  2021-01-08
 
 Generate the grade reports for a given group and "term".
 Fields in template files are replaced by the report information.
@@ -40,12 +37,6 @@ Copyright 2021 Michael Towers
 
 _REPORT_TYPE_FIELD = '*ZA'
 
-import sys, os
-if __name__ == '__main__':
-    # Enable package import if running as module
-    this = sys.path[0]
-    sys.path[0] = os.path.dirname(this)
-
 ## Messages
 _NOT_COMPLETE = "Daten für {pupil} unvollständig"
 _NO_REPORT_TYPE = "Kein Zeugnistyp für Schüler {pids}"
@@ -58,59 +49,86 @@ _NO_SLOT = "Kein Platz mehr für Fach mit Kürzel {sid} in Fachgruppe {tag}." \
         " Bisher: {done}"
 _BAD_REPORT_TYPE = "Ungültiger Zeugnistyp: '{rtype}'"
 
+###############################################################
+
+import sys, os
+
+if __name__ == '__main__':
+    # Enable package import if running as module
+    import locale
+
+    print("LOCALE:", locale.setlocale(locale.LC_ALL, ""))
+    # Enable package import if running as module
+    this = sys.path[0]
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+    from core.base import start
+
+    start.setup(os.path.join(basedir, "TESTDATA"))
+#    start.setup(os.path.join(basedir, 'DATA'))
+
+### +++++
+
+from typing import Dict, List#, Optional, Any, Set, Tuple
 
 from core.base import Dates
 from core.pupils import Pupils
-from local.base_config import year_path, class_year, \
-        print_schoolyear, LINEBREAK
-from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
-        GradeConfigError, NO_SUBJECT
-from local.grade_template import info_extend
-from template_engine.template_sub import Template, TemplateError
-from grades.gradetable import GradeTable, Grades, GradeTableError
+#from local.base_config import year_path, \
+#        print_schoolyear, LINEBREAK
+from local.local_grades import class_year
+#from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
+#        GradeConfigError, NO_SUBJECT
+#from local.grade_template import info_extend
+#from template_engine.template_sub import Template, TemplateError
+from grades.gradetable import readGradeFile, GradeTable#, GradeTableError
 
 
 class GradeReports:
-    """Generate the grade reports for a group of pupils.
+    """Generate the grade reports for a group of pupils based on the
+    information provided in a <GradeTable> instance.
     The group must be a valid grade-report group (which can be a class
     name or a class name with a group tag, e.g. '12.G') – the valid
     groups are specified (possibly dependant on the term) in the
-    'grade_config' module.
-    The grade information is extracted from the database for the given
-    school-year and "term".
+    GRADE_GROUP_INFO configuration file.
     """
-    def __init__(self, schoolyear, group, term):
-        self.grade_table = GradeTable(schoolyear, group, term)
-        self.gmap0 = {  ## data shared by all pupils in the group
-            'GROUP': group,
-            'TERM': term,
-            'CYEAR': class_year(group),
-            'issue_d': self.grade_table.issue_d,  # for file-names
-            'ISSUE_D': Dates.print_date(self.grade_table.issue_d,
+    def __init__(self, gradetable:GradeTable):
+        self.grade_table = gradetable
+#TODO: type of dict?
+        self.gmap0: Dict[str,str]= {
+            ## data shared by all pupils in the group
+            'GROUP': self.grade_table.group,
+            'TERM': self.grade_table.term,
+            'CYEAR': class_year(self.grade_table.group),
+            'issue_d': self.grade_table.issue_date,  # for file-names
+            'ISSUE_D': Dates.print_date(self.grade_table.issue_date,
                     trap = False),
-            'GRADES_D': Dates.print_date(self.grade_table.grades_d,
+            'GRADES_D': Dates.print_date(self.grade_table.grades_date,
                     trap = False),
-            'SCHOOL': SCHOOL_DATA.SCHOOL_NAME,
-            'SCHOOLBIG': SCHOOL_DATA.SCHOOL_NAME.upper(),
-            'schoolyear': schoolyear,
-            'SCHOOLYEAR': print_schoolyear(schoolyear)
+            'SCHOOL': CONFIG["SCHOOL_NAME"],
+            'SCHOOLBIG': CONFIG["SCHOOL_NAME"].upper(),
+            'schoolyear': SCHOOLYEAR,
+            'SCHOOLYEAR': CALENDAR["~SCHOOLYEAR_PRINT"]
         }
 #
-    def makeReports(self, pids = None):
-        """A subset of the group can be chosen by passing a list of
-        pupil-ids as <pids>.
-        The resulting pdfs will be combined into a single pdf-file for
+    def makeReports(self):
+        """The resulting pdfs will be combined into a single pdf-file for
         each report type. If the reports are double-sided, empty pages
         can be added as necessary.
         Return a list of file-paths for the report-type pdf-files.
         """
+        group_info = MINION(DATAPATH("CONFIG/GRADE_GROUP_INFO"))
+        #template = get_group_info(group_info, group, "GradeTableTemplate")
+
+
+
+
         greport_type = {}
         no_report_type = []
-        for pid, grades in self.grade_table.items():
-            # <forGroupTerm> accepts only valid grade-groups.
-            # Check pupil filter, <pids>:
-            if pids and (pid not in pids):
-                continue
+        for pupilGradeData in self.grade_table.pupils_grade_data:
+
+
+#?            # <forGroupTerm> accepts only valid grade-groups.
             if self.grade_table.term == 'A':
                 rtype = grades.abicalc.calculate()['REPORT_TYPE']
                 if not rtype:
@@ -126,6 +144,7 @@ class GradeReports:
                     greport_type[rtype] = [pid]
             else:
                 no_report_type.append(pid)
+
         if no_report_type:
             raise GradeTableError(_NO_REPORT_TYPE.format(
                     pids = ', '.join(no_report_type)))
@@ -326,14 +345,10 @@ def group_grades(all_keys):
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    from core.base import init
-    init()
-
-    _year = '2016'
-
-    # Build reports for a group
-#    greports = GradeReports(_year, '13', 'A')
-#    greports = GradeReports(_year, '11.G', '2')
-    greports = GradeReports(_year, '13', '1')
-    for f in greports.makeReports():
-        print("\n$$$: %s\n" % f)
+    _GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
+    _group = "12G.R"
+    _filepath = DATAPATH(f"testing/Noten/NOTEN_1/Noten_{_group}_1")
+    _gdata = readGradeFile(_filepath)
+    _cgtable = GradeTable(_gdata)
+    _grade_reports = GradeReports(_cgtable)
+    print("\nSHARED DATA:", _grade_reports.gmap0)

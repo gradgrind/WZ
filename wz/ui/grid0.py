@@ -2,12 +2,12 @@
 """
 ui/grid0.py
 
-Last updated:  2021-12-04
+Last updated:  2022-01-14
 
 Widget with tiles on grid layout (QGraphicsScene/QGraphicsView).
 
 =+LICENCE=============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -271,6 +271,14 @@ class GridView(QGraphicsView):
         self.scene.addItem(t)
         return t
 
+    def tile_left_clicked(self, tile):
+        print("LEFT CLICK:", tile.tag or "–––")
+        return True
+
+    def tile_right_clicked(self, tile):
+        print("CONTEXT MENU:", tile.tag or "–––")
+        return True
+
     ### pdf output
     def setPdfMargins(self, left=50, top=30, right=30, bottom=30):
         self._pdfmargins = (left, top, right, bottom)
@@ -460,7 +468,7 @@ class Tile(QGraphicsRectItem):
     Both cell and text can be styled to a limited extent.
     """
 
-    def __init__(self, grid, x, y, w, h, text="", tag=None, **style):
+    def __init__(self, grid, x, y, w, h, text="", tag="", **style):
         self._grid = grid
         self.tag = tag
         self.height0 = h
@@ -580,11 +588,9 @@ class Tile(QGraphicsRectItem):
         self.textItem.setPos(xshift, yshift)
 
     def leftclick(self):
-        print("LEFT CLICK:", self.tag or "–––")
         return self._grid.tile_left_clicked(self)
 
     def contextmenu(self):
-        print("CONTEXT MENU:", self.tag or "–––")
         return self._grid.tile_right_clicked(self)
 
 

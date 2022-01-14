@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 ui/grade_grid.py
 
-Last updated:  2021-05-04
+Last updated:  2022-01-14
 
 Manage the grid for the grade-editor.
 
 
 =+LICENCE=============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -26,228 +25,217 @@ Copyright 2021 Michael Towers
 """
 
 ### Display texts
-_PUPIL = "Schüler"
-_STREAM = "Maßstab"
-_COMMENT = "Bemerkungen für {name}"
+_GRUPPE = "Gruppe {group}"
+_TERM = "{year}: {term}"
+_ISSUE = "Ausgabedatum: {date}"
 
-## Measurements are in mm ##
-_SEP_SIZE = 1
-_WIDTH_AVERAGE = 12
-_HEIGHT_LINE = 6
-_WIDTH_GRADE = 8
-COLUMNS = (35, 15, 15, _SEP_SIZE) # + ...
+_PID = "Id"
+_PNAME = "Schüler(in)"
+_PGROUPS = "Gruppen"
 
-# Specify widths of special columns explicitly:
-COL_WIDTH = {
-    '+ZA': 30,
-    '+Q': 8,
-    '+F_D': 20,
-    '+B': 8,
-}
+## Measurements are in points ##
+_SEP_SIZE = 3
+_WIDTH_AVERAGE = 36
+_HEIGHT_LINE = 18
+_WIDTH_GRADE = 24
+COLUMNS = (45, 105, 45, _SEP_SIZE) # + ...
 
 ROWS = (
-#title
-    12,
-# info rows
-    6, 6, 6, 6, 6, 6,
 # header (tags)
-    6, _SEP_SIZE
-) # + 6 * n
+    18, 100, _SEP_SIZE
+) # + 18 * n
 
-#####################################################
+###############################################################
+
+import sys, os
+
+if __name__ == "__main__":
+    import locale
+    print("LOCALE:", locale.setlocale(locale.LC_ALL, ""))
+    # Enable package import if running as module
+    this = sys.path[0]
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+    from core.base import start
+
+    start.setup(os.path.join(basedir, "TESTDATA"))
+#    start.setup(os.path.join(basedir, 'DATA'))
+
+### +++++
+
+from typing import Dict, List, Optional, Any, Set, Tuple, Sequence
 
 import os
 
-from ui.grid import Grid
+from ui.grid0 import GridViewRescaling
+from grades.gradetable import readGradeFile, GradeTable, PupilGradeData, \
+        get_group_info
+from local.local_grades import XCOL_WIDTH
+from core.base import Dates
 
+### -----
 
-class GradeGrid(Grid):
+class GradeGrid(GridViewRescaling):
     """Present the grades for a group and term, allowing editing of the
-    individual fields.
+    individual fields and completion of the extra fields steering
+    report generation.
+    A print version of the table can be prepared.
     """
-    def __init__(self, grades_view, info, main_sids, components,
-            composites, calcs, extras, selects, pupil_data):
-        """<grades_view> is the "View" on which this "Scene" is to be
-        presented.
-        <info>: general information, [[key, value, tag], ... ]
-        <main_sids>, <components>, <composites>, <calcs>, <extras>:
-            These are the subjects (and similar items) for the columns.
-            They have the structure [[key, name], ... ]
-        <selects>: Special "selection" entries for particular field
-            editors, [[selection type, [value, ... ]], ... ]
-        <pupil_data>: A list of pupil lines,
-            [[pid, name, stream, {sid: value, ... }], ... ]
+    def set_table(self, gradetable:GradeTable) -> None:
+        """<gradetable> contains all the basic grade information for the
+        group.
         """
+        self.gradetable:GradeTable = gradetable
         # Get number of rows and columns
-        row_pids = len(ROWS)
-        _ROWS = ROWS + (_HEIGHT_LINE,) * len(pupil_data)
-        col_sids = len(COLUMNS)
-        _COLS = COLUMNS + (_WIDTH_GRADE,) * len(main_sids)
-        col_components = len(_COLS) + 1
-        if components:
-            _COLS += (_SEP_SIZE,) + (_WIDTH_GRADE,) * len(components)
-        col_composites = len(_COLS) + 1
-        if composites:
-            _COLS += (_SEP_SIZE,) + \
-                    (_WIDTH_GRADE,) * len(composites)
-        col_calcs = len(_COLS) + 1
-        if calcs:
-            _COLS += (_SEP_SIZE,) + (_WIDTH_AVERAGE,) * len(calcs)
-        col_extras = len(_COLS) + 1
-        if extras:
-            _COLS += (_SEP_SIZE,)
-            for x, _ in extras:
-                _COLS += (COL_WIDTH[x],)
-
-        super().__init__(grades_view, _ROWS, _COLS)
-        self.styles()
-
-        # Pop-up "selection" editors
-        for sel_type, sel_values in selects:
-            self.addSelect(sel_type, sel_values + [''])
-
-        # horizontal separator (after headers)
-        self.tile(row_pids - 1, 0, cspan = len(_COLS), style = 'padding')
-        # vertical separators
-        _clast = 0
-        for col in (col_sids, col_components, col_composites,
-                col_calcs, col_extras):
-            if col == _clast or col >= len(_COLS):
-                continue
-            self.tile(1, col - 1, rspan = len(_ROWS) - 1, style = 'padding')
-
-        # Title area
-        self.tile(0, 0, text = "Notentabelle", cspan = 2, style = 'title')
-        self.tile(0, 4, text = ADMIN.school_data['SCHOOL_NAME'],
-                cspan = 10, style = 'titleR')
-        # General Info
-        line = 1
-        for key, value, tag in info:
-            self.tile(line, 0, text = key, style = 'info')
-            if tag:
-                # An editable field
-                if tag.endswith('_D'):
-                    vtype = 'DATE'
-                else:
-                    vtype = 'LINE'
-                self.tile(line, 1, text = value, style = 'info_edit',
-                        cspan = 2, validation = vtype, tag = tag)
+        row_pids:int = len(ROWS)
+        _ROWS: Sequence[int] = ROWS + \
+                (_HEIGHT_LINE,) * len(gradetable.pupils_grade_data)
+        # Divide the column data into categories
+        print("SUBJECT:", gradetable.class_subjects)
+        subjects: List[Tuple[str,str]] = []
+        composites: List[Tuple[str,str]] = []
+        sid:str
+        sname:str
+        for sid, sname in gradetable.class_subjects:
+            if sid[0] == "$":
+                composites.append((sid, sname))
             else:
-                # Non-editable
-                self.tile(line, 1, text = value, cspan = 2, style = 'info')
-            line += 1
-        ### Subject headers
-        line += 1   # 7?
-        rspan = line - 1
-        self.tile(line, 0, text = _PUPIL, cspan = 2, style = 'small')
-        self.tile(line, 2, text = _STREAM,  style = 'small')
-        col = col_sids
-        for sid, name in main_sids:
-            self.tile(line, col, text = sid, style = 'small')
-            self.tile(1, col, text = name, rspan = rspan, style = 'v')
-            col += 1
-        col = col_components
-        for sid, name in components:
-            self.tile(line, col, text = sid, style = 'small')
-            self.tile(1, col, text = name, rspan = rspan, style = 'v')
-            col += 1
-        col = col_composites
-        for sid, name in composites:
-            self.tile(line, col, text = sid, style = 'small')
-            self.tile(1, col, text = name, rspan = rspan, style = 'v')
-            col += 1
-        col = col_calcs
-        for sid, name in calcs:
-            self.tile(line, col, text = sid, style = 'small')
-            self.tile(1, col, text = name, rspan = rspan, style = 'v')
-            col += 1
-        col = col_extras
-        for sid, name in extras:
-            self.tile(line, col, text = sid, style = 'small')
-            self.tile(1, col, text = name, rspan = rspan, style = 'v')
-            col += 1
+                subjects.append((sid, sname))
+        col_sids:int = len(COLUMNS)
+        _COLS: Sequence[int] = COLUMNS + (_WIDTH_GRADE,) * len(subjects)
+# Components could be coloured (on a per pupil basis)?
+        col_composites: int = len(_COLS) + 1
 
-        # Pupil lines
-        row = row_pids
-        for pid, pname, stream, grades in pupil_data:
-            self.tile(row, 0, text = pname, cspan = 2, style = 'name')
-            self.tile(row, 2, text = stream, style = 'small')
-            col = col_sids
-            for sid, _ in main_sids:
-                self.tile(row, col, text = grades[sid],
-                    style = 'entry',
-                    validation = 'grade', tag = f'${pid}-{sid}')
+
+        self.composite_set: Set[str] = set()
+        self.calc_set: Set[str] = set()
+        pgdata:PupilGradeData
+        for pgdata in _cgtable.pupils_grade_data:
+            for sid in pgdata.composites:
+                self.composite_set.add(sid)
+            for sid in pgdata.calcs:
+                self.calc_set.add(sid)
+
+        print("???1", self.composite_set)
+        print("???2", self.calc_set)
+        print("???3", composites)
+
+
+
+# composites from the parsed data? ...
+
+        if composites:
+            _COLS += (_SEP_SIZE,) + (_WIDTH_GRADE,) * len(composites)
+        col_calcs:int = len(_COLS) + 1
+        if self.calc_set:
+            _COLS += (_SEP_SIZE,) + (_WIDTH_AVERAGE,) * len(self.calc_set)
+
+        # Additional fields in the grade table
+        group_info = MINION(DATAPATH("CONFIG/GRADE_GROUP_INFO"))
+        xfields = get_group_info(group_info, group=gradetable.group,
+                key="GradeFields_X")
+        col_extras:int = len(_COLS) + 1
+        if xfields:
+            _COLS += (_SEP_SIZE,)
+            for x in xfields:
+                _COLS += (XCOL_WIDTH[x[0]],)
+
+        self.init(_ROWS, _COLS, titleheight=20)
+
+        # Use the title line for the "INFO"
+        self.add_title(_ISSUE.format(
+                date=Dates.print_date(gradetable.issue_date)), halign="r")
+        self.add_title(_GRUPPE.format(group=gradetable.group), halign="c")
+        self.add_title(_TERM.format(year=CALENDAR["~SCHOOLYEAR_PRINT"],
+                term=gradetable.term), halign="l")
+
+#TODO: Do I really need the columns for sid & pid?
+# Especially pid is questionable.
+        # Add the column headers
+        self.basic_tile(0, 0, text=_PID)
+        self.basic_tile(0, 1, text=_PNAME)
+        self.basic_tile(0, 2, text=_PGROUPS)
+
+        # Build a mapping from sid to column
+        self.sid2col: Dict[str,int] = {}
+        # Basic subjects
+        col = col_sids
+        for sid, sname in subjects:
+            self.sid2col[sid] = col
+            self.basic_tile(0, col, text=sid)
+            self.basic_tile(1, col, text=sname, rotate=True, valign="b")
+            col += 1
+        # Composite subjects
+        col = col_composites
+        for sid, sname in composites:
+            if sid in self.composite_set:
+                self.sid2col[sid] = col
+                self.basic_tile(0, col, text=sid)
+                self.basic_tile(1, col, text=sname, rotate=True, valign="b")
                 col += 1
-            col = col_components
-            for sid, _ in components:
-                self.tile(row, col, text = grades[sid],
-                    style = 'entry',
-                    validation = 'grade', tag = f'${pid}-{sid}')
+        # Calculated values
+        col = col_calcs
+        calcfields = get_group_info(group_info, group=gradetable.group,
+                key="Calc")
+        if calcfields:
+            for x in calcfields:
+                sid = x[0]
+                self.sid2col[sid] = col
+                self.basic_tile(0, col, text=sid)
+                self.basic_tile(1, col, text=x[1], rotate=True, valign="b")
                 col += 1
-            col = col_composites
-            for sid, _ in composites:
-                self.tile(row, col, text = grades[sid], style = 'calc',
-                        tag = f'${pid}-{sid}')
+        # Additional (evaluation?) fields
+        col = col_extras
+        if xfields:
+            for x in xfields:
+                sid = x[0]
+                self.sid2col[sid] = col
+                self.basic_tile(0, col, text=sid)
+                self.basic_tile(1, col, text=x[1], rotate=True, valign="b")
                 col += 1
-            if calcs:
-                col = col_calcs
-                for sid, _ in calcs:
-                    self.tile(row, col, text = grades[sid], style = 'calc',
-                            tag = f'${pid}-{sid}')
-                    col += 1
-            col = col_extras
-            for sid, name in extras:
-                _tag = f'${pid}-{sid}'
-                _val = grades[sid]
-                if sid.endswith('_D'):
-                    validation = 'DATE'
-                elif sid == '*B':
-                    validation = 'TEXT'
-                else:
-                    validation = sid
-                self.tile(row, col, text = _val, style = 'entry',
-                        validation = validation, tag = _tag)
-                col += 1
+
+        # The pupil lines
+        self.pid2row:Dict[str,int] = {}
+        row:int = row_pids
+        pgdata: PupilGradeData
+        for pgdata in gradetable.pupils_grade_data:
+            self.pid2row[pgdata.pid] = row
+            self.basic_tile(row, 0, text=pgdata.pid)
+            self.basic_tile(row, 1, text=pgdata.name, halign="l")
+            self.basic_tile(row, 2, text=" ".join(pgdata.groups))
+            pgdata.calculate()
+            for sid, col in self.sid2col.items():
+                g = pgdata.grades.get(sid) or ""
+                self.basic_tile(row, col, text=g)
             row += 1
-#
-    def styles(self):
-        """Set up the styles used in the table view.
-        """
-        self.new_style('base', font = ADMIN.school_data['FONT'], size = 11)
-        self.new_style('calc', base = 'base', highlight = ':006000')
-        self.new_style('name', base = 'base', align = 'l')
-        self.new_style('title', font = ADMIN.school_data['FONT'], size = 12,
-                align = 'l', border = 0, highlight = 'b')
-        self.new_style('info', base = 'base', border = 0, align = 'l')
-        self.new_style('underline', base = 'base', border = 2)
-        self.new_style('titleR', base = 'title', align = 'r')
-        self.new_style('small', base = 'base', size = 10)
-        self.new_style('v', base = 'small', align = 'b')
-        self.new_style('h', base = 'small', border = 0)
-        self.new_style('entry', base = 'base', highlight = ':002562',
-                mark = 'E00000')
-        self.new_style('info_edit', base = 'info', align = 'l',
-                highlight = ':002562', mark = 'E00000')
-        self.new_style('padding', bg = '666666')
-#
-    def value_changed(self, tile, text):
-        """Called when a cell value is changed by the editor.
-        """
-        super().value_changed(tile, text)
-        if tile.tag.startswith('$'):
-            # Averages should not be handled, but have no "validation"
-            # so they won't land here at all.
-            pid, sid = tile.tag[1:].split('-')
-            BACKEND('GRADES_grade_changed', pid = pid, sid = sid, val = text)
-        else:
-            BACKEND('GRADES_value_changed', tag = tile.tag, val = text)
-#
-    def set_grades(self, vlist):
-        for pid, sid, cgrade in vlist:
-            ctag = f'${pid}-{sid}'
-            self.set_text(ctag, cgrade)
-            self.set_change_mark(ctag, cgrade)
-#
-    def save_data(self):
-        BACKEND('GRADES_save')
-        # -> redisplay of term/group/subselect
+
+
+
+    def tile_left_clicked(self, tile):
+#TODO: Handle cell editors
+        print("POP UP EDITOR?:", tile.tag or "–––")
+        return True
+
+#    def tile_right_clicked(self, tile):
+#        print("CONTEXT MENU:", tile.tag or "–––")
+#        return True
+
+
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+
+if __name__ == "__main__":
+    from qtpy.QtWidgets import QApplication
+    app = QApplication([])
+
+    #_GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
+    _group = "12G.R"
+    _filepath = DATAPATH(f"testing/Noten/NOTEN_1/Noten_{_group}_1")
+    _gdata = readGradeFile(_filepath)
+    _cgtable = GradeTable(_gdata)
+
+    gridview = GradeGrid()
+    gridview.set_table(_cgtable)
+    gridview.resize(800, 600)
+    gridview.show()
+    app.exec()
