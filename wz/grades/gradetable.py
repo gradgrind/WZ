@@ -87,11 +87,12 @@ from typing import Dict, List, Optional, Any, Set, Tuple
 
 import datetime
 
+from pydal import DAL, Field
+
 from core.base import Dates
 from core.courses import Subjects, NULL, UNCHOSEN
 from tables.spreadsheet import read_DataTable, filter_DataTable
 from tables.matrix import KlassMatrix
-
 from local.local_grades import GradeBase, GradeConfigError
 
 
@@ -100,6 +101,48 @@ class GradeTableError(Exception):
 
 
 ### -----
+
+def make_db():
+    db = DAL('sqlite://db.sqlite', folder=DATAPATH(""))
+    if "Subjects" not in db._tables:
+        db.define_table("Subjects", Field("sid", "string"), Field('name','string'))
+
+        # Rewrite the Subjects table from the config file
+        sid2name = MINION(DATAPATH(CONFIG["SUBJECT_DATA"]))
+        db.Subjects.truncate()  # empty table
+        for sid, name in sid2name.items():
+            db.Subjects.insert(sid=sid, name=name)
+        db.commit()
+
+    return db
+
+"""Grade tables.
+pid, "term", grades (json?), extra fields:
+1) composites?
+2) calcs?
+3) date of issue, other date(s), report type, qualification, etc. ...
+The composites and calcs are not strictly necessary as they can always
+be regenerated, however it might be practical to have them directly
+available for the report generation.
+At least some of the other fields will depend on class, term, report
+type, etc., so perhaps there should be one field "extras"? (json?)
+Or the fields are included in "grades"?
+Separate field for "Bemerkungen"? "report-type"? ...
+
+I could use the spreadsheet tables for input purposes. The question
+would then be what to do when there is a conflict. The conflict could
+be shown with an accept/reject dialog. Or all values could be
+overwritten, or ...
+
+Some fields will normally apply to a whole group (e.g. date of issue or
+date of "Notenkonferenz"), but may – in special cases – deviate for
+individual pupils. This is a bit of a tricky one if the grade data in
+the database is purely pupil-term-based.
+One possibility might be to have the group value in a config file (or
+special config-table in the db). It would act as default if no value
+is set in the pupil record. In that case the value in a spreadsheet
+table would be irrelevant (only for information), maybe even superfluous.
+"""
 
 
 def get_group_info(
@@ -504,6 +547,11 @@ def collate_grade_tables(
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
+#    db = make_db()
+#    print("DB:", db)
+#    print("Tables:", db._tables)
+#    quit(0)
+
     #_GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
     _group = "12G.R"
     _filepath = DATAPATH(f"testing/Noten/NOTEN_1/Noten_{_group}_1")

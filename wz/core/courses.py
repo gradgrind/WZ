@@ -1,7 +1,7 @@
 """
 core/courses.py
 
-Last updated:  2022-01-04
+Last updated:  2022-01-21
 
 Manage course/subject data.
 
@@ -121,7 +121,7 @@ class __SubjectsCache:
         # All subject names: {sid: subject-name, ... }
         self.sid2name: Dict[str, str]
         #        self.class_info: Dict[str,str]
-        self.sid2name = MINION(DATAPATH(CONFIG["SUBJECT_DATA"]))
+#        self.sid2name = MINION(DATAPATH(CONFIG["SUBJECT_DATA"]))
         #        self.class_info = {}
 
         # Cache for class "info" fields, access via method <class_info>:
@@ -149,6 +149,13 @@ class __SubjectsCache:
         self.config = MINION(DATAPATH("CONFIG/SUBJECT_DATA"))
         # Each class has a table-file (substitute {klass}):
         self.class_path = DATAPATH(CONFIG["SUBJECT_TABLE"])
+
+        # Map sid to full subject name
+        fmap = {row["NAME"]: row["DISPLAY_NAME"]
+                for row in self.config["NAMES"]}
+        self.sid2name = {row[fmap["SID"]]: row[fmap["NAME"]]
+                for row in read_DataTable(
+                        DATAPATH(CONFIG["SUBJECT_DATA"]))["__ROWS__"]}
 
     def classes(self) -> List[str]:
         """Return a sorted list of class names."""
@@ -374,6 +381,51 @@ class __SubjectsCache:
                         else:
                             psids[sid] = sdata
         return subjects, table
+
+    def pupil_subjects(self, pid: str, grades: bool = True) -> Dict[str, Dict[str, str]]:
+        """Get the subject data for an individual pupil.
+        """
+        pdata:PupilData = Pupils()[pid]
+        _pgroups:str = pdata["GROUPS"]
+        klass:str = pdata["CLASS"]
+        sgmap: Dict[str, Dict[str, dict]] = self.report_sgmap(klass, grades)
+
+        pgroups: List[str] = _pgroups.split()
+        pname = pdata.name()
+        # Determine pupil's minimal group, as far as possible
+        group_data = self.group_info(klass)
+        try:
+            pset = frozenset.intersection(
+                *[group_data.element_groups[pg] for pg in pgroups]
+            )
+        except KeyError:
+            raise CourseError(
+                _INVALID_PUPIL_GROUPS.format(
+                    klass=klass, pname=pname, groups=_pgroups
+                )
+            )
+
+        psids: Dict[str, Dict[str, str]] = {}
+        for sid, gmap in sgmap.items():
+            for g, sdata in gmap.items():
+                if g == WHOLE_CLASS or (
+                    pset
+                    & group_data.element_groups[g]
+                ):
+                    if sid in psids:
+                        # raise CourseError(
+                        REPORT(
+                            "WARNING",
+                            _MULTIPLE_PID_SID.format(
+                                klass=klass,
+                                pname=pname,
+                                sid=sid,
+                                groups=f"[{psids[sid]['GROUP']}, {g}]",
+                            ),
+                        )
+                    else:
+                        psids[sid] = sdata
+        return psids
 
     def check_subject_name(self, sid, name):
         try:
@@ -714,6 +766,14 @@ if __name__ == "__main__":
         "\nREAD CHOICE TABLE:\n",
         choiceTableFile(DATAPATH("testing/ChoiceTable_12G.xlsx")),
     )
+
+    _pid = "201052"
+    _psids = _subjects.pupil_subjects(_pid, grades=True)
+    print("\n ???????????????????????????????????????\n")
+    _pdata = Pupils()[_pid]
+    print(f"Subjects for {_pdata.name()} ({_pdata['CLASS']}, {_pdata['GROUPS']}):")
+    for _sid, _sdata in _psids.items():
+        print("\n", _sdata)
 
     quit(0)
 

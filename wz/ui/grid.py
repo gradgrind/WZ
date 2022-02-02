@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
+# This is (basically) the old version ... it works with gridbase.py
 """
 ui/grid.py
 
-Last updated:  2021-06-16
+Last updated:  2022-01-08
 
 Widget with editable tiles on grid layout (QGraphicsScene/QGraphicsView).
 
 =+LICENCE=============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -35,10 +35,10 @@ if __name__ == '__main__':
     this = sys.path[0]
     sys.path[0] = os.path.dirname(this)
 
-from PySide6.QtWidgets import QLineEdit, QTextEdit, \
+from qtpy.QtWidgets import QLineEdit, QTextEdit, \
     QCalendarWidget, QVBoxLayout, QLabel, QDialog, QDialogButtonBox, \
     QTableWidget, QTableWidgetItem
-from PySide6.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
+from qtpy.QtCore import QDate, Qt, QMarginsF, QRectF, QBuffer, QByteArray, \
         QLocale
 
 from ui.gridbase import CellStyle, GridView, GridBase
@@ -357,9 +357,9 @@ class PopupLineEdit(QDialog):
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    from PySide6.QtWidgets import QApplication, QHBoxLayout, \
+    from qtpy.QtWidgets import QApplication, QHBoxLayout, \
             QPushButton, QMessageBox
-    from PySide6.QtCore import QTranslator, QLibraryInfo
+    from qtpy.QtCore import QTranslator, QLibraryInfo
 
     def function():
         QMessageBox.information(window, "Message", "Ouch!")

@@ -3,12 +3,12 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2021-04-28
+Last updated:  2022-01-22
 
 Manage the substitution of "special" fields in an odt template.
 
 =+LICENCE=============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -48,10 +48,18 @@ _Grades_Abitur = 'Notenzeugnisse/Abitur'
 
 
 import sys, os
-if __name__ == '__main__':
+if __name__ == "__main__":
+    import locale
+    print("LOCALE:", locale.setlocale(locale.LC_ALL, ""))
     # Enable package import if running as module
     this = sys.path[0]
-    sys.path[0] = os.path.dirname(this)
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+    from core.base import start
+
+    start.setup(os.path.join(basedir, "TESTDATA"))
+#    start.setup(os.path.join(basedir, 'DATA'))
 
 from io import BytesIO
 import tempfile
@@ -61,8 +69,7 @@ from pikepdf import Pdf, Page
 from core.run_extern import run_extern
 from template_engine.simpleodt import OdtFields, Metadata
 from template_engine.simpleodt import DocumentError as TemplateError
-from local.base_config import LIBREOFFICE
-from minion import Minion, MinionError
+from minion2 import Minion, MinionError
 
 ### +++++
 
@@ -119,7 +126,7 @@ def libre_office(odt_list, pdf_dir):
     def extern_out(line):
         REPORT('OUT', line)
 
-    rc, msg = run_extern(LIBREOFFICE, '--headless',
+    rc, msg = run_extern(CONFIG["LIBREOFFICE"], '--headless',
             '--convert-to', 'pdf',
             '--outdir', pdf_dir,
             *odt_list,
@@ -138,7 +145,7 @@ class Template:
     The method <all_keys> returns a <set> of all field names from the
     template.
     """
-    def __init__(self, template_path, full_path = False):
+    def __init__(self, template_path, full_path=False):
         """<template_path> is the path to the template file.
         If <full_path> is true, the path is absolute;
         if false, the path is relative to the templates folder.
@@ -146,8 +153,7 @@ class Template:
         normally not be passed in.
         """
         self.template_path = (template_path if full_path
-                else os.path.join(RESOURCES, 'templates',
-                        *template_path.split('/')))
+                else RESOURCEPATH('templates/' + template_path))
         if not self.template_path.endswith('.odt'):
             self.template_path += '.odt'
 #
@@ -309,7 +315,7 @@ class Template:
         with open(_outfile, 'bw') as fout:
             fout.write(odtBytes)
             # Open in external viewer
-            run_extern(LIBREOFFICE, '--view', _outfile)
+            run_extern(CONFIG["LIBREOFFICE"], '--view', _outfile)
         return None
 #
     def make_odt_bytes(self, datamap, no_info = False):
@@ -323,8 +329,6 @@ class Template:
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    from core.base import init
-    init()
 
     sdict0 = {
         'SCHOOL': 'Freie Michaelschule',
@@ -380,7 +384,10 @@ if __name__ == '__main__':
         'S.K.08': '––––––––––', 'G.K.08': '––––––––––',
     }
 
-#    t = Template('Noten/SekI')
+    t = Template('Noten/SekI')
+    print("\nMetadata:\n", t.metadata())
+    print("\nUser-Info:\n", t.user_info())
+
 #    t = Template('Noten/Fachhochschulreife')
     t = Template('Noten/SekII-13-Abgang')
     t.FILES_PATH = 'GRADE_REPORTS'
@@ -389,7 +396,11 @@ if __name__ == '__main__':
 #    t.show(sdict0)
 #    quit(0)
 
-    wdir = os.path.join(DATA, 'testing', 'tmp')
+    print("\nMetadata:\n", t.metadata())
+
+    print("\nUser-Info:\n", t.user_info())
+
+    wdir = DATAPATH('testing/tmp')
     file_name = '%s_%s' % (sdict0['PSORT'], sdict0['issue_d'])
     fpath = t.make1pdf(sdict0, os.path.join(wdir, file_name))
 #    pdf_bytes = t.make_pdf1(sdict0, file_name)

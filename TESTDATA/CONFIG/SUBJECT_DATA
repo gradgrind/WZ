@@ -1,6 +1,6 @@
 #+++ __TITLE__   : Felder der Fächertabellen (eine Tabelle pro Klasse)
 #+++ __MINION__  :  2.0
-#+++ __MODIFIED__: 2022-01-03
+#+++ __MODIFIED__: 2022-02-02
 #--------------------------------------------------------------
 
 INFO_FIELDS: [
@@ -29,4 +29,5 @@ NAMES: [
     {NAME: SID          DISPLAY_NAME: Kürzel        REQUIRED: true}
     {NAME: NAME         DISPLAY_NAME: Name          REQUIRED: true}
     {NAME: FLAGS        DISPLAY_NAME: Merkmale}
+    {NAME: NOTES        DISPLAY_NAME: Bemerkungen}
 ]

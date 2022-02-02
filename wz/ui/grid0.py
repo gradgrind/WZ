@@ -593,6 +593,166 @@ class Tile(QGraphicsRectItem):
     def contextmenu(self):
         return self._grid.tile_right_clicked(self)
 
+#################################################
+### The pop-up editors
+
+def PopupTable(grid, items, ncols = 3):
+    if items:
+        return _PopupTable(grid, items, ncols)
+    return None
+
+
+class _PopupTable(QDialog):
+#TODO: Note the change: '' is no longer included automatically!!!
+    def __init__(self, grid, items, ncols):
+        self._grid = grid
+        super().__init__()
+        vbox = QVBoxLayout(self)
+        self.table = QTableWidget(self)
+        vbox.addWidget(self.table)
+        self.table.horizontalHeader().hide()
+        self.table.verticalHeader().hide()
+        self.table.itemActivated.connect(self._select)
+        self.table.itemClicked.connect(self._select)
+        # Enter the data
+        nrows = (len(items) + 2) // ncols
+        self.table.setColumnCount(ncols)
+        self.table.setRowCount(nrows)
+        i = 0
+        for row in range(nrows):
+            for col in range(ncols):
+                try:
+                    text = items[i]
+                    item = QTableWidgetItem(text)
+                    item.setTextAlignment(Qt.AlignHCenter)
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                    item._text = text
+                except IndexError:
+                    item = QTableWidgetItem('')
+                    item.setBackground(CellStyle.getBrush(NO_ITEM))
+                    item.setFlags(Qt.NoItemFlags)
+                    item._text = None
+                self.table.setItem(row, col, item)
+                i += 1
+        # This is all about fitting to contents, first the table,
+        # then the window
+        self.table.resizeColumnsToContents()
+        self.table.resizeRowsToContents()
+        h = 0
+        for r in range(nrows):
+            h += self.table.rowHeight(r)
+        w = 0
+        for c in range(ncols):
+            w += self.table.columnWidth(c)
+        _cm = self.table.contentsMargins()
+        h += _cm.top() + _cm.bottom()
+        w += _cm.left() + _cm.right()
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setFixedSize(w, h)
+        self.resize(0, 0)
+
+    def _select(self, item):
+        if item._text != None:
+            self._value = item._text
+            self.accept()
+
+    def activate(self, tile, x, y):
+        self.setWindowTitle(tile.tag)
+        # x and y are scene coordinates.
+        self.move(self._grid.screen_coordinates(x, y))
+        if self.exec_():
+            self._grid.value_changed(tile, self._value)
+
+
+class PopupDate(QDialog):
+    def __init__(self, grid):
+        self._grid = grid
+        super().__init__()
+        vbox = QVBoxLayout(self)
+        self.cal = QCalendarWidget(self)
+        self.cal.setGridVisible(True)
+        self.cal.clicked[QDate].connect(self.newDate)
+        vbox.addWidget(self.cal)
+        self.lbl = QLabel(self)
+        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok
+                | QDialogButtonBox.Cancel | QDialogButtonBox.Reset)
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        buttonBox.button(QDialogButtonBox.Reset).clicked.connect(self.reset)
+        vbox.addWidget(self.lbl)
+        vbox.addWidget(buttonBox)
+        self.setLayout(vbox)
+
+    def reset(self):
+        self.date = ''
+        self.accept()
+
+    def activate(self, tile, x, y):
+        self.setWindowTitle(tile.tag)
+        # Set date
+        tile = tile
+        date = tile.value()
+        self.cal.setSelectedDate(QDate.fromString(date, 'yyyy-MM-dd')
+                if date else QDate.currentDate())
+        self.newDate(self.cal.selectedDate())
+        self.move(self._grid.screen_coordinates(x, y))
+        if self.exec_():
+            tile.setText(self.date)
+            self._grid.value_changed(tile, self.date)
+
+    def newDate(self, date):
+        self.lbl.setText(QLocale().toString(date))
+        self.date = date.toString('yyyy-MM-dd')
+
+
+class PopupTextEdit(QDialog):
+    def __init__(self, grid):
+        self._grid = grid
+        super().__init__()
+        vbox = QVBoxLayout(self)
+        self.textedit = QTextEdit(self)
+        self.textedit.setTabChangesFocus(True)
+        vbox.addWidget(self.textedit)
+        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok
+                | QDialogButtonBox.Cancel)
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        vbox.addWidget(buttonBox)
+
+    def activate(self, tile, x, y):
+        self.setWindowTitle(tile.tag)
+        text = tile.value()
+        self.textedit.setPlainText(text)
+        self.move(self._grid.screen_coordinates(x, y))
+        if self.exec_():
+            text = self.textedit.toPlainText()
+            if text:
+                text = '\n'.join([l.rstrip() for l in text.splitlines()])
+            self._grid.value_changed(tile, text)
+
+
+class PopupLineEdit(QDialog):
+    def __init__(self, grid):
+        self._grid = grid
+        super().__init__()
+        vbox = QVBoxLayout(self)
+        self.lineedit = QLineEdit(self)
+        vbox.addWidget(self.lineedit)
+        self.lineedit.returnPressed.connect(self.accept)
+
+    def activate(self, tile, x, y):
+        self.setWindowTitle(tile.tag)
+        w = tile.width0
+        if w < 50.0:
+            w = 50.0
+        self.lineedit.setFixedWidth(w)
+        self.lineedit.setText(tile.value() or '')
+        self.move(self._grid.screen_coordinates(x, y))
+        if self.exec_():
+            self._grid.value_changed(tile, self.lineedit.text())
+
+#################################################
 
 class GraphicsSupport:
     """Support functions for the grid."""
