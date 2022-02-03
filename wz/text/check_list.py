@@ -56,7 +56,7 @@ def get_teacher_class_subjects():
 
     tmap = {}
     for klass in subjects.classes():
-        if klass.startswith("XX"):
+        if klass >= "13":
             continue
         sgmap = subjects.report_sgmap(klass, grades=False)
         for sid, gmap in sgmap.items():
@@ -73,6 +73,30 @@ def get_teacher_class_subjects():
                         except KeyError:
                             kmap[klass] = {sid}
     return tmap
+
+
+def teacher_class_subjects():
+    """Build a document with a page for each teacher, listing classes
+    and subjects for the text reports.
+    """
+    tmap = get_teacher_class_subjects()
+    teachers = Teachers()
+    ### Build html
+    document = []
+    #???
+    for tdata in teachers:
+        tid = tdata["TID"]
+        tname = tdata["NAME"]
+# Should I maybe use a similar approach to pupil names? That is separate
+# first name and last name, with a "|" in case of a "tussenvoegsel"?
+
+
+    #TODO
+    for tid, kmap in tmap.items():
+        document.append(f"<h3>({tid})</h3>")
+        for klass, sids in kmap.items():
+            print(" :::", klass, ":", sids)
+
 
 
 if __name__ == "__main__":

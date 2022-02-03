@@ -1,0 +1,24 @@
+#+++ __TITLE__   : Felder der Lehrertabelle
+#+++ __MINION__  :  2.0
+#+++ __MODIFIED__: 2022-02-03
+#--------------------------------------------------------------
+
+INFO_FIELDS: [
+    {NAME: SCHOOLYEAR      DISPLAY_NAME: Schuljahr    REQUIRED: true}
+    {NAME: MINPERDAY       DISPLAY_NAME: Stunden      REQUIRED: true}
+    {NAME: LUNCHBREAK      DISPLAY_NAME: Mittag       REQUIRED: true}
+    {NAME: MAXGAPSPERWEEK  DISPLAY_NAME: Lücken       REQUIRED: true}
+    {NAME: MAXBLOCK        DISPLAY_NAME: Blocklänge   REQUIRED: true}
+]
+
+TABLE_FIELDS: [
+    {NAME: TID             DISPLAY_NAME: Kürzel     REQUIRED: true}
+    {NAME: NAME            DISPLAY_NAME: Name       REQUIRED: true}
+    {NAME: SORTNAME        DISPLAY_NAME: Längel     REQUIRED: true}
+    {NAME: MINPERDAY       DISPLAY_NAME: Stunden}
+    {NAME: LUNCHBREAK      DISPLAY_NAME: Mittag}
+    {NAME: MAXGAPSPERWEEK  DISPLAY_NAME: Lücken}
+    {NAME: MAXBLOCK        DISPLAY_NAME: Blocklänge}
+    {NAME: AVAILABLE       DISPLAY_NAME: verfügbar}
+    {NAME: NOTES           DISPLAY_NAME: Notizen}
+]
