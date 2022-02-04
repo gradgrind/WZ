@@ -42,7 +42,14 @@ if __name__ == "__main__":
 
 ### +++++
 
+from io import BytesIO
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import mm
+
 from core.courses import Subjects
+from core.teachers import Teachers
 
 ### -----
 
@@ -80,22 +87,73 @@ def teacher_class_subjects():
     and subjects for the text reports.
     """
     tmap = get_teacher_class_subjects()
+    tset = set(tmap)
     teachers = Teachers()
-    ### Build html
-    document = []
-    #???
-    for tdata in teachers:
-        tid = tdata["TID"]
-        tname = tdata["NAME"]
-# Should I maybe use a similar approach to pupil names? That is separate
-# first name and last name, with a "|" in case of a "tussenvoegsel"?
-
-
-    #TODO
-    for tid, kmap in tmap.items():
-        document.append(f"<h3>({tid})</h3>")
+    subjects = Subjects()
+    tlist = []
+    for tid in teachers.list_teachers():
+        tname = teachers.name(tid)
+        try:
+            tset.remove(tid)
+        except KeyError:
+            print(f" *** {tname}: keine Zeugnisse")
+            continue
+        kmap = tmap[tid]
+        slist = []
         for klass, sids in kmap.items():
-            print(" :::", klass, ":", sids)
+            for sid in sids:
+                slist.append(f"Klasse {klass}: {subjects.sid2name[sid]}")
+        tlist.append((f"Zeugnisfächer für {tname}", slist))
+    for tid in tset:
+        print(f"!!! unbekanntes Lehrer-Kürzel: {tid}")
+    return tlist
+
+
+BASE_MARGIN = 20 * mm
+class PdfCreator:
+    def add_page_number(self, canvas, doc):
+        canvas.saveState()
+        canvas.setFont('Times-Roman', 12)
+        page_number_text = "%d" % (doc.page)
+        canvas.drawCentredString(
+            18 * mm,
+            18 * mm,
+            page_number_text
+        )
+        canvas.restoreState()
+
+    def build_pdf(self, pagelist):
+        pdf_buffer = BytesIO()
+        my_doc = SimpleDocTemplate(
+            pdf_buffer,
+            pagesize=A4,
+            topMargin=BASE_MARGIN,
+            leftMargin=BASE_MARGIN,
+            rightMargin=BASE_MARGIN,
+            bottomMargin=BASE_MARGIN
+        )
+        sample_style_sheet = getSampleStyleSheet()
+        body_style = sample_style_sheet['BodyText']
+        body_style.fontSize = 14
+        body_style.leading = 20
+        heading_style = sample_style_sheet['Heading1']
+        #print("\n STYLES:", sample_style_sheet.list())
+
+        flowables = []
+        for teacher, subjects in pagelist:
+            flowables.append(Paragraph(teacher, heading_style))
+            flowables.append(Spacer(1, 24))
+            for subject in subjects:
+                flowables.append(Paragraph(subject, body_style))
+            flowables.append(PageBreak())
+        my_doc.build(
+            flowables,
+            onFirstPage=self.add_page_number,
+            onLaterPages=self.add_page_number,
+        )
+        pdf_value = pdf_buffer.getvalue()
+        pdf_buffer.close()
+        return pdf_value
 
 
 
@@ -105,6 +163,23 @@ if __name__ == "__main__":
         print(f"\n*** {tid} ***")
         for klass, sids in kmap.items():
             print(" :::", klass, ":", sids)
+
+    tlist = teacher_class_subjects()
+    for t, slist in tlist:
+        print("\n", t)
+        for s in slist:
+            print(s)
+
+    pdf = PdfCreator()
+    pdfbytes = pdf.build_pdf(tlist)
+
+    odir = DATAPATH("testing/tmp")
+    os.makedirs(odir, exist_ok=True)
+    pdffile = os.path.join(odir, "pdf_test.pdf")
+    with open(pdffile, "wb") as fh:
+        fh.write(pdfbytes)
+        print("\nOUT:", pdffile)
+
 
 
 """
