@@ -1,9 +1,11 @@
 """
-template_engine/template_sub.py
+text/check_list.py
 
-Last updated:  2022-02-02
+Last updated:  2022-02-04
 
-Build a check-list for the teachers: teacher -> class -> report subjects
+For text reports:
+    Build a check-list for the teachers: teacher -> class -> report subjects
+    Build a check-list for the classes: class -> report subjects -> teachers
 
 
 =+LICENCE=============================
@@ -109,6 +111,49 @@ def teacher_class_subjects():
     return tlist
 
 
+def get_class_subjects_teachers():
+    """For each class, collect the report subjects and the teachers
+    who are responsible.
+    """
+    subjects = Subjects()
+#    print("SUBJECTS:", _subjects.sid2name)
+
+#    print("\nINITIAL CLASSES:", _subjects.classes())
+
+    clist = []
+    for klass in subjects.classes():
+        if klass >= "13":
+            continue
+        sgmap = subjects.report_sgmap(klass, grades=False)
+        smap = {}
+        clist.append((klass, smap))
+        for sid, gmap in sgmap.items():
+            for sdata in gmap.values():
+                #print(f"Class {klass}, {subjects.sid2name[sid]}: {sdata['TIDS']}")
+                for tid in sdata["TIDS"].split():
+                    try:
+                        smap[sid].add(tid)
+                    except KeyError:
+                        smap[sid] = {tid}
+    return clist
+
+
+def class_subjects_teachers():
+    """Build a document with a page for each class, listing subjects
+    and the associated teachers for the text reports.
+    """
+    teachers = Teachers()
+    subjects = Subjects()
+    clist = []
+    for klass, smap in get_class_subjects_teachers():
+        slist = []
+        for sid, tlist in smap.items():
+            for tid in tlist:
+                slist.append(f"{subjects.sid2name[sid]}: {teachers.name(tid)}")
+        clist.append((f"Zeugnisfächer in Klasse {klass}", slist))
+    return clist
+
+
 BASE_MARGIN = 20 * mm
 class PdfCreator:
     def add_page_number(self, canvas, doc):
@@ -137,12 +182,13 @@ class PdfCreator:
         body_style.fontSize = 14
         body_style.leading = 20
         heading_style = sample_style_sheet['Heading1']
+        heading_style.spaceAfter = 24
         #print("\n STYLES:", sample_style_sheet.list())
 
         flowables = []
         for teacher, subjects in pagelist:
             flowables.append(Paragraph(teacher, heading_style))
-            flowables.append(Spacer(1, 24))
+            #flowables.append(Spacer(1, 24))
             for subject in subjects:
                 flowables.append(Paragraph(subject, body_style))
             flowables.append(PageBreak())
@@ -156,6 +202,9 @@ class PdfCreator:
         return pdf_value
 
 
+#TODO: Add class – subject – teacher list
+
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
     tmap = get_teacher_class_subjects()
@@ -175,7 +224,18 @@ if __name__ == "__main__":
 
     odir = DATAPATH("testing/tmp")
     os.makedirs(odir, exist_ok=True)
-    pdffile = os.path.join(odir, "pdf_test.pdf")
+    pdffile = os.path.join(odir, "Lehrer-Klassen-Fächer.pdf")
+    with open(pdffile, "wb") as fh:
+        fh.write(pdfbytes)
+        print("\nOUT:", pdffile)
+
+    clist = class_subjects_teachers()
+    pdf = PdfCreator()
+    pdfbytes = pdf.build_pdf(clist)
+
+    odir = DATAPATH("testing/tmp")
+    os.makedirs(odir, exist_ok=True)
+    pdffile = os.path.join(odir, "Klassen-Fächer-Lehrer.pdf")
     with open(pdffile, "wb") as fh:
         fh.write(pdfbytes)
         print("\nOUT:", pdffile)
