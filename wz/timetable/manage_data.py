@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/manage_data.py - last updated 2021-08-28
+TT/manage_data.py - last updated 2022-02-05
 
 Coordinate and process the timetable data
 
 ==============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ from itertools import combinations
 import xmltodict
 
 from timetable.basic_data import Classes, Days, Periods, Placements, \
-        Rooms, Subjects, Teachers, TT_Error, TT_CONFIG
+        Rooms, TT_Subjects, TT_Teachers, TT_Error, TT_CONFIG
 
 ### -----
 
@@ -696,7 +696,7 @@ class Classes_gui(Classes):
 
 ###
 
-class Teachers_fet(Teachers):
+class Teachers_fet(TT_Teachers):
     def get_teachers(self, timetable_teachers):
         return [
             {   'Name': tid,
@@ -887,7 +887,7 @@ class Rooms_fet(Rooms):
 
 ###
 
-class Subjects_fet(Subjects):
+class Subjects_fet(TT_Subjects):
     def get_subjects(self):
         sids = [{'Name': sid, 'Comments': name}
                 for sid, name in self.items()

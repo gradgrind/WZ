@@ -1,7 +1,7 @@
 """
 core/courses.py
 
-Last updated:  2022-01-21
+Last updated:  2022-02-05
 
 Manage course/subject data.
 
@@ -26,6 +26,7 @@ Copyright 2022 Michael Towers
 _FILTER_ERROR = "Fachdaten-Fehler: {msg}"
 _SCHOOLYEAR_MISMATCH = "Falsches Schuljahr in Tabelle:\n  {path}"
 _CLASS_MISMATCH = "Falsche Klasse in\n{path}"
+_UNKNOWN_SID = "Unbekanntes Fach-Kürzel: {sid}"
 _MULTIPLE_SID = (
     "Fach-Kürzel {sid} wird in Klasse {klass} in sich"
     " überschneidenden Schülergruppen benutzt: {group1}, {group2}"
@@ -120,9 +121,6 @@ class __SubjectsCache:
     def __init__(self):
         # All subject names: {sid: subject-name, ... }
         self.sid2name: Dict[str, str]
-        #        self.class_info: Dict[str,str]
-#        self.sid2name = MINION(DATAPATH(CONFIG["SUBJECT_DATA"]))
-        #        self.class_info = {}
 
         # Cache for class "info" fields, access via method <class_info>:
         # {class: {key: value, ... }, ...}
@@ -147,6 +145,8 @@ class __SubjectsCache:
 
         # Fields:
         self.config = MINION(DATAPATH("CONFIG/SUBJECT_DATA"))
+        self.SUBJECT_FIELDS = {row["NAME"]: row["DISPLAY_NAME"]
+                for row in self.config["TABLE_FIELDS"]}
         # Each class has a table-file (substitute {klass}):
         self.class_path = DATAPATH(CONFIG["SUBJECT_TABLE"])
 
@@ -208,7 +208,10 @@ class __SubjectsCache:
         for row in table:
             sname = row.pop("SNAME")
             sid = row["SID"]
-            sname0 = self.sid2name.get(sid) or "---"
+            try:
+                sname0 = self.sid2name[sid.split("+", 1)[0]]
+            except KeyError:
+                REPORT("ERROR", _UNKNOWN_SID.format(sid=sid))
             if sname != sname0:
                 REPORT(
                     "WARNING",

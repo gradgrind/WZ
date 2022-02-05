@@ -2,7 +2,7 @@
 """
 ui/grid0.py
 
-Last updated:  2022-01-14
+Last updated:  2022-02-04
 
 Widget with tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -67,6 +67,7 @@ _NOTSTRING = "In <grid::Tile>: Zeichenkette erwartet: {val}"
 #####################################################
 
 from qtpy.QtWidgets import (
+    QDialog,
     QGraphicsView,
     QGraphicsScene,
     QGraphicsRectItem,
