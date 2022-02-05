@@ -31,6 +31,7 @@ _CLASS_SUBJECTS = "Klasse {klass}: {subject}"
 _TEACHER = "Zeugnisfächer für {tname}"
 _UNKNOWN_TID = "unbekanntes Lehrer-Kürzel: {tid}"
 _CLASS_REPORTS = "Zeugnisfächer in Klasse {klass}"
+_SUPPRESSED = "Lehrkraft ausgeschlossen: {tname}"
 
 ##############################################################
 
@@ -51,13 +52,14 @@ if __name__ == "__main__":
 ### +++++
 
 from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, PageBreak
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 
 from core.courses import Subjects
 from core.teachers import Teachers
+from local.local_text import text_report_class
 
 ### -----
 
@@ -75,16 +77,12 @@ def teacher_class_subjects(block_tids=None):
     tmap = {}
     subjects = Subjects()
     for klass in subjects.classes():
-#TODO: put test in local module?
-        if klass >= "13":
+        if not text_report_class(klass):
             continue
         sgmap = subjects.report_sgmap(klass, grades=False)
         for sid, gmap in sgmap.items():
             for sdata in gmap.values():
-                #print(f"Class {klass}, {subjects.sid2name[sid]}: {sdata['TIDS']}")
                 for tid in sdata["TIDS"].split():
-                    if tid in block_tids:
-                        continue
                     try:
                         kmap = tmap[tid]
                     except KeyError:
@@ -94,7 +92,7 @@ def teacher_class_subjects(block_tids=None):
                             kmap[klass].add(sid)
                         except KeyError:
                             kmap[klass] = {sid}
-    # Now build the output document
+    # Now build the output list
     tset = set(tmap)
     teachers = Teachers()
     tlist = []
@@ -103,15 +101,24 @@ def teacher_class_subjects(block_tids=None):
         try:
             tset.remove(tid)
         except KeyError:
-            REPORT("INFO", _NO_REPORTS.format(tname=tname))
+            if tid not in block_tids:
+                REPORT("INFO", _NO_REPORTS.format(tname=tname))
             continue
-        kmap = tmap[tid]
         slist = []
+        suppress = tid in block_tids
+        if suppress:
+            REPORT("INFO", _SUPPRESSED.format(tname=tname))
+        else:
+            tlist.append((_TEACHER.format(tname=tname), slist))
+        kmap = tmap[tid]
         for klass, sids in kmap.items():
             for sid in sids:
-                slist.append(_CLASS_SUBJECTS.format(klass=klass,
-                        subject=subjects.sid2name[sid]))
-        tlist.append((_TEACHER.format(tname=tname), slist))
+                text = _CLASS_SUBJECTS.format(klass=klass,
+                            subject=subjects.sid2name[sid])
+                if suppress:
+                    REPORT("OUT", text)
+                else:
+                    slist.append(text)
     for tid in tset:
         REPORT("WARNING", _UNKNOWN_TID.format(tid=tid))
     return tlist
@@ -131,14 +138,12 @@ def class_subjects_teachers(block_tids=None):
     teachers = Teachers()
     clist = []
     for klass in subjects.classes():
-#TODO: put test in local module?
-        if klass >= "13":
+        if not text_report_class(klass):
             continue
         sgmap = subjects.report_sgmap(klass, grades=False)
         smap = {}
         for sid, gmap in sgmap.items():
             for sdata in gmap.values():
-                #print(f"Class {klass}, {subjects.sid2name[sid]}: {sdata['TIDS']}")
                 for tid in sdata["TIDS"].split():
                     if tid in block_tids:
                         continue
@@ -146,7 +151,7 @@ def class_subjects_teachers(block_tids=None):
                         smap[sid].add(tid)
                     except KeyError:
                         smap[sid] = {tid}
-        # Now build the output document
+        # Now build the output list
         slist = []
         for sid, tlist in smap.items():
             for tid in tlist:
@@ -168,10 +173,12 @@ class PdfCreator:
         )
         canvas.restoreState()
 
-    def build_pdf(self, pagelist):
+    def build_pdf(self, pagelist, title, author):
         pdf_buffer = BytesIO()
         my_doc = SimpleDocTemplate(
             pdf_buffer,
+            title=title,
+            author=author,
             pagesize=A4,
             topMargin=BASE_MARGIN,
             leftMargin=BASE_MARGIN,
@@ -189,7 +196,6 @@ class PdfCreator:
         flowables = []
         for teacher, subjects in pagelist:
             flowables.append(Paragraph(teacher, heading_style))
-            #flowables.append(Spacer(1, 24))
             for subject in subjects:
                 flowables.append(Paragraph(subject, body_style))
             flowables.append(PageBreak())
@@ -208,7 +214,8 @@ class PdfCreator:
 if __name__ == "__main__":
     tlist = teacher_class_subjects({"IV", "ID"})
     pdf = PdfCreator()
-    pdfbytes = pdf.build_pdf(tlist)
+    pdfbytes = pdf.build_pdf(tlist, title="Lehrer-Klassen-Fächer",
+            author="FWS Bothfeld")
     odir = DATAPATH("testing/tmp")
     os.makedirs(odir, exist_ok=True)
     pdffile = os.path.join(odir, "Lehrer-Klassen-Fächer.pdf")
@@ -218,7 +225,8 @@ if __name__ == "__main__":
 
     clist = class_subjects_teachers({"IV", "ID"})
     pdf = PdfCreator()
-    pdfbytes = pdf.build_pdf(clist)
+    pdfbytes = pdf.build_pdf(clist, title="Klassen-Fächer-Lehrer",
+            author="FWS Bothfeld")
     odir = DATAPATH("testing/tmp")
     os.makedirs(odir, exist_ok=True)
     pdffile = os.path.join(odir, "Klassen-Fächer-Lehrer.pdf")
