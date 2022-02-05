@@ -1,7 +1,7 @@
 """
 text/check_list.py
 
-Last updated:  2022-02-04
+Last updated:  2022-02-05
 
 For text reports:
     Build a check-list for the teachers: teacher -> class -> report subjects
@@ -26,7 +26,13 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
-# So far just notes ...
+_NO_REPORTS = " *** {tname}: keine Zeugnisse"
+_CLASS_SUBJECTS = "Klasse {klass}: {subject}"
+_TEACHER = "Zeugnisfächer für {tname}"
+_UNKNOWN_TID = "unbekanntes Lehrer-Kürzel: {tid}"
+_CLASS_REPORTS = "Zeugnisfächer in Klasse {klass}"
+
+##############################################################
 
 import sys, os
 #from typing import Dict, List, Tuple, Optional, Set
@@ -55,16 +61,21 @@ from core.teachers import Teachers
 
 ### -----
 
-def get_teacher_class_subjects():
-    """For each teacher, collect the subjects (s)he gives in each class.
+
+def teacher_class_subjects(block_tids=None):
+    """For each teacher, collect the subjects for text reports (s)he
+    gives in each class.
+    If <block_tids> is supplied, it should be a set of teacher-ids which
+    will be "blocked", i.e. not appear in the output.
+    Build a list of "pages", one for each teacher, with a list of his/her
+    classes and subjects.
     """
-    subjects = Subjects()
-#    print("SUBJECTS:", _subjects.sid2name)
-
-#    print("\nINITIAL CLASSES:", _subjects.classes())
-
+    if block_tids is None:
+        block_tids = set()
     tmap = {}
+    subjects = Subjects()
     for klass in subjects.classes():
+#TODO: put test in local module?
         if klass >= "13":
             continue
         sgmap = subjects.report_sgmap(klass, grades=False)
@@ -72,6 +83,8 @@ def get_teacher_class_subjects():
             for sdata in gmap.values():
                 #print(f"Class {klass}, {subjects.sid2name[sid]}: {sdata['TIDS']}")
                 for tid in sdata["TIDS"].split():
+                    if tid in block_tids:
+                        continue
                     try:
                         kmap = tmap[tid]
                     except KeyError:
@@ -81,76 +94,64 @@ def get_teacher_class_subjects():
                             kmap[klass].add(sid)
                         except KeyError:
                             kmap[klass] = {sid}
-    return tmap
-
-
-def teacher_class_subjects():
-    """Build a document with a page for each teacher, listing classes
-    and subjects for the text reports.
-    """
-    tmap = get_teacher_class_subjects()
+    # Now build the output document
     tset = set(tmap)
     teachers = Teachers()
-    subjects = Subjects()
     tlist = []
     for tid in teachers.list_teachers():
         tname = teachers.name(tid)
         try:
             tset.remove(tid)
         except KeyError:
-            print(f" *** {tname}: keine Zeugnisse")
+            REPORT("INFO", _NO_REPORTS.format(tname=tname))
             continue
         kmap = tmap[tid]
         slist = []
         for klass, sids in kmap.items():
             for sid in sids:
-                slist.append(f"Klasse {klass}: {subjects.sid2name[sid]}")
-        tlist.append((f"Zeugnisfächer für {tname}", slist))
+                slist.append(_CLASS_SUBJECTS.format(klass=klass,
+                        subject=subjects.sid2name[sid]))
+        tlist.append((_TEACHER.format(tname=tname), slist))
     for tid in tset:
-        print(f"!!! unbekanntes Lehrer-Kürzel: {tid}")
+        REPORT("WARNING", _UNKNOWN_TID.format(tid=tid))
     return tlist
 
 
-def get_class_subjects_teachers():
-    """For each class, collect the report subjects and the teachers
+def class_subjects_teachers(block_tids=None):
+    """For each class, collect the text report subjects and the teachers
     who are responsible.
+    If <block_tids> is supplied, it should be a set of teacher-ids which
+    will be "blocked", i.e. not appear in the output.
+    Build a list of "pages", one for each class, with a list of the subjects
+    and the associated teachers – as text lines.
     """
+    if block_tids is None:
+        block_tids = set()
     subjects = Subjects()
-#    print("SUBJECTS:", _subjects.sid2name)
-
-#    print("\nINITIAL CLASSES:", _subjects.classes())
-
+    teachers = Teachers()
     clist = []
     for klass in subjects.classes():
+#TODO: put test in local module?
         if klass >= "13":
             continue
         sgmap = subjects.report_sgmap(klass, grades=False)
         smap = {}
-        clist.append((klass, smap))
         for sid, gmap in sgmap.items():
             for sdata in gmap.values():
                 #print(f"Class {klass}, {subjects.sid2name[sid]}: {sdata['TIDS']}")
                 for tid in sdata["TIDS"].split():
+                    if tid in block_tids:
+                        continue
                     try:
                         smap[sid].add(tid)
                     except KeyError:
                         smap[sid] = {tid}
-    return clist
-
-
-def class_subjects_teachers():
-    """Build a document with a page for each class, listing subjects
-    and the associated teachers for the text reports.
-    """
-    teachers = Teachers()
-    subjects = Subjects()
-    clist = []
-    for klass, smap in get_class_subjects_teachers():
+        # Now build the output document
         slist = []
         for sid, tlist in smap.items():
             for tid in tlist:
                 slist.append(f"{subjects.sid2name[sid]}: {teachers.name(tid)}")
-        clist.append((f"Zeugnisfächer in Klasse {klass}", slist))
+        clist.append((_CLASS_REPORTS.format(klass=klass), slist))
     return clist
 
 
@@ -202,26 +203,12 @@ class PdfCreator:
         return pdf_value
 
 
-#TODO: Add class – subject – teacher list
-
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    tmap = get_teacher_class_subjects()
-    for tid, kmap in tmap.items():
-        print(f"\n*** {tid} ***")
-        for klass, sids in kmap.items():
-            print(" :::", klass, ":", sids)
-
-    tlist = teacher_class_subjects()
-    for t, slist in tlist:
-        print("\n", t)
-        for s in slist:
-            print(s)
-
+    tlist = teacher_class_subjects({"IV", "ID"})
     pdf = PdfCreator()
     pdfbytes = pdf.build_pdf(tlist)
-
     odir = DATAPATH("testing/tmp")
     os.makedirs(odir, exist_ok=True)
     pdffile = os.path.join(odir, "Lehrer-Klassen-Fächer.pdf")
@@ -229,47 +216,12 @@ if __name__ == "__main__":
         fh.write(pdfbytes)
         print("\nOUT:", pdffile)
 
-    clist = class_subjects_teachers()
+    clist = class_subjects_teachers({"IV", "ID"})
     pdf = PdfCreator()
     pdfbytes = pdf.build_pdf(clist)
-
     odir = DATAPATH("testing/tmp")
     os.makedirs(odir, exist_ok=True)
     pdffile = os.path.join(odir, "Klassen-Fächer-Lehrer.pdf")
     with open(pdffile, "wb") as fh:
         fh.write(pdfbytes)
         print("\nOUT:", pdffile)
-
-
-
-"""
-Print Document (QTextDocument) to pdf
-=====================================
-
-
-int main(int argc, char *argv[]) {
-
-   QApplication app(argc, argv);
-
-   QString fileName = QFileDialog::getSaveFileName((QWidget* )0, "Export PDF", QString(), "*.pdf");
-   if (QFileInfo(fileName).suffix().isEmpty()) { fileName.append(".pdf"); }
-
-   QPrinter printer(QPrinter::PrinterResolution);
-   printer.setOutputFormat(QPrinter::PdfFormat);
-   printer.setPaperSize(QPrinter::A4);
-   printer.setOutputFileName(fileName);
-
-   QTextDocument doc;
-
-doc.setHtml("
-Hello, World!
-\n
-
-Lorem ipsum dolor sit amet, consectitur adipisci elit.
-");
-
-   doc.setPageSize(printer.pageRect().size()); // This is necessary if you want to hide the page number
-   doc.print(&printer);
-
-}
-"""
