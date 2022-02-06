@@ -1,5 +1,5 @@
 """
-core/teachers.py - last updated 2022-02-03
+core/teachers.py - last updated 2022-02-06
 
 Manage teacher data.
 
@@ -97,7 +97,8 @@ class __TeachersCache(dict):
     def __init__(self):
         super().__init__()
         try:
-            ttable = read_DataTable(DATAPATH(CONFIG["TEACHER_DATA"]))
+            fpath = DATAPATH(CONFIG["TEACHER_DATA"])
+            ttable = read_DataTable(fpath)
             ttable = filter_DataTable(ttable,
                     MINION(DATAPATH("CONFIG/TEACHER_DATA")))
         except TableError as e:

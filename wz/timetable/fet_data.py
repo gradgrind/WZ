@@ -20,49 +20,63 @@ Copyright 2022 Michael Towers
 """
 
 __TEST = False
-#__TEST = True
+# __TEST = True
 
-FET_VERSION = '6.2.7'
+FET_VERSION = "6.2.7"
 
-WEIGHTS = [None, '50', '67', '80', '88', '93', '95', '97', '98', '99', '100']
+WEIGHTS = [None, "50", "67", "80", "88", "93", "95", "97", "98", "99", "100"]
 
-LUNCH_BREAK = ('mp', "Mittagspause")
-VIRTUAL_ROOM = ('dummy', "Zusatzraum")
+LUNCH_BREAK = ("mp", "Mittagspause")
+VIRTUAL_ROOM = ("dummy", "Zusatzraum")
 
 ### Messages
 _LESSON_NO_GROUP = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Gruppe"
-_LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne" \
-        " Lehrer.\nDieser Unterricht wird NICHT im Stundenplan erscheinen."
-_LAST_LESSON_TAG_INVALID = "Bedingung „LAST_LESSON“: Die Kennung {tag}" \
-        " wird mehr als einmal benutzt"
+_LESSON_NO_TEACHER = (
+    "Klasse {klass}, Fach {sid}: „Unterricht“ ohne"
+    " Lehrer.\nDieser Unterricht wird NICHT im Stundenplan erscheinen."
+)
+_LAST_LESSON_TAG_INVALID = (
+    "Bedingung „LAST_LESSON“: Die Kennung {tag}" " wird mehr als einmal benutzt"
+)
 _SUBJECT_PAIR_INVALID = "Ungültiges Fach-Paar ({item}) in:\n  {path}"
-_DODGY_GAPS_PER_WEEK = "Bedingung GAPS für Klasse {klass} ist" \
-        " wahrscheinlich fehlerhaft: {gaps}"
-_BAD_GAPS_PER_WEEK = "Bedingung GAPS für Klasse {klass} ist" \
-        " fehlerhaft: {gaps}"
-_TEACHER_DAYS_WRONG = "Lehrer-Tabelle: {tname} hat die falsche Anzahl" \
-        " an Tagesangaben"
-_TEACHER_PERIODS_WRONG = "Lehrer-Tabelle: {tname} hat die falsche Anzahl" \
-        " an Stunden für {day}"
-_NO_LESSON_WITH_TAG = "Tabelle der festen Stunden: Kennung {tag} hat keine" \
-        " entsprechenden Unterrichtsstunden"
-_TAG_TOO_MANY_TIMES = "Tabelle der festen Stunden: Kennung {tag} gibt" \
-        " mehr Zeiten an, als es dafür Unterrichtsstunden gibt"
+_DODGY_GAPS_PER_WEEK = (
+    "Bedingung GAPS für Klasse {klass} ist" " wahrscheinlich fehlerhaft: {gaps}"
+)
+_BAD_GAPS_PER_WEEK = (
+    "Bedingung GAPS für Klasse {klass} ist" " fehlerhaft: {gaps}"
+)
+_TEACHER_DAYS_WRONG = (
+    "Lehrer-Tabelle: {tname} hat die falsche Anzahl" " an Tagesangaben"
+)
+_TEACHER_PERIODS_WRONG = (
+    "Lehrer-Tabelle: {tname} hat die falsche Anzahl" " an Stunden für {day}"
+)
+_NO_LESSON_WITH_TAG = (
+    "Tabelle der festen Stunden: Kennung {tag} hat keine"
+    " entsprechenden Unterrichtsstunden"
+)
+_TAG_TOO_MANY_TIMES = (
+    "Tabelle der festen Stunden: Kennung {tag} gibt"
+    " mehr Zeiten an, als es dafür Unterrichtsstunden gibt"
+)
 
 
 ########################################################################
 
-import sys, os, datetime, re
-if __name__ == '__main__':
+import sys, os
+
+if __name__ == "__main__":
     # Enable package import if running as module
     this = sys.path[0]
     appdir = os.path.dirname(this)
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
-#TODO: Temporary redirection to use real data (there isn't any test data yet!)
-#    start.setup(os.path.join(basedir, 'TESTDATA'))
-    start.setup(os.path.join(basedir, 'DATA'))
+
+    # TODO: Temporary redirection to use real data (there isn't any test data yet!)
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    #    start.setup(os.path.join(basedir, 'DATA'))
+    start.setup(os.path.join(basedir, "NEXT"))
 
 # IMPORTANT: Note that some uses of Python dicts here may assume ordered
 # entries. If the implementation is altered, this should be taken into
@@ -76,96 +90,105 @@ from itertools import combinations
 
 import xmltodict
 
-from timetable.basic_data import Classes, Days, Periods, Placements, \
-        Rooms, TT_Subjects, TT_Teachers, TT_Error, TT_CONFIG, \
-        class_group_split
+from timetable.basic_data import (
+    Classes,
+    Days,
+    Periods,
+    Placements,
+    Rooms,
+    TT_Subjects,
+    TT_Teachers,
+    TT_Error,
+    TT_CONFIG,
+    class_group_split,
+)
 
 ### -----
 
+
 class Days_fet(Days):
     def get_days(self):
-        """Return an ordered list of fet elements for the days.
-        """
-        return [{'Name': dkey} for dkey in self]
-#
+        """Return an ordered list of fet elements for the days."""
+        return [{"Name": dkey} for dkey in self]
+
     def get_id(self, key):
         # This doesn't actually do anything at the moment, because the
         # 'short' entry IS the key. But I suppose things could change ...
-        return self[key]['short']
+        return self[key]["short"]
 
-###
 
 class Periods_fet(Periods):
     def get_periods(self):
-        """Return an ordered list of fet elements for the periods.
-        """
-        return [{'Name': pkey} for pkey in self]
-#
+        """Return an ordered list of fet elements for the periods."""
+        return [{"Name": pkey} for pkey in self]
+
     def get_id(self, key):
         # This doesn't actually do anything at the moment, because the
         # 'short' entry IS the key. But I suppose things could change ...
-        return self[key]['short']
+        return self[key]["short"]
 
-###
 
 class Classes_fet(Classes):
     def class_data(self, klass):
-        """Return a fet students_list/year entry for the given class.
-        """
+        """Return a fet students_list/year entry for the given class."""
         class_groups = self.class_groups[klass]
         division = self.atomics_lists[klass]
-# Try with just 0 or 1 category.
+        # Try with just 0 or 1 category.
         # The groups are all the "elemental" groups plus any dotted groups
         # which are used and not "atomic" groups already defined as subgroups.
         year_entry = {
-            'Name': klass,
-#TODO: long name?
-            'Number_of_Students': '0',
-            'Comments': None, # '1. Großklasse'. etc.?
-            'Number_of_Categories': '1' if division else '0',
-            'Separator': '.'
+            "Name": klass,
+            # TODO: long name?
+            "Number_of_Students": "0",
+            "Comments": None,  # '1. Großklasse'. etc.?
+            "Number_of_Categories": "1" if division else "0",
+            "Separator": ".",
         }
         if division:
             _groups = []
             _agset = set()
             for g, sgs in class_groups.items():
-                if g == '*': continue
-                g = f'{klass}.{g}'
+                if g == "*":
+                    continue
+                g = f"{klass}.{g}"
                 if g in sgs:
                     # This group is an atomic group
                     if g not in _agset:
                         _agset.add(g)
                         _groups.append(
-                            {   'Name': g,
-                                'Number_of_Students': '0',
-                                'Comments': None
+                            {
+                                "Name": g,
+                                "Number_of_Students": "0",
+                                "Comments": None,
                             }
                         )
                 else:
                     _agset.update(sgs)
                     _subgroups = [
-                        {   'Name': sg,
-                            'Number_of_Students': '0',
-                            'Comments': None
-                        } for sg in sgs
+                        {
+                            "Name": sg,
+                            "Number_of_Students": "0",
+                            "Comments": None,
+                        }
+                        for sg in sgs
                     ]
                     _groups.append(
-                        {   'Name': g,
-                            'Number_of_Students': '0',
-                            'Comments': None,
-                            'Subgroup': _subgroups
+                        {
+                            "Name": g,
+                            "Number_of_Students": "0",
+                            "Comments": None,
+                            "Subgroup": _subgroups,
                         }
                     )
-            year_entry['Category'] = {
-                'Number_of_Divisions': f'{len(division)}',
-                'Division': division
+            year_entry["Category"] = {
+                "Number_of_Divisions": f"{len(division)}",
+                "Division": division,
             }
-            year_entry['Group'] = _groups
+            year_entry["Group"] = _groups
         return year_entry
-#
+
     def constraint_blocked_periods(self):
-        """Constraint: students set not available ...
-        """
+        """Constraint: students set not available ..."""
         constraints = []
         for klass in self.class_days_periods:
             daymap = self.class_days_periods[klass]
@@ -174,48 +197,50 @@ class Classes_fet(Classes):
                 dayperiods = daymap[day]
                 for p in self.periods:
                     if not dayperiods[p]:
-                        weektags.append({'Day': day, 'Hour': p})
+                        weektags.append({"Day": day, "Hour": p})
             if weektags:
                 constraints.append(
-                    {   'Weight_Percentage': '100',
-                        'Students': klass,
-                        'Number_of_Not_Available_Times': f'{len(weektags)}',
-                        'Not_Available_Time': weektags,
-                        'Active': 'true',
-                        'Comments': None
+                    {
+                        "Weight_Percentage": "100",
+                        "Students": klass,
+                        "Number_of_Not_Available_Times": f"{len(weektags)}",
+                        "Not_Available_Time": weektags,
+                        "Active": "true",
+                        "Comments": None,
                     }
                 )
         if constraints:
-            self.time_constraints['ConstraintStudentsSetNotAvailableTimes'] \
-                    = constraints
-#
+            self.time_constraints[
+                "ConstraintStudentsSetNotAvailableTimes"
+            ] = constraints
+
     def get_lessons(self):
-        """Build list of lessons for fet-timetables.
-        """
+        """Build list of lessons for fet-timetables."""
+
         def make_room_constraints(rlist, percent):
-            _rlist = rlist.split('/')
+            _rlist = rlist.split("/")
             if len(_rlist) == 1:
-                room_constraint = 'ConstraintActivityPreferredRoom'
+                room_constraint = "ConstraintActivityPreferredRoom"
                 rc_item = {
-                    'Weight_Percentage': percent,
-                    'Activity_Id': None,
-                    'Room': rlist,
-                    'Permanently_Locked': 'true',
-                    'Active': 'true',
-                    'Comments': None
+                    "Weight_Percentage": percent,
+                    "Activity_Id": None,
+                    "Room": rlist,
+                    "Permanently_Locked": "true",
+                    "Active": "true",
+                    "Comments": None,
                 }
             else:
-                room_constraint = 'ConstraintActivityPreferredRooms'
+                room_constraint = "ConstraintActivityPreferredRooms"
                 rc_item = {
-                    'Weight_Percentage': percent,
-                    'Activity_Id': None,
-                    'Number_of_Preferred_Rooms': len(_rlist),
-                    'Preferred_Room': _rlist,
-                    'Active': 'true',
-                    'Comments': None
+                    "Weight_Percentage": percent,
+                    "Activity_Id": None,
+                    "Number_of_Preferred_Rooms": len(_rlist),
+                    "Preferred_Room": _rlist,
+                    "Active": "true",
+                    "Comments": None,
                 }
             return (room_constraint, rc_item)
-        #+
+
         def add_room_constraint(r_c, rc_item, rclid):
             try:
                 s_c = space_constraints[r_c]
@@ -223,101 +248,102 @@ class Classes_fet(Classes):
                 s_c = []
                 space_constraints[r_c] = s_c
             rci = rc_item.copy()
-            rci['Activity_Id'] = rclid
+            rci["Activity_Id"] = rclid
             s_c.append(rci)
-        #+
+
         space_constraints = {}  # for room placements
-        time_constraints = {}   # for "virtual" lessons (multiple rooms)
+        time_constraints = {}  # for "virtual" lessons (multiple rooms)
         self.lesson_list = []
-        self.tag_lids = {}      # {tag: [lesson-id, ...]}
-        self.xlids = []         # [[lid, xlid1, xlid2, ... ], ... ]
+        self.tag_lids = {}  # {tag: [lesson-id, ...]}
+        self.xlids = []  # [[lid, xlid1, xlid2, ... ], ... ]
         self.multirooms = []
         # For constraints concerning relative placement of individual
         # lessons in the various subjects, collect the tags and their
         # pupil groups for each subject:
-        self.sid_groups = {}    # {sid: [(group-set, lesson-tag), ... ]}
+        self.sid_groups = {}  # {sid: [(group-set, lesson-tag), ... ]}
         lid = 0
         for tag, data in self.lessons.items():
-            block = data['block']
-            if block and block != '++':
-                continue    # not a timetabled lesson
-            sid = data['SID']
-            klass = data['CLASS']
-            groups = data['GROUPS']
+            block = data["block"]
+            if block and block != "++":
+                continue  # not a timetabled lesson
+            sid = data["SID"]
+            klass = data["CLASS"]
+            groups = data["GROUPS"]
             if groups:
                 _gids = sorted(self.combine_atomic_groups(groups))
                 tag_groups = _gids[0] if len(_gids) == 1 else _gids
-#                print("\n???  ", tag, gids, "-->", tag_groups)
+            #                print("\n???  ", tag, gids, "-->", tag_groups)
             else:
-                REPORT("WARN", _LESSON_NO_GROUP.format(klass = klass,
-                        sid = sid))
+                REPORT("WARN", _LESSON_NO_GROUP.format(klass=klass, sid=sid))
                 tag_groups = None
-            #classes = ','.join(sorted(_classes_groups))
+            # classes = ','.join(sorted(_classes_groups))
 
-            tids = sorted(data['TIDS'])
-            if (not tids) and (not data['REALTIDS']):
-                REPORT("WARN", _LESSON_NO_TEACHER.format(klass = klass,
-                        sid = sid))
+            tids = sorted(data["TIDS"])
+            if (not tids) and (not data["REALTIDS"]):
+                REPORT("WARN", _LESSON_NO_TEACHER.format(klass=klass, sid=sid))
                 continue
 
             # Add room constraints for lesson
             room_constraints = []
-            _roomlist = data['ROOMS']
+            _roomlist = data["ROOMS"]
             if _roomlist:
                 # Make a list of constraints
                 for _r in _roomlist:
                     try:
-                        _pref, _x = _r.split('+')
+                        _pref, _x = _r.split("+")
                     except ValueError:
                         # No "preferred" rooms
                         _pc = None
-                        _ac = make_room_constraints(_r, '100')
+                        _ac = make_room_constraints(_r, "100")
                     else:
-                        _pc = make_room_constraints(_pref, '90')
-                        _ac = make_room_constraints(_pref + '/' + _x, '100')
+                        _pc = make_room_constraints(_pref, "90")
+                        _ac = make_room_constraints(_pref + "/" + _x, "100")
                     room_constraints.append((_pc, _ac))
 
             # Keep a list of subjects with multiple rooms
             if len(room_constraints) > 1:
-                self.multirooms.append({
-                        'CLASS': klass,
-                        'GROUPS': groups,
-                        'SID': sid,
-                        'NUMBER': len(room_constraints)
+                self.multirooms.append(
+                    {
+                        "CLASS": klass,
+                        "GROUPS": groups,
+                        "SID": sid,
+                        "NUMBER": len(room_constraints),
                     }
                 )
-                #print("???", self.multirooms[-1])
+                # print("???", self.multirooms[-1])
 
             # Generate the lesson items
             if tids:
                 if len(tids) == 1:
-                    lesson0 = {'Teacher': tids[0]}
+                    lesson0 = {"Teacher": tids[0]}
                 else:
-                    lesson0 = {'Teacher': tids}
+                    lesson0 = {"Teacher": tids}
             else:
                 lesson0 = {}
             if tag_groups:
-                lesson0['Students'] = tag_groups
-            lesson0['Subject'] = sid
-            lesson0['Activity_Group_Id'] = '0'
-            lesson0['Active'] = 'true'
-            dmap = data['lengths']
+                lesson0["Students"] = tag_groups
+            lesson0["Subject"] = sid
+            lesson0["Activity_Group_Id"] = "0"
+            lesson0["Active"] = "true"
+            dmap = data["lengths"]
             if dmap:
                 for d in sorted(dmap):
                     _tag_lids = []
-                    __tag = f'{tag}__{d}' if len(dmap) > 1 else tag
+                    __tag = f"{tag}__{d}" if len(dmap) > 1 else tag
                     for i in range(dmap[d]):
                         lid += 1
                         _lid = str(lid)
                         _tag_lids.append(_lid)
                         dstr = str(d)
                         lesson = lesson0.copy()
-                        lesson.update({
-                            'Duration': dstr,
-                            'Total_Duration': dstr,
-                            'Id': _lid,
-                            'Comments': __tag
-                        })
+                        lesson.update(
+                            {
+                                "Duration": dstr,
+                                "Total_Duration": dstr,
+                                "Id": _lid,
+                                "Comments": __tag,
+                            }
+                        )
                         self.lesson_list.append(lesson)
                         if room_constraints:
                             _pc, _ac = room_constraints[0]
@@ -333,34 +359,34 @@ class Classes_fet(Classes):
                                     _xlid = str(lid)
                                     _rids.append(_xlid)
                                     lesson = {
-#                                        'Teacher': {},
-                                        'Subject': VIRTUAL_ROOM[0],
-#                                        'Students': {},
-                                        'Duration': dstr,
-                                        'Total_Duration': dstr,
-                                        'Id': _xlid,
-                                        'Activity_Group_Id': '0',
-                                        'Active': 'true',
-                                        'Comments': f'++{_lid}'
+                                        #                                        'Teacher': {},
+                                        "Subject": VIRTUAL_ROOM[0],
+                                        #                                        'Students': {},
+                                        "Duration": dstr,
+                                        "Total_Duration": dstr,
+                                        "Id": _xlid,
+                                        "Activity_Group_Id": "0",
+                                        "Active": "true",
+                                        "Comments": f"++{_lid}",
                                     }
                                     self.lesson_list.append(lesson)
                                     # Add the space constraints
                                     if _pc:
-                                        add_room_constraint(_pc[0], _pc[1],
-                                                _xlid)
-                                    add_room_constraint(_ac[0], _ac[1],
-                                            _xlid)
+                                        add_room_constraint(
+                                            _pc[0], _pc[1], _xlid
+                                        )
+                                    add_room_constraint(_ac[0], _ac[1], _xlid)
                                 # Note the list of coupled lids
                                 self.xlids.append(_rids)
                                 # Add start-time constraint
                                 time_constraint = {
-                                    'Weight_Percentage': '100',
-                                    'Number_of_Activities': str(len(_rids)),
-                                    'Activity_Id': _rids,
-                                    'Active': 'true',
-                                    'Comments': None
+                                    "Weight_Percentage": "100",
+                                    "Number_of_Activities": str(len(_rids)),
+                                    "Activity_Id": _rids,
+                                    "Active": "true",
+                                    "Comments": None,
                                 }
-                                tc_tag = 'ConstraintActivitiesSameStartingTime'
+                                tc_tag = "ConstraintActivitiesSameStartingTime"
                                 try:
                                     t_c = time_constraints[tc_tag]
                                 except KeyError:
@@ -373,68 +399,75 @@ class Classes_fet(Classes):
                     except KeyError:
                         self.sid_groups[sid] = [(groups, __tag)]
         self.last_lesson_id = lid
-#TODO--
-#        print("???", self.tag_lids)
+        # TODO--
+        #        print("???", self.tag_lids)
         self.time_constraints = time_constraints
         self.space_constraints = space_constraints
-#
+
     def lunch_breaks(self, lessons):
-#TODO: This is very much tied to a concrete situation. Think of a more
-# general approach.
-# I need a special lesson on the long days AND a constraint to limit it
-# to periods 3,4 or 5.
-# There needs to be a lunch-break lesson for every sub-group of the class!
+        # TODO: This is very much tied to a concrete situation. Think of a more
+        # general approach.
+        # I need a special lesson on the long days AND a constraint to limit it
+        # to periods 3,4 or 5.
+        # There needs to be a lunch-break lesson for every sub-group of the class!
         constraints = []
         for klass, weekdata in self.class_days_periods.items():
-            atomic_groups = self.class_groups[klass]['*']
+            atomic_groups = self.class_groups[klass]["*"]
             groupsets = self.groupsets_class[klass]
-            #print(f"??? {klass}", atomic_groups)
+            # print(f"??? {klass}", atomic_groups)
             for day, daydata in weekdata.items():
-                if daydata['5']:
-#                    print(f"??? {klass}, {day}")
+                if daydata["5"]:
+                    #                    print(f"??? {klass}, {day}")
                     # Add lesson lunch-break
                     for g in atomic_groups:
                         self.last_lesson_id += 1
                         lid = str(self.last_lesson_id)
                         lesson = {
-#                            'Teacher': {},
-                            'Subject': LUNCH_BREAK[0],
-                            'Students': groupsets.get(frozenset([g])) or g,
-                            'Duration': '1',
-                            'Total_Duration': '1',
-                            'Id': lid,
-                            'Activity_Group_Id': '0',
-                            'Active': 'true',
-                            'Comments': None
+                            #                            'Teacher': {},
+                            "Subject": LUNCH_BREAK[0],
+                            "Students": groupsets.get(frozenset([g])) or g,
+                            "Duration": "1",
+                            "Total_Duration": "1",
+                            "Id": lid,
+                            "Activity_Group_Id": "0",
+                            "Active": "true",
+                            "Comments": None,
                         }
                         lessons.append(lesson)
                         # Add constraint
                         constraints.append(
-                            {   'Weight_Percentage': '100',
-                                'Activity_Id': lid,
-                                'Number_of_Preferred_Starting_Times': '3',
-                                'Preferred_Starting_Time': [
-                                    {'Preferred_Starting_Day': day,
-                                        'Preferred_Starting_Hour': '3'},
-                                    {'Preferred_Starting_Day': day,
-                                        'Preferred_Starting_Hour': '4'},
-                                    {'Preferred_Starting_Day': day,
-                                        'Preferred_Starting_Hour': '5'},
+                            {
+                                "Weight_Percentage": "100",
+                                "Activity_Id": lid,
+                                "Number_of_Preferred_Starting_Times": "3",
+                                "Preferred_Starting_Time": [
+                                    {
+                                        "Preferred_Starting_Day": day,
+                                        "Preferred_Starting_Hour": "3",
+                                    },
+                                    {
+                                        "Preferred_Starting_Day": day,
+                                        "Preferred_Starting_Hour": "4",
+                                    },
+                                    {
+                                        "Preferred_Starting_Day": day,
+                                        "Preferred_Starting_Hour": "5",
+                                    },
                                 ],
-                                'Active': 'true',
-                                'Comments': None
+                                "Active": "true",
+                                "Comments": None,
                             }
                         )
         if constraints:
             try:
                 self.time_constraints[
-                        'ConstraintActivityPreferredStartingTimes'] \
-                    += constraints
+                    "ConstraintActivityPreferredStartingTimes"
+                ] += constraints
             except KeyError:
                 self.time_constraints[
-                        'ConstraintActivityPreferredStartingTimes'] \
-                    = constraints
-#
+                    "ConstraintActivityPreferredStartingTimes"
+                ] = constraints
+
     def __subject_atomic_group_tags(self, tglist):
         """Given a list of (atomic-group-set, tag) pairs, collect the
         tags which have common groups {tag: {tag, ... }]. Tags which
@@ -451,7 +484,7 @@ class Classes_fet(Classes):
                 # Also include tags with multiple lessons!
                 tgmap[tag] = collect
         return tgmap
-#
+
     def __tag_sets_common_groups(self, tgmap):
         """Given a mapping {tag: {tag, ... } as returned by
         <__subject_atomic_group_tags>, return a list of tags-sets
@@ -467,9 +500,9 @@ class Classes_fet(Classes):
         xcombis = []
         for ycombi in kcombis:
             # Check with all components
-#                print("&&&", combi)
+            #                print("&&&", combi)
             for p in ycombi:
-#                    print("%%%", p)
+                #                    print("%%%", p)
                 plist = tgmap[p]
                 for q in ycombi:
                     if q not in plist:
@@ -489,7 +522,7 @@ class Classes_fet(Classes):
             else:
                 combis.append(c)
         return combis
-#
+
     def __pairs_common_groups(self, cmap):
         """For each item (sid1+sid2) get all tag sets with common groups.
         The result is a mapping. For each item, there is a further mapping,
@@ -503,10 +536,13 @@ class Classes_fet(Classes):
                 pairs[item] = None
         for item in pairs:
             try:
-                sid1, sid2 = item.split('+')
+                sid1, sid2 = item.split("+")
             except ValueError:
-                raise TT_Error(_SUBJECT_PAIR_INVALID.format(item = item,
-                        path = DATAPATH(TT_CONFIG['CONSTRAINTS'])))
+                raise TT_Error(
+                    _SUBJECT_PAIR_INVALID.format(
+                        item=item, path=DATAPATH(TT_CONFIG["CONSTRAINTS"])
+                    )
+                )
             tglist1 = self.sid_groups[sid1]
             tglist2 = self.sid_groups[sid2]
             # <tglistX> is a list of ({set of "atomic" groups}, tag)
@@ -549,8 +585,9 @@ class Classes_fet(Classes):
             # Divide up the sets into classes
             class_map = {}
             for tag, tset in tagmap.items():
-                classes = {class_group_split(g)[0]
-                        for g in self.tag_get_groups(tag)}
+                classes = {
+                    class_group_split(g)[0] for g in self.tag_get_groups(tag)
+                }
                 for klass in classes:
                     tset1 = set()
                     for t in tset:
@@ -564,13 +601,13 @@ class Classes_fet(Classes):
                         except KeyError:
                             class_map[klass] = [tag_tset]
             pairs[item] = class_map
-#            for k in sorted(class_map):
-#                for tset in class_map[k]:
-#                    print("+++", k, tset)
+        #            for k in sorted(class_map):
+        #                for tset in class_map[k]:
+        #                    print("+++", k, tset)
         return pairs
-#
-#TODO: This is rather a hammer-approach which could perhaps be improved
-# by collecting data class-wise?
+
+    # TODO: This is rather a hammer-approach which could perhaps be improved
+    # by collecting data class-wise?
     def constraint_day_separation(self, placements):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
@@ -582,7 +619,7 @@ class Classes_fet(Classes):
         constraints = []
         for sid, tglist in self.sid_groups.items():
             if sid == VIRTUAL_ROOM[0]:
-                continue    # ignore dummy subject
+                continue  # ignore dummy subject
             # <tglist> is a list of ({set of "atomic" groups}, tag) pairs
             # for each tag.
             # Collect the tags which share groups (for this subject)
@@ -611,20 +648,22 @@ class Classes_fet(Classes):
                     for tag in tagset:
                         ids += self.tag_lids[tag]
                     constraints.append(
-                        {   'Weight_Percentage': '100',
-                            'Consecutive_If_Same_Day': 'true',
-                            'Number_of_Activities': str(len(ids)),
-                            'Activity_Id': ids,
-                            'MinDays': '1',
-                            'Active': 'true',
-                            'Comments': None
+                        {
+                            "Weight_Percentage": "100",
+                            "Consecutive_If_Same_Day": "true",
+                            "Number_of_Activities": str(len(ids)),
+                            "Activity_Id": ids,
+                            "MinDays": "1",
+                            "Active": "true",
+                            "Comments": None,
                         }
                     )
         if constraints:
-            self.time_constraints['ConstraintMinDaysBetweenActivities'] \
-                    = constraints
+            self.time_constraints[
+                "ConstraintMinDaysBetweenActivities"
+            ] = constraints
         return sid_group_sets
-#
+
     def constraint_min_lessons_per_day(self, default, custom_table):
         constraints = []
         for klass in self.class_days_periods:
@@ -634,36 +673,37 @@ class Classes_fet(Classes):
                 n = default
             if n:
                 constraints.append(
-                    {   'Weight_Percentage': '100',
-                        'Minimum_Hours_Daily': str(n),
-                        'Students': klass,
-                        'Allow_Empty_Days': 'false',
-                        'Active': 'true',
-                        'Comments': None
+                    {
+                        "Weight_Percentage": "100",
+                        "Minimum_Hours_Daily": str(n),
+                        "Students": klass,
+                        "Allow_Empty_Days": "false",
+                        "Active": "true",
+                        "Comments": None,
                     }
                 )
         if constraints:
-            self.time_constraints['ConstraintStudentsSetMinHoursDaily'] \
-                    = constraints
+            self.time_constraints[
+                "ConstraintStudentsSetMinHoursDaily"
+            ] = constraints
 
-# Version for all classes:
-#    time_constraints['ConstraintStudentsMinHoursDaily'] = [
-#        {   'Weight_Percentage': '100',
-#            'Minimum_Hours_Daily': str(min_lessons),
-#            'Allow_Empty_Days': 'false',
-#            'Active': 'true',
-#            'Comments': None
-#        }
-#    ]
+    # Version for all classes:
+    #    time_constraints['ConstraintStudentsMinHoursDaily'] = [
+    #        {   'Weight_Percentage': '100',
+    #            'Minimum_Hours_Daily': str(min_lessons),
+    #            'Allow_Empty_Days': 'false',
+    #            'Active': 'true',
+    #            'Comments': None
+    #        }
+    #    ]
 
     ############### FURTHER CONSTRAINTS ###############
 
     def class_constraint_data(self, data):
-        """Extract info for the various classes, jandling default values.
-        """
+        """Extract info for the various classes, jandling default values."""
         cmap = {}
         try:
-            default = data.pop('*')     # WARNING: The entry is now gone!
+            default = data.pop("*")  # WARNING: The entry is now gone!
         except KeyError:
             pass
         else:
@@ -675,14 +715,13 @@ class Classes_fet(Classes):
             except KeyError:
                 cmap[klass] = v
         return cmap
-#
+
     def GAPS(self, data):
-        """Maximum gaps per week for each specified class.
-        """
+        """Maximum gaps per week for each specified class."""
         constraints = []
         cmap = {}
         try:
-            default = data.pop('*')     # WARNING: The entry is now gone!
+            default = data.pop("*")  # WARNING: The entry is now gone!
         except KeyError:
             pass
         else:
@@ -696,115 +735,120 @@ class Classes_fet(Classes):
                 if _gpw < 0:
                     raise ValueError
                 if _gpw > 5:
-                    REPORT("WARN", _DODGY_GAPS_PER_WEEK.format(
-                            klass = klass, gaps = gpw))
+                    REPORT(
+                        "WARN",
+                        _DODGY_GAPS_PER_WEEK.format(klass=klass, gaps=gpw),
+                    )
                     continue
             except ValueError:
-                raise TT_Error(_BAD_GAPS_PER_WEEK.format(
-                            klass = klass, gaps = gpw))
+                raise TT_Error(_BAD_GAPS_PER_WEEK.format(klass=klass, gaps=gpw))
             constraints.append(
-                {   'Weight_Percentage': '100',
-                    'Max_Gaps': _gpw,
-                    'Students': klass,
-                    'Active': 'true',
-                    'Comments': None
+                {
+                    "Weight_Percentage": "100",
+                    "Max_Gaps": _gpw,
+                    "Students": klass,
+                    "Active": "true",
+                    "Comments": None,
                 }
             )
         if constraints:
-            self.time_constraints['ConstraintStudentsSetMaxGapsPerWeek'] \
-                    = constraints
-#
+            self.time_constraints[
+                "ConstraintStudentsSetMaxGapsPerWeek"
+            ] = constraints
+
     def LAST_LESSON(self, data):
-        """The lessons should end the day for the respective classes.
-        """
+        """The lessons should end the day for the respective classes."""
         constraints = []
         for tag in data:
             _tags = self.parallel_tags[tag]
             if len(_tags) > 1:
-                REPORT("WARN", _LAST_LESSON_TAG_INVALID.format(tag = tag))
+                REPORT("WARN", _LAST_LESSON_TAG_INVALID.format(tag=tag))
             for lid in self.tag_lids[_tags[0]]:
                 constraints.append(
-                    {   'Weight_Percentage': '100',
-                        'Activity_Id': lid,
-                        'Active': 'true',
-                        'Comments': None
+                    {
+                        "Weight_Percentage": "100",
+                        "Activity_Id": lid,
+                        "Active": "true",
+                        "Comments": None,
                     }
                 )
         if constraints:
-            self.time_constraints['ConstraintActivityEndsStudentsDay'] \
-                    = constraints
-#
-    def tag_get_sid(self, tag):
-        return self.lessons[tag.split('__', 1)[0]]['SID']
-#
-    def tag_get_groups(self, tag):
-        return self.lessons[tag.split('__', 1)[0]]['GROUPS']
-#
-#TODO: This might be easier using lists of tags and data for each class!
-    def ORDERED_IF_SAME_DAY(self, data):
-        """Two subjects should be in the given order, if on the same day.
-        """
-        constraints = []
-        cmap = self.class_constraint_data(data)
-        pairs = self.__pairs_common_groups(cmap)
-        for klass, item_map in cmap.items():
-            for item, weight in item_map.items():
-                percent = WEIGHTS[int(weight)]
-                if not percent:
-                    continue
-                taglist = pairs[item].get(klass) or []
-                for tag, tagset in taglist:
-                    lids2 = []
-                    for t in tagset:
-                        lids2 += self.tag_lids[t]
-                    for lid1 in self.tag_lids[tag]:
-                        #print("???", klass, item, percent, lid1, lids2)
-                        for lid2 in lids2:
-                            constraints.append(
-                                {   'Weight_Percentage': percent,
-                                    'First_Activity_Id': lid1,
-                                    'Second_Activity_Id': lid2,
-                                    'Active': 'true',
-                                    'Comments': None
-                                }
-                            )
-        if constraints:
-            self.time_constraints['ConstraintTwoActivitiesOrderedIfSameDay'] \
-                    = constraints
-#
-    def PAIR_GAPS(self, data):
-        """Two subjects should have at least one lesson in between.
-        """
-        constraints = []
-        cmap = self.class_constraint_data(data)
-        pairs = self.__pairs_common_groups(cmap)
-        for klass, item_map in cmap.items():
-            for item, weight in item_map.items():
-                percent = WEIGHTS[int(weight)]
-                if not percent:
-                    continue
-                taglist = pairs[item].get(klass) or []
-                for tag, tagset in taglist:
-                    lids2 = []
-                    for t in tagset:
-                        lids2 += self.tag_lids[t]
-                    for lid1 in self.tag_lids[tag]:
-                        #print("???", klass, item, percent, lid1, lids2)
-                        for lid2 in lids2:
-                            constraints.append(
-                                {   'Weight_Percentage': percent,
-                                    'Number_of_Activities': '2',
-                                    'Activity_Id': [lid1, lid2],
-                                    'MinGaps': '1',
-                                    'Active': 'true',
-                                    'Comments': None
-                                }
-                            )
-        if constraints:
-            self.time_constraints['ConstraintMinGapsBetweenActivities'] \
-                    = constraints
+            self.time_constraints[
+                "ConstraintActivityEndsStudentsDay"
+            ] = constraints
 
-###
+    def tag_get_sid(self, tag):
+        return self.lessons[tag.split("__", 1)[0]]["SID"]
+
+    def tag_get_groups(self, tag):
+        return self.lessons[tag.split("__", 1)[0]]["GROUPS"]
+
+    # TODO: This might be easier using lists of tags and data for each class!
+    def ORDERED_IF_SAME_DAY(self, data):
+        """Two subjects should be in the given order, if on the same day."""
+        constraints = []
+        cmap = self.class_constraint_data(data)
+        pairs = self.__pairs_common_groups(cmap)
+        for klass, item_map in cmap.items():
+            for item, weight in item_map.items():
+                percent = WEIGHTS[int(weight)]
+                if not percent:
+                    continue
+                taglist = pairs[item].get(klass) or []
+                for tag, tagset in taglist:
+                    lids2 = []
+                    for t in tagset:
+                        lids2 += self.tag_lids[t]
+                    for lid1 in self.tag_lids[tag]:
+                        # print("???", klass, item, percent, lid1, lids2)
+                        for lid2 in lids2:
+                            constraints.append(
+                                {
+                                    "Weight_Percentage": percent,
+                                    "First_Activity_Id": lid1,
+                                    "Second_Activity_Id": lid2,
+                                    "Active": "true",
+                                    "Comments": None,
+                                }
+                            )
+        if constraints:
+            self.time_constraints[
+                "ConstraintTwoActivitiesOrderedIfSameDay"
+            ] = constraints
+
+    def PAIR_GAPS(self, data):
+        """Two subjects should have at least one lesson in between."""
+        constraints = []
+        cmap = self.class_constraint_data(data)
+        pairs = self.__pairs_common_groups(cmap)
+        for klass, item_map in cmap.items():
+            for item, weight in item_map.items():
+                percent = WEIGHTS[int(weight)]
+                if not percent:
+                    continue
+                taglist = pairs[item].get(klass) or []
+                for tag, tagset in taglist:
+                    lids2 = []
+                    for t in tagset:
+                        lids2 += self.tag_lids[t]
+                    for lid1 in self.tag_lids[tag]:
+                        # print("???", klass, item, percent, lid1, lids2)
+                        for lid2 in lids2:
+                            constraints.append(
+                                {
+                                    "Weight_Percentage": percent,
+                                    "Number_of_Activities": "2",
+                                    "Activity_Id": [lid1, lid2],
+                                    "MinGaps": "1",
+                                    "Active": "true",
+                                    "Comments": None,
+                                }
+                            )
+        if constraints:
+            self.time_constraints[
+                "ConstraintMinGapsBetweenActivities"
+            ] = constraints
+
 
 class Teachers_fet(TT_Teachers):
     def get_teachers(self, timetable_teachers):
@@ -813,87 +857,88 @@ class Teachers_fet(TT_Teachers):
         <self.tidlist>.
         """
         tlist = []
-        self.tidlist = []   # Just tids used in the timetable
+        self.tidlist = []  # Just tids used in the timetable
         for tid, name in self.items():
-             if tid in timetable_teachers:
-                tlist.append({
-                        'Name': tid,
-                        'Target_Number_of_Hours': '0',
-                        'Qualified_Subjects': None,
-                        'Comments': name
+            if tid in timetable_teachers:
+                tlist.append(
+                    {
+                        "Name": tid,
+                        "Target_Number_of_Hours": "0",
+                        "Qualified_Subjects": None,
+                        "Comments": name,
                     }
                 )
                 self.tidlist.append(tid)
         return tlist
-#
+
     def add_constraints(self, days, periods, classes):
-#TODO: Passing in <classes> is a nasty bodge! There should be universal
-# access to the days, the periods, the constraints and the lesson data.
+        # TODO: Passing in <classes> is a nasty bodge! There should be universal
+        # access to the days, the periods, the constraints and the lesson data.
         time_constraints = classes.time_constraints
         # Not-available times
         blocked = self.constraint_blocked_periods(days, periods)
         if blocked:
-            time_constraints['ConstraintTeacherNotAvailableTimes'] = blocked
+            time_constraints["ConstraintTeacherNotAvailableTimes"] = blocked
         # Gaps per week and contiguous lessons
         constraints_g = []
         constraints_u = []
         for tid in self.tidlist:
             cdata = self.constraints[tid]
-            g = cdata['MAXGAPSPERWEEK']
-            u = cdata['MAXBLOCK']
+            g = cdata["MAXGAPSPERWEEK"]
+            u = cdata["MAXBLOCK"]
             # These are <None> or a (number, weight) pair (integers)
             if g != None:
                 constraints_g.append(
-                    {   'Weight_Percentage': '100', # necessary!
-                        'Teacher_Name': tid,
-                        'Max_Gaps': str(g),
-                        'Active': 'true',
-                        'Comments': None
+                    {
+                        "Weight_Percentage": "100",  # necessary!
+                        "Teacher_Name": tid,
+                        "Max_Gaps": str(g),
+                        "Active": "true",
+                        "Comments": None,
                     }
                 )
             if u:
                 n, w = u
                 if w:
                     constraints_u.append(
-                        {   'Weight_Percentage': WEIGHTS[w],
-                            'Teacher_Name': tid,
-                            'Maximum_Hours_Continuously': str(n),
-                            'Active': 'true',
-                            'Comments': None
+                        {
+                            "Weight_Percentage": WEIGHTS[w],
+                            "Teacher_Name": tid,
+                            "Maximum_Hours_Continuously": str(n),
+                            "Active": "true",
+                            "Comments": None,
                         }
                     )
         if constraints_g:
-            time_constraints['ConstraintTeacherMaxGapsPerWeek'] \
-                    = constraints_g
+            time_constraints["ConstraintTeacherMaxGapsPerWeek"] = constraints_g
         if constraints_u:
-            time_constraints['ConstraintTeacherMaxHoursContinuously'] \
-                    = constraints_u
+            time_constraints[
+                "ConstraintTeacherMaxHoursContinuously"
+            ] = constraints_u
 
         constraints = self.lunch_breaks(days, periods, classes)
         if constraints:
             try:
-               time_constraints[
-                        'ConstraintActivityPreferredStartingTimes'] \
-                    += constraints
+                time_constraints[
+                    "ConstraintActivityPreferredStartingTimes"
+                ] += constraints
             except KeyError:
                 time_constraints[
-                        'ConstraintActivityPreferredStartingTimes'] \
-                    = constraints
+                    "ConstraintActivityPreferredStartingTimes"
+                ] = constraints
 
         constraints = self.min_lessons_daily(classes)
         if constraints:
-            time_constraints['ConstraintTeacherMinHoursDaily'] = constraints
+            time_constraints["ConstraintTeacherMinHoursDaily"] = constraints
 
     def constraint_blocked_periods(self, days, periods):
-        """Return the blocked periods in the form needed by fet.
-        """
+        """Return the blocked periods in the form needed by fet."""
         blocked = []
         for tid in self.tidlist:
             dlist = self.blocked_periods.get(tid)
             if dlist:
                 if len(dlist) != len(days):
-                    REPORT("ERROR", _TEACHER_DAYS_WRONG.format(
-                            tname = self[tid]))
+                    REPORT("ERROR", _TEACHER_DAYS_WRONG.format(tname=self[tid]))
                     continue
                 tlist = []
                 i = 0
@@ -901,35 +946,35 @@ class Teachers_fet(TT_Teachers):
                     pblist = dlist[i]
                     i += 1
                     if len(pblist) != len(periods):
-                        REPORT("ERROR", _TEACHER_PERIODS_WRONG.format(
-                                tname = self[tid], day = d))
+                        REPORT(
+                            "ERROR",
+                            _TEACHER_PERIODS_WRONG.format(
+                                tname=self[tid], day=d
+                            ),
+                        )
                         continue
                     j = 0
                     for p in periods:
                         if pblist[j]:
-                            tlist.append(
-                                {
-                                    'Day': d,
-                                    'Hour': p
-                                }
-                            )
+                            tlist.append({"Day": d, "Hour": p})
                         j += 1
                 blocked.append(
-                    {   'Weight_Percentage': '100',
-                        'Teacher': tid,
-                        'Number_of_Not_Available_Times': str(len(tlist)),
-                        'Not_Available_Time': tlist
+                    {
+                        "Weight_Percentage": "100",
+                        "Teacher": tid,
+                        "Number_of_Not_Available_Times": str(len(tlist)),
+                        "Not_Available_Time": tlist,
                     }
                 )
         return blocked
-#
+
     def lunch_breaks(self, days, periods, classes):
         """Add a special lesson on the long days AND a constraint to
         limit it to the lunch times.
         """
         constraints = []
         for tid in self.tidlist:
-            lbperiods = self.constraints[tid]['LUNCHBREAK']
+            lbperiods = self.constraints[tid]["LUNCHBREAK"]
             if not lbperiods:
                 continue
             bp = self.blocked_periods.get(tid)
@@ -938,7 +983,7 @@ class Teachers_fet(TT_Teachers):
                     for p in lbperiods:
                         i = periods.index(p)
                         if bp[d][i]:
-                            break    # No lunch break needed
+                            break  # No lunch break needed
                     else:
                         raise ValueError
                     continue
@@ -948,63 +993,73 @@ class Teachers_fet(TT_Teachers):
                 classes.last_lesson_id += 1
                 lid = str(classes.last_lesson_id)
                 lesson = {
-                    'Teacher': tid,
-                    'Subject': LUNCH_BREAK[0],
-#                    'Students': {},
-                    'Duration': '1',
-                    'Total_Duration': '1',
-                    'Id': lid,
-                    'Activity_Group_Id': '0',
-                    'Active': 'true',
-                    'Comments': None
+                    "Teacher": tid,
+                    "Subject": LUNCH_BREAK[0],
+                    #                    'Students': {},
+                    "Duration": "1",
+                    "Total_Duration": "1",
+                    "Id": lid,
+                    "Activity_Group_Id": "0",
+                    "Active": "true",
+                    "Comments": None,
                 }
                 classes.lesson_list.append(lesson)
                 # Add constraint
                 day = days[d]
                 plist = [
-                    {   'Preferred_Starting_Day': day,
-                        'Preferred_Starting_Hour': p
-                    } for p in lbperiods
+                    {
+                        "Preferred_Starting_Day": day,
+                        "Preferred_Starting_Hour": p,
+                    }
+                    for p in lbperiods
                 ]
                 constraints.append(
-                    {   'Weight_Percentage': '100',
-                        'Activity_Id': lid,
-                        'Number_of_Preferred_Starting_Times': str(len(
-                                plist)),
-                        'Preferred_Starting_Time': plist,
-                        'Active': 'true',
-                        'Comments': None
+                    {
+                        "Weight_Percentage": "100",
+                        "Activity_Id": lid,
+                        "Number_of_Preferred_Starting_Times": str(len(plist)),
+                        "Preferred_Starting_Time": plist,
+                        "Active": "true",
+                        "Comments": None,
                     }
                 )
         return constraints
-#
+
     def min_lessons_daily(self, classes):
-        """ConstraintTeacherMinHoursDaily
-        """
+        """ConstraintTeacherMinHoursDaily"""
         constraints = []
         for tid in self.tidlist:
-            minl = self.constraints[tid]['MINPERDAY']
+            minl = self.constraints[tid]["MINPERDAY"]
             if not minl:
                 continue
             constraints.append(
-                {   'Weight_Percentage': '100',
-                    'Teacher_Name': tid,
-                    'Minimum_Hours_Daily': str(minl),
-                    'Allow_Empty_Days': 'true',
-                    'Active': 'true',
-                    'Comments': None
+                {
+                    "Weight_Percentage": "100",
+                    "Teacher_Name": tid,
+                    "Minimum_Hours_Daily": str(minl),
+                    "Allow_Empty_Days": "true",
+                    "Active": "true",
+                    "Comments": None,
                 }
             )
         return constraints
 
-###
 
 class Rooms_fet(Rooms):
     def get_rooms(self):
-        return [{'Name': rid, 'Building': None, 'Capacity': '30000',
-                'Virtual': 'false', 'Comments': name}
-                for rid, name in self.items()]
-#TODO: special fet bodge.
+        return [
+            {
+                "Name": rid,
+                "Building": None,
+                "Capacity": "30000",
+                "Virtual": "false",
+                "Comments": name,
+            }
+            for rid, name in self.items()
+        ]
+
+
+# TODO: special fet bodge.
 # Add virtual rooms when a lesson needs more than one room.
 # Name them according to the contained rooms, e.g. 'rid1,rid2'?
 #                {'Name': 'V1', 'Building': None, 'Capacity': '30000',
@@ -1018,16 +1073,14 @@ class Rooms_fet(Rooms):
 # To include more than one room in a set (possibly best to avoid this?):
 # {'Number_of_Real_Rooms': '2', 'Real_Room': ['r2', 'r3']}
 
-###
 
 class Subjects_fet(TT_Subjects):
     def get_subjects(self):
-        sids = [{'Name': sid, 'Comments': name}
-                for sid, name in self.items()
-        ]
-        sids.append({'Name': VIRTUAL_ROOM[0], 'Comments': VIRTUAL_ROOM[1]})
-        sids.append({'Name': LUNCH_BREAK[0], 'Comments': LUNCH_BREAK[1]})
+        sids = [{"Name": sid, "Comments": name} for sid, name in self.items()]
+        sids.append({"Name": VIRTUAL_ROOM[0], "Comments": VIRTUAL_ROOM[1]})
+        sids.append({"Name": LUNCH_BREAK[0], "Comments": LUNCH_BREAK[1]})
         return sids
+
 
 ########################################################################
 
@@ -1080,107 +1133,93 @@ class Subjects_fet(TT_Subjects):
     }
 """
 
-###
 
-def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
-        CLASSES, LESSONS, time_constraints, space_constraints):
+def build_dict_fet(
+    ROOMS,
+    DAYS,
+    PERIODS,
+    TEACHERS,
+    SUBJECTS,
+    CLASSES,
+    LESSONS,
+    time_constraints,
+    space_constraints,
+):
     fet_dict = {
-        '@version': f'{FET_VERSION}',
-        'Mode': 'Official',
-        'Institution_Name': 'FWS Bothfeld',
-        'Comments': 'Default comments',
-
-        'Days_List': {
-            'Number_of_Days': f'{len(DAYS)}',
-            'Day': DAYS
+        "@version": f"{FET_VERSION}",
+        "Mode": "Official",
+        "Institution_Name": "FWS Bothfeld",
+        "Comments": "Default comments",
+        "Days_List": {"Number_of_Days": f"{len(DAYS)}", "Day": DAYS},
+        "Hours_List": {"Number_of_Hours": f"{len(PERIODS)}", "Hour": PERIODS},
+        "Subjects_List": {"Subject": SUBJECTS},
+        "Activity_Tags_List": None,
+        "Teachers_List": {"Teacher": TEACHERS},
+        "Students_List": {"Year": CLASSES},
+        # Try single activities instead?
+        "Activities_List": {
+            "Activity": LESSONS
+            #                    [
+            #                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
+            #                            'Duration': '2', 'Total_Duration': '10',
+            #                            'Id': '1', 'Activity_Group_Id': '1',
+            #                            'Active': 'true', 'Comments': None
+            #                        },
+            #                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
+            #                            'Duration': '2', 'Total_Duration': '10',
+            #                            'Id': '2', 'Activity_Group_Id': '1',
+            #                            'Active': 'true', 'Comments': None
+            #                        },
+            #
+            # ...
+            # To specify more than one student group, use, e.g. ['01G_A', '02G_A'].
+            # Also the 'Teacher' field can take multiple entries: ['JS', 'CC']
+            #                    ]
         },
-
-        'Hours_List': {
-            'Number_of_Hours': f'{len(PERIODS)}',
-            'Hour': PERIODS
+        "Buildings_List": None,
+        "Rooms_List": {
+            "Room": ROOMS
+            #                    [
+            #                        {'Name': 'r1', 'Building': None, 'Capacity': '30000',
+            #                            'Virtual': 'false', 'Comments': None
+            #                        },
+            #                        {'Name': 'r2', 'Building': None, 'Capacity': '30000',
+            #                            'Virtual': 'false', 'Comments': None
+            #                        },
+            ## Virtual room (to get multiple rooms)
+            #                        {'Name': 'V1', 'Building': None, 'Capacity': '30000',
+            #                            'Virtual': 'true',
+            #                            'Number_of_Sets_of_Real_Rooms': '2',
+            #                            'Set_of_Real_Rooms': [
+            #                                {'Number_of_Real_Rooms': '1', 'Real_Room': 'r1'},
+            #                                {'Number_of_Real_Rooms': '1', 'Real_Room': 'r2'}
+            #                            ], 'Comments': None
+            #                        }
+            #                    ]
         },
-
-        'Subjects_List': {
-            'Subject': SUBJECTS
-        },
-
-        'Activity_Tags_List': None,
-
-        'Teachers_List': {
-            'Teacher': TEACHERS
-        },
-
-        'Students_List': {
-            'Year': CLASSES
-        },
-
-# Try single activities instead?
-        'Activities_List': {
-            'Activity': LESSONS
-
-#                    [
-#                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
-#                            'Duration': '2', 'Total_Duration': '10',
-#                            'Id': '1', 'Activity_Group_Id': '1',
-#                            'Active': 'true', 'Comments': None
-#                        },
-#                        {'Teacher': 'JS', 'Subject': 'Hu', 'Students': '01G',
-#                            'Duration': '2', 'Total_Duration': '10',
-#                            'Id': '2', 'Activity_Group_Id': '1',
-#                            'Active': 'true', 'Comments': None
-#                        },
-#
-# ...
-# To specify more than one student group, use, e.g. ['01G_A', '02G_A'].
-# Also the 'Teacher' field can take multiple entries: ['JS', 'CC']
-#                    ]
-        },
-
-        'Buildings_List': None,
-
-        'Rooms_List': {
-            'Room': ROOMS
-
-#                    [
-#                        {'Name': 'r1', 'Building': None, 'Capacity': '30000',
-#                            'Virtual': 'false', 'Comments': None
-#                        },
-#                        {'Name': 'r2', 'Building': None, 'Capacity': '30000',
-#                            'Virtual': 'false', 'Comments': None
-#                        },
-## Virtual room (to get multiple rooms)
-#                        {'Name': 'V1', 'Building': None, 'Capacity': '30000',
-#                            'Virtual': 'true',
-#                            'Number_of_Sets_of_Real_Rooms': '2',
-#                            'Set_of_Real_Rooms': [
-#                                {'Number_of_Real_Rooms': '1', 'Real_Room': 'r1'},
-#                                {'Number_of_Real_Rooms': '1', 'Real_Room': 'r2'}
-#                            ], 'Comments': None
-#                        }
-#                    ]
-        },
-# To include more than one room in a set:
-#{'Number_of_Real_Rooms': '2', 'Real_Room': ['r2', 'r3']}
+        # To include more than one room in a set:
+        # {'Number_of_Real_Rooms': '2', 'Real_Room': ['r2', 'r3']}
     }
     tc_dict = {
-        'ConstraintBasicCompulsoryTime': {
-            'Weight_Percentage': '100',
-            'Active': 'true',
-            'Comments': None
+        "ConstraintBasicCompulsoryTime": {
+            "Weight_Percentage": "100",
+            "Active": "true",
+            "Comments": None,
         }
     }
     sc_dict = {
-        'ConstraintBasicCompulsorySpace': {
-            'Weight_Percentage': '100',
-            'Active': 'true',
-            'Comments': None
+        "ConstraintBasicCompulsorySpace": {
+            "Weight_Percentage": "100",
+            "Active": "true",
+            "Comments": None,
         }
     }
     tc_dict.update(time_constraints)
     sc_dict.update(space_constraints)
-    fet_dict['Time_Constraints_List'] = tc_dict
-    fet_dict['Space_Constraints_List'] = sc_dict
-    return {'fet': fet_dict}
+    fet_dict["Time_Constraints_List"] = tc_dict
+    fet_dict["Space_Constraints_List"] = sc_dict
+    return {"fet": fet_dict}
+
 
 ###################
 """
@@ -1321,57 +1360,58 @@ def build_dict_fet(ROOMS, DAYS, PERIODS, TEACHERS, SUBJECTS,
 </ConstraintTeachersMinHoursDaily>
 """
 
-###
 
 class Placements_fet(Placements):
     def placements(self, days, periods, classes):
         tag_lids = classes.tag_lids
-#        print("\n tag_lids::::::::::::::::::")
-#        for k, v in tag_lids.items():
-#            print(f"  {k}:", v)
-#        print("\n*** Parallel tags ***")
-#        for k, v in self.parallel_tags.items():
-#            print(f"  {k}:", v)
+        #        print("\n tag_lids::::::::::::::::::")
+        #        for k, v in tag_lids.items():
+        #            print(f"  {k}:", v)
+        #        print("\n*** Parallel tags ***")
+        #        for k, v in self.parallel_tags.items():
+        #            print(f"  {k}:", v)
         cards = []
         for _tag, places_list in self.predef:
             for tag in classes.parallel_tags[_tag]:
                 try:
                     lids = tag_lids[tag]
                 except KeyError:
-                    REPORT("WARN", _NO_LESSON_WITH_TAG.format(tag = tag))
+                    REPORT("WARN", _NO_LESSON_WITH_TAG.format(tag=tag))
                     continue
                 i = 0
                 for d, p in places_list:
                     try:
                         lid = lids[i]
                     except ValueError:
-                        REPORT("ERROR", _TAG_TOO_MANY_TIMES.format(tag = tag))
+                        REPORT("ERROR", _TAG_TOO_MANY_TIMES.format(tag=tag))
                         continue
                     i += 1
-                    cards.append({
-                            'Weight_Percentage': '100',
-                            'Activity_Id': lid,
-                            'Preferred_Day': days[d],
-                            'Preferred_Hour': periods[p],
-                            'Permanently_Locked': 'true',
-                            'Active': 'true',
-                            'Comments': None
+                    cards.append(
+                        {
+                            "Weight_Percentage": "100",
+                            "Activity_Id": lid,
+                            "Preferred_Day": days[d],
+                            "Preferred_Hour": periods[p],
+                            "Permanently_Locked": "true",
+                            "Active": "true",
+                            "Comments": None,
                         }
                     )
-        classes.time_constraints['ConstraintActivityPreferredStartingTime'] \
-                    = cards
+        classes.time_constraints[
+            "ConstraintActivityPreferredStartingTime"
+        ] = cards
 
 
-#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     _days = Days_fet()
 
     days = _days.get_days()
     if __TEST:
         print("\n*** DAYS ***")
         for _day in _days:
-            print('   ', f"'{_days.get_id(_day)}'", _days[_day])
+            print("   ", f"'{_days.get_id(_day)}'", _days[_day])
         print("\n    ... for fet ...\n   ", days)
         print("\n  ==================================================")
 
@@ -1380,7 +1420,7 @@ if __name__ == '__main__':
     if __TEST:
         print("\n*** PERIODS ***")
         for _pkey in _periods:
-            print('   ', f"'{_periods.get_id(_pkey)}'", _periods[_pkey])
+            print("   ", f"'{_periods.get_id(_pkey)}'", _periods[_pkey])
         print("\n    ... for fet ...\n   ", periods)
         print("\n  ==================================================")
 
@@ -1407,13 +1447,14 @@ if __name__ == '__main__':
 
     if __TEST:
         print("\n ********** READ LESSON DATA **********\n")
-    c_list = _classes.all_lessons(SUBJECTS = _subjects, ROOMS = _rooms,
-            TEACHERS = _teachers)
+    c_list = _classes.all_lessons(
+        SUBJECTS=_subjects, ROOMS=_rooms, TEACHERS=_teachers
+    )
     print("\n ... read data for:", c_list)
 
     if __TEST:
         print("\n  CLASSROOMS:", _classes.classrooms)
-        _klass = '12G'
+        _klass = "12G"
         print("\nCLASS", _klass)
         print("\n  DIVISIONS:", _classes.class_divisions[_klass])
         print("\n  GROUPS:", _classes.class_groups[_klass])
@@ -1422,55 +1463,60 @@ if __name__ == '__main__':
     if __TEST:
         print("\nTEACHERS:")
         for tid in _teachers.tidlist:
-            blocked = _teachers.blocked_periods.get(tid) or '–––'
+            blocked = _teachers.blocked_periods.get(tid) or "–––"
             print("  ", tid, _teachers[tid], blocked)
         for tdata in teachers:
             print("   ", tdata)
-#TODO:
-#        print("\nLONG TAGS:\n", _teachers.longtag.values())
+    # TODO:
+    #        print("\nLONG TAGS:\n", _teachers.longtag.values())
 
-    from timetable.basic_data import TT_CONFIG
-    outdir = DATAPATH(TT_CONFIG['OUTPUT_FOLDER'])
-    os.makedirs(outdir, exist_ok = True)
+    outdir = DATAPATH(TT_CONFIG["OUTPUT_FOLDER"])
+    os.makedirs(outdir, exist_ok=True)
 
     # Check-lists for teachers
-    outpath = os.path.join(outdir, 'teacher_check.txt')
-    with open(outpath, 'w', encoding = 'utf-8') as fh:
-        fh.write("STUNDENPLAN 2021/22: Lehrer-Stunden\n"
-                "===================================\n")
+    outpath = os.path.join(outdir, "teacher_check.txt")
+    with open(outpath, "w", encoding="utf-8") as fh:
+        fh.write(
+            "STUNDENPLAN 2021/22: Lehrer-Stunden\n"
+            "===================================\n"
+        )
         fh.write(_classes.teacher_check_list())
     print("\nTEACHER CHECK-LIST ->", outpath)
 
     classes = []
     for klass in c_list:
-        if klass.startswith('XX'): continue
+        if klass.startswith("XX"):
+            continue
         class_data = _classes.class_data(klass)
         classes.append(class_data)
         if __TEST:
             print(f"\nfet-CLASS {klass}")
-            for g in class_data.get('Group') or []:
-                print("  ---", g['Name'])
-                for sg in g.get('Subgroup') or []:
-                    print("     +", sg['Name'])
+            for g in class_data.get("Group") or []:
+                print("  ---", g["Name"])
+                for sg in g.get("Subgroup") or []:
+                    print("     +", sg["Name"])
 
     _classes.get_lessons()
-    lessons, s_constraints, t_constraints = _classes.lesson_list, \
-            _classes.space_constraints, _classes.time_constraints
+    lessons, s_constraints, t_constraints = (
+        _classes.lesson_list,
+        _classes.space_constraints,
+        _classes.time_constraints,
+    )
     if __TEST:
         print("\n ********* fet LESSONS *********\n")
-        #for l, data in _classes.lessons.items():
+        # for l, data in _classes.lessons.items():
         #    print(f"   {l}:", data)
         for l in lessons:
             print("   ", l)
         print("\n  ======================================================\n")
 
-#TODO: At present the input is 1-based indexes. It might be better to use
-# the ids ...
+    # TODO: At present the input is 1-based indexes. It might be better to use
+    # the ids ...
     i = 0
     d2 = {}
     d2list = []
     for d in _days:
-        did =_days.get_id(d)
+        did = _days.get_id(d)
         d2list.append(did)
         i += 1
         d2[str(i)] = did
@@ -1478,7 +1524,7 @@ if __name__ == '__main__':
     p2 = {}
     p2list = []
     for p in _periods:
-        pid =_periods.get_id(p)
+        pid = _periods.get_id(p)
         p2list.append(pid)
         i += 1
         p2[str(i)] = pid
@@ -1497,12 +1543,27 @@ if __name__ == '__main__':
 
     # For all classes, and with custom values for some classes:
     # minimum lessons per day
-#TODO: This one could be table driven?
-    mintable = {k: 5 for k in ('01K', '02K', '03K', '04K', '05K', '06K',
-            '07K', '08K', '09K', '10K', '11K', '12K')}
+    # TODO: This one could be table driven?
+    mintable = {
+        k: 5
+        for k in (
+            "01K",
+            "02K",
+            "03K",
+            "04K",
+            "05K",
+            "06K",
+            "07K",
+            "08K",
+            "09K",
+            "10K",
+            "11K",
+            "12K",
+        )
+    }
     _classes.constraint_min_lessons_per_day(4, mintable)
 
-    EXTRA_CONSTRAINTS = MINION(DATAPATH(TT_CONFIG['CONSTRAINTS']))
+    EXTRA_CONSTRAINTS = MINION(DATAPATH(TT_CONFIG["CONSTRAINTS"]))
     for key, value in EXTRA_CONSTRAINTS.items():
         try:
             func = getattr(_classes, key)
@@ -1511,53 +1572,56 @@ if __name__ == '__main__':
             continue
         func(value)
 
-#TODO: Should this be before the extra constraints?
+    # TODO: Should this be before the extra constraints?
     _classes.lunch_breaks(lessons)
 
-    xml_fet = xmltodict.unparse(build_dict_fet(
-            ROOMS = rooms,
-            DAYS = days,
-            PERIODS = periods,
-            TEACHERS = teachers,
-            SUBJECTS = subjects,
-            CLASSES = classes,
-            LESSONS = lessons,
-            time_constraints = t_constraints,
-            space_constraints = s_constraints
-#            space_constraints = {}
+    xml_fet = xmltodict.unparse(
+        build_dict_fet(
+            ROOMS=rooms,
+            DAYS=days,
+            PERIODS=periods,
+            TEACHERS=teachers,
+            SUBJECTS=subjects,
+            CLASSES=classes,
+            LESSONS=lessons,
+            time_constraints=t_constraints,
+            space_constraints=s_constraints
+            #            space_constraints = {}
         ),
-        pretty = True
+        pretty=True,
     )
 
-    outpath = os.path.join(outdir, 'tt_out.fet')
-    with open(outpath, 'w', encoding = 'utf-8') as fh:
-        fh.write(xml_fet.replace('\t', '   '))
+    outpath = os.path.join(outdir, "tt_out.fet")
+    with open(outpath, "w", encoding="utf-8") as fh:
+        fh.write(xml_fet.replace("\t", "   "))
     print("\nTIMETABLE XML ->", outpath)
 
-#    for sid, gs in sid_group_sets.items():
-#        print(f"\n +++ {sid}:", gs)
-#    print(f"\n +++ Mal:", sid_group_sets['Mal'])
-#    print("\n???divisions 01K:", _classes.class_divisions['01K'])
-#    print("\n???class_groups 01K:", _classes.class_groups['01K'])
+    #    for sid, gs in sid_group_sets.items():
+    #        print(f"\n +++ {sid}:", gs)
+    #    print(f"\n +++ Mal:", sid_group_sets['Mal'])
+    #    print("\n???divisions 01K:", _classes.class_divisions['01K'])
+    #    print("\n???class_groups 01K:", _classes.class_groups['01K'])
 
     import json
-    outpath = os.path.join(outdir, 'tag-lids.json')
+
+    outpath = os.path.join(outdir, "tag-lids.json")
     # Save association of lesson "tags" with "lids" and "xlids"
     lid_data = {
-        'tag-lids': _classes.tag_lids,
-        'lid-xlids': {lids[0]: lids[1:] for lids in _classes.xlids}
+        "tag-lids": _classes.tag_lids,
+        "lid-xlids": {lids[0]: lids[1:] for lids in _classes.xlids},
     }
-    with open(outpath, 'w', encoding = 'utf-8') as fh:
-        json.dump(lid_data, fh, indent = 4)
+    with open(outpath, "w", encoding="utf-8") as fh:
+        json.dump(lid_data, fh, indent=4)
     print("\nTag – Lesson associations ->", outpath)
 
-    outpath = os.path.join(outdir, 'multiple-rooms')
-    with open(outpath, 'w', encoding = 'utf-8') as fh:
+    outpath = os.path.join(outdir, "multiple-rooms")
+    with open(outpath, "w", encoding="utf-8") as fh:
         for mr in _classes.multirooms:
-            groups = ', '.join(mr['GROUPS'])
-            sname = _classes.SUBJECTS[mr['SID']]
-            fh.write(f"\nKlasse {mr['CLASS']} ({groups})"
-                    f" :: {sname}: {mr['NUMBER']}")
+            groups = ", ".join(mr["GROUPS"])
+            sname = _classes.SUBJECTS[mr["SID"]]
+            fh.write(
+                f"\nKlasse {mr['CLASS']} ({groups})"
+                f" :: {sname}: {mr['NUMBER']}"
+            )
 
     print("\nSubjects with multiple rooms ->", outpath)
-
