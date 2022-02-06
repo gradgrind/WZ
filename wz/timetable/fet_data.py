@@ -1,12 +1,10 @@
-# -*- coding: utf-8 -*-
-
 """
-TT/fet_data.py - last updated 2021-08-28
+timetable/fet_data.py - last updated 2022-02-06
 
 Prepare fet-timetables input from the various sources ...
 
 ==============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -24,7 +22,7 @@ Copyright 2021 Michael Towers
 __TEST = False
 #__TEST = True
 
-FET_VERSION = '6.1.1'
+FET_VERSION = '6.2.7'
 
 WEIGHTS = [None, '50', '67', '80', '88', '93', '95', '97', '98', '99', '100']
 
@@ -78,8 +76,9 @@ from itertools import combinations
 
 import xmltodict
 
-from timetable.manage_data import Classes, Days, Periods, Placements, \
-        Rooms, Subjects, Teachers, TT_Error, TT_CONFIG
+from timetable.basic_data import Classes, Days, Periods, Placements, \
+        Rooms, TT_Subjects, TT_Teachers, TT_Error, TT_CONFIG, \
+        class_group_split
 
 ### -----
 
@@ -507,7 +506,7 @@ class Classes_fet(Classes):
                 sid1, sid2 = item.split('+')
             except ValueError:
                 raise TT_Error(_SUBJECT_PAIR_INVALID.format(item = item,
-                        path = YEARPATH(TT_CONFIG['CONSTRAINTS'])))
+                        path = DATAPATH(TT_CONFIG['CONSTRAINTS'])))
             tglist1 = self.sid_groups[sid1]
             tglist2 = self.sid_groups[sid2]
             # <tglistX> is a list of ({set of "atomic" groups}, tag)
@@ -550,13 +549,13 @@ class Classes_fet(Classes):
             # Divide up the sets into classes
             class_map = {}
             for tag, tset in tagmap.items():
-                classes = {self.split_class_group(g)[0]
+                classes = {class_group_split(g)[0]
                         for g in self.tag_get_groups(tag)}
                 for klass in classes:
                     tset1 = set()
                     for t in tset:
                         for g in self.tag_get_groups(t):
-                            if self.split_class_group(g)[0] == klass:
+                            if class_group_split(g)[0] == klass:
                                 tset1.add(t)
                     if tset1:
                         tag_tset = (tag, tset1)
@@ -807,15 +806,25 @@ class Classes_fet(Classes):
 
 ###
 
-class Teachers_fet(Teachers):
+class Teachers_fet(TT_Teachers):
     def get_teachers(self, timetable_teachers):
-        return [
-            {   'Name': tid,
-                'Target_Number_of_Hours': '0',
-                'Qualified_Subjects': None,
-                'Comments': name
-            } for tid, name in self.items() if tid in timetable_teachers
-        ]
+        """Generate the teacher definitions for fet.
+        This method should be called before the others, to set up
+        <self.tidlist>.
+        """
+        tlist = []
+        self.tidlist = []   # Just tids used in the timetable
+        for tid, name in self.items():
+             if tid in timetable_teachers:
+                tlist.append({
+                        'Name': tid,
+                        'Target_Number_of_Hours': '0',
+                        'Qualified_Subjects': None,
+                        'Comments': name
+                    }
+                )
+                self.tidlist.append(tid)
+        return tlist
 #
     def add_constraints(self, days, periods, classes):
 #TODO: Passing in <classes> is a nasty bodge! There should be universal
@@ -828,10 +837,10 @@ class Teachers_fet(Teachers):
         # Gaps per week and contiguous lessons
         constraints_g = []
         constraints_u = []
-        for tid in self:
+        for tid in self.tidlist:
             cdata = self.constraints[tid]
-            g = cdata['GAPS']
-            u = cdata['UNBROKEN']
+            g = cdata['MAXGAPSPERWEEK']
+            u = cdata['MAXBLOCK']
             # These are <None> or a (number, weight) pair (integers)
             if g != None:
                 constraints_g.append(
@@ -879,7 +888,7 @@ class Teachers_fet(Teachers):
         """Return the blocked periods in the form needed by fet.
         """
         blocked = []
-        for tid in self:
+        for tid in self.tidlist:
             dlist = self.blocked_periods.get(tid)
             if dlist:
                 if len(dlist) != len(days):
@@ -919,8 +928,8 @@ class Teachers_fet(Teachers):
         limit it to the lunch times.
         """
         constraints = []
-        for tid in classes.timetable_teachers:
-            lbperiods = self.constraints[tid]['LUNCH']
+        for tid in self.tidlist:
+            lbperiods = self.constraints[tid]['LUNCHBREAK']
             if not lbperiods:
                 continue
             bp = self.blocked_periods.get(tid)
@@ -973,8 +982,8 @@ class Teachers_fet(Teachers):
         """ConstraintTeacherMinHoursDaily
         """
         constraints = []
-        for tid in classes.timetable_teachers:
-            minl = self.constraints[tid]['MINLESSONS']
+        for tid in self.tidlist:
+            minl = self.constraints[tid]['MINPERDAY']
             if not minl:
                 continue
             constraints.append(
@@ -1011,7 +1020,7 @@ class Rooms_fet(Rooms):
 
 ###
 
-class Subjects_fet(Subjects):
+class Subjects_fet(TT_Subjects):
     def get_subjects(self):
         sids = [{'Name': sid, 'Comments': name}
                 for sid, name in self.items()
@@ -1412,20 +1421,20 @@ if __name__ == '__main__':
     teachers = _teachers.get_teachers(_classes.timetable_teachers)
     if __TEST:
         print("\nTEACHERS:")
-        for tid, tname in _teachers.items():
+        for tid in _teachers.tidlist:
             blocked = _teachers.blocked_periods.get(tid) or '–––'
-            print("  ", tid, tname, blocked)
+            print("  ", tid, _teachers[tid], blocked)
         for tdata in teachers:
             print("   ", tdata)
 #TODO:
 #        print("\nLONG TAGS:\n", _teachers.longtag.values())
 
     from timetable.basic_data import TT_CONFIG
-    outdir = YEARPATH(TT_CONFIG['OUTPUT_FOLDER'])
+    outdir = DATAPATH(TT_CONFIG['OUTPUT_FOLDER'])
     os.makedirs(outdir, exist_ok = True)
 
     # Check-lists for teachers
-    outpath = os.path.join(outdir, 'teacher_check2.txt')
+    outpath = os.path.join(outdir, 'teacher_check.txt')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write("STUNDENPLAN 2021/22: Lehrer-Stunden\n"
                 "===================================\n")
@@ -1493,7 +1502,7 @@ if __name__ == '__main__':
             '07K', '08K', '09K', '10K', '11K', '12K')}
     _classes.constraint_min_lessons_per_day(4, mintable)
 
-    EXTRA_CONSTRAINTS = MINION(YEARPATH(TT_CONFIG['CONSTRAINTS']))
+    EXTRA_CONSTRAINTS = MINION(DATAPATH(TT_CONFIG['CONSTRAINTS']))
     for key, value in EXTRA_CONSTRAINTS.items():
         try:
             func = getattr(_classes, key)
@@ -1520,7 +1529,7 @@ if __name__ == '__main__':
         pretty = True
     )
 
-    outpath = os.path.join(outdir, 'tt_out2.fet')
+    outpath = os.path.join(outdir, 'tt_out.fet')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         fh.write(xml_fet.replace('\t', '   '))
     print("\nTIMETABLE XML ->", outpath)
@@ -1532,7 +1541,7 @@ if __name__ == '__main__':
 #    print("\n???class_groups 01K:", _classes.class_groups['01K'])
 
     import json
-    outpath = os.path.join(outdir, 'tag-lids2.json')
+    outpath = os.path.join(outdir, 'tag-lids.json')
     # Save association of lesson "tags" with "lids" and "xlids"
     lid_data = {
         'tag-lids': _classes.tag_lids,
@@ -1542,7 +1551,7 @@ if __name__ == '__main__':
         json.dump(lid_data, fh, indent = 4)
     print("\nTag – Lesson associations ->", outpath)
 
-    outpath = os.path.join(outdir, 'multiple-rooms2')
+    outpath = os.path.join(outdir, 'multiple-rooms')
     with open(outpath, 'w', encoding = 'utf-8') as fh:
         for mr in _classes.multirooms:
             groups = ', '.join(mr['GROUPS'])

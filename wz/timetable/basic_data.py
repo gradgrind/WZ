@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/basic_data.py - last updated 2022-02-05
+timetable/basic_data.py - last updated 2022-02-06
 
 Read timetable information from the various sources ...
 
@@ -436,7 +436,6 @@ class Classes:
         self.atomics_lists = {}
         self.element_groups = {}
 #        self.extended_groups = {}
-
 #?
         self.class_divisions = {}
         self.class_groups = {}
