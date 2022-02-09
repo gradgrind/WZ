@@ -2,13 +2,13 @@
 """
 ui/wz_main.py
 
-Last updated:  2021-08-25
+Last updated:  2022-02-09
 
 The timetable "main" window.
 
 
 =+LICENCE=============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -45,10 +45,10 @@ if __name__ == '__main__':
 
     #TODO: IF I use this feature, this is probably the wrong path ...
     # Without the environment variable there is a disquieting error message.
-    os.environ['PYSIDE_DESIGNER_PLUGINS'] = this
+#    os.environ['PYSIDE_DESIGNER_PLUGINS'] = this
 
-    from PySide6.QtWidgets import QApplication#, QStyleFactory
-    from PySide6.QtCore import QLocale, QTranslator, QLibraryInfo
+    from qtpy.QtWidgets import QApplication#, QStyleFactory
+    from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo
     #print(QStyleFactory.keys())
     #QApplication.setStyle('windows')
     # Qt initialization
@@ -61,115 +61,163 @@ if __name__ == '__main__':
             QLibraryInfo.location(QLibraryInfo.TranslationsPath))
     app.installTranslator(qtr)
 
-from PySide6.QtWidgets import QGraphicsScene, QGraphicsRectItem, \
-        QGraphicsSimpleTextItem
-from PySide6.QtCore import Qt#, QSettings
-from PySide6.QtGui import QIcon, QPen, QBrush, QColor#, QPixmap
-
-from ui.ui_support import ui_load
+from qtpy.QtWidgets import QGraphicsScene, QGraphicsRectItem, \
+        QGraphicsSimpleTextItem, QGraphicsView
+from qtpy.QtCore import Qt#, QSettings
+from qtpy.QtGui import QIcon, QPen, QBrush, QColor, QPainter, QTransform
 
 ### +++++
 
-BOXWIDTH = 80
-BOXHEIGHT = 80
-SEPWIDTH = 10
-LINEWIDTH = 2
-TITLEHEIGHT = 20
-TITLEWIDTH = 40
+# Sizes in points
+_BOXWIDTH = 80
+_BOXHEIGHT = 80
+_SEPWIDTH = 10
+_LINEWIDTH = 2
+_TITLEHEIGHT = 20
+_TITLEWIDTH = 40
+
 BORDER_COLOUR = '6060d0'         # rrggbb
 HEADER_COLOUR = 'a0a0a0'
 CELL_HIGHLIGHT_COLOUR = 'a0a0ff' # rrggbb
 #FONT_COLOUR = '442222'           # rrggbb
-SELECT_COLOUR = 'f000f0'         # rrggbb
+SELECT_COLOUR = 'ff0000'         # rrggbb
 
 #TODO: these should be in a config file:
 DAYS = ('Mo', 'Di', 'Mi', 'Do', 'Fr')
 PERIODS = ('A', 'B', '1', '2', '3', '4', '5', '6', '7')
 BREAKS = ('1', '3', '5')
 
+
+#TODO: point to pixel conversions???
+
 ### -----
 
 def main(args):
+    font = app.font()
+    #print("FONT:", font.pointSize())
+    font.setPointSize(12)
+    app.setFont(font)
     # Persistent Settings:
 #    builtins.SETTINGS = QSettings(
 #            QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
-    builtins.WINDOW = ui_load('timetable.ui')
+    builtins.WINDOW = GridViewRescaling()
+    #builtins.WINDOW = GridViewHFit()
 
     # Set up grid
     grid = GridPeriodsDays(DAYS, PERIODS, BREAKS)
-    WINDOW.table_view.setScene(grid)
+    WINDOW.setScene(grid)
 
-#    WINDOW.setWindowIcon(QIcon(":/icons/tt.svg")) # in ui file
-    WINDOW.show()
-    sys.exit(app.exec())
-
-
-    return
-
-
-## Alternive ui loader using generated python file:
-# ../../venv/bin/pyside6-uic designer/timetable.ui > timetable_ui_test.py
-# The path to the icon resources must be set up as ui.icons_rc ... which
-# designer doesn't like. It looks like a BUG, so go with my patch for the
-# ui-file loader (in ui_load).
-def main2(args):
-    from PySide6.QtWidgets import QMainWindow
-    from ui.timetable_ui_test import Ui_MainWindow
-    wmain = QMainWindow()
-    builtins.WINDOW = Ui_MainWindow()
-    WINDOW.setupUi(wmain)
-    # Set up grid
-    grid = GridPeriodsDays(DAYS, PERIODS, BREAKS)
-    WINDOW.table_view.setScene(grid)
-
-#    WINDOW.setWindowIcon(QIcon(":/icons/tt.svg")) # in ui file
-    wmain.show()
-    sys.exit(app.exec())
-
-
-    # Determine data directory
-#TODO: pass datadir to back-end, perhaps as command-line parameter!
-# It might be possible to change the datadir from the gui.
-# Could use SETTINGS...
-
-#    SETTINGS.setValue('DATA', os.path.join(__basedir, 'DATA'))
-#    print("$$$", SETTINGS.value('DATA'), SETTINGS.allKeys())
-
-    try:
-        args.remove('--test')
-    except:
-        testing = False
-        datadir = SETTINGS.value('DATA') or ''
-    else:
-        testing = True
-#TODO: This might be disabled or modified in a release version?
-# The test data might be provided in a pristine archive, which can be
-# unpacked to some work folder and registered there in settings?
-        datadir = os.path.join(appdir, 'TESTDATA')
-
-#TODO: If no DATADIR, get it from "settings".
-# If none set, need to select one, or else load the test data, or
-# start from scratch. Starting from scratch one would need to select
-# a folder and immediately edit a calendar – perhaps the one from the
-# test data could be taken as a starting point (changing to current
-# year, as in migrate_year). Also other files can be "borrowed" from
-# the test data. There should be a prompt to add pupils (can one do
-# this manually when there are none present?).
-
-    app.setWindowIcon(QIcon(os.path.join('icons', 'WZ1.png')))
+    app.setWindowIcon(QIcon(os.path.join(basedir, "wz-data", "icons", "tt.svg")))
     screen = app.primaryScreen()
     screensize = screen.availableSize()
-    main_window.resize(screensize.width()*0.8, screensize.height()*0.8)
-    main_window.show()
+    WINDOW.resize(int(screensize.width()*0.6), int(screensize.height()*0.6))
+    WINDOW.show()
+
+    t1 = grid.new_tile("T1", duration=1, nmsg=1, offset=1, total=4, text="De p1", colour="FFFF44")
+    grid.place_tile("T1", (2, 3))
+    t2 = grid.new_tile("T2", duration=2, nmsg=1, offset=0, total=4, text="tg B", colour="FF77E0")
+    grid.place_tile("T2", (2, 3))
     sys.exit(app.exec())
 
-###
+
+class GridView(QGraphicsView):
+    """This is the "view" widget for the grid.
+    The actual grid is implemented as a "scene".
+    """
+    def __init__(self):
+        super().__init__()
+        # Change update mode: The default, MinimalViewportUpdate, seems
+        # to cause artefacts to be left, i.e. it updates too little.
+        # Also BoundingRectViewportUpdate seems not to be 100% effective.
+        # self.setViewportUpdateMode(self.BoundingRectViewportUpdate)
+        self.setViewportUpdateMode(self.FullViewportUpdate)
+        # self.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
+        self.setRenderHints(QPainter.Antialiasing)
+        # self.setRenderHints(QPainter.TextAntialiasing)
+        self.ldpi = self.logicalDpiX()
+        #        self.pdpi = self.physicalDpiX()
+        #        self.MM2PT = self.ldpi / 25.4
+#        self.scene = QGraphicsScene()
+#        self.setScene(self.scene)
+
+        ### Set up sizes (globally)
+        global BOXWIDTH, BOXHEIGHT, SEPWIDTH, LINEWIDTH, TITLEHEIGHT, TITLEWIDTH
+        BOXWIDTH = self.pt2px(_BOXWIDTH)
+        BOXHEIGHT = self.pt2px(_BOXHEIGHT)
+        SEPWIDTH = self.pt2px(_SEPWIDTH)
+        LINEWIDTH = self.pt2px(_LINEWIDTH)
+        TITLEHEIGHT = self.pt2px(_TITLEHEIGHT)
+        TITLEWIDTH = self.pt2px(_TITLEWIDTH)
+
+    def pt2px(self, pt):
+        px = self.ldpi * pt / 72.0
+        # print(f"pt2px: {pt} -> {px}")
+        return px
+
+    def px2mm(self, px):
+        return px * 25.4 / self.ldpi
+
+
+class GridViewRescaling(GridView):
+    """An QGraphicsView that automatically adjusts the scaling of its
+    scene to fill the viewing window.
+    """
+    def __init__(self):
+        super().__init__()
+        # Disable the scrollbars when using this resizing scheme. They
+        # should not appear anyway, but this might avoid problems.
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+    def resizeEvent(self, event):
+        self.rescale()
+        return super().resizeEvent(event)
+
+    def rescale(self):
+        #qrect = self._sceneRect
+        qrect = self.scene().sceneRect()
+        self.fitInView(qrect, Qt.KeepAspectRatio)
+
+
+# Experimental!
+class GridViewHFit(GridView):
+    """A QGraphicsView that automatically adjusts the scaling of its
+    scene to fill the width of the viewing window.
+    """
+    def __init__(self):
+        super().__init__()
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Avoid problems at on/off transition:
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+
+    def resizeEvent(self, event):
+        self.rescale()
+        return super().resizeEvent(event)
+
+    def rescale(self):
+        #qrect = self._sceneRect
+        qrect = self.scene().sceneRect()
+        size = self.size()
+        vsb = self.verticalScrollBar()
+        w = size.width()
+# This might be problematic at the point where the scrollbar appears or
+# disappears ...
+# Initially the scrollbar is reported as invisible, even when it is
+# clearly visible, so the calculation is wrong.
+        if vsb.isVisible():
+            w -= vsb.size().width()
+        scale = w / qrect.width()
+        t = QTransform().scale(scale, scale)
+        self.setTransform(t)
+#        self.fitInView(qrect, Qt.KeepAspectRatio)
+
 
 class GridPeriodsDays(QGraphicsScene):
     def __init__(self, days, periods, breaks):
+        self.tiles = {}
         super().__init__()
-        xslots = [0]    # x-coordinate of column left side
-        yslots = [0]    # y-coordinate of row top side
+        self.xslots = [0]    # x-coordinate of column left side
+        self.yslots = [0]    # y-coordinate of row top side
         # Cell at top left-hand corner
         self.addItem(Cell(0, 0, TITLEWIDTH, TITLEHEIGHT, -1, -1))
         # Add column headers
@@ -178,7 +226,7 @@ class GridPeriodsDays(QGraphicsScene):
         for col_header in periods:
             if col_header in breaks:
                 x += SEPWIDTH
-            xslots.append(x)
+            self.xslots.append(x)
             cell = Cell(x, 0, BOXWIDTH, TITLEHEIGHT, -1, icol)
             cell.set_text(col_header)
             cell.set_background(HEADER_COLOUR)
@@ -193,7 +241,7 @@ class GridPeriodsDays(QGraphicsScene):
         for row_header in days:
             day_list = []
             self.cell_matrix.append(day_list)
-            yslots.append(y)
+            self.yslots.append(y)
             # row header
             cell = Cell(0, y, TITLEWIDTH, BOXHEIGHT, irow, -1)
             cell.set_text(row_header)
@@ -201,26 +249,128 @@ class GridPeriodsDays(QGraphicsScene):
             self.addItem(cell)
             # period cells
             for i in range(icol):
-                cell = Cell(xslots[i + 1], y, BOXWIDTH, BOXHEIGHT, irow, i)
+                cell = Cell(self.xslots[i + 1], y, BOXWIDTH, BOXHEIGHT, irow, i)
                 day_list.append(cell)
                 self.addItem(cell)
             irow += 1
             y += BOXHEIGHT
         self.grid_height = y
+        self.select = QGraphicsRectItem(0, 0, BOXWIDTH, BOXHEIGHT)
+        self.select.setPen(StyleCache.getPen(LINEWIDTH*2, SELECT_COLOUR))
+        self.select.setZValue(20)
+        self.select.hide()
+        self.addItem(self.select)
+
 #
     def get_cell(self, row, col):
         return self.cell_matrix[row][col]
 #
     def mousePressEvent(self, event):
         point = event.scenePos()
-        print("Scene PRESS:", point, self.items(point))
-        kbdmods = QApplication.keyboardModifiers()
-        if kbdmods & Qt.ShiftModifier:
-            print("SHIFT")
-        if kbdmods & Qt.ControlModifier:
-            print("CTRL")
+        items = self.items(point)
+        if items:
+            if event.button() == Qt.LeftButton:
+#TODO ...
+                kbdmods = QApplication.keyboardModifiers()
+                shift = " + SHIFT" if kbdmods & Qt.ShiftModifier else ""
+                alt = " + ALT" if kbdmods & Qt.AltModifier else ""
+                ctrl = " + CTRL" if kbdmods & Qt.ControlModifier else ""
+                cell = None
+                tiles = []
+                item0 = None
+                for item in items:
+                    try:
+                        cell = item.cell
+                        item0 = item
+                    except AttributeError:
+                        tiles.append(item)
+                for tile in tiles:
+                    # Give all tiles at this point a chance to react, starting
+                    # with the topmost. An item can break the chain by
+                    # returning a false value.
+                    try:
+                        if not tile.leftclick():
+                            return
+                    except AttributeError:
+                        pass
+                if cell:
+                    print (f"Cell – left press{shift}{ctrl}{alt} @ {item.cell}")
+# Note that ctrl-click is for context menu on OSX ...
+                    if shift:
+                        self.place_tile("T2", cell)
+                    if alt:
+                        self.select_cell(cell)
 
-###
+    def contextMenuEvent(self, event):
+        point = event.scenePos()
+        items = self.items(point)
+        if items:
+            for item in items:
+                # Give all items at this point a chance to react, starting
+                # with the topmost. An item can break the chain by
+                # returning a false value.
+                try:
+                    if not item.contextmenu():
+                        return
+                except AttributeError:
+                    pass
+                print (f"Cell – context menu @ {item.cell}")
+
+    def new_tile(self, tag, duration, nmsg, offset, total, text, colour):
+        t = Tile(duration, nmsg, offset, total, text, colour)
+        self.addItem(t)
+        self.tiles[tag] = t
+
+    def place_tile(self, tag, cell):
+        tile = self.tiles[tag]
+        x = self.xslots[cell[0] + 1]    # first cell is header
+        y = self.yslots[cell[1] + 1]    # first cell is header
+        w = BOXWIDTH - LINEWIDTH #* 2
+        if tile.duration > 1:
+            w += self.xslots[cell[0] + tile.duration] - x
+        tile.set_cell(x, y, w)
+
+    def select_cell(self, cell):
+        x = self.xslots[cell[0] + 1]    # first cell is header
+        y = self.yslots[cell[1] + 1]    # first cell is header
+        self.select.setPos(x, y)
+        self.select.show()
+
+
+class Tile(QGraphicsRectItem):
+    def __init__(self, duration, nmsg, offset, total, text, colour):
+        self.duration = duration
+        self.height = BOXHEIGHT  * nmsg / total# - LINEWIDTH# * 2
+        self.y = BOXHEIGHT * offset / total + LINEWIDTH/2
+        super().__init__(
+            LINEWIDTH/2,
+            self.y,
+            BOXWIDTH,
+            self.height
+        )
+        self.setBrush(StyleCache.getBrush(colour))
+        self.text_item = QGraphicsSimpleTextItem(self)
+        self.set_text(text)
+        self.hide()
+
+    def set_text(self, text):
+        self.text_item.setText(text)
+        text_rect = self.text_item.boundingRect()
+        rect = self.rect()
+        self.text_width = text_rect.width()
+        self.yshift = self.y + (rect.height() - text_rect.height()) / 2
+        xshift = (rect.width() - self.text_width) / 2
+        self.text_item.setPos(xshift, self.yshift)
+
+    def set_cell(self, x, y, w):
+        rect = self.rect()
+        rect.setWidth(w)
+        self.setRect(rect)
+        self.setPos(x, y)
+        self.text_item.setPos((w - self.text_width) / 2, self.yshift)
+        self.show()
+
+
 
 class Box(QGraphicsRectItem):
     """A rectangle with adjustable borderwidth.
@@ -287,16 +437,15 @@ class Cell(Box):
         super().__init__(x, y, w, h, width=LINEWIDTH)
         self.x0 = x
         self.y0 = y
-        self.icol = icol
-        self.irow = irow
+        self.cell = (icol, irow)
         self.setAcceptHoverEvents(True)
 #        print ("Cell", icol, irow, x, y)
 
     def hoverEnterEvent(self, event):
-        print("Enter", self.irow, self.icol)
+        print("Enter", self.cell)
 
     def hoverLeaveEvent(self, event):
-        print("Leave", self.irow, self.icol)
+        print("Leave", self.cell)
 
     def set_background(self, colour):
         """Set the cell background colour.
@@ -307,7 +456,7 @@ class Cell(Box):
 ###
 
 #TODO
-class Tile(QGraphicsRectItem):
+class Tile0(QGraphicsRectItem):
     """The graphical representation of a lesson.
     """
     margin = 3.0
@@ -396,7 +545,7 @@ class StyleCache:
                 return cls.__pens[wc]
             except KeyError:
                 pass
-            pen = QPen('#FF' + wc[1])
+            pen = QPen(QColor('#FF' + wc[1]))
             pen.setWidthF(wc[0])
             cls.__pens[wc] = pen
             return pen

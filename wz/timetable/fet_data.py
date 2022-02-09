@@ -359,9 +359,9 @@ class Classes_fet(Classes):
                                     _xlid = str(lid)
                                     _rids.append(_xlid)
                                     lesson = {
-                                        #                                        'Teacher': {},
+                                        #'Teacher': {},
                                         "Subject": VIRTUAL_ROOM[0],
-                                        #                                        'Students': {},
+                                        #'Students': {},
                                         "Duration": dstr,
                                         "Total_Duration": dstr,
                                         "Id": _xlid,

@@ -720,8 +720,8 @@ class Classes:
         else:
             gmap["*"] = fs_whole
 
-    #        print("+++", klass, gmap)
-    #        print("---", klass, reversemap)
+        # print("+++", klass, gmap)
+        # print("---", klass, reversemap)
 
     def group_classgroups(self, klass, group):
         """Return the (frozen)set of "full" groups for the given class
