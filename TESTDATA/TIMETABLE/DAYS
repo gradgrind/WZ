@@ -1,0 +1,13 @@
+#+++ __TITLE__   : Stundenplanung: Tabelle der Tage
+#+++ __MINION__  : 2.0
+#+++ __MODIFIED__: 2022-02-10
+#--------------------------------------------------------------
+
+# Eine Liste der Tage für den Stundenplan, jeweils Kurzform und voller Name
+DAYS: [
+    [Mo Montag]
+    [Di Dienstag]
+    [Mi Mittwoch]
+    [Do Donnerstag]
+    [Fr Freitag]
+]

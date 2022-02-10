@@ -1,5 +1,5 @@
 """
-timetable/basic_data.py - last updated 2022-02-10
+timetable/tt_base.py - last updated 2022-02-10
 
 Read timetable information from the various sources ...
 
@@ -19,17 +19,7 @@ Copyright 2022 Michael Towers
    limitations under the License.
 """
 
-#TODO: Update to use the new teachers tables!
-
-_TEACHERS = "Lehrkräfte"  # error reporting only, refers to the input table
-_ROOMS = "Räume"  # error reporting only, refers to the input table
-_SUBJECTS = "Fachnamen"  # error reporting only, refers to the input table
 _MAX_DURATION = 4  # maximum length of a lesson
-
-# "Extra" rooms (a bodge to avoid impossible timetables because of room
-# shortages).
-# XROOMS = []
-XROOMS = [(f"rX{i}", f"Extra-Raum {i}") for i in range(1, 2)]
 
 ### Messages
 
@@ -103,10 +93,10 @@ _ADD_ROOM_DOUBLE = (
     "Klasse {klass}, Fach {sname}: Raum ({rid}) wurde dem"
     " Block {block} schon zugefügt"
 )
-_DOUBLED_KEY = (
-    "Tabelle der {table}: Feld „{key}“ muss eindeutig sein:"
-    " „{val}“ kommt zweimal vor"
+_DOUBLED_RID = (
+    "Tabelle der Räume: Kürzel „{rid}“ kommt doppelt vor"
 )
+_BAD_XROOMS = "Ungültige Info-Angabe <EXTRA> („Zusatzräume“) in Raumliste: {val}"
 _LESSON_CLASS_MISMATCH = (
     "In der Tabelle der Unterrichtsstunden für"
     " Klasse {klass} ist die Klasse falsch angegeben:\n  {path}"
@@ -198,107 +188,136 @@ if __name__ == "__main__":
 # account. One place is the definition of pre-placed lessons
 # for a subject. If there is more than one entry for this subject and
 # varying durations, the placement could be affected.
+#TODO: Can I avoid that with the rewrite?
 
 ### +++++
 
 from tables.spreadsheet import read_DataTable, filter_DataTable, TableError
 from core.base import class_group_split
 from core.courses import Subjects
-from misc.teachers import Teachers
+from core.teachers2 import Teachers
 
+#???
 TT_CONFIG = MINION(DATAPATH("CONFIG/TIMETABLE"))
 
 
 class TT_Error(Exception):
     pass
 
+from typing import NamedTuple, Dict, List
 
 ### -----
 
+class Day(NamedTuple):
+    short: str      # Short name (e.g. "Do")
+    full: str       # Full name (e.g. "Donnerstag")
+    tag: str        # Day number as string, starting at "1"
+    bitmap: int     # Each day has a bit, e.g. 8 (2^3) for the fourth day
 
-class Days(dict):
+class TT_Days(List[Day]):
+    """Manage various representations of the days of the (timetable) week.
+    The primary internal representation of a day is the index, starting
+    at 0 for the first day of the school week.
+    """
     def __init__(self):
         super().__init__()
-        days = read_DataTable(DATAPATH(TT_CONFIG["DAY_DATA"]))
-        days = filter_DataTable(
-            days, MINION(DATAPATH("CONFIG/TT_DAYS")), extend=False
-        )["__ROWS__"]
-        bitmaps = []
-        b = 1
-        for day in days:
-            bitmaps.append(str(b).zfill(len(days)))
-            b *= 10
-        i = 0
-        for day in days:
+        b = 1   # for bitmap
+        i = 0   # for tag
+        for k, l in MINION(DATAPATH("TIMETABLE/DAYS"))["DAYS"]:
             i += 1
-            day["day"] = str(i)  # day-index starts at 1
-            day["bitmap"] = bitmaps.pop()
-            self[day["short"]] = day
+            self.append(Day(k, l, str(i), b))
+            b *= 2
 
-    def get_id(self, key):
-        return self[key]["day"]
+    def bitstring(self, day:int) -> str:
+        """Return the bitmap as a string of 1s and 0s, but reversed, so
+        that the first day comes first in the string.
+        """
+        return f"{self[day].bitmap:0{len(self)}b}"[::-1]
 
 
-class Periods(dict):
+class Period(NamedTuple):
+    short: str      # Short name (e.g. "2")
+    full: str       # Full name (e.g. "2. Fachstunde")
+    tag: str        # Period number as string, starting at "1"
+    starttime: str  # Time of period start
+    endtime: str    # Time of period end
+
+class TT_Periods(List[Period]):
+    """Manage information about the periods of the school day.
+    The primary internal representation of a period is the index, starting
+    at 0 for the first period of the school day.
+    """
     def __init__(self):
         super().__init__()
-        periods = read_DataTable(DATAPATH(TT_CONFIG["PERIOD_DATA"]))
-        periods = filter_DataTable(
-            periods, MINION(DATAPATH("CONFIG/TT_PERIODS")), extend=False
-        )["__ROWS__"]
         i = 0
-        for pdata in periods:
+        for k, l, s, e in MINION(DATAPATH("TIMETABLE/PERIODS"))["PERIODS"]:
             i += 1
-            pdata["period"] = str(i)  # Period-index starts at 1.
-            key = pdata["short"]
-            self[key] = pdata
-
-    def get_id(self, key):
-        return self[key]["period"]
+            self.append(Period(k, l, str(i), s, e))
 
 
-class Rooms(dict):
+class TT_Rooms(Dict[str,str]):
+    """The internal representation of a room is the short name (a number/index
+    would make no sense here).
+    The class instance maps the short name to the full name.
+    <self.rooms_for_class> maps the classes to the list of rooms
+    available for each one.
+    <self.xrooms> is a list of "extra" (non-existent) rooms provided only
+    to alleviate the blockage of timetables when there are too few rooms
+    available. It doesn't actually solve the problem, but can help the
+    automatic generation process. The failed room allocations must be
+    fixed manually.
+    """
     def __init__(self):
         super().__init__()
-        rooms = read_DataTable(DATAPATH(TT_CONFIG["ROOM_DATA"]))
-        roomdata = filter_DataTable(
-            rooms, MINION(DATAPATH("CONFIG/TT_ROOMS")), extend=False
-        )
-        rooms = roomdata["__ROWS__"]
-        self.rooms_for_class = {}  # {class: [available rooms]}
-        # Bodge to get around missing rooms ...
-        self.xrooms = []
-        for rid, name in XROOMS:
-            self[rid] = name
-            self.xrooms.append(rid)
-        _rooms = {}  # buffer to allow resorting
-        for room in rooms:
-            rid = room["RID"]
-            if rid in _rooms:
-                raise TT_Error(
-                    _DOUBLED_KEY.format(
-                        table=_ROOMS,
-                        key=roomdata["__FIELD_NAMES__"]["RID"],
-                        val=rid,
-                    )
-                )
+        # {class: [available rooms]}
+        self.rooms_for_class : Dict[str,List[str]] = {}
+        # [extra rooms] ... a bodge to get around missing rooms
+        self.xrooms : List[str] = []
+        roomdata = read_DataTable(DATAPATH("TIMETABLE/ROOMS"))
+        try:
+            x = roomdata["__INFO__"]["EXTRA"]
+        except KeyError:
+            pass
+        else:
+            if x:
+                try:
+                    xname, n = x.rsplit("*", 1)
+                    i = int(n)
+                    xroom = xname.strip()
+                except ValueError:
+                    raise(TT_Error(_BAD_XROOMS.format(val=x)))
+                for ix in range(1, i+1):
+                    rid = f"rX{ix}"
+                    self[rid] = xroom.format(i=ix)
+                    self.xrooms.append(rid)
+                    i -= 1
+        for room in roomdata["__ROWS__"]:
+            rid = room["short"]
+            if rid in self:
+                raise TT_Error(_DOUBLED_RID.format(rid=rid))
             if not rid.isalnum():
                 raise TT_Error(_ROOM_INVALID.format(rid=rid))
-            _rooms[rid] = room["NAME"]
-            usage = room["USAGE"].split()
-            if usage:
+            self[rid] = room["full"]
+            users = room["users"].split()
+            if users:
                 # The classes which can use this room
-                for k in usage:
+                for k in users:
                     try:
                         self.rooms_for_class[k].append(rid)
                     except KeyError:
                         self.rooms_for_class[k] = [rid]
-        # Sort tags alphabetically (to make finding them easier)
-        for room in sorted(_rooms):
-            self[room] = _rooms[room]
 
 
-class TT_Subjects(dict):
+class TT_Subjects(Dict[str,str]):
+    """The internal representation of a subject is the short name (a
+    number/index would make no sense here).
+    The class instance maps the short name to the full name.
+    For timetabling no other functions are required.
+    "Special" subjects introduced for grade reporting begin with a
+    non-alphabetical character ("$") and are skipped here.
+    Also other subjects will not be relevant for timetabling, but they
+    can just be ignored.
+    """
     def __init__(self):
         super().__init__()
         for sid, name in Subjects().sid2name.items():
@@ -453,6 +472,136 @@ class TT_Teachers(dict):
             if l and u:
                 REPORT("WARNING", _UNBROKEN_WITH_LUNCH.format(tname=tname))
             self.constraints[tid] = {
+                "MAXGAPSPERWEEK": g,
+                "MAXBLOCK": u,
+                "MINPERDAY": m,
+                "LUNCHBREAK": l,
+            }
+        # Sort tags alphabetically (to make finding them easier)
+        for t in sorted(_teachers):
+            self[t] = _teachers[t]
+
+
+class TT_TeachersX(dict):
+    NO = "0"
+    YES = "1"
+
+    def __init__(self, days, periods):
+        def sequence(period_string):
+            """Generator function for the characters of a string."""
+            for ch in period_string:
+                yield ch
+
+        def get_minlessons(val, message, teacher=None):
+            try:
+                n = int(val)
+                if n < 0 or n > len(periods):
+                    raise ValueError
+            except ValueError:
+                raise TT_Error(message.format(val=val, teacher=teacher))
+            return n
+
+        def get_lunch_periods(val, message, teacher=None):
+            plist = []
+            for p in val.split():
+                if p in plist or p not in periods:
+                    raise TT_Error(message.format(val=val, teacher=teacher))
+                plist.append(p)
+            return plist
+
+        def get_lessons_weight(val, message, teacher=None):
+            try:
+                x, w = [int(a) for a in val.split("@")]
+                if x < 0 or x > 10:
+                    raise ValueError
+                if w < 0 or w > 10:
+                    raise ValueError
+            except:
+                raise TT_Error(message.format(val=val, teacher=teacher))
+            return x, w
+
+        def get_gaps(val, message, teacher=None):
+            try:
+                x = int(val)
+                if x < 0 or x > 10:
+                    raise ValueError
+            except:
+                raise TT_Error(message.format(val=val, teacher=teacher))
+            return x
+
+        super().__init__()
+        self.alphatag = {}  # shortened, ASCII version of name, sortable
+        teachers = Teachers()
+        default_minlessons = None
+        _dm = teachers.info["MINPERDAY"]  # min.lessons per day
+        if _dm:
+            default_minlessons = get_minlessons(
+                _dm, _INVALID_DEFAULT_MINLESSONS
+            )
+        default_lunch = None
+        _dl = teachers.info["LUNCHBREAK"]  # possible lunch periods
+        if _dl:
+            default_lunch = get_lunch_periods(_dl, _INVALID_DEFAULT_LUNCH)
+        default_gaps = None
+        default_unbroken = None
+        _dg = teachers.info["MAXGAPSPERWEEK"]  # gaps per week
+        if _dg:
+            default_gaps = get_gaps(_dg, _INVALID_DEFAULT_GAPS)
+        _du = teachers.info["MAXBLOCK"]  # max. contiguous lessons
+        if _du:
+            default_unbroken = get_lessons_weight(
+                _du, _INVALID_DEFAULT_UNBROKEN
+            )
+        self.blocked_periods = {}
+        self.constraints = {}
+        _teachers = {}  # buffer to allow resorting
+        for tid, tdata in teachers.items():
+            tname, times = teachers.name(tid), tdata["AVAILABLE"]
+            if not tid.isalnum():
+                raise TT_Error(_TEACHER_INVALID.format(tid=tid))
+            self.alphatag[tid] = tdata["SORTNAME"]
+            _teachers[tid] = tname
+            if times:
+                day_list = [d.strip() for d in times.split(",")]
+                if len(day_list) != len(days):
+                    raise TT_Error(
+                        _TEACHER_NDAYS.format(
+                            name=tname, tid=tid, ndays=len(days)
+                        )
+                    )
+                dlist = []
+                for dperiods in day_list:
+                    pblist = []
+                    val = None
+                    rd = sequence(dperiods)
+                    for p in periods:
+                        try:
+                            b = next(rd)
+                            if b == self.YES:
+                                val = "X"  # not blocked
+                            elif b == self.NO:
+                                val = ""   # blocked
+                            else:
+                                val = None
+                                raise StopIteration
+                        except StopIteration:
+                            if val == None:
+                                raise TT_Error(
+                                    _TEACHER_DAYS_INVALID.format(
+                                        name=tname, tid=tid
+                                    )
+                                )
+                        pblist.append(val)
+                    dlist.append(pblist)
+                self.blocked_periods[tid] = dlist
+            g = tdata["MAXGAPSPERWEEK"]
+            u = tdata["MAXBLOCK"]
+            m = tdata["MINPERDAY"]
+            l = tdata["LUNCHBREAK"]
+            if l and u:
+                REPORT("WARNING", _UNBROKEN_WITH_LUNCH.format(tname=tname))
+            self.constraints[tid] = {
+                "MAXGAPSPERDAY": "*" if g else "",
                 "MAXGAPSPERWEEK": g,
                 "MAXBLOCK": u,
                 "MINPERDAY": m,
@@ -1389,38 +1538,101 @@ def lesson_lengths(duration_map):
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
+def teachers_convert(days, periods, filetype='tsv'):
+    teachers = TT_TeachersX(
+        {d.short: d for d in days},
+        {p.short: p for p in periods}
+    )
+    fields = MINION(DATAPATH("CONFIG/TEACHER_FIELDS"))
+    tf = fields["TABLE_FIELDS_STUB"]
+    for p in periods:
+        tf.append({
+            "NAME": p.short
+        })
+    fields["TABLE_FIELDS"] = tf
+    fnames = [f["NAME"] for f in tf]
+    #print("fnames:", fnames)
+
+    from tables.spreadsheet import make_DataTable
+    folder = DATAPATH("testing/tmp/TEACHERS")
+    if not os.path.isdir(folder):
+        os.makedirs(folder)
+    for k, v in teachers.items():
+#        print(f"  {k} ({teachers.alphatag[k]}): {v}")
+#        print("   ", teachers.blocked_periods.get(k) or "–––")
+#        print("   ", teachers.constraints[k])
+
+        info = {
+            "NAME": v,
+            "TID": k,
+            "SORTNAME": teachers.alphatag[k]
+        }
+        info.update(teachers.constraints[k])
+        blocked = teachers.blocked_periods.get(k)
+        if not blocked:
+            continue
+        rows = []
+        for d in days:
+            ddata = blocked.pop(0)
+            day = d.short
+            row = {
+                "DAY": day,
+                "FULL_DAY": d.full
+            }
+            for p in periods:
+                period = p.short
+                row[period] = ddata.pop(0)
+            rows.append(row)
+        data = {
+            "__INFO__": info,
+            "__ROWS__": rows,
+            "__FIELDS__": fnames
+        }
+#        print("\n", data)
+
+        fpath = os.path.join(folder, k)
+        tbytes = make_DataTable(data, filetype, fields)
+        with open(f"{fpath}.{filetype}", 'wb') as fh:
+            fh.write(tbytes)
+
+
 if __name__ == "__main__":
-    days = Days()
-    print("\nDAYS:")
-    for k, v in days.items():
-        print(f"  {k}: {v}")
+    print("\nDAYS: {len(days)}")
+    days = TT_Days()
+    i = 0
+    for d in days:
+        print(f"  {d} // {days.bitstring(i)}")
+        i += 1
 
-    periods = Periods()
-    print("\nPERIODS:")
-    for k, v in periods.items():
-        print(f"  {k}: {v}")
+    print("\nPERIODS: {len(periods)}")
+    periods = TT_Periods()
+    for p in periods:
+        print(f"  {p}")
 
-    rooms = Rooms()
     print("\nROOMS:")
-    for k, v in rooms.items():
-        print(f"  {k}: {v}")
+    rooms = TT_Rooms()
+    for r in sorted(rooms):
+        print(f"  {r:8}: {rooms[r]}")
     print("\nXROOMS:", rooms.xrooms)
     print("\nCLASS -> ROOMS:")
     for k in sorted(rooms.rooms_for_class):
-        v = rooms.rooms_for_class[k]
-        print(f"  {k}: {sorted(v)}")
+        print(f"  {k:4}: {sorted(rooms.rooms_for_class[k])}")
 
-    subjects = TT_Subjects()
     print("\nSUBJECTS:")
-    for k, v in subjects.items():
-        print(f"  {k}: {v}")
+    subjects = TT_Subjects()
+    for k in sorted(subjects):
+        print(f"  {k:8}: {subjects[k]}")
 
-    teachers = TT_Teachers(days, periods)
     print("\nTEACHERS:")
+#    teachers_convert(days, periods)
+
+
     for k, v in teachers.items():
         print(f"  {k} ({teachers.alphatag[k]}): {v}")
         print("   ", teachers.blocked_periods.get(k) or "–––")
         print("   ", teachers.constraints[k])
+
+    quit(0)
 
     print("\nCLASSES:")
     classes = Classes(periods)

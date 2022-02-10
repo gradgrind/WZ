@@ -1,0 +1,42 @@
+#+++ __TITLE__   : Felder der Lehrertabellen
+#+++ __MINION__  : 2.0
+#+++ __MODIFIED__: 2022-02-10
+#--------------------------------------------------------------
+
+INFO_FIELDS: [
+    {NAME: NAME             DISPLAY_NAME: Name          REQUIRED: true}
+    {NAME: TID              DISPLAY_NAME: Kürzel        REQUIRED: true}
+    {NAME: SORTNAME         DISPLAY_NAME: Sortiername   REQUIRED: true}
+# Stundenplanung:
+    {NAME: MINPERDAY        DISPLAY_NAME: min_Stunden_pro_Tag}
+    {NAME: MAXGAPSPERDAY    DISPLAY_NAME: max_Lücken_pro_Tag}
+    {NAME: MAXGAPSPERWEEK   DISPLAY_NAME: max_Lücken_pro_Woche}
+    {NAME: LUNCHBREAK       DISPLAY_NAME: Mittag}
+    {NAME: MAXBLOCK         DISPLAY_NAME: Blocklänge}
+]
+# Feldwerte der Stundenplanung:
+#   leer ⇒ keine Angabe
+#   * ⇒ Standardwert (DEFAULT)
+#   sonst eigener Wert
+# Normalerweise sollte ein Lehrer nur in einer der Spalten Mittag
+# und Blocklänge einen Wert haben.
+
+TABLE_FIELDS: [
+    {NAME: DAY              DISPLAY_NAME: Tag       REQUIRED: true}
+    {NAME: FULL_DAY         DISPLAY_NAME: Tag_voll}
+# Die Felder für die Stundenverfügbarkeit werden automatisch hinzugefügt. 
+]
+
+DEFAULTS: {
+# min. Unterrichtsstunden pro Tag (außer an freien Tagen):
+    MINPERDAY:          2
+# max. Lücken pro Tag (0 – 10):
+    MAXGAPSPERDAY:      ""
+# Wenn alle angegebenen Stunden möglich sind, muss eine frei sein:
+    LUNCHBREAK:         "3 4 5"
+# max. Lücken pro Woche (0 – 10):
+    MAXGAPSPERWEEK:     4
+# max. nacheinanderfolgende Unterrichtsstunden, Stundenzahl@Gewichtung:
+# jeweils (0 – 10):
+    MAXBLOCK:           6@5
+}

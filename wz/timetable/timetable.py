@@ -77,7 +77,7 @@ _TITLEHEIGHT = 20
 _TITLEWIDTH = 40
 
 BORDER_COLOUR = '6060d0'         # rrggbb
-HEADER_COLOUR = 'a0a0a0'
+HEADER_COLOUR = 'b0b0b0'
 CELL_HIGHLIGHT_COLOUR = 'a0a0ff' # rrggbb
 #FONT_COLOUR = '442222'           # rrggbb
 SELECT_COLOUR = 'ff0000'         # rrggbb
@@ -97,15 +97,25 @@ def main(args):
     #print("FONT:", font.pointSize())
     font.setPointSize(12)
     app.setFont(font)
+
+    #from qtpy.QtGui import QFontInfo
+    #qfi = QFontInfo(font)
+    #print("FONT PIXELS / POINTS:", qfi.pixelSize(), qfi.pointSize())
     # Persistent Settings:
 #    builtins.SETTINGS = QSettings(
 #            QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
-    builtins.WINDOW = GridViewRescaling()
+    #builtins.WINDOW = GridViewRescaling()
     #builtins.WINDOW = GridViewHFit()
+    builtins.WINDOW = GridView()
 
     # Set up grid
     grid = GridPeriodsDays(DAYS, PERIODS, BREAKS)
     WINDOW.setScene(grid)
+
+    # Scaling: only makes sense if using basic, unscaled GridView
+    scale = WINDOW.pdpi / WINDOW.ldpi
+    t = QTransform().scale(scale, scale)
+    WINDOW.setTransform(t)
 
     app.setWindowIcon(QIcon(os.path.join(basedir, "wz-data", "icons", "tt.svg")))
     screen = app.primaryScreen()
@@ -135,7 +145,9 @@ class GridView(QGraphicsView):
         self.setRenderHints(QPainter.Antialiasing)
         # self.setRenderHints(QPainter.TextAntialiasing)
         self.ldpi = self.logicalDpiX()
-        #        self.pdpi = self.physicalDpiX()
+        self.pdpi = self.physicalDpiX()
+        #print("PDPI:", self.pdpi)
+# Scaling the scene by pdpi/ldpi should display the correct size ...
         #        self.MM2PT = self.ldpi / 25.4
 #        self.scene = QGraphicsScene()
 #        self.setScene(self.scene)
@@ -151,7 +163,7 @@ class GridView(QGraphicsView):
 
     def pt2px(self, pt):
         px = self.ldpi * pt / 72.0
-        # print(f"pt2px: {pt} -> {px}")
+        #print(f"pt2px: {pt} -> {px} (LDPI: {self.ldpi})")
         return px
 
     def px2mm(self, px):
@@ -394,6 +406,7 @@ class Box(QGraphicsRectItem):
             self.text_item = item
         item.setText(text)
         bdrect = item.boundingRect()
+        #print("§§§", text, bdrect)
         wt = bdrect.width()
         ht = bdrect.height()
         rect = self.rect()
@@ -574,8 +587,6 @@ class StyleCache:
             brush = QBrush()    # no fill
             cls.__brushes['*'] = brush
         return brush
-
-
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

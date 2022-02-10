@@ -1,7 +1,7 @@
 """
-core/teachers.py - last updated 2022-02-10
+misc/teachers.py - last updated 2022-02-10
 
-Manage teacher data.
+Manage teacher data. ... old version
 
 =+LICENCE=================================
 Copyright 2022 Michael Towers
@@ -19,11 +19,13 @@ Copyright 2022 Michael Towers
    limitations under the License.
 =-LICENCE=================================
 
-The teachers' data is supplied in individual "DataTables".
-In this module there is support for reading these tables.
+There is a single table containing all teachers.
+
+In this module there is support for reading this table as a "DataTable".
 """
 
 ### Messages
+_SCHOOLYEAR_MISMATCH = "Lehrerdaten-Fehler: falsches Jahr in\n{path}"
 _FILTER_ERROR = "Lehrerdaten-Fehler: {msg}"
 _DOUBLE_TID = "Lehrerdaten-Fehler: Kürzel {tid} doppelt vorhanden"
 
@@ -40,9 +42,8 @@ if __name__ == "__main__":
     basedir = os.path.dirname(appdir)
     from core.base import start
 
-    #    start.setup(os.path.join(basedir, 'TESTDATA'))
-    #    start.setup(os.path.join(basedir, "DATA"))
-    start.setup(os.path.join(basedir, "NEXT"))
+    start.setup(os.path.join(basedir, 'TESTDATA'))
+    #start.setup(os.path.join(basedir, "DATA"))
 
 ### +++++
 
@@ -69,7 +70,7 @@ class __TeachersCache(dict):
     An instance of this class is a <dict> holding the teacher data as a
     mapping: {tid -> {field: value, ...}}.
     The fields defined for a teacher are read from the configuration file
-    CONFIG/TEACHER_FIELDS.
+    CONFIG/TEACHER_DATA.
     This is a "singleton" class, i.e. there should be only one instance,
     which is accessible via the <_instance> method.
     """
@@ -95,26 +96,21 @@ class __TeachersCache(dict):
 
     def __init__(self):
         super().__init__()
-        folder = DATAPATH("TEACHERS")
-        fields = MINION(DATAPATH("CONFIG/TEACHER_FIELDS"))
-        for f in os.listdir(folder):
-            fpath = os.path.join(folder, f)
-            try:
-                ttable = read_DataTable(fpath)
-                ttable = filter_DataTable(ttable, fields, matrix=True)
-            except TableError as e:
-                raise TeacherError(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
-            info = ttable["__INFO__"]
-            tid = info.pop("TID")
-            available = {}
-            info["AVAILABLE"] = available
-            for row in ttable["__ROWS__"]:
-                day = row.pop("DAY")
-                del(row["FULL_DAY"])
-                available[day] = row
+        try:
+            fpath = DATAPATH("OLD/Lehrer.ods")
+            ttable = read_DataTable(fpath)
+            ttable = filter_DataTable(ttable,
+                    MINION(DATAPATH("OLD/TEACHER_DATA")))
+        except TableError as e:
+            raise TeacherError(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
+        self.info = ttable["__INFO__"]
+        if self.info["SCHOOLYEAR"] != SCHOOLYEAR:
+            raise TeacherError(_SCHOOLYEAR_MISMATCH.format(path=fpath))
+        for row in ttable["__ROWS__"]:
+            tid = row["TID"]
             if tid in self:
                 raise TeacherError(_DOUBLE_TID.format(tid=tid))
-            self[tid] = info
+            self[tid] = row
 
     def name(self, tid):
         return self[tid]["NAME"].replace("|", "")
@@ -132,4 +128,4 @@ class __TeachersCache(dict):
 if __name__ == "__main__":
     teachers = Teachers()
     for tid in teachers.list_teachers():
-        print(f"  {tid}: {teachers.name(tid)} // {teachers[tid]}")
+        print(f"  {tid}: {teachers.name(tid)}")

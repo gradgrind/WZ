@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-ui/grid0.py
+ui/colourgrid.py
 
-Last updated:  2022-02-04
+Last updated:  2022-02-0
 
 Widget with tiles on grid layout (QGraphicsScene/QGraphicsView).
+Used to display a grid of distinct colours – preferring light colours.
 
 =+LICENCE=============================
 Copyright 2022 Michael Towers
@@ -849,19 +850,49 @@ def getDistinctColors(c, r):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
+    from qtpy.QtWidgets import QApplication
+    app = QApplication([])
+    import sys, os
+    this = sys.path[0]
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+
+    with open(os.path.join(basedir, "wz-data", "COLOURS")) as fh:
+        lines = fh.read().split()
+    colours = []
+    for l in lines:
+        c = l.lstrip('#')
+        if c:
+            colours.append(c)
+    grid0 = GridViewRescaling()
+    #grid0 = GridView()
+    titleheight = 25
+    cols = (50,)*10
+    rows = (50,)*((len(colours)+9) // 10)
+    grid0.init(rows, cols, titleheight)
+    grid0.add_title("Colour Palette 1")
+    for r in range(len(rows)):
+        for c in range(10):
+            try:
+                colour = colours.pop()
+            except IndexError:
+                colour = ""
+            grid0.basic_tile(r, c, bg=colour, text=colour)
+
+    grid0.resize(800, 600)
+    grid0.show()
+
     huex = (0, 16, 32, 48, 64, 88, 112, 134, 144, 160, 176, 192, 208, 230)
     satx = (0.2, 0.3, 0.4, 0.5, 0.7)
     cols = (50,)*len(huex)
     rows = (50,)*len(satx)
 
-    from qtpy.QtWidgets import QApplication
-
-    app = QApplication([])
     grid = GridViewRescaling()
     #grid = GridView()
     titleheight = 25
     grid.init(rows, cols, titleheight)
-    grid.add_title("Colour Palette")
+    grid.add_title("Colour Palette 2")
     cn = len(huex)
     rn = len(satx)
 #    clist = getDistinctColors(cn, rn)
@@ -869,8 +900,9 @@ if __name__ == "__main__":
         hue = huex[c]/256
         for r in range(rn):
             sat = satx[r]
-            grid.basic_tile(r, c, bg=HSVToRGB(hue, sat, 1.0))
+            colour = HSVToRGB(hue, sat, 1.0)
+            grid.basic_tile(r, c, bg=colour, text=colour)
 
-    grid.resize(600, 400)
+    grid.resize(800, 600)
     grid.show()
     app.exec()

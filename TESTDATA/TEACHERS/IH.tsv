@@ -1,0 +1,15 @@
++++	Name	Irmgard Häuslich
++++	Kürzel	IH
++++	Sortiername	Haeuslich_I
++++	min_Stunden_pro_Tag	
++++	max_Lücken_pro_Tag	
++++	max_Lücken_pro_Woche	
++++	Mittag	
++++	Blocklänge	
+
+Tag	Tag_voll	A	B	1	2	3	4	5	6	7
+Mo	Montag	X	X	X	X	X	X	X	X	X
+Di	Dienstag	X	X	X	X	X	X	X	X	X
+Mi	Mittwoch	X	X	X	X	X	X	X	X	X
+Do	Donnerstag	X	X	X	X	X	X	X		
+Fr	Freitag	X	X	X	X	X	X	X	X	X

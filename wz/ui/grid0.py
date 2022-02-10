@@ -835,8 +835,8 @@ if __name__ == "__main__":
     from qtpy.QtWidgets import QApplication
 
     app = QApplication([])
-    #    grid = GridViewRescaling()
-    grid = GridView()
+    grid = GridViewRescaling()
+    #grid = GridView()
     titleheight = 25
     grid.init(rows, cols, titleheight)
 

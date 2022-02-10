@@ -1,0 +1,22 @@
+#+++ __TITLE__   : Stundenplanung: Tabelle der Tagesstunden
+#+++ __MINION__  : 2.0
+#+++ __MODIFIED__: 2022-02-10
+#--------------------------------------------------------------
+
+# Die Felder sind: 
+#   Kürzel
+#   Name
+#   Anfang (Uhrzeit)
+#   Ende (Uhrzeit)
+
+PERIODS: [  
+    [A  "Hauptunterricht 1"     "08:10" "09:00"]
+    [B  "Hauptunterricht 2"     "09:00" "09:50"]
+    [1  "1. Fachstunde"         "10:10" "10:55"]
+    [2  "2. Fachstunde"         "11:00" "11:45"]
+    [3  "3. Fachstunde"         "12:00" "12:45"]
+    [4  "4. Fachstunde"         "12:50" "13:35"]
+    [5  "5. Fachstunde"         "13:45" "14:30"]
+    [6  "6. Fachstunde"         "14:30" "15:15"]
+    [7  "7. Fachstunde"         "15:15" "16:00"]
+]

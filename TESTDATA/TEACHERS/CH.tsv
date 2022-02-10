@@ -1,0 +1,15 @@
++++	Name	Claudia Hahn
++++	Kürzel	CH
++++	Sortiername	Hahn_C
++++	min_Stunden_pro_Tag	
++++	max_Lücken_pro_Tag	
++++	max_Lücken_pro_Woche	
++++	Mittag	
++++	Blocklänge	
+
+Tag	Tag_voll	A	B	1	2	3	4	5	6	7
+Mo	Montag									
+Di	Dienstag									
+Mi	Mittwoch	X	X	X	X	X	X	X	X	X
+Do	Donnerstag	X	X	X	X	X	X	X	X	X
+Fr	Freitag									
