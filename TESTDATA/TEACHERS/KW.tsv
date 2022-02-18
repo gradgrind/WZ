@@ -1,10 +1,9 @@
 +++	Name	Karin Wohltat
 +++	Kürzel	KW
 +++	Sortiername	Wohltat_K
-+++	min_Stunden_pro_Tag	
++++	min_Stunden_pro_Tag	*
 +++	max_Lücken_pro_Tag	
 +++	max_Lücken_pro_Woche	
-+++	Mittag	
 +++	Blocklänge	
 
 Tag	Tag_voll	A	B	1	2	3	4	5	6	7

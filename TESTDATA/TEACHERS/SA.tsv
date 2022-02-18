@@ -1,7 +1,7 @@
-+++	Name	Ulrich Lager
-+++	Kürzel	UL
-+++	Sortiername	Lager_U
-+++	min_Stunden_pro_Tag	
++++	Name	Sven Anderssen
++++	Kürzel	SA
++++	Sortiername	Anderssen_S
++++	min_Stunden_pro_Tag	*
 +++	max_Lücken_pro_Tag	*
 +++	max_Lücken_pro_Woche	*
 +++	Blocklänge	*
@@ -10,5 +10,5 @@ Tag	Tag_voll	A	B	1	2	3	4	5	6	7
 Mo	Montag	X	X	X	X	X	X	X	X	X
 Di	Dienstag	X	X	X	X	X	X	X	X	X
 Mi	Mittwoch	X	X	X	X	X	X	X	X	X
-Do	Donnerstag	X	X	X	X	X	X	X	X	X
-Fr	Freitag	X	X	X	X					
+Do	Donnerstag	X	X	X	X	X	X	X		
+Fr	Freitag	X	X	X	X	X	X	X	X	X

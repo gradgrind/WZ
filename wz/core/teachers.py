@@ -1,5 +1,5 @@
 """
-core/teachers.py - last updated 2022-02-10
+core/teachers.py - last updated 2022-02-12
 
 Manage teacher data.
 
@@ -26,7 +26,7 @@ In this module there is support for reading these tables.
 ### Messages
 _FILTER_ERROR = "Lehrerdaten-Fehler: {msg}"
 _DOUBLE_TID = "Lehrerdaten-Fehler: Kürzel {tid} doppelt vorhanden"
-
+_TEACHER_INVALID = "Lehrerkürzel „{tid}“ ist ungültig, in\n  {path}"
 
 ###############################################################
 
@@ -63,7 +63,7 @@ def Teachers():
 
 
 class __TeachersCache(dict):
-    """Handler for pupil data.
+    """Handler for teacher data.
     The internal teacher data should be read and written only through this
     interface.
     An instance of this class is a <dict> holding the teacher data as a
@@ -96,16 +96,18 @@ class __TeachersCache(dict):
     def __init__(self):
         super().__init__()
         folder = DATAPATH("TEACHERS")
-        fields = MINION(DATAPATH("CONFIG/TEACHER_FIELDS"))
+        self.fields = MINION(DATAPATH("CONFIG/TEACHER_FIELDS"))
         for f in os.listdir(folder):
             fpath = os.path.join(folder, f)
             try:
                 ttable = read_DataTable(fpath)
-                ttable = filter_DataTable(ttable, fields, matrix=True)
+                ttable = filter_DataTable(ttable, self.fields, matrix=True)
             except TableError as e:
                 raise TeacherError(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
             info = ttable["__INFO__"]
             tid = info.pop("TID")
+            if not tid.isalnum():
+                raise Teacher(_TEACHER_INVALID.format(tid=tid, path=fpath))
             available = {}
             info["AVAILABLE"] = available
             for row in ttable["__ROWS__"]:
@@ -122,9 +124,7 @@ class __TeachersCache(dict):
     def list_teachers(self):
         """Return a sorted list of teacher ids.
         """
-        tlist = [(tdata["SORTNAME"], tid) for tid, tdata in self.items()]
-        tlist.sort()
-        return [tid for _, tid in tlist]
+        return sorted(self, key=lambda x:self[x]["SORTNAME"])
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

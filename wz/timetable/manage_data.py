@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-TT/manage_data.py - last updated 2022-02-05
+TT/manage_data.py - last updated 2022-02-06
 
 Coordinate and process the timetable data
 
@@ -1053,7 +1053,7 @@ if __name__ == '__main__':
 #        print("\nLONG TAGS:\n", _teachers.longtag.values())
 
     from timetable.basic_data import TT_CONFIG
-    outdir = YEARPATH(TT_CONFIG['OUTPUT_FOLDER'])
+    outdir = DATAPATH(TT_CONFIG['OUTPUT_FOLDER'])
     os.makedirs(outdir, exist_ok = True)
 
     # Check-lists for teachers

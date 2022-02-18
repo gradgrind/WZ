@@ -1,5 +1,5 @@
 """
-misc/convert_old_teachers.py - last updated 2022-02-10
+misc/convert_old_teachers.py - last updated 2022-02-12
 
 Convert a single teachers table to a folder of individual tables.
 
@@ -240,6 +240,7 @@ def teachers_convert(days, periods, filetype='tsv'):
     folder = DATAPATH("testing/tmp/TEACHERS")
     if not os.path.isdir(folder):
         os.makedirs(folder)
+    lbperiods = ('5', '4', '3')
     for k, v in teachers.items():
         info = {
             "NAME": v,
@@ -262,6 +263,15 @@ def teachers_convert(days, periods, filetype='tsv'):
                 period = p.short
                 row[period] = ddata.pop(0)
             rows.append(row)
+            if info["LUNCHBREAK"]:
+                # Add (possible) lunch breaks
+                for p in lbperiods:
+                    if not row[p]:
+                        break
+                else:
+                    for p in lbperiods:
+                        row[p] = '+'
+
         data = {
             "__INFO__": info,
             "__ROWS__": rows,
