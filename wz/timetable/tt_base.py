@@ -1,5 +1,5 @@
 """
-timetable/tt_base.py - last updated 2022-02-18
+timetable/tt_base.py - last updated 2022-02-19
 
 Read timetable information from the various sources ...
 
@@ -20,20 +20,15 @@ Copyright 2022 Michael Towers
 """
 
 _MAX_DURATION = 4  # maximum length of a lesson
+_SINGLE = "Einzel"
+_DOUBLE = "Doppel"
+_EXTRA = "EXTRA"
+_BLOCK = "BLOCK"
+_BLOCK_COURSE = "EPOCHE"
 
 ### Messages
 
-_BAD_COURSE_FILE = (
-    "Klasse {klass}: Kursdaten konnten nicht eingelesen"
-    " werden\n       ({path})\n --> {report}"
-)
-_TAG_INVALID = "Klasse {klass}, Fach {sname}: Kennung '{tag}' ist ungültig"
-_CLASS_INVALID = (
-    "Klassenbezeichnungen dürfen nur aus Zahlen und"
-    " lateinischen Buchstaben bestehen: {klass} ist ungültig."
-)
 _UNKNOWN_GROUP = "Klasse {klass}: unbekannte Gruppe – '{group}'"
-_GROUP_IN_MULTIPLE_SPLITS = "Klasse {klass}: Gruppe {group} in >1 Teilung"
 _INVALID_ENTRY = (
     "Klasse {klass}, Fach {sname}, Feld_{field}:" " ungültiger Wert ({val})"
 )
@@ -67,21 +62,15 @@ _TAG_TEACHER_DOUBLE = (
     "     Fach {sid1}, Klasse {klass1}"
 )
 _FIELD_MISSING = "Klasse {klass}: Feld {field} fehlt in Fachtabelle"
-_BAD_TIDS = "Klasse {klass}: ungültige Lehrkräfte ({tids}) für {sname}"
 _UNKNOWN_TEACHER = "Klasse {klass}: unbekannte Lehrkraft ({tid}) für {sname}"
 _ROOM_INVALID = (
     "Raumkürzel dürfen nur aus Zahlen und"
     " lateinischen Buchstaben bestehen: {rid} ist ungültig."
 )
 _UNKNOWN_ROOM = "Klasse {klass}, Fach {sname}: unbekannter Raum ({rid})"
-_BAD_ROOM = "Klasse {klass}, Fach {sname}: ungültige Raumangabe ({rid})"
-_DOUBLED_RID = (
-    "Tabelle der Räume: Kürzel „{rid}“ kommt doppelt vor"
-)
-_BAD_XROOMS = "Ungültige Info-Angabe <EXTRA> („Zusatzräume“) in Raumliste: {val}"
-_LESSON_CLASS_MISMATCH = (
-    "In der Tabelle der Unterrichtsstunden für"
-    " Klasse {klass} ist die Klasse falsch angegeben:\n  {path}"
+_DOUBLED_RID = "Tabelle der Räume: Kürzel „{rid}“ kommt doppelt vor"
+_BAD_XROOMS = (
+    "Ungültige Info-Angabe <EXTRA> („Zusatzräume“) in Raumliste: {val}"
 )
 _UNKNOWN_TAG = "Tabelle der festen Stunden: unbekannte Stundenkennung „{tag}“"
 _INVALID_DAY_PERIOD = (
@@ -98,7 +87,6 @@ _PREPLACE_TOO_MANY = (
 _PREPLACE_TOO_FEW = (
     "Zu wenig feste Stunden definiert für" " Stundenkennung {tag}"
 )
-_TABLE_ERROR = "In Klasse {klass}: {e}"
 _MULTIPLE_BLOCK = "Klasse {klass}: Block {sname} mehrfach definiert"
 _BLOCK_SID_NOT_BLOCK = (
     "Klasse {klass}, Fach {sname}:" "Block-Fach (Epoche = {sid}) ist kein Block"
@@ -109,39 +97,6 @@ _COMPONENT_BAD_LENGTH_SID = (
 )
 _NONLESSON_BAD_LENGTH = (
     "Klasse {klass}, EXTRA-Fach {sname}: ungültige" " Länge ({length})"
-)
-_PLUSTAG_INVALID = (
-    "Klasse {klass}, Fach {sname}: Kennung mit '+' ({tag})" " ungültig"
-)
-_INVALID_DEFAULT_GAPS = (
-    "Lehrer-Tabelle: ungültige Standard-Lücken-Angabe" " ({val})"
-)
-_INVALID_DEFAULT_UNBROKEN = (
-    "Lehrer-Tabelle: ungültige" " Standard-Blocklänge-Angabe ({val})"
-)
-_INVALID_GAPS = "Lehrer-Tabelle: ungültige Lücken-Angabe für {teacher} ({val})"
-_INVALID_UNBROKEN = (
-    "Lehrer-Tabelle: ungültige Blocklänge-Angabe für" " {teacher} ({val})"
-)
-_INVALID_DEFAULT_MINLESSONS = (
-    "Lehrer-Tabelle: ungültige Standard-Angabe"
-    " für min. Stunden pro Tag ({val})"
-)
-_INVALID_MINLESSONS = (
-    "Lehrer-Tabelle, {teacher}: ungültige Angabe"
-    " für min. Stunden pro Tag ({val})"
-)
-_INVALID_DEFAULT_LUNCH = (
-    "Lehrer-Tabelle: ungültige Standard-Angabe"
-    " für die Mittagsstunden ({val})"
-)
-_INVALID_LUNCH = (
-    "Lehrer-Tabelle, {teacher}: ungültige Angabe"
-    " für die Mittagsstunden ({val})"
-)
-_UNBROKEN_WITH_LUNCH = (
-    "Lehrer-Tabelle: für {tname} ist sowohl Blocklänge"
-    " wie auch Mittag angegeben"
 )
 _BAD_CONDITION_DEF = "Ungültige Bedingungsdefinition: {name}"
 _NOT_IN_RANGE = "Wert ({val}) nicht im Bedingungsbereich für {name}"
@@ -175,13 +130,6 @@ if __name__ == "__main__":
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "NEXT"))
 
-# IMPORTANT: Note that some uses of Python dicts here may assume ordered
-# entries. If the implementation is altered, this should be taken into
-# account. One place is the definition of pre-placed lessons
-# for a subject. If there is more than one entry for this subject and
-# varying durations, the placement could be affected.
-#TODO: Can I avoid that with the rewrite?
-
 ### +++++
 
 from tables.spreadsheet import read_DataTable, filter_DataTable, TableError
@@ -189,38 +137,39 @@ from core.base import class_group_split
 from core.courses import Subjects
 from core.teachers import Teachers
 
-#???
-TT_CONFIG = MINION(DATAPATH("CONFIG/TIMETABLE"))
-
 
 class TT_Error(Exception):
     pass
+
 
 from typing import NamedTuple, Dict, List, Set, FrozenSet
 
 ### -----
 
+
 class Day(NamedTuple):
-    short: str      # Short name (e.g. "Do")
-    full: str       # Full name (e.g. "Donnerstag")
-    tag: str        # Day number as string, starting at "1"
-    bitmap: int     # Each day has a bit, e.g. 8 (2^3) for the fourth day
+    short: str  # Short name (e.g. "Do")
+    full: str  # Full name (e.g. "Donnerstag")
+    tag: str  # Day number as string, starting at "1"
+    bitmap: int  # Each day has a bit, e.g. 8 (2^3) for the fourth day
+
 
 class TT_Days(List[Day]):
     """Manage various representations of the days of the (timetable) week.
     The primary internal representation of a day is the index, starting
     at 0 for the first day of the school week.
     """
+
     def __init__(self):
         super().__init__()
-        b = 1   # for bitmap
-        i = 0   # for tag
+        b = 1  # for bitmap
+        i = 0  # for tag
         for k, l in MINION(DATAPATH("TIMETABLE/DAYS"))["DAYS"]:
             i += 1
             self.append(Day(k, l, str(i), b))
             b *= 2
 
-    def bitstring(self, day:int) -> str:
+    def bitstring(self, day: int) -> str:
         """Return the bitmap as a string of 1s and 0s, but reversed, so
         that the first day comes first in the string.
         """
@@ -228,17 +177,19 @@ class TT_Days(List[Day]):
 
 
 class Period(NamedTuple):
-    short: str      # Short name (e.g. "2")
-    full: str       # Full name (e.g. "2. Fachstunde")
-    tag: str        # Period number as string, starting at "1"
+    short: str  # Short name (e.g. "2")
+    full: str  # Full name (e.g. "2. Fachstunde")
+    tag: str  # Period number as string, starting at "1"
     starttime: str  # Time of period start
-    endtime: str    # Time of period end
+    endtime: str  # Time of period end
+
 
 class TT_Periods(List[Period]):
     """Manage information about the periods of the school day.
     The primary internal representation of a period is the index, starting
     at 0 for the first period of the school day.
     """
+
     def __init__(self):
         super().__init__()
         i = 0
@@ -247,7 +198,7 @@ class TT_Periods(List[Period]):
             self.append(Period(k, l, str(i), s, e))
 
 
-class TT_Rooms(Dict[str,str]):
+class TT_Rooms(Dict[str, str]):
     """The internal representation of a room is the short name (a number/index
     would make no sense here).
     The class instance maps the short name to the full name.
@@ -259,12 +210,13 @@ class TT_Rooms(Dict[str,str]):
     automatic generation process. The failed room allocations must be
     fixed manually.
     """
+
     def __init__(self):
         super().__init__()
         # {class: [available rooms]}
-        self.rooms_for_class : Dict[str,List[str]] = {}
+        self.rooms_for_class: Dict[str, List[str]] = {}
         # [extra rooms] ... a bodge to get around missing rooms
-        self.xrooms : List[str] = []
+        self.xrooms: List[str] = []
         roomdata = read_DataTable(DATAPATH("TIMETABLE/ROOMS"))
         try:
             x = roomdata["__INFO__"]["EXTRA"]
@@ -277,8 +229,8 @@ class TT_Rooms(Dict[str,str]):
                     i = int(n)
                     xroom = xname.strip()
                 except ValueError:
-                    raise(TT_Error(_BAD_XROOMS.format(val=x)))
-                for ix in range(1, i+1):
+                    raise (TT_Error(_BAD_XROOMS.format(val=x)))
+                for ix in range(1, i + 1):
                     rid = f"rX{ix}"
                     self[rid] = xroom.format(i=ix)
                     self.xrooms.append(rid)
@@ -300,7 +252,7 @@ class TT_Rooms(Dict[str,str]):
                         self.rooms_for_class[k] = [rid]
 
 
-class TT_Subjects(Dict[str,str]):
+class TT_Subjects(Dict[str, str]):
     """The internal representation of a subject is the short name (a
     number/index would make no sense here).
     The class instance maps the short name to the full name.
@@ -310,6 +262,7 @@ class TT_Subjects(Dict[str,str]):
     Also other subjects will not be relevant for timetabling, but they
     can just be ignored.
     """
+
     def __init__(self):
         super().__init__()
         for sid, name in Subjects().sid2name.items():
@@ -317,7 +270,7 @@ class TT_Subjects(Dict[str,str]):
                 self[sid] = name
 
 
-class TT_Teachers(Dict[str,str]):
+class TT_Teachers(Dict[str, str]):
     """The internal representation of a subject is the short name (a
     number/index would make no sense here).
     The class instance maps the short name to the full name.
@@ -329,6 +282,7 @@ class TT_Teachers(Dict[str,str]):
     available periods (list of days, each day is a list of periods:
     <True> => available).
     """
+
     def __init__(self, days, periods):
         super().__init__()
         self.address = {}
@@ -338,7 +292,8 @@ class TT_Teachers(Dict[str,str]):
         self.available = {}
         self.lunch_periods = {}
         self.constraints = {}
-        for tid, tdata in teachers.items():
+        for tid in teachers.list_teachers():
+            tdata = teachers[tid]
             tname, times = teachers.name(tid), tdata["AVAILABLE"]
             if times:
                 atable = []
@@ -353,13 +308,13 @@ class TT_Teachers(Dict[str,str]):
                     i = 0
                     for p in periods:
                         val = daydata[p.short]
-                        if val == '+':
+                        if val == "+":
                             l.append(i)
                         i += 1
                         daylist.append(bool(val))
                 self.available[tid] = atable
             else:
-                #TODO: Should such a teacher be excluded?
+                # TODO: Should such a teacher be excluded?
                 # Or count as "always available"???
                 self.available[tid] = None
                 self.lunch_periods[tid] = None
@@ -372,15 +327,15 @@ class TT_Teachers(Dict[str,str]):
                 constraints[c] = f.value(tdata[c])
 
     def list_teachers(self):
-        """Return a sorted list of teacher ids.
-        """
-        return sorted(self.alphatag, key=lambda x:self.alphatag[x])
+        """Return a sorted list of teacher ids."""
+        return sorted(self.alphatag, key=lambda x: self.alphatag[x])
 
 
 class Conditions:
     """Handle teacher "conditions", as defined in the "DEFAULTS" entry in
     the configuration file TEACHER_FIELDS.
     """
+
     def __init__(self, fields):
         """Produce a handler for each condition via the mapping
         <self.conditions>.
@@ -413,13 +368,14 @@ class Conditions:
             v, w = val.rsplit("@", 1)
         except ValueError:
             return val, None
-        return v, int(w)    # Can raise <ValueError>
+        return v, int(w)  # Can raise <ValueError>
 
     @classmethod
     def RANGE(cls, name, default, key, *args):
         """Build a handler for RANGE conditions. A minimum and maximum
         are supplied.
         """
+
         class Range:
             def __init__(self, condition, default, vmin, vmax):
                 self.condition = condition
@@ -429,7 +385,7 @@ class Conditions:
 
             def value(self, val):
                 if val:
-                    if val == '*':
+                    if val == "*":
                         return self.default
                     v0, w = cls.value(val)
                     try:
@@ -438,10 +394,7 @@ class Conditions:
                             raise ValueError
                     except ValueError:
                         raise TT_Error(
-                            _NOT_IN_RANGE.format(
-                                name=self.condition,
-                                val=val
-                            )
+                            _NOT_IN_RANGE.format(name=self.condition, val=val)
                         )
                     return v, w
                 return None
@@ -470,6 +423,7 @@ class Conditions:
         """Build a handler for FROM conditions: accepting a subset of
         a preset set of values.
         """
+
         class From:
             def __init__(self, condition, default, vals):
                 self.condition = condition
@@ -478,7 +432,7 @@ class Conditions:
 
             def value(self, val):
                 if val:
-                    if val == '*':
+                    if val == "*":
                         return self.default
                     v0, w = cls.value(val)
                     try:
@@ -488,10 +442,7 @@ class Conditions:
                     except ValueError:
                         pass
                     raise TT_Error(
-                        _NOT_SUBSET.format(
-                            name=self.condition,
-                            val=val
-                        )
+                        _NOT_SUBSET.format(name=self.condition, val=val)
                     )
                     return v, w
                 return None
@@ -510,24 +461,62 @@ class Conditions:
 
 
 class BlockCourse(NamedTuple):
-    CLASS: str      # Class (short) name (e.g. "09G")
-    GROUPS: FrozenSet[str]   # Full name (e.g. "Donnerstag")
-    SID: str        # Subject-id
+    CLASS: str  # Class (short) name (e.g. "09G")
+    GROUPS: FrozenSet[str]  # Full name (e.g. "Donnerstag")
+    SID: str  # Subject-id
+    NUMBER: int # Number of course blocks (for "++"), otherwise 0
     REALTIDS: Set[str]  # Set of teacher-ids
-    ROOMLIST: List[str] # List of possible room-ids
+    ROOMLIST: List[str]  # List of possible room-ids
 
 
 class Lesson(NamedTuple):
-    CLASS: str      # Class (short) name (e.g. "09G")
-    GROUPS: FrozenSet[str]   # Full name (e.g. "Donnerstag")
-    SID: str        # Subject-id
+    BLOCK: str  # "++", "--" or ""
+    CLASS: str  # Class (short) name (e.g. "09G")
+    GROUPS: FrozenSet[str]  # Full name (e.g. "Donnerstag")
+    SID: str  # Subject-id
     TIDS: Set[str]  # for timetable-clash checking,
     REALTIDS: Set[str]  # Set of teacher-ids
-    ROOMLIST: List[str] # List of possible room-ids
+    ROOMLIST: List[str]  # List of possible room-ids
     LENGTHS: List[int]
 
 
 class Classes:
+    __slots__ = (
+        "lesson_list",  # a list of the <Lesson>s from all classes
+        "available",  # class -> a list of day-lists of period availability
+        "address",  # class -> class data-table path
+        "lunch_periods",  # class -> a list of day-lists of possible break periods
+        "__lesson_index",  # internal counter
+        "class_name",  # class -> long class name:
+        "atomics_lists",  # class -> list of "atomic" groups
+        "element_groups",  # class -> "element" groups -> frozenset of atomic groups
+        # As element groups, but for the dotted groups from the group divisions:
+        "extended_groups",  # class -> "dotted" groups -> frozenset of atomic groups
+        "class_divisions",  # class -> list of divisions (which are lists of strings)
+        # Similar to element_groups, but the atomic groups have a class prefix
+        # (e.g. "11G.A.G" instead of just "A.G").
+        # Also the "extended" groups are included and there is an entry for the whole
+        # class (with key "*").
+        "class_groups",
+        # The reverse mapping, basically turning class_groups around,
+        # so that the values (frozensets of atomic groups) become the keys.
+        # The values to which these map get a class prefix (e.g. "11G.A"
+        # instead of just "A"). The value corresponding to the frozenset
+        # of all atomic groups is the class (e.g. "11G") instead of "*".
+        # There is also an entry mapping the frozenset of the full class
+        # (e.g. "11G") to the class itself.
+        "groupsets_class",
+        "timetable_teachers",  # tid -> list of lesson-indexes
+        "class_lessons",  # class -> list of lesson-indexes
+        "class2room",  # class -> class "home" room
+        "parallel_tags",  # tag -> list of parallel lesson-indexes
+        "block2courselist",  # lesson-index -> list of courses in block
+        "SUBJECTS",
+        "ROOMS",
+        "TEACHERS",
+        "__global_blocks",  # internal mapping of blocks
+    )
+
     def __init__(self, days, periods):
         """Initialize with the valid lesson slots for each class. The
         data is read from the class-days-tables.
@@ -535,12 +524,11 @@ class Classes:
                 {class: class availability}.
         The value is a day/periods matrix of <bool> values.
         Also, possible periods for lunch breaks are extracted from the
-        class tables. These are then available via the attribute
-        <lunch_periods>, as a list of day-lists of possible periods.
+        class tables.
         """
         self.available = {}
         self.address = {}
-        self.lunch_periods = {}
+        self.lunch_periods: Dict[str, List[List[int]]] = {}
         folder = DATAPATH("TIMETABLE/CLASSES")
         fields = MINION(DATAPATH("TIMETABLE/CLASS_PERIODS_FIELDS"))
         for f in os.listdir(folder):
@@ -549,16 +537,16 @@ class Classes:
                 ctable = read_DataTable(fpath)
                 ctable = filter_DataTable(ctable, fields, matrix=True)
             except TableError as e:
-                raise TeacherError(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
+                raise TT_Error(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
             info = ctable["__INFO__"]
             klass = info["CLASS"]
             available = {}
             for row in ctable["__ROWS__"]:
-#                day = row.pop("DAY")
+                #                day = row.pop("DAY")
                 day = row["DAY"]
                 if day in available:
                     raise TT_Error(_DOUBLE_DAY.format(day=day))
-#                del(row["FULL_DAY"])
+                #                del(row["FULL_DAY"])
                 available[day] = row
             self.address[klass] = fpath
             atable = []
@@ -574,31 +562,28 @@ class Classes:
                 i = 0
                 for p in periods:
                     val = daydata[p.short]
-                    if val == '+':
+                    if val == "+":
                         l.append(i)
                     i += 1
                     daylist.append(bool(val))
             self.available[klass] = atable
 
-
-#TODO:
         ### Now initialize the lesson-reading structures
-        self.class_name = {}
-        self.atomics_lists = {}
-        self.element_groups = {}
-#?
+        # <Lesson>s are referenced by their index in the list <self.lesson_list>
+        self.__lesson_index: int = -1
+        self.lesson_list: List[Lesson] = []
+        self.class_name: Dict[str, str] = {}
+        self.atomics_lists: Dict[str, List[str]] = {}
+        self.element_groups: Dict[str, Dict[str, FrozenSet[str]]] = {}
         self.extended_groups = {}
-        # ?
-        self.class_divisions = {}
-        self.class_groups = {}
-        self.groupsets_class = {}
-        self.timetable_teachers = {}  # {tid: [lesson-tag, ... ]}
-        self.class_tags = {}        # [class: [lesson-tag, ... ]}
-        self.class2room = {}        # {class: class "home" room}
-        self.lessons = {}           # {lesson-tag: lesson data ({})}
-        self.parallel_tags = {}     # {tag: [indexed parallel lesson-tags]}
-        self.block2courselist = {}  # {lesson-tag: list of courses within
-                                    # a "block"}
+        self.class_divisions: Dict[str, List[List[str]]] = {}
+        self.class_groups: Dict[str, Dict[str, FrozenSet[str]]] = {}
+        self.groupsets_class: Dict[str, Dict[FrozenSet[str], str]] = {}
+        self.timetable_teachers: Dict[str, List[int]] = {}
+        self.class_lessons: Dict[str, List[int]] = {}
+        self.class2room: Dict[str, str] = {}
+        self.parallel_tags: Dict[str, List[int]] = {}
+        self.block2courselist: Dict[int, List[BlockCourse]] = {}
 
     # ++++++++++++++++ Now the stuff dealing with the class-group-lesson data
 
@@ -625,17 +610,16 @@ class Classes:
             self.read_class_data(k)
             classes.append(k)
 
-#TODO
-
+        # TODO
 
         ### Post-processing of lesson data (tags, etc.)
-        for tag, lesson_tags in self.parallel_tags.items():
-            if len(lesson_tags) < 2:
+        for tag, lesson_indexes in self.parallel_tags.items():
+            if len(lesson_indexes) < 2:
                 continue
             # Check the compatibility of the fields
-            nl = None
-            for ltag in lesson_tags:
-                l = self.lessons[ltag]
+            nl, g, t, k, s = None, None, None, None, None
+            for lx in lesson_indexes:
+                l = self.lesson_list[lx]
                 # The actual lessons must match in number and length
                 if nl:
                     if l.LENGTHS != nl:
@@ -677,15 +661,15 @@ class Classes:
                             klass1=l.CLASS,
                         )
                     )
-                # The rooms are probably too complicated to compare ...
+                # TODO: The rooms are probably too complicated to compare ...
         # Add the blocks to the teachers' lesson lists
-        for tag in self.block2courselist:
-            data = self.lessons[tag]
+        for lesson_index in self.block2courselist:
+            data = self.lesson_list[lesson_index]
             for tid in data.REALTIDS:
                 try:
-                    self.timetable_teachers[tid].append(tag)
+                    self.timetable_teachers[tid].append(lesson_index)
                 except KeyError:
-                    self.timetable_teachers[tid] = [tag]
+                    self.timetable_teachers[tid] = [lesson_index]
         return classes
 
     def read_class_data(self, klass):
@@ -734,7 +718,7 @@ class Classes:
         ### Add declared class divisions (and their groups).
         divisions = [["*"]]
         division_ix = 0
-        __element2division = {}     # To check uniqueness of elements
+        __element2division = {}  # To check uniqueness of elements
         divs = []
         atomic_groups = [frozenset()]
         all_atoms = set()
@@ -766,15 +750,15 @@ class Classes:
                 for item2 in __division:
                     all_atoms |= item2
                     ag2.append(item | item2)
-            #print("\n???", __division, "\n", atomic_groups, "->", ag2)
+            # print("\n???", __division, "\n", atomic_groups, "->", ag2)
             atomic_groups = ag2
         self.class_divisions[klass] = divisions
-        #print("§§§ DIVISIONS:", klass, divisions)
+        # print("§§§ DIVISIONS:", klass, divisions)
         ### Build a sorted list of "atomic" groups for the class
         al = [".".join(sorted(ag)) for ag in atomic_groups]
         al.sort()
         self.atomics_lists[klass] = al  # All (possibly dotted) atomic groups
-        #print(f'$$$ "Atomic" groups in class {klass}:', al)
+        # print(f'$$$ "Atomic" groups in class {klass}:', al)
         ### Make a mapping of element groups to frozensets of their
         ### dotted atomic groups.
         gmap = {
@@ -783,44 +767,34 @@ class Classes:
             )
             for a in all_atoms
         }
-        #print(f'$$$ "Element" groups in class {klass}:', gmap)
+        # print(f'$$$ "Element" groups in class {klass}:', gmap)
         self.element_groups[klass] = gmap
 
         ### The same for the dotted groups from the divisions (if any)
         xmap = {}
         for division in divs:
             for item in division:
-                if len(item) < 2: # Check dotted
+                if len(item) < 2:  # Check dotted
                     continue
                 if item not in gmap:
-                    xmap['.'.join(sorted(item))] = frozenset.intersection(
-                            *[gmap[i] for i in item])
-        #print(f'$$$ "Extended" groups in class {klass}:', xmap)
+                    xmap[".".join(sorted(item))] = frozenset.intersection(
+                        *[gmap[i] for i in item]
+                    )
+        # print(f'$$$ "Extended" groups in class {klass}:', xmap)
         self.extended_groups[klass] = xmap
         self.make_class_groups(klass)
 
     def make_class_groups(self, klass):
         """Build the entry for <self.class_groups> for the given class.
         Also build the reversed mapping <self.groupsets_class>.
-        <self.class_groups> is basically the same as <self.element_groups>,
-        but the atomic groups have a class prefix (e.g. "11G.A.G" instead
-        of just "A.G"). Also an entry for the whole class is added (with
-        key "*").
-        The reverse mapping basically turns <self.class_groups> around,
-        so that the values (frozensets of atomic groups) become the keys.
-        The values to which these map get a class prefix (e.g. "11G.A"
-        instead of just "A"). The value corresponding to the frozenset
-        of all atomic groups is the class (e.g. "11G") instead of "*".
-        There is also an entry maping the frozenset of the full class
-        (e.g. "11G") to the class itself.
-        This method may need to be overriden for specific timetable
+        This method may need to be overridden for specific timetable
         generators.
         """
         gmap = {}
         reversemap = {}
         for _map in self.element_groups[klass], self.extended_groups[klass]:
             for k, v in _map.items():
-                vset = frozenset([f'{klass}.{ag}' for ag in v])
+                vset = frozenset([f"{klass}.{ag}" for ag in v])
                 gmap[k] = vset
                 ### Avoid duplicate values – the first entry (from
                 ### <self.element_groups>) will be simpler.
@@ -840,9 +814,9 @@ class Classes:
             reversemap[all_groups] = _whole_class
         else:
             gmap["*"] = fs_whole
-        #print("+++", klass, gmap)
-        #print("---", klass, reversemap)
-        #print("~~~", klass, set(reversemap.values()))
+        # print("+++", klass, gmap)
+        # print("---", klass, reversemap)
+        # print("~~~", klass, set(reversemap.values()))
 
     def group_classgroups(self, klass, group):
         """Return the frozenset of "full" atomic groups for the given class
@@ -876,10 +850,9 @@ class Classes:
                     )
                 )
 
-        lesson_id = 0
         class_blocks = {}  # collect {block-sid: block-lesson-tag}
-        class_tags = []  # collect all lesson-tags for this class
-        self.class_tags[klass] = class_tags
+        class_lessons = []  # collect all lesson-indexes for this class
+        self.class_lessons[klass] = class_lessons
         for row in lesson_lines:
             ### Subject
             sid = read_field("SID")
@@ -955,8 +928,9 @@ class Classes:
                         r = self.class2room[klass]
                         if r:
                             if r in roomlist:
-                                raise TT_Error(_CLASSROOM_REPEATED.format(
-                                        klass=klass))
+                                raise TT_Error(
+                                    _CLASSROOM_REPEATED.format(klass=klass)
+                                )
                             roomlist.append(r)
                         else:
                             raise TT_Error(_NO_CLASSROOM.format(klass=klass))
@@ -978,7 +952,9 @@ class Classes:
 
             ### Group
             group = read_field("GROUP")
-            _groups = self.group_classgroups(klass, group) if group else frozenset()
+            _groups = (
+                self.group_classgroups(klass, group) if group else frozenset()
+            )
 
             # The TAG value is a label for a set of lessons which should
             # be parallel, if possible. It should be an ASCII alphanumeric
@@ -986,8 +962,8 @@ class Classes:
             # (fixed) times for the lesson(s). If there is no specified
             # placement, the program will treat the wish for simultaneity
             # as a soft constraint, whose weight can be set.
-# TODO: Where is the weight set? I suggest in the table which (also) fixes
-# times.
+            # TODO: Where is the weight set? I suggest in the table which (also) fixes
+            # times.
             #
             # Also "blocks" (see below) may use the TAG field, but their
             # component lessons (which don't appear in the timeatable –
@@ -1031,10 +1007,11 @@ class Classes:
             #                   each other (no intersections).
             #                   The groups of all the items must be independent of
             #                   each other (no intersections).
-# TODO:
+            # TODO:
             #                   Also, compulsory rooms must be independent of
             #                   each other, but this will be practically impossible
             #                   to test at this stage ...
+            #
             #                   The number and lengths of all lessons with the same
             #                   tag must be identical.
             #
@@ -1081,7 +1058,7 @@ class Classes:
             #                   one block-course). If additional rooms are needed,
             #                   they are accessed via the block-course entry.
             #
-#TODO: what are the implications of "parallel" blocks?
+            # TODO: what are the implications of "parallel" blocks?
             #
             #                   The LENGTHS field can be '*', which means the value
             #                   will be taken from the block entry. As far as payment
@@ -1122,10 +1099,10 @@ class Classes:
                     # A block component, <block> = block-sid
                     try:
                         # First check within this table
-                        block_lesson_tag = class_blocks[block]
+                        block_lesson_index = class_blocks[block]
                     except KeyError:
                         try:
-                            block_lesson_tag = self.__global_blocks[block]
+                            block_lesson_index = self.__global_blocks[block]
                         except KeyError:
                             raise TT_Error(
                                 _BLOCK_SID_NOT_BLOCK.format(
@@ -1148,8 +1125,13 @@ class Classes:
                                     klass=klass, sname=sname, sid=block
                                 )
                             )
-                    block_lesson = self.lessons[block_lesson_tag]
-                    block_course_list = self.block2courselist[block_lesson_tag]
+                        number = durations[0]
+                    else:
+                        number = 0
+                    block_lesson = self.lesson_list[block_lesson_index]
+                    block_course_list = self.block2courselist[
+                        block_lesson_index
+                    ]
 
                     # For each component of a block, a block-course is added
                     # to the list for the associated block.
@@ -1157,11 +1139,15 @@ class Classes:
                     # they are sets) the lesson item for the block, but if
                     # an additional room is needed, this is available only via
                     # the block-course.
-                    __tids = block_lesson.REALTIDS | real_teachers
+                    block_lesson.REALTIDS.update(real_teachers)
+                    # As the groups are frozensets the whole block lesson
+                    # must be replaced if there is a chenge.
                     __groups = block_lesson.GROUPS | _groups
-                    block_lesson._replace(REALTIDS=__tids, GROUPS=__groups)
+                    if __groups != block_lesson.GROUPS:
+                        block_lesson = block_lesson._replace(GROUPS=__groups)
+                        self.lesson_list[block_lesson_index] = block_lesson
                     if roomlist:
-                        if block_lesson_tag.endswith("--"):
+                        if block_lesson.BLOCK == "--":
                             raise TT_Error(
                                 _ROOM_NO_LESSON.format(klass=klass, sname=sname)
                             )
@@ -1172,27 +1158,27 @@ class Classes:
                             CLASS=klass,
                             GROUPS=_groups,
                             SID=sidx[0],
-                            REALTIDS=real_teachers, # all associated teachers
-                            ROOMLIST=roomlist
+                            NUMBER=number,
+                            REALTIDS=real_teachers,  # all associated teachers
+                            ROOMLIST=roomlist,
                         )
                     )
-#TODO: room-list compatibility checking? Do it later ...
+                    # TODO: room-list compatibility checking? Do it later ...
                     continue
             # else:
-                # A "normal" lesson
+            # A "normal" lesson
 
             ### Lesson-id generation
-            lesson_id += 1
-            lesson_tag = f"{klass}_{lesson_id:02}{block}"
+            self.__lesson_index += 1
             if block:
-                self.block2courselist[lesson_tag] = []
+                self.block2courselist[self.__lesson_index] = []
                 # This must be the only definition of a block for
                 # this subject-id in this table.
                 if sid in class_blocks:
                     raise TT_Error(
                         _MULTIPLE_BLOCK.format(klass=klass, sname=sname)
                     )
-                class_blocks[sid] = lesson_tag
+                class_blocks[sid] = self.__lesson_index
                 if len(sidx) > 1:
                     # This must be the only definition of a block for
                     # this subject-id in any table.
@@ -1200,27 +1186,30 @@ class Classes:
                         raise TT_Error(
                             _MULTIPLE_BLOCK.format(klass=klass, sname=sname)
                         )
-                    self.__global_blocks[sid] = lesson_tag
+                    self.__global_blocks[sid] = self.__lesson_index
             else:
                 for tid in real_teachers:
                     try:
-                        self.timetable_teachers[tid].append(lesson_tag)
+                        self.timetable_teachers[tid].append(self.__lesson_index)
                     except KeyError:
-                        self.timetable_teachers[tid] = [lesson_tag]
+                        self.timetable_teachers[tid] = [self.__lesson_index]
             if tag:
                 try:
-                    self.parallel_tags[tag].append(lesson_tag)
+                    self.parallel_tags[tag].append(self.__lesson_index)
                 except KeyError:
-                    self.parallel_tags[tag] = [lesson_tag]
-            class_tags.append(lesson_tag)
-            self.lessons[lesson_tag] = Lesson(
-                CLASS=klass,
-                GROUPS=_groups,
-                SID=sidx[0],
-                TIDS=teachers,          # for timetable-clash checking,
-                REALTIDS=real_teachers, # all associated teachers
-                ROOMLIST=roomlist,
-                LENGTHS=durations
+                    self.parallel_tags[tag] = [self.__lesson_index]
+            class_lessons.append(self.__lesson_index)
+            self.lesson_list.append(
+                Lesson(
+                    BLOCK=block,
+                    CLASS=klass,
+                    GROUPS=_groups,
+                    SID=sidx[0],
+                    TIDS=teachers,  # for timetable-clash checking,
+                    REALTIDS=real_teachers,  # all associated teachers
+                    ROOMLIST=roomlist,
+                    LENGTHS=durations,
+                )
             )
 
     def combine_atomic_groups(self, groups):
@@ -1240,78 +1229,90 @@ class Classes:
         for k, glist in kgroups.items():
             try:
                 gmap = self.groupsets_class[k]
-                _groups.add(gmap[frozenset(glist)])
+                fg = gmap[frozenset(glist)]
+                _groups.add(fg)
             except:
                 _groups.update(glist)
         return _groups
 
+
     def teacher_check_list(self):
-        """Return a "check-list" of the lessons for each teacher."""
-        lines = []
+        """Return a "check-list" of the lessons for each teacher.
+        """
+        tlist = []
         for tid in self.TEACHERS:
-            tags = self.timetable_teachers.get(tid)
-            if tags:
+            lesson_indexes = self.timetable_teachers.get(tid)
+            if lesson_indexes:
                 class_lessons = {}
-                for tag in tags:
-                    data = self.lessons[tag]
-                    klass = data["CLASS"]
+                for lesson_index in lesson_indexes:
+                    data = self.lesson_list[lesson_index]
+                    klass = data.CLASS
                     try:
                         class_list, class_blocks = class_lessons[klass]
                     except KeyError:
                         class_list = []
                         class_blocks = []
                         class_lessons[klass] = [class_list, class_blocks]
-                    rooms = data["ROOMLIST"]
-                    n = len(rooms)
-                    _rooms = f" [{n}: {', '.join(sorted(rooms))}]" if n else ""
-                    sname = self.SUBJECTS[data["SID"]]
-                    # Combine subgroups
-                    groups = sorted(self.combine_atomic_groups(data["GROUPS"]))
-
-#TODO: durations = data["LENGTHS"]
-                    dmap = data["lengths"]
-#TODO: for block type see lesson-tag
-                    block = data["block"]
-                    if block == "--":
-                        d = list(dmap)[0] if dmap else 0
-                        entry = (
-                            f"    // {sname} [{','.join(groups)}]:"
-                            f" EXTRA x {d}"
-                        )
-                        class_blocks.append(entry)
-                    elif block == "++":
-                        ll = ", ".join(lesson_lengths(dmap))
-                        entry = (
-                            f"    // {sname} [{','.join(groups)}]:"
-                            f" BLOCK: {ll}{_rooms}"
-                        )
-                        class_blocks.append(entry)
-                    elif block:
-                        # Component
-                        blesson = self.lessons[block]
-                        bname = self.SUBJECTS[blesson["SID"]]
-                        if dmap:
-                            entry = (
-                                f"    {sname} [{','.join(groups)}]:"
-                                f" EPOCHE ({bname}) x {list(dmap)[0]}"
-                            )
-                        else:
-                            entry = (
-                                f"    {sname} [{','.join(groups)}]:"
-                                f" ({bname})"
-                            )
-                        class_list.append(entry)
+                    if data.ROOMLIST:
+                        rooms = f" // {','.join(data.ROOMLIST[:3])}"
+                        if len(data.ROOMLIST) > 3:
+                            rooms += ", ..."
                     else:
-                        ll = ", ".join(lesson_lengths(dmap))
+                        rooms = ""
+                    sname = self.SUBJECTS[data.SID]
+                    # Combine subgroups
+                    groups = sorted(self.combine_atomic_groups(data.GROUPS))
+                    durations = data.LENGTHS
+                    if data.BLOCK == "--":
+                        d = durations[0] if durations else 0
                         entry = (
-                            f"    {sname} [{','.join(groups)}]:"
-                            f" {ll}{_rooms}"
+                            f"-- {sname} [{','.join(groups)}]:"
+                            f" {_EXTRA} x {d}"
+                        )
+                        class_blocks.append(entry)
+                    elif data.BLOCK == "++":
+                        ll = ", ".join(lesson_lengths(durations))
+                        entry = (
+                            f"++ {sname} [{','.join(groups)}]:"
+                            f" {_BLOCK}: {ll}{rooms}"
+                        )
+                        class_blocks.append(entry)
+                    else:
+                        ll = ", ".join(lesson_lengths(durations))
+                        entry = (
+                            f"{sname} [{','.join(groups)}]:"
+                            f" {ll}{rooms}"
                         )
                         class_list.append(entry)
+                    if data.BLOCK:
+                        # Get components
+                        for component in self.block2courselist[lesson_index]:
+                            if tid in component.REALTIDS:
+                                cname = self.SUBJECTS[component.SID]
+                                # Combine subgroups
+                                groups = ','.join(
+                                    sorted(
+                                        self.combine_atomic_groups(
+                                            component.GROUPS
+                                        )
+                                    )
+                                )
+                                if component.NUMBER:
+                                    class_list.append(
+                                        f"{cname}"
+                                        f" [{groups}]:"
+                                        f" {_BLOCK_COURSE}"
+                                        f" ({sname}) x {component.NUMBER}"
+                                    )
+                                else:
+                                    class_list.append(
+                                        f"{cname}"
+                                        f" [{groups}]:"
+                                        f" ({sname})"
+                                    )
                 if class_lessons:
-                    lines.append("")
-                    lines.append("")
-                    lines.append(f"$$$ {tid} ({self.TEACHERS[tid]})")
+                    lines = []
+                    tlist.append((tid, self.TEACHERS[tid], lines))
                     # Present the "dummy" classes first
                     first, second = [], []
                     for klass in class_lessons:
@@ -1327,10 +1328,8 @@ class Classes:
                             clines.append("")
                         clines += class_list
                         if clines:
-                            lines.append("")
-                            lines.append(f"  Klasse {klass}:")
-                            lines += clines
-        return "\n".join(lines)
+                            lines.append((f"Klasse {klass}", clines))
+        return tlist
 
 
 # *** Group handling ***#
@@ -1409,12 +1408,28 @@ class Placements:
 # increasing length
 
 
-def lesson_lengths(duration_map):
+def lesson_lengths(durations):
+    """Build a textual representation of the lesson numbers and lengths.
+    """
     ll = []
-    for d in sorted(duration_map):
-        n = duration_map[d]
-        length = "Einzel" if d == 1 else "Doppel" if d == 2 else f"[{d}]"
-        ll.append(f" {length} x {n}")
+    size = {}
+    single, double = 0, 0
+    for d in durations:
+        if d == 1:
+            single += 1
+        elif d == 2:
+            double += 1
+        else:
+            try:
+                size[d] += 1
+            except KeyError:
+                size[d] = 1
+    if single:
+        ll.append(f" {_SINGLE} x {single}")
+    if double:
+        ll.append(f" {_DOUBLE} x {double}")
+    for d, n in size.items():   # uses ordered nature of <dict>
+        ll.append(f" {d} x {n}")
     return ll
 
 
@@ -1458,13 +1473,47 @@ if __name__ == "__main__":
 
     print("\nCLASSES:")
     classes = Classes(days, periods)
-    for k in sorted(classes.available):
-        print("\nCLASS:", k)
-        print(classes.available[k])
-        print(classes.lunch_periods[k])
-
-    print("\nREAD LESSONS:")
     classes.all_lessons(subjects, rooms, teachers)
+    for k in sorted(classes.available):
+        print(f"\nCLASS {k} ({classes.class_name[k]}): {classes.address[k]}")
+        print("*** HOME ROOM ***", classes.class2room[k])
+        print("*** AVAILABLE ***", classes.available[k])
+        print("*** LUNCH ***", classes.lunch_periods[k])
+        print("*** DIVISIONS ***", classes.class_divisions[k])
+        print("*** ATOMIC GROUPS ***", classes.atomics_lists[k])
+        print("*** ELEMENT GROUPS ***", classes.element_groups[k])
+        print("*** EXTENDED GROUPS ***", classes.extended_groups[k])
+        print("*** CLASS GROUPS ***", classes.class_groups[k])
+        print("*** GROUP SETS ***", classes.groupsets_class[k])
+        print("*** CLASS LESSONS ***")
+        for lx in classes.class_lessons[k]:
+            l = classes.lesson_list[lx]
+            print("      ", l.SID, l.GROUPS, l.LENGTHS)
+        print("-----------------------------------------------------")
+
+# Further attributes:
+#        "timetable_teachers",  # tid -> list of lesson-indexes
+#        "class_lessons",  # class -> list of lesson-indexes
+#        "parallel_tags",  # tag -> list of parallel lesson-indexes
+#        "block2courselist",  # lesson-index -> list of courses in block
+
+    print("\nBLOCK2COURSELIST")
+    for li, cl in classes.block2courselist.items():
+        l = classes.lesson_list[li]
+        print(f"  {l.CLASS} {l.SID}: {l.BLOCK} --- {l.REALTIDS}")
+#        print(f"  {li}: {cl}")
+
+    tcl = classes.teacher_check_list()
+    odir = DATAPATH("testing/tmp")
+    os.makedirs(odir, exist_ok=True)
+    from timetable.tt_check_list import teacher_class_subjects
+    pdfbytes = teacher_class_subjects(tcl)
+    pdffile = os.path.join(odir, "Lehrer-Stunden-Kontrolle.pdf")
+    with open(pdffile, "wb") as fh:
+        fh.write(pdfbytes)
+        print("\nTeacher check list:", pdffile)
+
+
 
     quit(0)
 
