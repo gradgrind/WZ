@@ -1,7 +1,7 @@
 """
 timetable/tt_check_list.py
 
-Last updated:  2022-02-19
+Last updated:  2022-02-20
 
 For checking timetable entries:
     Build a check-list for the teachers: teacher -> class -> subjects/courses
@@ -33,18 +33,6 @@ _SUPPRESSED = "Lehrkraft ausgeschlossen: {tname}"
 
 import sys, os
 #from typing import Dict, List, Tuple, Optional, Set
-
-if __name__ == "__main__":
-    # Enable package import if running as module
-    this = sys.path[0]
-    appdir = os.path.dirname(this)
-    sys.path[0] = appdir
-    basedir = os.path.dirname(appdir)
-    from core.base import start
-
-#    start.setup(os.path.join(basedir, "TESTDATA"))
-#    start.setup(os.path.join(basedir, "DATA"))
-    start.setup(os.path.join(basedir, "NEXT"))
 
 ### +++++
 

@@ -1,5 +1,5 @@
 """
-timetable/tt_base.py - last updated 2022-02-20
+timetable/tt_base.py - last updated 2022-02-22
 
 Read timetable information from the various sources ...
 
@@ -20,6 +20,8 @@ Copyright 2022 Michael Towers
 """
 
 _MAX_DURATION = 4  # maximum length of a lesson
+_N_ROOM_COMBINATIONS = 20 # Warn if a block has more room combinations
+
 _SINGLE = "Einzel"
 _DOUBLE = "Doppel"
 _EXTRA = "EXTRA"
@@ -117,6 +119,35 @@ _BAD_PLACEMENT_WEIGHTING = (
     "  Kennung {tag}: {w}"
 )
 _TAG_NO_ENTRY = "Unbekannte Platzierungskennung: „{tag}“"
+_REPEATED_ROOM = "Klasse {klass}, Block „{block}“: Raum {rid} mehrfach benutzt"
+_MINUS_NO_ROOM = (
+    "Klasse {klass}, Fach {sname}: Im Raumfeld steht „-“, aber kein Raum"
+)
+_MINUS_NOT_BLOCK_COURSE = (
+    "Klasse {klass}, Fach {sname}: Im Raumfeld steht „-“, der Eintrag ist"
+    " aber kein Block-Kurs"
+)
+_BAD_SID_TAG = (
+    "Klasse {klass}, Fachkürzel: {sid}: Fachkürzel mit „+“ sind nur in"
+    " Block-Definitionen („++“ und „--“) erlaubt."
+)
+_BLOCK_NO_COURSES = "Klasse {klass}, Fachkürzel {sid}: Block ohne Kurse"
+_BLOCK_NO_ROOM_COMBINATIONS = (
+    "Klasse {klass}, Fachkürzel {sid}: Block hat keine möglichen"
+    " Raumkombinationen"
+)
+_WARN_ROOM_COMBINATIONS = (
+    "Klasse {klass}, Fachkürzel {sid}: Block mit sehr vielen ({n}) möglichen"
+    " Raumkombinationen. Das könnte die Verarbeitung verlangsamen."
+)
+_BLOCK_COURSE_NO_ROOM = (
+    "Klasse {klass}, Fachkürzel {sid} (Block {block}): Die Raumwahl"
+    " wurde nicht reserviert"
+)
+_BLOCK_COURSES_ROOM_PROBLEM = (
+    "Block {block} (Klasse {klass}): Nicht alle Kursräume („-“-Raumlisten)"
+    " wurden reserviert"
+)
 
 ########################################################################
 
@@ -137,6 +168,9 @@ if __name__ == "__main__":
 
 ### +++++
 
+from itertools import product
+from typing import NamedTuple, Dict, List, Set, FrozenSet, Tuple, Sequence
+
 from tables.spreadsheet import read_DataTable, filter_DataTable, TableError
 from core.base import class_group_split
 from core.courses import Subjects
@@ -145,9 +179,6 @@ from core.teachers import Teachers
 
 class TT_Error(Exception):
     pass
-
-
-from typing import NamedTuple, Dict, List, Set, FrozenSet, Tuple
 
 ### -----
 
@@ -489,7 +520,7 @@ class BlockCourse(NamedTuple):
     SID: str  # Subject-id
     NUMBER: int  # Number of course blocks (for "++"), otherwise 0
     REALTIDS: Set[str]  # Set of teacher-ids
-    ROOMLIST: List[str]  # List of possible room-ids
+    ROOMLIST: List[str] # List of possible room-ids (the first entry can be "-")
 
 
 class Lesson(NamedTuple):
@@ -534,6 +565,7 @@ class Classes:
         "class2room",  # class -> class "home" room
         "parallel_tags",  # tag -> list of parallel lesson-indexes
         "block2courselist",  # lesson-index -> list of courses in block
+        "block2rooms",  # lesson-index -> list of possible room combinations
         "SUBJECTS",
         "ROOMS",
         "TEACHERS",
@@ -633,6 +665,104 @@ class Classes:
             self.read_class_data(k)
             classes.append(k)
 
+        ### Check room lists of blocks
+        # For each ++-block build a set of room-sets, each set having a
+        # possible room combination for the block.
+        self.block2rooms: Dict[int,Set[FrozenSet[str]]] = {}
+        # Build the cartesian product of a list of roomlists and select
+        # only the results which have distinct elements (rooms).
+        # The result is a list of sets.
+        for blockix, courselist in self.block2courselist.items():
+            # Build list of needed rooms and a separate list of block
+            # courses which specify rooms but no additional ones ("-").
+            block: Lesson = self.lesson_list[blockix]
+            if not courselist and block.BLOCK == "++":
+                raise TT_Error(_BLOCK_NO_COURSES.format(
+                        klass=block.CLASS,
+                        sid=block.SID
+                    )
+                )
+            roomlists: List[List[str]] = []
+            minus_list: List[BlockCourse] = []
+            if block.ROOMLIST:
+                roomlists.append(block.ROOMLIST)
+            for bcourse in courselist:
+                if bcourse.ROOMLIST:
+                    if bcourse.ROOMLIST[0] == "-":
+                        minus_list.append(bcourse)
+                    else:
+                        roomlists.append(bcourse.ROOMLIST)
+            # Now generate the cartesian product, then filter out those
+            # permutations which have duplicated rooms and those
+            # combinations which are already in the result list.
+            l = len(roomlists)
+            resultset: Set[FrozenSet[str]] = set()
+            results: List[Sequence[str]] = []
+            for cpx in product(*roomlists):
+                cps = frozenset(cpx)
+                if len(cps) == l and cps not in resultset:
+                    resultset.add(cps)
+                    results.append(cpx)
+            if not results:
+                TT_Error(_BLOCK_NO_ROOM_COMBINATIONS.format(
+                        klass=block.CLASS,
+                        sid=block.SID
+                    )
+                )
+            if len(results) > _N_ROOM_COMBINATIONS:
+                REPORT("WARNING", _WARN_ROOM_COMBINATIONS.format(
+                        klass=block.CLASS,
+                        sid=block.SID,
+                        n=len(results)
+                    )
+                )
+            # Check "minus" courses. There should be some intersection
+            # with the room combinations ...
+            # There are actually (at least) two types of problem:
+            #  - A "minus" room list may be unsupported by any of the
+            #    possible room combinations.
+            #  - A group of "minus" room lists may not all be supported
+            #    by any of the possible room combinations.
+            room_map = []   # Not a map, but a list!
+            for rlist in results:
+                # <rlist> is a sequence of rooms
+                room_map.append(set(rlist))
+            course_results: List[List[Sequence[str]]] = []
+            for bcourse in minus_list:
+                roomlist: List[str] = bcourse.ROOMLIST[1:]
+                newroomlist: List[Sequence[str]] = []
+                i = 0
+                for allrooms in room_map:
+                    if not allrooms.isdisjoint(roomlist):
+                        newroomlist.append(results[i])
+                    i += 1
+                if newroomlist:
+                    # Add the possibly reduced list to <results2>
+                    course_results.append(newroomlist)
+                else:
+                    # bcourse has an unsupported room
+                    raise TT_Error(_BLOCK_COURSE_NO_ROOM.format(
+                            klass=bcourse.CLASS,
+                            sid=bcourse.SID,
+                            block=block.SID
+                        )
+                    )
+            # Now check for no overlap in <course_results>.
+            if course_results:
+                list0: List[List[str]] = course_results[0]
+                for listn in course_results[1:]:
+                    list1: List[List[str]] = [l for l in listn if l in list0]
+                    if list1:
+                        list0 = list1
+                    else:
+                        raise TT_Error(_BLOCK_COURSES_ROOM_PROBLEM.format(
+                                block=block.SID,
+                                klass=block.CLASS
+                            )
+                        )
+                self.block2rooms[blockix] = list0
+            else:
+                self.block2rooms[blockix] = results
         ### Post-processing of lesson data (tags, etc.)
         for tag, lesson_indexes in self.parallel_tags.items():
             if len(lesson_indexes) < 2:
@@ -683,6 +813,7 @@ class Classes:
                         )
                     )
                 # TODO: The rooms are probably too complicated to compare ...
+
         # Add the blocks to the teachers' lesson lists
         for lesson_index in self.block2courselist:
             data = self.lesson_list[lesson_index]
@@ -924,7 +1055,20 @@ class Classes:
                         )
 
             ### Rooms
-            _rids = read_field("ROOMS")
+            _rids: str = read_field("ROOMS")
+            minus_room: bool
+            if _rids.startswith('-'):
+                # Only valid in an entry for a ++-block course.
+                # Don't add a new room requirement to the block. This
+                # allows a room to be used in a block course without
+                # causing an error because of multiple usage.
+                minus_room = True
+                _rids = _rids.lstrip("- ")
+                if not _rids:
+                    raise TT_Error(_MINUS_NO_ROOM.format(klass=klass,
+                            sname=sname))
+            else:
+                minus_room = False
             # Each lesson line may specify the need for one room. This
             # room may be given explicitly, or as a list of possibilities,
             # separated by "/". Earlier items in the list are given
@@ -933,7 +1077,7 @@ class Classes:
             # and for the list of rooms which have been flagged as being
             # usable by this class ("?"). Any "extra" ("fake") rooms
             # will be added to the end of the "?-list" automatically.
-            roomlist = []
+            roomlist: List[str] = []
             if _rids:
                 _extra = False
                 for rid in _rids.split("/"):
@@ -1112,6 +1256,8 @@ class Classes:
                         )
                 else:
                     # A block component, <block> = block-sid
+                    if len(sidx) > 1:
+                        raise TT_Error(_BAD_SID_TAG.format(klass=klass, sid=sid))
                     try:
                         # First check within this table
                         block_lesson_index = class_blocks[block]
@@ -1166,22 +1312,28 @@ class Classes:
                             raise TT_Error(
                                 _ROOM_NO_LESSON.format(klass=klass, sname=sname)
                             )
+                        if minus_room:
+                            roomlist.insert(0, "-")
                     # Add data for the block component,
                     # it can register the need for a room
                     block_course_list.append(
                         BlockCourse(
                             CLASS=klass,
                             GROUPS=_groups,
-                            SID=sidx[0],
+                            SID=sid,
                             NUMBER=number,
                             REALTIDS=real_teachers,  # all associated teachers
                             ROOMLIST=roomlist,
                         )
                     )
-                    # TODO: room-list compatibility checking? Do it later ...
                     continue
-            # else:
-            # A "normal" lesson
+            else:
+                # A "normal" lesson
+                if len(sidx) > 1:
+                    raise TT_Error(_BAD_SID_TAG.format(klass=klass, sid=sid))
+            if minus_room:
+                raise TT_Error(_MINUS_NOT_BLOCK_COURSE.format(klass=klass,
+                        sname=sname))
 
             ### Lesson-id generation
             self.__lesson_index += 1
@@ -1219,7 +1371,7 @@ class Classes:
                     BLOCK=block,
                     CLASS=klass,
                     GROUPS=_groups,
-                    SID=sidx[0],
+                    SID=sid,
                     TIDS=teachers,  # for timetable-clash checking,
                     REALTIDS=real_teachers,  # all associated teachers
                     ROOMLIST=roomlist,
@@ -1229,7 +1381,7 @@ class Classes:
 
     def combine_atomic_groups(self, groups):
         """Given a set of atomic groups, possibly from more than one
-        class,try to reduce it to elemental groups (as used in the data
+        class, try to reduce it to elemental groups (as used in the data
         input).
         Return the possibly "simplified" groups as a set.
         """
@@ -1272,7 +1424,7 @@ class Classes:
                             rooms += ", ..."
                     else:
                         rooms = ""
-                    sname = self.SUBJECTS[data.SID]
+                    sname = self.SUBJECTS[data.SID.split("+", 1)[0]]
                     # Combine subgroups
                     groups = sorted(self.combine_atomic_groups(data.GROUPS))
                     durations = data.LENGTHS
@@ -1366,8 +1518,8 @@ class Classes:
 class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
     def __init__(self, classes_data, days, periods):
         super().__init__()
-        dayx = days.short2index()
-        periodx = periods.short2index()
+        self.dayx = days.short2index()
+        self.periodx = periods.short2index()
         self.classes_data = classes_data
         lessons = classes_data.lesson_list
         parallel_tags = classes_data.parallel_tags
@@ -1399,7 +1551,7 @@ class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
             for d_p in row["PLACE"].split():
                 try:
                     d, p = d_p.strip().split(".")
-                    dp: Tuple[int, int] = (dayx[d], periodx[p])
+                    dp: Tuple[int, int] = (self.dayx[d], self.periodx[p])
                 except:
                     raise TT_Error(_INVALID_DAY_PERIOD.format(tag=tag, d_p=d_p))
                 if dp in places_list:
