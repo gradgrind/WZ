@@ -281,6 +281,8 @@ class Classes_fet(Classes):
         # lessons in the various subjects, collect the tags and their
         # pupil groups for each subject:
         self.sid_groups = {}  # {sid: [(group-set, lesson-tag), ... ]}
+
+
         lid:int = -1    # index of the current "lesson"
         for lesson in self.lesson_list:
             lid += 1
@@ -323,7 +325,6 @@ class Classes_fet(Classes):
                     if _rlist:
                         if _rlist[0] == "-":
                             _ignore_lists.append(_rlist[1:])
-# Maybe I need the whole <bc>?
                         else:
                             _roomlists.append(_rlist)
             except KeyError:

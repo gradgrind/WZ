@@ -20,7 +20,7 @@ Copyright 2022 Michael Towers
 """
 
 _MAX_DURATION = 4  # maximum length of a lesson
-_N_ROOM_COMBINATIONS = 20 # Warn if a block has more room combinations
+_N_ROOM_COMBINATIONS = 20  # Warn if a block has more room combinations
 
 _SINGLE = "Einzel"
 _DOUBLE = "Doppel"
@@ -148,6 +148,11 @@ _BLOCK_COURSES_ROOM_PROBLEM = (
     "Block {block} (Klasse {klass}): Nicht alle Kursräume („-“-Raumlisten)"
     " wurden reserviert"
 )
+_WARN_ROOMS_LOST = (
+    "Klasse {klass}, Fachkürzel {sid} (Block {block}): Nicht alle"
+    " Raumkombinations des Blocks decken den Raumbedarf für diesen Kurs ab."
+    " Vielleicht sollte dieser Raumbedarf zu einem der Pflichträume werden?"
+)
 
 ########################################################################
 
@@ -179,6 +184,7 @@ from core.teachers import Teachers
 
 class TT_Error(Exception):
     pass
+
 
 ### -----
 
@@ -520,7 +526,9 @@ class BlockCourse(NamedTuple):
     SID: str  # Subject-id
     NUMBER: int  # Number of course blocks (for "++"), otherwise 0
     REALTIDS: Set[str]  # Set of teacher-ids
-    ROOMLIST: List[str] # List of possible room-ids (the first entry can be "-")
+    ROOMLIST: List[
+        str
+    ]  # List of possible room-ids (the first entry can be "-")
 
 
 class Lesson(NamedTuple):
@@ -566,13 +574,16 @@ class Classes:
         "parallel_tags",  # tag -> list of parallel lesson-indexes
         "block2courselist",  # lesson-index -> list of courses in block
         "block2rooms",  # lesson-index -> list of possible room combinations
+        "block2roomlists",  # lesson-index -> list of room-choice lists
+        "block2minus_list", # lesson-index -> list of block courses with "-" rooms
+        "classes",  # list of classes whose subject tables have been read in
         "SUBJECTS",
         "ROOMS",
         "TEACHERS",
         "__global_blocks",  # internal mapping of blocks
     )
 
-    def __init__(self, days, periods):
+    def __init__(self, days, periods, SUBJECTS, ROOMS, TEACHERS):
         """Initialize with the valid lesson slots for each class. The
         data is read from the class-days-tables.
         Build a mapping available via attribute <available>:
@@ -580,6 +591,7 @@ class Classes:
         The value is a day/periods matrix of <bool> values.
         Also, possible periods for lunch breaks are extracted from the
         class tables.
+        Finally read and process the data for the individual classes.
         """
         self.available = {}
         self.address = {}
@@ -639,51 +651,51 @@ class Classes:
         self.class2room: Dict[str, str] = {}
         self.parallel_tags: Dict[str, List[int]] = {}
         self.block2courselist: Dict[int, List[BlockCourse]] = {}
+        self.block2rooms: Dict[int, Set[FrozenSet[str]]] = {}
+        self.block2roomlists: Dict[int,List[List[str]]] = {}
+        self.block2minus_list: Dict[int,List[BlockCourse]] = {}
 
-    # ++++++++++++++++ Now the stuff dealing with the class-group-lesson data
+        # +++++++ Now the stuff dealing with the class-group-lesson data
+        ### Read the lesson data (etc.) for all classes readable by the
+        ### <Subjects> class (courses.py).
+        ### The successfully read classes are listed at <self.classes>.
 
-    def all_lessons(self, SUBJECTS, ROOMS, TEACHERS):
-        """Read the lesson data (etc.) for all classes readable by the
-        <Subjects> class (courses.py).
-
-        Return a list of successfully read classes.
-        """
-        self.SUBJECTS = SUBJECTS
-        self.ROOMS = ROOMS
-        self.TEACHERS = TEACHERS
-        classes = []
+        self.SUBJECTS: TT_Subjects = SUBJECTS
+        self.ROOMS: TT_Rooms = ROOMS
+        self.TEACHERS: TT_Teachers = TEACHERS
+        self.classes: List[str] = []
         self.__global_blocks = {}
+
         # Start with "classless" data
         __classes = []
         for k in Subjects().classes():
             if k.startswith("XX"):
                 self.read_class_data(k)
-                classes.append(k)
+                self.classes.append(k)
             else:
                 __classes.append(k)
         for k in __classes:
             self.read_class_data(k)
-            classes.append(k)
+            self.classes.append(k)
 
         ### Check room lists of blocks
         # For each ++-block build a set of room-sets, each set having a
         # possible room combination for the block.
-        self.block2rooms: Dict[int,Set[FrozenSet[str]]] = {}
         # Build the cartesian product of a list of roomlists and select
         # only the results which have distinct elements (rooms).
-        # The result is a list of sets.
+        # The value in <self.block2rooms> is a list of lists/sequences.
         for blockix, courselist in self.block2courselist.items():
             # Build list of needed rooms and a separate list of block
             # courses which specify rooms but no additional ones ("-").
             block: Lesson = self.lesson_list[blockix]
             if not courselist and block.BLOCK == "++":
-                raise TT_Error(_BLOCK_NO_COURSES.format(
-                        klass=block.CLASS,
-                        sid=block.SID
-                    )
+                raise TT_Error(
+                    _BLOCK_NO_COURSES.format(klass=block.CLASS, sid=block.SID)
                 )
             roomlists: List[List[str]] = []
+            self.block2roomlists[blockix] = roomlists
             minus_list: List[BlockCourse] = []
+            self.block2minus_list[blockix] = minus_list
             if block.ROOMLIST:
                 roomlists.append(block.ROOMLIST)
             for bcourse in courselist:
@@ -704,17 +716,17 @@ class Classes:
                     resultset.add(cps)
                     results.append(cpx)
             if not results:
-                TT_Error(_BLOCK_NO_ROOM_COMBINATIONS.format(
-                        klass=block.CLASS,
-                        sid=block.SID
+                TT_Error(
+                    _BLOCK_NO_ROOM_COMBINATIONS.format(
+                        klass=block.CLASS, sid=block.SID
                     )
                 )
             if len(results) > _N_ROOM_COMBINATIONS:
-                REPORT("WARNING", _WARN_ROOM_COMBINATIONS.format(
-                        klass=block.CLASS,
-                        sid=block.SID,
-                        n=len(results)
-                    )
+                REPORT(
+                    "WARNING",
+                    _WARN_ROOM_COMBINATIONS.format(
+                        klass=block.CLASS, sid=block.SID, n=len(results)
+                    ),
                 )
             # Check "minus" courses. There should be some intersection
             # with the room combinations ...
@@ -723,41 +735,56 @@ class Classes:
             #    possible room combinations.
             #  - A group of "minus" room lists may not all be supported
             #    by any of the possible room combinations.
-            room_map = []   # Not a map, but a list!
+            room_sets = []
             for rlist in results:
                 # <rlist> is a sequence of rooms
-                room_map.append(set(rlist))
+                room_sets.append(set(rlist))
             course_results: List[List[Sequence[str]]] = []
             for bcourse in minus_list:
                 roomlist: List[str] = bcourse.ROOMLIST[1:]
                 newroomlist: List[Sequence[str]] = []
                 i = 0
-                for allrooms in room_map:
-                    if not allrooms.isdisjoint(roomlist):
+                disjoint = False
+                for roomset in room_sets:
+                    if roomset.isdisjoint(roomlist):
+                        disjoint = True
+                    else:
                         newroomlist.append(results[i])
                     i += 1
                 if newroomlist:
                     # Add the possibly reduced list to <results2>
                     course_results.append(newroomlist)
+                    if disjoint:
+                        REPORT(
+                            "WARNING",
+                            _WARN_ROOMS_LOST.format(
+                                klass=bcourse.CLASS,
+                                sid=bcourse.SID,
+                                block=block.SID,
+                            ),
+                        )
                 else:
                     # bcourse has an unsupported room
-                    raise TT_Error(_BLOCK_COURSE_NO_ROOM.format(
+                    raise TT_Error(
+                        _BLOCK_COURSE_NO_ROOM.format(
                             klass=bcourse.CLASS,
                             sid=bcourse.SID,
-                            block=block.SID
+                            block=block.SID,
                         )
                     )
             # Now check for no overlap in <course_results>.
             if course_results:
-                list0: List[List[str]] = course_results[0]
+                list0: List[Sequence[str]] = course_results[0]
                 for listn in course_results[1:]:
-                    list1: List[List[str]] = [l for l in listn if l in list0]
+                    list1: List[Sequence[str]] = [
+                        l for l in listn if l in list0
+                    ]
                     if list1:
                         list0 = list1
                     else:
-                        raise TT_Error(_BLOCK_COURSES_ROOM_PROBLEM.format(
-                                block=block.SID,
-                                klass=block.CLASS
+                        raise TT_Error(
+                            _BLOCK_COURSES_ROOM_PROBLEM.format(
+                                block=block.SID, klass=block.CLASS
                             )
                         )
                 self.block2rooms[blockix] = list0
@@ -822,7 +849,6 @@ class Classes:
                     self.timetable_teachers[tid].append(lesson_index)
                 except KeyError:
                     self.timetable_teachers[tid] = [lesson_index]
-        return classes
 
     def read_class_data(self, klass):
         """Read the information pertaining to the teaching groups within
@@ -1057,7 +1083,7 @@ class Classes:
             ### Rooms
             _rids: str = read_field("ROOMS")
             minus_room: bool
-            if _rids.startswith('-'):
+            if _rids.startswith("-"):
                 # Only valid in an entry for a ++-block course.
                 # Don't add a new room requirement to the block. This
                 # allows a room to be used in a block course without
@@ -1065,8 +1091,9 @@ class Classes:
                 minus_room = True
                 _rids = _rids.lstrip("- ")
                 if not _rids:
-                    raise TT_Error(_MINUS_NO_ROOM.format(klass=klass,
-                            sname=sname))
+                    raise TT_Error(
+                        _MINUS_NO_ROOM.format(klass=klass, sname=sname)
+                    )
             else:
                 minus_room = False
             # Each lesson line may specify the need for one room. This
@@ -1257,7 +1284,9 @@ class Classes:
                 else:
                     # A block component, <block> = block-sid
                     if len(sidx) > 1:
-                        raise TT_Error(_BAD_SID_TAG.format(klass=klass, sid=sid))
+                        raise TT_Error(
+                            _BAD_SID_TAG.format(klass=klass, sid=sid)
+                        )
                     try:
                         # First check within this table
                         block_lesson_index = class_blocks[block]
@@ -1332,8 +1361,9 @@ class Classes:
                 if len(sidx) > 1:
                     raise TT_Error(_BAD_SID_TAG.format(klass=klass, sid=sid))
             if minus_room:
-                raise TT_Error(_MINUS_NOT_BLOCK_COURSE.format(klass=klass,
-                        sname=sname))
+                raise TT_Error(
+                    _MINUS_NOT_BLOCK_COURSE.format(klass=klass, sname=sname)
+                )
 
             ### Lesson-id generation
             self.__lesson_index += 1
@@ -1646,8 +1676,10 @@ if __name__ == "__main__":
         print("   ", teachers.constraints[tid])
 
     print("\nCLASSES:")
-    classes = Classes(days, periods)
-    classes.all_lessons(subjects, rooms, teachers)
+    classes = Classes(days, periods, subjects, rooms, teachers)
+
+    #quit(0)
+
     for k in sorted(classes.available):
         print(f"\nCLASS {k} ({classes.class_name[k]}): {classes.address[k]}")
         print("*** HOME ROOM ***", classes.class2room[k])
@@ -1670,6 +1702,7 @@ if __name__ == "__main__":
     #        "class_lessons",  # class -> list of lesson-indexes
     #        "parallel_tags",  # tag -> list of parallel lesson-indexes
     #        "block2courselist",  # lesson-index -> list of courses in block
+    #        "block2rooms",  # lesson-index -> list of room lists for block
 
     print("\nBLOCK2COURSELIST")
     for li, cl in classes.block2courselist.items():
