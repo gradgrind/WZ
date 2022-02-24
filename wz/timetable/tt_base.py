@@ -281,6 +281,7 @@ class TT_Rooms(Dict[str, str]):
         # [extra rooms] ... a bodge to get around missing rooms
         self.xrooms: List[str] = []
         roomdata = read_DataTable(DATAPATH("TIMETABLE/ROOMS"))
+#TODO: With translated headers (like placements)?
         try:
             x = roomdata["__INFO__"]["EXTRA"]
         except KeyError:
@@ -1554,6 +1555,13 @@ class Classes:
 
 
 class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
+    """Read placements from the PLACEMENT_TAGS table.
+    The days and periods should be in "short" form as day.period,
+    but one or the other may be '*', meaning any day/period, allowing
+    just the day or the period to be specified.
+    The generated data structure records the placements as pairs of
+    integers (day index, period index). Instead of '*', -1 is used.
+    """
     def __init__(self, classes_data, days, periods):
         super().__init__()
         self.dayx = days.short2index()
@@ -1567,7 +1575,7 @@ class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
             REPORT("ERROR", str(e))
             return
         place_data = filter_DataTable(
-            place_data, MINION(DATAPATH("CONFIG/TT_PLACEMENTS"))
+            place_data, MINION(DATAPATH("TIMETABLE/TT_PLACEMENTS"))
         )
         for row in place_data["__ROWS__"]:
             tag: str = row["TAG"]
@@ -1589,7 +1597,13 @@ class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
             for d_p in row["PLACE"].split():
                 try:
                     d, p = d_p.strip().split(".")
-                    dp: Tuple[int, int] = (self.dayx[d], self.periodx[p])
+                    d_i = -1 if d == '*' else self.dayx[d]
+                    p_i = -1 if p == '*' else self.periodx[p]
+
+# What about "last period of students' day"? Maybe "/" -> 100?
+                    if d_i < 0 and p_i < 0:
+                        raise ValueError
+                    dp: Tuple[int, int] = (d_i, p_i)
                 except:
                     raise TT_Error(_INVALID_DAY_PERIOD.format(tag=tag, d_p=d_p))
                 if dp in places_list:

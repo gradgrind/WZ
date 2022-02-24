@@ -217,8 +217,11 @@ class Classes_fet(Classes):
                         "Comments": None,
                     }
                 )
-        if constraints:
-            self.time_constraints["ConstraintStudentsSetNotAvailableTimes"] = constraints
+        add_constraints(
+            self.time_constraints,
+            "ConstraintStudentsSetNotAvailableTimes",
+            constraints
+        )
 
     def virtual_room(self, roomlists: List[List[str]]) -> str:
         """Return a virtual room for the given list of room lists. These
@@ -288,10 +291,11 @@ class Classes_fet(Classes):
                 }
             else:
                 raise Bug("No room(s) passed to 'make_room_constraint'")
-            try:
-                self.space_constraints[r_c].append(s_c)
-            except KeyError:
-                self.space_constraints[r_c] = [s_c]
+            add_constraints(
+                self.space_constraints,
+                r_c,
+                [s_c]
+            )
 
         self.time_constraints = {}
         self.space_constraints = {}
@@ -420,8 +424,9 @@ class Classes_fet(Classes):
                         self.sid_groups[sid] = [(groups, activity_id)]
 
     def lunch_breaks(self, lessons):
-        # TODO: This is very much tied to a concrete situation. Think of a more
-        # general approach.
+# TODO ...
+# This is very much tied to a concrete situation. Think of a more
+# general approach.
         # I need a special lesson on the long days AND a constraint to limit it
         # to periods 3,4 or 5.
         # There needs to be a lunch-break lesson for every sub-group of the class!
@@ -473,6 +478,8 @@ class Classes_fet(Classes):
                                 "Comments": None,
                             }
                         )
+# use add_constraints
+
         if constraints:
             try:
                 self.time_constraints[
@@ -676,10 +683,11 @@ class Classes_fet(Classes):
                             "Comments": None,
                         }
                     )
-        if constraints:
-            self.time_constraints[
-                "ConstraintMinDaysBetweenActivities"
-            ] = constraints
+        add_constraints(
+            self.time_constraints,
+            "ConstraintMinDaysBetweenActivities",
+            constraints
+        )
         return sid_group_sets
 
     def constraint_min_lessons_per_day(self, default, custom_table):
@@ -700,10 +708,11 @@ class Classes_fet(Classes):
                         "Comments": None,
                     }
                 )
-        if constraints:
-            self.time_constraints[
-                "ConstraintStudentsSetMinHoursDaily"
-            ] = constraints
+        add_constraints(
+            self.time_constraints,
+            "ConstraintStudentsSetMinHoursDaily",
+            constraints
+        )
 
     # Version for all classes:
     #    time_constraints['ConstraintStudentsMinHoursDaily'] = [
@@ -769,10 +778,11 @@ class Classes_fet(Classes):
                     "Comments": None,
                 }
             )
-        if constraints:
-            self.time_constraints[
-                "ConstraintStudentsSetMaxGapsPerWeek"
-            ] = constraints
+        add_constraints(
+            self.time_constraints,
+            "ConstraintStudentsSetMaxGapsPerWeek",
+            constraints
+        )
 
     def LAST_LESSON(self, data):
         """The lessons should end the day for the respective classes."""
@@ -784,16 +794,17 @@ class Classes_fet(Classes):
             for lid in self.tag_lids[_tags[0]]:
                 constraints.append(
                     {
-                        "Weight_Percentage": "100",
+                        "Weight_Percentage": "100", # necessary!
                         "Activity_Id": lid,
                         "Active": "true",
                         "Comments": None,
                     }
                 )
-        if constraints:
-            self.time_constraints[
-                "ConstraintActivityEndsStudentsDay"
-            ] = constraints
+        add_constraints(
+            self.time_constraints,
+            "ConstraintActivityEndsStudentsDay",
+            constraints
+        )
 
     def tag_get_sid(self, tag):
 #?
@@ -831,10 +842,11 @@ class Classes_fet(Classes):
                                     "Comments": None,
                                 }
                             )
-        if constraints:
-            self.time_constraints[
-                "ConstraintTwoActivitiesOrderedIfSameDay"
-            ] = constraints
+        add_constraints(
+            self.time_constraints,
+            "ConstraintTwoActivitiesOrderedIfSameDay",
+            constraints
+        )
 
     def PAIR_GAPS(self, data):
         """Two subjects should have at least one lesson in between."""
@@ -864,10 +876,11 @@ class Classes_fet(Classes):
                                     "Comments": None,
                                 }
                             )
-        if constraints:
-            self.time_constraints[
-                "ConstraintMinGapsBetweenActivities"
-            ] = constraints
+        add_constraints(
+            self.time_constraints,
+            "ConstraintMinGapsBetweenActivities",
+            constraints
+        )
 
 
 class Teachers_fet(TT_Teachers):
@@ -896,8 +909,11 @@ class Teachers_fet(TT_Teachers):
         time_constraints = self.classes.time_constraints
         # Not-available times
         blocked = self.constraint_available()
-        if blocked:
-            time_constraints["ConstraintTeacherNotAvailableTimes"] = blocked
+        add_constraints(
+            time_constraints,
+            "ConstraintTeacherNotAvailableTimes",
+            blocked
+        )
 
         constraints_m = []      # MINPERDAY
         constraints_gd = []     # MAXGAPSPERDAY
@@ -954,25 +970,32 @@ class Teachers_fet(TT_Teachers):
                             "Comments": None,
                         }
                     )
-        if constraints_m:
-            time_constraints["ConstraintTeacherMinHoursDaily"] = constraints_m
-        if constraints_gd:
-            time_constraints["ConstraintTeacherMaxGapsPerDay"] = constraints_gd
-        if constraints_gw:
-            time_constraints["ConstraintTeacherMaxGapsPerWeek"] = constraints_gw
-        if constraints_u:
-            time_constraints["ConstraintTeacherMaxHoursContinuously"] = constraints_u
-
+        add_constraints(
+            time_constraints,
+            "ConstraintTeacherMinHoursDaily",
+            constraints_m
+        )
+        add_constraints(
+            time_constraints,
+            "ConstraintTeacherMaxGapsPerDay",
+            constraints_gd
+        )
+        add_constraints(
+            time_constraints,
+            "ConstraintTeacherMaxGapsPerWeek",
+            constraints_gw
+        )
+        add_constraints(
+            time_constraints,
+            "ConstraintTeacherMaxHoursContinuously",
+            constraints_u
+        )
         constraints = self.lunch_breaks()
-        if constraints:
-            try:
-                time_constraints[
-                    "ConstraintActivityPreferredStartingTimes"
-                ] += constraints
-            except KeyError:
-                time_constraints[
-                    "ConstraintActivityPreferredStartingTimes"
-                ] = constraints
+        add_constraints(
+            time_constraints,
+            "ConstraintActivityPreferredStartingTimes",
+            constraints
+        )
 
     def constraint_available(self):
         """Return the blocked periods in the form needed by fet.
@@ -1369,11 +1392,14 @@ def build_dict_fet(
 class Placements_fet(TT_Placements):
     def placements(self):
         days = self.classes.DAYS
+        ndays = str(len(days))
         periods = self.classes.PERIODS
+        nperiods = str(len(periods))
         lid2aids: Dict[int,List[str]] = self.classes.lid2aids
         constraints_parallel = []
         constraints_fixed = []
-        print("\n*** Parallel tags ***")
+        constraints_multi = []
+        #print("\n*** Parallel tags ***")
         for tag, lids in self.classes.parallel_tags.items():
             #for i in lids:
             #    print(f"  {tag}: {i} --> {lid2aids[i]}")
@@ -1387,7 +1413,6 @@ class Placements_fet(TT_Placements):
             # Collect tagged activities where there is no places list,
             # also where there are not enough places:
             excess = []
-            # Concrete placements
             for lid in lids:
                 try:
                     aids = lid2aids[lid]
@@ -1402,17 +1427,52 @@ class Placements_fet(TT_Placements):
                         REPORT("ERROR", _TAG_TOO_MANY_TIMES.format(tag=tag))
                         continue
                     i += 1
-                    constraints_fixed.append(
-                        {
-                            "Weight_Percentage": w,
-                            "Activity_Id": aid,
-                            "Preferred_Day": days[d],
-                            "Preferred_Hour": periods[p],
-                            "Permanently_Locked": "true",
-                            "Active": "true",
-                            "Comments": None,
-                        }
-                    )
+                    if d < 0:
+                        xp = periods[p]
+                        constraints_multi.append(
+                            {
+                                "Weight_Percentage": w,
+                                "Activity_Id": aid,
+                                "Number_of_Preferred_Starting_Times": ndays,
+                                "Preferred_Starting_Time": [
+                                    {
+                                        "Preferred_Starting_Day": xd,
+                                        "Preferred_Starting_Hour": xp,
+                                    } for xd in days
+                                ],
+                                "Active": "true",
+                                "Comments": None,
+                            }
+                        )
+                    elif p < 0:
+                        xd = days[d]
+                        constraints_multi.append(
+                            {
+                                "Weight_Percentage": w,
+                                "Activity_Id": aid,
+                                "Number_of_Preferred_Starting_Times": nperiods,
+                                "Preferred_Starting_Time": [
+                                    {
+                                        "Preferred_Starting_Day": xd,
+                                        "Preferred_Starting_Hour": xp,
+                                    } for xp in periods
+                                ],
+                                "Active": "true",
+                                "Comments": None,
+                            }
+                        )
+                    else:
+                        constraints_fixed.append(
+                            {
+                                "Weight_Percentage": w,
+                                "Activity_Id": aid,
+                                "Preferred_Day": days[d],
+                                "Preferred_Hour": periods[p],
+                                "Permanently_Locked": "true",
+                                "Active": "true",
+                                "Comments": None,
+                            }
+                        )
                 excess.append(aids[i:])
             # Only those lists containing more than one list are
             # interesting for parallel activities.
@@ -1430,19 +1490,39 @@ class Placements_fet(TT_Placements):
                             "Weight_Percentage": w,
                             "Number_of_Activities": str(l),
                             "Activity_Id": parallel,
+                            "Permanently_Locked": "true",
                             "Active": "true",
                             "Comments": None,
                         }
                     )
-        if constraints_fixed:
-            self.classes.time_constraints[
-                "ConstraintActivityPreferredStartingTime"
-            ] = constraints_fixed
-        if constraints_parallel:
-            self.classes.time_constraints[
-                "ConstraintActivitiesSameStartingTime"
-            ] = constraints_parallel
+        time_constraints = self.classes.time_constraints
+        add_constraints(
+            time_constraints,
+            "ConstraintActivityPreferredStartingTime",
+            constraints_fixed
+        )
+        add_constraints(
+            time_constraints,
+            "ConstraintActivitiesSameStartingTime",
+            constraints_parallel
+        )
+        add_constraints(
+            time_constraints,
+            "ConstraintActivityPreferredStartingTimes",
+            constraints_multi
+        )
 
+
+def add_constraints(constraints, ctype, constraint_list):
+    """Add a (possibly empty) list of constraints, of type <ctype>, to
+    the master constraint list-mapping <constraints> (either time or
+    space constraints).
+    """
+    if constraint_list:
+        try:
+            constraints[ctype] += constraint_list
+        except KeyError:
+            constraints[ctype] = constraint_list
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
