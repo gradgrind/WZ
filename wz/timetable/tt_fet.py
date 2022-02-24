@@ -1,5 +1,5 @@
 """
-timetable/tt_fet.py - last updated 2022-02-20
+timetable/tt_fet.py - last updated 2022-02-24
 
 Prepare fet-timetables input from the various sources ...
 
@@ -20,7 +20,7 @@ Copyright 2022 Michael Towers
 """
 
 __TEST = False
-# __TEST = True
+__TEST = True
 
 FET_VERSION = "6.2.7"
 
@@ -44,12 +44,6 @@ _DODGY_GAPS_PER_WEEK = (
 )
 _BAD_GAPS_PER_WEEK = (
     "Bedingung GAPS für Klasse {klass} ist" " fehlerhaft: {gaps}"
-)
-_TEACHER_DAYS_WRONG = (
-    "Lehrer-Tabelle: {tname} hat die falsche Anzahl" " an Tagesangaben"
-)
-_TEACHER_PERIODS_WRONG = (
-    "Lehrer-Tabelle: {tname} hat die falsche Anzahl" " an Stunden für {day}"
 )
 _NO_LESSON_WITH_TAG = (
     "Tabelle der festen Stunden: Kennung {tag} hat keine"
@@ -110,26 +104,36 @@ from timetable.tt_base import (
 class Days_fet(TT_Days):
     def get_days(self):
         """Return an ordered list of fet elements for the days."""
-        return [{"Name": dkey} for dkey in self]
+        return [{"Name": d.short} for d in self]
 
-    def get_id(self, key):
-        # This doesn't actually do anything at the moment, because the
-        # 'short' entry IS the key. But I suppose things could change ...
-        return self[key]["short"]
+#    def get_id(self, key):
+#        # This doesn't actually do anything at the moment, because the
+#        # 'short' entry IS the key. But I suppose things could change ...
+#        return self[key]["short"]
 
 
 class Periods_fet(TT_Periods):
     def get_periods(self):
         """Return an ordered list of fet elements for the periods."""
-        return [{"Name": pkey} for pkey in self]
+        return [{"Name": p.short} for p in self]
 
-    def get_id(self, key):
-        # This doesn't actually do anything at the moment, because the
-        # 'short' entry IS the key. But I suppose things could change ...
-        return self[key]["short"]
+#    def get_id(self, key):
+#        # This doesn't actually do anything at the moment, because the
+#        # 'short' entry IS the key. But I suppose things could change ...
+#        return self[key]["short"]
 
 
 class Classes_fet(Classes):
+    __slots__ = (
+        "activities",
+        "fet_rooms",
+        "__virtual_rooms",
+        "sid_groups",
+        "time_constraints",
+        "space_constraints",
+        "lid2aids",
+    )
+
     def class_data(self, klass):
         """Return a fet students_list/year entry for the given class."""
         class_groups = self.class_groups[klass]
@@ -191,107 +195,125 @@ class Classes_fet(Classes):
     def constraint_blocked_periods(self):
         """Constraint: students set not available ..."""
         constraints = []
-        for klass in self.class_days_periods:
-            daymap = self.class_days_periods[klass]
-            weektags = []
-            for day in self.days:
-                dayperiods = daymap[day]
-                for p in self.periods:
-                    if not dayperiods[p]:
-                        weektags.append({"Day": day, "Hour": p})
-            if weektags:
+        for klass, daylist in self.available.items():
+            tlist = []
+            i = 0
+            for d in self.DAYS:
+                pblist = daylist[i]
+                i += 1
+                j = 0
+                for p in self.PERIODS:
+                    if not pblist[j]:
+                        tlist.append({"Day": d, "Hour": p})
+                    j += 1
+            if tlist:
                 constraints.append(
                     {
                         "Weight_Percentage": "100",
                         "Students": klass,
-                        "Number_of_Not_Available_Times": f"{len(weektags)}",
-                        "Not_Available_Time": weektags,
+                        "Number_of_Not_Available_Times": str(len(tlist)),
+                        "Not_Available_Time": tlist,
                         "Active": "true",
                         "Comments": None,
                     }
                 )
         if constraints:
-            self.time_constraints[
-                "ConstraintStudentsSetNotAvailableTimes"
-            ] = constraints
+            self.time_constraints["ConstraintStudentsSetNotAvailableTimes"] = constraints
 
-    def new_activity_id(self):
-        self.xlid += 1
-        return str(self.xlid)
+    def virtual_room(self, roomlists: List[List[str]]) -> str:
+        """Return a virtual room for the given list of room lists. These
+        virtual rooms are cached so that they can be reused, should
+        the <roomlists> argument be repeated.
+        """
+        # First need a hashable representation of <roomlists>, use a string.
+        hashable = "&".join(["|".join(rooms) for rooms in roomlists])
+        #print("???????", hashable)
+        try:
+            return self.__virtual_rooms[hashable]
+        except KeyError:
+            pass
+        # Construct a new virtual room
+        name = f"v{len(self.__virtual_rooms) + 1:03}"
+        roomlist = []
+        for rooms in roomlists:
+            nrooms = len(rooms)
+            roomlist.append(
+                {   'Number_of_Real_Rooms': str(nrooms),
+                    'Real_Room': rooms[0] if nrooms == 1 else rooms
+                }
+            )
+        room = {
+            'Name': name,
+            'Building': None,
+            'Capacity': '30000',
+            'Virtual': 'true',
+            'Number_of_Sets_of_Real_Rooms': str(len(roomlists)),
+            'Set_of_Real_Rooms': roomlist,
+            'Comments': None
+        }
+        self.__virtual_rooms[hashable] = room
+        self.fet_rooms.append(room)
+        return name
+
+    def next_activity_id(self):
+        return str(len(self.activities) + 1)
 
     def get_lessons(self):
         """Build list of lessons for fet-timetables."""
 
-        def make_room_constraint(rlist:List[str]) -> None:
-            # fet cannot at present do prioritizing of room allocation in
-            # a satisfying way. The compromise made here is to add an extra
-            # constraint for the first room in the list (if there is more
-            # than one room).
+        def make_room_constraint(aid: str, rlist:List[str]) -> None:
+            """Make a room constraint for the given activity id and room
+            list.
+            """
             n = len(rlist)
-            if n < 1:
-                raise Bug("No room(s) passed to 'make_room_constraint'")
-            percent = "100"
-            rclist = []
             if n > 1:
                 r_c = "ConstraintActivityPreferredRooms"
-                try:
-                    s_c = space_constraints[r_c]
-                except KeyError:
-                    s_c = []
-                    space_constraints[r_c] = s_c
-                s_c.append(
-                    {   "Weight_Percentage": percent,
-                        "Activity_Id": aid,
-                        "Number_of_Preferred_Rooms": n,
-                        "Preferred_Room": rlist,
-                        "Active": "true",
-                        "Comments": None,
-                    }
-                )
-                percent = "90"
-            r_c = "ConstraintActivityPreferredRoom"
-            try:
-                s_c = space_constraints[r_c]
-            except KeyError:
-                s_c = []
-                space_constraints[r_c] = s_c
-            s_c.append(
-                {   "Weight_Percentage": percent,
+                s_c = {
+                    "Weight_Percentage": "100",
+                    "Activity_Id": aid,
+                    "Number_of_Preferred_Rooms": n,
+                    "Preferred_Room": rlist,
+                    "Active": "true",
+                    "Comments": None,
+                }
+            elif n == 1:
+                r_c = "ConstraintActivityPreferredRoom"
+                s_c = {
+                    "Weight_Percentage": "100",
                     "Activity_Id": aid,
                     "Room": rlist[0],
                     "Permanently_Locked": "true",
                     "Active": "true",
                     "Comments": None,
                 }
-            )
+            else:
+                raise Bug("No room(s) passed to 'make_room_constraint'")
+            try:
+                self.space_constraints[r_c].append(s_c)
+            except KeyError:
+                self.space_constraints[r_c] = [s_c]
 
-        space_constraints = {}  # for room placements
-        time_constraints = {}   # for "virtual" lessons (multiple rooms)
+        self.time_constraints = {}
+        self.space_constraints = {}
         self.activities = []    # fet activities
-        # For additional activities there needs to be a new starting index
-        # (using the length of the existing lesson-list means that no new
-        # lessons may be added to <self.lessons_list>):
-        self.xlid: int = len(self.lesson_list)
-
-#TODO: ???
-        self.tag_lids = {}  # {tag: [lesson-id, ...]}
-        self.xlids = []  # [[lid, xlid1, xlid2, ... ], ... ]
-        self.multirooms = []
+        # Get initial room list in fet form
+        self.fet_rooms: List[dict] = self.ROOMS.get_rooms()
+        self.__virtual_rooms = {}   # virtual room cache, internal
         # For constraints concerning relative placement of individual
         # lessons in the various subjects, collect the tags and their
         # pupil groups for each subject:
-        self.sid_groups = {}  # {sid: [(group-set, lesson-tag), ... ]}
+        #    {sid: [(group-set, activity id), ... ]}
+        self.sid_groups: Dict[str,List[Tuple[FrozenSet[str],str]]] = {}
+        self.lid2aids: Dict[int,List[str]] = {}
 
-
-        lid:int = -1    # index of the current "lesson"
+        lesson_index:int = -1    # index of the current "lesson"
         for lesson in self.lesson_list:
-            lid += 1
-            aid = str(lid + 1)  # fet activity id
+            lesson_index += 1
             if lesson.BLOCK == "--":
                 continue  # not a timetabled lesson
-            sid = lesson.SID
-            klass = lesson.CLASS
-            groups = lesson.GROUPS
+            sid: str = lesson.SID
+            klass: str = lesson.CLASS
+            groups: FrozenSet[str] = lesson.GROUPS
             activity_groups: List[str]
             if groups:
                 # "Simplify" the groups, building a list of groups
@@ -306,50 +328,35 @@ class Classes_fet(Classes):
                 REPORT("WARNING", _LESSON_NO_TEACHER.format(klass=klass, sid=sid))
                 continue
 
-            # Add room constraint(s) for lesson
-#TODO: need to consider durations – each sub-activity has the same room constraints!
-# ... so this should probably be done later!
-# However, with virtual rooms this could be OK here.
-# I need a list of room-lists. From this I could make a hashable value,
-# as a key to a dict of existing virtual rooms, to avoid duplication.
-
-            _roomlists = []
-            _ignore_lists = []
+            ### Add room constraint(s) for lesson
+            # Keep it as simple as possible. I don't think fet has list-
+            # order prioritization, so don't even try. Some post-processing
+            # may be able to improve the situation, otherwise manual
+            # editing will be necessary.
+            rooms: List[str]
+            roomlists: List[List[str]] = []
+            ignore_rooms = []
             if lesson.ROOMLIST:
-                _roomlists.append(lesson.ROOMLIST)
-            print("lesson.ROOMLIST ...", _roomlists)
-
+                roomlists.append(lesson.ROOMLIST)
             try:
-                for bc in self.block2courselist[lid]:
+                for bc in self.block2courselist[lesson_index]:
                     _rlist = bc.ROOMLIST
                     if _rlist:
                         if _rlist[0] == "-":
-                            _ignore_lists.append(_rlist[1:])
+                            ignore_rooms.append(_rlist[1:])
                         else:
-                            _roomlists.append(_rlist)
+                            roomlists.append(_rlist)
             except KeyError:
                 # No additional rooms
                 pass
-            roomlists = tuple(_roomlists)
-            #if len(roomlists) > 1:
-            #    print("???????", roomlists)
+            if len(roomlists) == 1:
+                rooms = roomlists[0]
+            elif len(roomlists) > 1:
+                rooms = [self.virtual_room(roomlists)]
+            else:
+                rooms = []
 
-
-#TODO: handle block components later
-            """# Keep a list of subjects with multiple rooms
-            if len(room_constraints) > 1:
-                self.multirooms.append(
-                    {
-                        "CLASS": klass,
-                        "GROUPS": groups,
-                        "SID": sid,
-                        "NUMBER": len(room_constraints),
-                    }
-                )
-                # print("???", self.multirooms[-1])
-            """
-
-            # Generate the activity or activities
+            ### Generate the activity or activities
             if tids:
                 if len(tids) == 1:
                     activity0 = {"Teacher": tids[0]}
@@ -365,93 +372,52 @@ class Classes_fet(Classes):
             activity0["Subject"] = sid
             activity0["Activity_Group_Id"] = "0"
             activity0["Active"] = "true"
-            durations = lesson.LENGTHS
-            if durations:
-                # The first activity can take <aid> for its id, any
-                # further activities will require new ids – can use
-                # <self.new_activity_id>.
-                # Additionally, if the primary activity has multiple rooms
-                # (specified in block-courses) also these will need
-                # additional activity ids.
+            durations: List[int] = lesson.LENGTHS
+            if len(durations) == 1:
+                d = durations[0]
+                dstr = str(d)
+                activity_id = self.next_activity_id()
+                self.lid2aids[lesson_index] = [activity_id]
+                activity0.update(
+                    {
+                        "Duration": dstr,
+                        "Total_Duration": dstr,
+                        "Id": activity_id,
+                        "Comments": f"{lesson_index}",
+                    }
+                )
+                self.activities.append(activity0)
+                if rooms:
+                    make_room_constraint(activity_id, rooms)
+                try:
+                    self.sid_groups[sid].append((groups, activity_id))
+                except KeyError:
+                    self.sid_groups[sid] = [(groups, activity_id)]
+            else:
+                i = 0
+                aids = []
+                self.lid2aids[lesson_index] = aids
                 for d in durations:
-
-#TODO ... completely new activity ids?
-
-                    _tag_lids = []
-                    __tag = f"{tag}__{d}" if len(dmap) > 1 else tag
-                    for i in range(dmap[d]):
-                        lid += 1
-                        _lid = str(lid)
-                        _tag_lids.append(_lid)
-                        dstr = str(d)
-                        lesson = activity0.copy()
-                        lesson.update(
-                            {
-                                "Duration": dstr,
-                                "Total_Duration": dstr,
-                                "Id": _lid,
-                                "Comments": __tag,
-                            }
-                        )
-                        self.lessons.append(lesson)
-                        if room_constraints:
-                            _pc, _ac = room_constraints[0]
-                            # Add the space constraints
-                            if _pc:
-                                add_room_constraint(_pc[0], _pc[1], _lid)
-                            add_room_constraint(_ac[0], _ac[1], _lid)
-                            if len(room_constraints) > 1:
-                                # Multiple room: generate "virtual" lessons
-                                _rids = [_lid]
-                                for _pc, _ac in room_constraints[1:]:
-                                    lid += 1
-                                    _xlid = str(lid)
-                                    _rids.append(_xlid)
-                                    lesson = {
-                                        #'Teacher': {},
-                                        "Subject": VIRTUAL_ROOM[0],
-                                        #'Students': {},
-                                        "Duration": dstr,
-                                        "Total_Duration": dstr,
-                                        "Id": _xlid,
-                                        "Activity_Group_Id": "0",
-                                        "Active": "true",
-                                        "Comments": f"++{_lid}",
-                                    }
-                                    self.activities.append(lesson)
-                                    # Add the space constraints
-                                    if _pc:
-                                        add_room_constraint(
-                                            _pc[0], _pc[1], _xlid
-                                        )
-                                    add_room_constraint(_ac[0], _ac[1], _xlid)
-                                # Note the list of coupled lids
-                                self.xlids.append(_rids)
-                                # Add start-time constraint
-                                time_constraint = {
-                                    "Weight_Percentage": "100",
-                                    "Number_of_Activities": str(len(_rids)),
-                                    "Activity_Id": _rids,
-                                    "Active": "true",
-                                    "Comments": None,
-                                }
-                                tc_tag = "ConstraintActivitiesSameStartingTime"
-                                try:
-                                    t_c = time_constraints[tc_tag]
-                                except KeyError:
-                                    t_c = []
-                                    time_constraints[tc_tag] = t_c
-                                t_c.append(time_constraint)
-                    self.tag_lids[__tag] = _tag_lids
+                    i += 1
+                    dstr = str(d)
+                    activity_id = self.next_activity_id()
+                    aids.append(activity_id)
+                    activity = activity0.copy()
+                    activity.update(
+                        {
+                            "Duration": dstr,
+                            "Total_Duration": dstr,
+                            "Id": activity_id,
+                            "Comments": f"{lesson_index}.{i}",
+                        }
+                    )
+                    self.activities.append(activity)
+                    if rooms:
+                        make_room_constraint(activity_id, rooms)
                     try:
-                        self.sid_groups[sid].append((groups, __tag))
+                        self.sid_groups[sid].append((groups, activity_id))
                     except KeyError:
-                        self.sid_groups[sid] = [(groups, __tag)]
-        self.last_lesson_id = lid
-        # TODO--
-        #        print("???", self.tag_lids)
-        self.time_constraints = time_constraints
-        self.space_constraints = space_constraints
+                        self.sid_groups[sid] = [(groups, activity_id)]
 
     def lunch_breaks(self, lessons):
         # TODO: This is very much tied to a concrete situation. Think of a more
@@ -656,9 +622,16 @@ class Classes_fet(Classes):
     def constraint_day_separation(self, placements):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
-        <placements> supplies the tags, as list of (tag, positions) pairs,
+        <placements> supplies the tags (as a <Placements_fet> instance),
         which have fixed positions, and so do not need this constraint.
         """
+        # Actually it's (potentially) a bit more complicated, because the
+        # placements can be weighted, in which case they might not end up
+        # in the specified position!
+
+
+
+
         self.placements = {k for k, v in placements}
         sid_group_sets = {}
         constraints = []
@@ -898,15 +871,16 @@ class Classes_fet(Classes):
 
 
 class Teachers_fet(TT_Teachers):
-    def get_teachers(self, timetable_teachers):
+    def get_teachers(self, classes):
         """Generate the teacher definitions for fet.
         This method should be called before the others, to set up
         <self.tidlist>.
         """
+        self.classes = classes
         tlist = []
         self.tidlist = []  # Just tids used in the timetable
         for tid, name in self.items():
-            if tid in timetable_teachers:
+            if tid in classes.timetable_teachers:
                 tlist.append(
                     {
                         "Name": tid,
@@ -918,32 +892,56 @@ class Teachers_fet(TT_Teachers):
                 self.tidlist.append(tid)
         return tlist
 
-    def add_constraints(self, days, periods, classes):
-        # TODO: Passing in <classes> is a nasty bodge! There should be universal
-        # access to the days, the periods, the constraints and the lesson data.
-        time_constraints = classes.time_constraints
+    def add_constraints(self):
+        time_constraints = self.classes.time_constraints
         # Not-available times
-        blocked = self.constraint_blocked_periods(days, periods)
+        blocked = self.constraint_available()
         if blocked:
             time_constraints["ConstraintTeacherNotAvailableTimes"] = blocked
-        # Gaps per week and contiguous lessons
-        constraints_g = []
-        constraints_u = []
+
+        constraints_m = []      # MINPERDAY
+        constraints_gd = []     # MAXGAPSPERDAY
+        constraints_gw = []     # MAXGAPSPERWEEK
+        constraints_u = []      # MAXBLOCK
         for tid in self.tidlist:
+            # The constraint values are <None> or a (number, weight) pair
+            # (integers, though the weight may be <None>)
             cdata = self.constraints[tid]
-            g = cdata["MAXGAPSPERWEEK"]
-            u = cdata["MAXBLOCK"]
-            # These are <None> or a (number, weight) pair (integers)
-            if g != None:
-                constraints_g.append(
+            minl = cdata["MINPERDAY"]
+            if minl:
+                constraints_m.append(
                     {
-                        "Weight_Percentage": "100",  # necessary!
+                        "Weight_Percentage": "100", # necessary!
                         "Teacher_Name": tid,
-                        "Max_Gaps": str(g),
+                        "Minimum_Hours_Daily": str(minl[0]),
+                        "Allow_Empty_Days": "true",
                         "Active": "true",
                         "Comments": None,
                     }
                 )
+            gd = cdata["MAXGAPSPERDAY"]
+            if gd != None:
+                constraints_gd.append(
+                    {
+                        "Weight_Percentage": "100", # necessary!
+                        "Teacher_Name": tid,
+                        "Max_Gaps": str(gd[0]),
+                        "Active": "true",
+                        "Comments": None,
+                    }
+                )
+            gw = cdata["MAXGAPSPERWEEK"]
+            if gw != None:
+                constraints_gw.append(
+                    {
+                        "Weight_Percentage": "100", # necessary!
+                        "Teacher_Name": tid,
+                        "Max_Gaps": str(gw[0]),
+                        "Active": "true",
+                        "Comments": None,
+                    }
+                )
+            u = cdata["MAXBLOCK"]
             if u:
                 n, w = u
                 if w:
@@ -956,14 +954,16 @@ class Teachers_fet(TT_Teachers):
                             "Comments": None,
                         }
                     )
-        if constraints_g:
-            time_constraints["ConstraintTeacherMaxGapsPerWeek"] = constraints_g
+        if constraints_m:
+            time_constraints["ConstraintTeacherMinHoursDaily"] = constraints_m
+        if constraints_gd:
+            time_constraints["ConstraintTeacherMaxGapsPerDay"] = constraints_gd
+        if constraints_gw:
+            time_constraints["ConstraintTeacherMaxGapsPerWeek"] = constraints_gw
         if constraints_u:
-            time_constraints[
-                "ConstraintTeacherMaxHoursContinuously"
-            ] = constraints_u
+            time_constraints["ConstraintTeacherMaxHoursContinuously"] = constraints_u
 
-        constraints = self.lunch_breaks(days, periods, classes)
+        constraints = self.lunch_breaks()
         if constraints:
             try:
                 time_constraints[
@@ -974,37 +974,26 @@ class Teachers_fet(TT_Teachers):
                     "ConstraintActivityPreferredStartingTimes"
                 ] = constraints
 
-        constraints = self.min_lessons_daily(classes)
-        if constraints:
-            time_constraints["ConstraintTeacherMinHoursDaily"] = constraints
-
-    def constraint_blocked_periods(self, days, periods):
-        """Return the blocked periods in the form needed by fet."""
+    def constraint_available(self):
+        """Return the blocked periods in the form needed by fet.
+        <days> and <periods> are lists of the fet tags.
+        """
+        days = self.classes.DAYS
+        periods = self.classes.PERIODS
         blocked = []
         for tid in self.tidlist:
-            dlist = self.blocked_periods.get(tid)
-            if dlist:
-                if len(dlist) != len(days):
-                    REPORT("ERROR", _TEACHER_DAYS_WRONG.format(tname=self[tid]))
-                    continue
-                tlist = []
-                i = 0
-                for d in days:
-                    pblist = dlist[i]
-                    i += 1
-                    if len(pblist) != len(periods):
-                        REPORT(
-                            "ERROR",
-                            _TEACHER_PERIODS_WRONG.format(
-                                tname=self[tid], day=d
-                            ),
-                        )
-                        continue
-                    j = 0
-                    for p in periods:
-                        if pblist[j]:
-                            tlist.append({"Day": d, "Hour": p})
-                        j += 1
+            dlist = self.available[tid]
+            tlist = []
+            i = 0
+            for d in days:
+                pblist = dlist[i]
+                i += 1
+                j = 0
+                for p in periods:
+                    if not pblist[j]:
+                        tlist.append({"Day": d, "Hour": p})
+                    j += 1
+            if tlist:
                 blocked.append(
                     {
                         "Weight_Percentage": "100",
@@ -1015,80 +1004,49 @@ class Teachers_fet(TT_Teachers):
                 )
         return blocked
 
-    def lunch_breaks(self, days, periods, classes):
-        """Add a special lesson on the long days AND a constraint to
-        limit it to the lunch times.
+    def lunch_breaks(self):
+        """Add a special activity on the days with specified lunch breaks.
+        Also add a constraint to limit the activity to the lunch times.
         """
         constraints = []
+        days = self.classes.DAYS
+        periods = self.classes.PERIODS
         for tid in self.tidlist:
-            lbperiods = self.constraints[tid]["LUNCHBREAK"]
-            if not lbperiods:
-                continue
-            bp = self.blocked_periods.get(tid)
-            for d in range(len(days)):
-                try:
-                    for p in lbperiods:
-                        i = periods.index(p)
-                        if bp[d][i]:
-                            break  # No lunch break needed
-                    else:
-                        raise ValueError
-                    continue
-                except:
-                    # need lunch break
-                    pass
-                classes.last_lesson_id += 1
-                lid = str(classes.last_lesson_id)
-                lesson = {
-                    "Teacher": tid,
-                    "Subject": LUNCH_BREAK[0],
-                    #                    'Students': {},
-                    "Duration": "1",
-                    "Total_Duration": "1",
-                    "Id": lid,
-                    "Activity_Group_Id": "0",
-                    "Active": "true",
-                    "Comments": None,
-                }
-                classes.lesson_list.append(lesson)
-                # Add constraint
-                day = days[d]
-                plist = [
-                    {
-                        "Preferred_Starting_Day": day,
-                        "Preferred_Starting_Hour": p,
-                    }
-                    for p in lbperiods
-                ]
-                constraints.append(
-                    {
-                        "Weight_Percentage": "100",
-                        "Activity_Id": lid,
-                        "Number_of_Preferred_Starting_Times": str(len(plist)),
-                        "Preferred_Starting_Time": plist,
+            d = 0
+            for daylist in self.lunch_periods[tid]:
+                if daylist:
+                    aid = self.classes.next_activity_id()
+                    activity = {
+                        "Teacher": tid,
+                        "Subject": LUNCH_BREAK[0],
+                        #'Students': {},
+                        "Duration": "1",
+                        "Total_Duration": "1",
+                        "Id": aid,
+                        "Activity_Group_Id": "0",
                         "Active": "true",
                         "Comments": None,
                     }
-                )
-        return constraints
-
-    def min_lessons_daily(self, classes):
-        """ConstraintTeacherMinHoursDaily"""
-        constraints = []
-        for tid in self.tidlist:
-            minl = self.constraints[tid]["MINPERDAY"]
-            if not minl:
-                continue
-            constraints.append(
-                {
-                    "Weight_Percentage": "100",
-                    "Teacher_Name": tid,
-                    "Minimum_Hours_Daily": str(minl),
-                    "Allow_Empty_Days": "true",
-                    "Active": "true",
-                    "Comments": None,
-                }
-            )
+                    self.classes.activities.append(activity)
+                    # Add constraint
+                    plist = [
+                        {
+                            "Preferred_Starting_Day": days[d],
+                            "Preferred_Starting_Hour": periods[p],
+                        }
+                        for p in daylist
+                    ]
+                    constraints.append(
+                        {
+                            "Weight_Percentage": "100",
+                            "Activity_Id": aid,
+                            "Number_of_Preferred_Starting_Times": str(len(plist)),
+                            "Preferred_Starting_Time": plist,
+                            "Active": "true",
+                            "Comments": None,
+                        }
+                    )
+                d += 1
         return constraints
 
 
@@ -1410,34 +1368,44 @@ def build_dict_fet(
 
 class Placements_fet(TT_Placements):
     def placements(self):
-        tag_lids = self.classes_data.tag_lids
-        #        print("\n tag_lids::::::::::::::::::")
-        #        for k, v in tag_lids.items():
-        #            print(f"  {k}:", v)
-        #        print("\n*** Parallel tags ***")
-        #        for k, v in self.parallel_tags.items():
-        #            print(f"  {k}:", v)
-        cards = []
-        for _tag in self:
-            weighting, places_list = self[_tag]
-            for tag in self.classes_data.parallel_tags[_tag]:
+        days = self.classes.DAYS
+        periods = self.classes.PERIODS
+        lid2aids: Dict[int,List[str]] = self.classes.lid2aids
+        constraints_parallel = []
+        constraints_fixed = []
+        print("\n*** Parallel tags ***")
+        for tag, lids in self.classes.parallel_tags.items():
+            #for i in lids:
+            #    print(f"  {tag}: {i} --> {lid2aids[i]}")
+            #    print(f"    ... {self.get_info(tag)}")
+            weighting, places_list = self.get_info(tag)
+            # What exactly the weighting applies to is not clear.
+            # It could be the placement, or the parallel activities ...
+            # I assume the placement(s), if there are any, otherwise
+            # the parallel activities.
+            w = WEIGHTS[weighting]
+            # Collect tagged activities where there is no places list,
+            # also where there are not enough places:
+            excess = []
+            # Concrete placements
+            for lid in lids:
                 try:
-                    lids = tag_lids[tag]
+                    aids = lid2aids[lid]
                 except KeyError:
                     REPORT("WARN", _NO_LESSON_WITH_TAG.format(tag=tag))
                     continue
                 i = 0
                 for d, p in places_list:
                     try:
-                        lid = lids[i]
-                    except ValueError:
+                        aid = aids[i]
+                    except IndexError:
                         REPORT("ERROR", _TAG_TOO_MANY_TIMES.format(tag=tag))
                         continue
                     i += 1
-                    cards.append(
+                    constraints_fixed.append(
                         {
-                            "Weight_Percentage": "100",
-                            "Activity_Id": lid,
+                            "Weight_Percentage": w,
+                            "Activity_Id": aid,
                             "Preferred_Day": days[d],
                             "Preferred_Hour": periods[p],
                             "Permanently_Locked": "true",
@@ -1445,9 +1413,36 @@ class Placements_fet(TT_Placements):
                             "Comments": None,
                         }
                     )
-        self.classes_data.time_constraints[
-            "ConstraintActivityPreferredStartingTime"
-        ] = cards
+                excess.append(aids[i:])
+            # Only those lists containing more than one list are
+            # interesting for parallel activities.
+            # Others may be used for special placement rules ...
+            if len(excess) > 1:
+                # Check that all lists are of equal length
+                l = len(excess[0])
+                for e in excess[1:]:
+                    if len(e) != l:
+                        raise Bug("Mismatch in parallel tag lists, tag = {tag}")
+                for i in range(l):
+                    parallel = [e[i] for e in excess]
+                    constraints_parallel.append(
+                        {
+                            "Weight_Percentage": w,
+                            "Number_of_Activities": str(l),
+                            "Activity_Id": parallel,
+                            "Active": "true",
+                            "Comments": None,
+                        }
+                    )
+        if constraints_fixed:
+            self.classes.time_constraints[
+                "ConstraintActivityPreferredStartingTime"
+            ] = constraints_fixed
+        if constraints_parallel:
+            self.classes.time_constraints[
+                "ConstraintActivitiesSameStartingTime"
+            ] = constraints_parallel
+
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -1459,7 +1454,7 @@ if __name__ == "__main__":
     if __TEST:
         print("\n*** DAYS ***")
         for _day in _days:
-            print("   ", f"'{_days.get_id(_day)}'", _days[_day])
+            print("   ", _day)
         print("\n    ... for fet ...\n   ", days)
         print("\n  ==================================================")
 
@@ -1467,22 +1462,12 @@ if __name__ == "__main__":
     periods = _periods.get_periods()
     if __TEST:
         print("\n*** PERIODS ***")
-        for _pkey in _periods:
-            print("   ", f"'{_periods.get_id(_pkey)}'", _periods[_pkey])
+        for _period in _periods:
+            print("   ", _period)
         print("\n    ... for fet ...\n   ", periods)
         print("\n  ==================================================")
 
-    _classes = Classes_fet(_days, _periods)
-#    if _classes.days != list(_days):
-#        print("\nDAYS MISMATCH:", _classes.days)
-#        quit(1)
-
     _rooms = Rooms_fet()
-    rooms = _rooms.get_rooms()
-    if __TEST:
-        print("\nROOMS:")
-        for rdata in rooms:
-            print("   ", rdata)
 
     _subjects = Subjects_fet()
     subjects = _subjects.get_subjects()
@@ -1495,24 +1480,25 @@ if __name__ == "__main__":
 
     if __TEST:
         print("\n ********** READ LESSON DATA **********\n")
-    c_list = _classes.all_lessons(
-        SUBJECTS=_subjects, ROOMS=_rooms, TEACHERS=_teachers
-    )
+    _classes = Classes_fet(_days, _periods,
+            SUBJECTS=_subjects, ROOMS=_rooms, TEACHERS=_teachers)
+
+    # Generate the fet activities
+    _classes.get_lessons()
+
+    c_list = _classes.classes
     print("\n ... read data for:", c_list)
 
     if __TEST:
-        print("\n  CLASSROOMS:", _classes.classrooms)
-        _klass = "12G"
-        print("\nCLASS", _klass)
-        print("\n  DIVISIONS:", _classes.class_divisions[_klass])
-        print("\n  GROUPS:", _classes.class_groups[_klass])
+        print("\nROOMS:")
+        for rdata in _classes.fet_rooms:
+            print("   ", rdata)
 
-    teachers = _teachers.get_teachers(_classes.timetable_teachers)
     if __TEST:
         print("\nTEACHERS:")
-        for tid in _teachers.tidlist:
-            blocked = _teachers.blocked_periods.get(tid) or "–––"
-            print("  ", tid, _teachers[tid], blocked)
+    teachers = _teachers.get_teachers(_classes)
+    _teachers.add_constraints()
+    if __TEST:
         for tdata in teachers:
             print("   ", tdata)
     # TODO:
@@ -1530,14 +1516,6 @@ if __name__ == "__main__":
         fh.write(pdfbytes)
     print("\nTEACHER CHECK-LIST ->", pdffile)
 
-
-
-
-
-
-
-
-
     classes = []
     for klass in c_list:
         if klass.startswith("XX"):
@@ -1551,7 +1529,6 @@ if __name__ == "__main__":
                 for sg in g.get("Subgroup") or []:
                     print("     +", sg["Name"])
 
-    _classes.get_lessons()
     activities, s_constraints, t_constraints = (
         _classes.activities,
         _classes.space_constraints,
@@ -1565,36 +1542,14 @@ if __name__ == "__main__":
             print("   ", l)
         print("\n  ======================================================\n")
 
-    # TODO: At present the input is 1-based indexes. It might be better to use
-    # the ids ...
-    i = 0
-    d2 = {}
-    d2list = []
-    for d in _days:
-        did = _days.get_id(d)
-        d2list.append(did)
-        i += 1
-        d2[str(i)] = did
-    i = 0
-    p2 = {}
-    p2list = []
-    for p in _periods:
-        pid = _periods.get_id(p)
-        p2list.append(pid)
-        i += 1
-        p2[str(i)] = pid
-
-    # Teachers' constraints
-    _teachers.add_constraints(d2list, p2list, _classes)
-
     # Classes' not-available times
     _classes.constraint_blocked_periods()
 
-    # Fixed placements for lessons
-    cards = Placements_fet(_classes)
-    cards.placements(d2, p2, _classes)
+    # Fixed placements for activities
+    cards = Placements_fet(_classes, _days, _periods)
+    cards.placements()
 
-    sid_group_sets = _classes.constraint_day_separation(cards.predef)
+    sid_group_sets = _classes.constraint_day_separation(cards)
 
     # For all classes, and with custom values for some classes:
     # minimum lessons per day

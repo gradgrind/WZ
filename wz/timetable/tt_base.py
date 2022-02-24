@@ -1,5 +1,5 @@
 """
-timetable/tt_base.py - last updated 2022-02-22
+timetable/tt_base.py - last updated 2022-02-24
 
 Read timetable information from the various sources ...
 
@@ -65,6 +65,9 @@ _TAG_TEACHER_DOUBLE = (
 )
 _FIELD_MISSING = "Klasse {klass}: Feld {field} fehlt in Fachtabelle"
 _UNKNOWN_TEACHER = "Klasse {klass}: unbekannte Lehrkraft ({tid}) für {sname}"
+_TEACHER_UNAVAILABLE = (
+    "Lehrkraft {tname} ({tid}) hat keine Verfügbarkeitstabelle"
+)
 _ROOM_INVALID = (
     "Raumkürzel dürfen nur aus Zahlen und"
     " lateinischen Buchstaben bestehen: {rid} ist ungültig."
@@ -84,7 +87,7 @@ _REPEATED_DAY_PERIOD = (
     " Tag.Stunde-Angabe für Kennung {tag}: {d_p}"
 )
 _PREPLACE_TOO_MANY = (
-    "Warnung: zu viele feste Stunden definiert für" " Stundenkennung {tag}"
+    "Zu viele feste Stunden definiert für" " Stundenkennung {tag}"
 )
 _PREPLACE_TOO_FEW = (
     "Zu wenig feste Stunden definiert für" " Stundenkennung {tag}"
@@ -374,10 +377,9 @@ class TT_Teachers(Dict[str, str]):
                         daylist.append(bool(val))
                 self.available[tid] = atable
             else:
-                # TODO: Should such a teacher be excluded?
-                # Or count as "always available"???
-                self.available[tid] = None
-                self.lunch_periods[tid] = None
+                REPORT("WARNING", _TEACHER_UNAVAILABLE.format(
+                    tname=tname, tid=tid))
+                continue
             self[tid] = tname
             self.address[tid] = tdata["__FILEPATH__"]
             self.alphatag[tid] = tdata["SORTNAME"]
@@ -548,6 +550,8 @@ class Classes:
         "available",  # class -> a list of day-lists of period availability
         "address",  # class -> class data-table path
         "lunch_periods",  # class -> a list of day-lists of possible break periods
+#TODO: Actually I probably don't need this, as it should be available as
+# len(self.lesson_list).
         "__lesson_index",  # internal counter
         "class_name",  # class -> long class name:
         "atomics_lists",  # class -> list of "atomic" groups
@@ -577,6 +581,8 @@ class Classes:
         "block2roomlists",  # lesson-index -> list of room-choice lists
         "block2minus_list", # lesson-index -> list of block courses with "-" rooms
         "classes",  # list of classes whose subject tables have been read in
+        "DAYS",     # list of short day tags
+        "PERIODS",  # list of short period tags
         "SUBJECTS",
         "ROOMS",
         "TEACHERS",
@@ -593,6 +599,8 @@ class Classes:
         class tables.
         Finally read and process the data for the individual classes.
         """
+        self.DAYS = [d.short for d in days]
+        self.PERIODS = [p.short for p in periods]
         self.available = {}
         self.address = {}
         self.lunch_periods: Dict[str, List[List[int]]] = {}
@@ -620,15 +628,15 @@ class Classes:
             self.available[klass] = atable
             lunch = []
             self.lunch_periods[klass] = lunch
-            for d in days:
+            for d in self.DAYS:
                 l = []
                 lunch.append(l)
-                daydata = available[d.short]
+                daydata = available[d]
                 daylist = []
                 atable.append(daylist)
                 i = 0
-                for p in periods:
-                    val = daydata[p.short]
+                for p in self.PERIODS:
+                    val = daydata[p]
                     if val == "+":
                         l.append(i)
                     i += 1
@@ -988,7 +996,7 @@ class Classes:
         else:
             gmap["*"] = fs_whole
 
-    def group_classgroups(self, klass, group):
+    def group_classgroups(self, klass:str, group:str) -> FrozenSet[str]:
         """Return the frozenset of "full" atomic groups for the given class
         and group. The group may be an "element" group, or a dotted
         group declared within a "division".
@@ -1550,7 +1558,7 @@ class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
         super().__init__()
         self.dayx = days.short2index()
         self.periodx = periods.short2index()
-        self.classes_data = classes_data
+        self.classes = classes_data
         lessons = classes_data.lesson_list
         parallel_tags = classes_data.parallel_tags
         try:
@@ -1596,7 +1604,10 @@ class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
             durations: List[int] = lessons[taglist[0]].LENGTHS
             if len(durations) != len(places_list):
                 if len(durations) > len(places_list):
-                    REPORT("WARNING", _PREPLACE_TOO_FEW.format(tag=tag))
+                    # If no placements are specified, assume that is
+                    # intentional and that the lessons should just be parallel.
+                    if len(places_list):
+                        REPORT("WARNING", _PREPLACE_TOO_FEW.format(tag=tag))
                 else:
                     raise TT_Error(_PREPLACE_TOO_MANY.format(tag=tag))
             self[tag] = (weighting, places_list)
