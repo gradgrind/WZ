@@ -1,5 +1,5 @@
 """
-timetable/tt_base.py - last updated 2022-02-24
+timetable/tt_base.py - last updated 2022-02-25
 
 Read timetable information from the various sources ...
 
@@ -19,8 +19,9 @@ Copyright 2022 Michael Towers
    limitations under the License.
 """
 
-_MAX_DURATION = 4  # maximum length of a lesson
+_MAX_DURATION = 4   # maximum length of a lesson
 _N_ROOM_COMBINATIONS = 20  # Warn if a block has more room combinations
+LAST_LESSON = 100   # "index" for "last period" in lesson placement
 
 _SINGLE = "Einzel"
 _DOUBLE = "Doppel"
@@ -1594,16 +1595,19 @@ class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
                 # Default weighting is 100%
                 weighting = 10
             places_list: List[Tuple[int, int]] = []
+            dp: Tuple[int, int]
             for d_p in row["PLACE"].split():
                 try:
                     d, p = d_p.strip().split(".")
                     d_i = -1 if d == '*' else self.dayx[d]
-                    p_i = -1 if p == '*' else self.periodx[p]
-
-# What about "last period of students' day"? Maybe "/" -> 100?
-                    if d_i < 0 and p_i < 0:
-                        raise ValueError
-                    dp: Tuple[int, int] = (d_i, p_i)
+                    if p == '*':
+                        if d_i < 0:
+                            raise ValueError
+                        dp = (d_i, -1)
+                    elif p == '/':
+                        dp = (d_i, LAST_LESSON)
+                    else:
+                        dp = (d_i, self.periodx[p])
                 except:
                     raise TT_Error(_INVALID_DAY_PERIOD.format(tag=tag, d_p=d_p))
                 if dp in places_list:
