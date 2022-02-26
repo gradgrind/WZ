@@ -1,5 +1,5 @@
 """
-timetable/tt_base.py - last updated 2022-02-25
+timetable/tt_base.py - last updated 2022-02-26
 
 Read timetable information from the various sources ...
 
@@ -551,6 +551,7 @@ class Classes:
         "lesson_list",  # a list of the <Lesson>s from all classes
         "available",  # class -> a list of day-lists of period availability
         "address",  # class -> class data-table path
+        "class_constraints",    # class -> constraints (mapping)
         "lunch_periods",  # class -> a list of day-lists of possible break periods
 #TODO: Actually I probably don't need this, as it should be available as
 # len(self.lesson_list).
@@ -605,6 +606,7 @@ class Classes:
         self.PERIODS = [p.short for p in periods]
         self.available = {}
         self.address = {}
+        self.class_constraints: Dict[str,Dict[str,str]] = {}
         self.lunch_periods: Dict[str, List[List[int]]] = {}
         folder = DATAPATH("TIMETABLE/CLASSES")
         fields = MINION(DATAPATH("TIMETABLE/CLASS_PERIODS_FIELDS"))
@@ -616,7 +618,9 @@ class Classes:
             except TableError as e:
                 raise TT_Error(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
             info = ctable["__INFO__"]
-            klass = info["CLASS"]
+            klass = info.pop("CLASS")
+            self.class_constraints[klass] = info
+            self.class_constraints['__INFO_NAMES__'] = ctable['__INFO_NAMES__']
             available = {}
             for row in ctable["__ROWS__"]:
                 #                day = row.pop("DAY")
@@ -1726,6 +1730,13 @@ if __name__ == "__main__":
             print("      ", l.SID, l.GROUPS, l.LENGTHS)
         print("-----------------------------------------------------")
 
+    print("§§§§§§§§§§§§ Class XX:")
+    for lx in classes.class_lessons['XX']:
+        l = classes.lesson_list[lx]
+        print("      ", l.SID, l.GROUPS, l.LENGTHS)
+
+    quit(0)
+
     # Further attributes:
     #        "timetable_teachers",  # tid -> list of lesson-indexes
     #        "class_lessons",  # class -> list of lesson-indexes
@@ -1738,6 +1749,8 @@ if __name__ == "__main__":
         l = classes.lesson_list[li]
         print(f"  {l.CLASS} {l.SID}: {l.BLOCK} --- {l.REALTIDS}")
     #        print(f"  {li}: {cl}")
+
+    quit(0)
 
     tcl = classes.teacher_check_list()
     odir = DATAPATH("testing/tmp")

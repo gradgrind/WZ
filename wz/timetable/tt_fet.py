@@ -1,5 +1,5 @@
 """
-timetable/tt_fet.py - last updated 2022-02-25
+timetable/tt_fet.py - last updated 2022-02-26
 
 Prepare fet-timetables input from the various sources ...
 
@@ -29,7 +29,11 @@ WEIGHTS = [None, "50", "67", "80", "88", "93", "95", "97", "98", "99", "100"]
 LUNCH_BREAK = ("mp", "Mittagspause")
 VIRTUAL_ROOM = ("dummy", "Zusatzraum")
 
+_MAX_GAPS_PER_WEEK = 10 # maximum value for max. gaps per week (for classes)
+
+
 ### Messages
+
 _LESSON_NO_GROUP = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Gruppe"
 _LESSON_NO_TEACHER = (
     "Klasse {klass}, Fach {sid}: „Unterricht“ ohne"
@@ -54,6 +58,9 @@ _NO_LESSON_WITH_TAG = (
 _TAG_TOO_MANY_TIMES = (
     "Tabelle der festen Stunden: Kennung {tag} gibt"
     " mehr Zeiten an, als es dafür Unterrichtsstunden gibt"
+)
+_INVALID_CLASS_CONSTRAINT = (
+    "Klasse {klass}: ungültige Wert für Bedingung {constraint}"
 )
 
 
@@ -603,8 +610,6 @@ class Classes_fet(Classes):
         #                    print("+++", k, tset)
         return pairs
 
-    # TODO: This is rather a hammer-approach which could perhaps be improved
-    # by collecting data class-wise?
     def constraint_day_separation(self, placements):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
@@ -615,80 +620,113 @@ class Classes_fet(Classes):
         # placements can be weighted, in which case they might not end up
         # in the specified position!
 
-        self.placements = {k for k, v in placements}
-        sid_group_sets = {}
-        constraints = []
-        for sid, tglist in self.sid_groups.items():
-            if sid == VIRTUAL_ROOM[0]:
-                continue  # ignore dummy subject
-            # <tglist> is a list of ({set of "atomic" groups}, tag) pairs
-            # for each tag.
-            # Collect the tags which share groups (for this subject)
-            tgmap = self.__subject_atomic_group_tags(tglist)
-            if not tgmap:
-                continue
+        # self.class_lessons and self.lid2aids can be used to find activities.
+        # XXtra classes would perhaps need special handling? Why? ...
 
-            # Get sets of tags with (group) intersections
-            cc = self.__tag_sets_common_groups(tgmap)
+        constraints: List[dict] = []
+        for klass in self.classes:
+            sid2lids: Dict[str,List[int]] = {}
+            ### Collect subjects
+#TODO: Maybe this part should be shared by all subject based constraints?
+            for lid in self.class_lessons[klass]:
+                lesson = self.lesson_list[lid]
+                sid: str = lesson.SID
+                try:
+                    sid2lids[sid].append(lid)
+                except KeyError:
+                    sid2lids[sid] = [lid]
 
-            # Remove tag sets containing only fixed lessons (this
-            # can't cope with tags whose lessons are only partially
-            # placed – they are handled as tags with full placed
-            # lessons).
-            tagsets = set()
-            for tags in cc:
-                for tag in tags:
-                    if tag not in self.placements:
-                        tagsets.add(tags)
-                        break
-            if tagsets:
-                sid_group_sets[sid] = tagsets
-                # Now add the constraints
-                for tagset in tagsets:
-                    ids = []
-                    for tag in tagset:
-                        ids += self.tag_lids[tag]
+            #print(f"\n§§§ CLASS {klass}")
+            # Find lids with common atomic groups
+            for sid, lids in sid2lids.items():
+                aid_lists: List[List[str]] = []
+                collected: Dict[str,Set[int]] = {}
+                if len(lids) == 1:
+                    # Also remember single-lid sids
+                    aids = self.lid2aids.get(lids[0])
+                    if aids and len(aids) > 1:
+                        aid_lists.append(aids)
+                    else:
+                        continue
+                else:
+                    # Get lid list for each atomic group
+                    for lid in lids:
+                        for g in self.lesson_list[lid].GROUPS:
+                            try:
+                                collected[g].add(lid)
+                            except KeyError:
+                                collected[g] = {lid}
+                    lidsorted: List[Set[int]] = sorted(
+                        collected.values(),
+                        key=lambda l: len(l)
+                    )
+                    # Eliminate subsets
+                    lidsets: List[Set[int]] = []
+                    i = 0
+                    for s in lidsorted:
+                        i += 1
+                        for s2 in lidsorted[i:]:
+                            if s <= s2:
+                                break
+                        else:
+                            lidsets.append(s)
+                    # Add extended aid lists
+                    for lidset in lidsets:
+                        aids = []
+                        for lid in lidset:
+                            aids += self.lid2aids[lid]
+                        if len(aids) > 1:
+                            aid_lists.append(aids)
+                for aids in aid_lists:
                     constraints.append(
                         {
                             "Weight_Percentage": "100",
                             "Consecutive_If_Same_Day": "true",
-                            "Number_of_Activities": str(len(ids)),
-                            "Activity_Id": ids,
+                            "Number_of_Activities": str(len(aids)),
+                            "Activity_Id": aids,
                             "MinDays": "1",
                             "Active": "true",
                             "Comments": None,
                         }
                     )
+                #print(f"  .. {sid}")
+                #for aids in aid_lists:
+                #    print(f"        {aids}")
         add_constraints(
             self.time_constraints,
             "ConstraintMinDaysBetweenActivities",
             constraints,
         )
-        return sid_group_sets
 
-    def constraint_min_lessons_per_day(self, default, custom_table):
-        constraints = []
-        for klass in self.class_days_periods:
+#TODO ??        return sid_group_sets
+
+    ############### FURTHER CONSTRAINTS ###############
+
+    def constraint_MIN_PERIODS_DAILY(self, klass, n, t_constraint):
+        if n:
             try:
-                n = custom_table[klass]
-            except KeyError:
-                n = default
-            if n:
-                constraints.append(
+                i = int(n)
+                if i < 1 or i > len(self.PERIODS):
+                    raise ValueError
+            except ValueError:
+                REPORT("ERROR", _INVALID_CLASS_CONSTRAINT.format(
+                        klass=klass, constraint=t_constraint))
+                return
+            add_constraints(
+                self.time_constraints,
+                "ConstraintStudentsSetMinHoursDaily",
+                [
                     {
-                        "Weight_Percentage": "100",
-                        "Minimum_Hours_Daily": str(n),
+                        "Weight_Percentage": "100", # necessary!
+                        "Minimum_Hours_Daily": n,
                         "Students": klass,
                         "Allow_Empty_Days": "false",
                         "Active": "true",
                         "Comments": None,
                     }
-                )
-        add_constraints(
-            self.time_constraints,
-            "ConstraintStudentsSetMinHoursDaily",
-            constraints,
-        )
+                ],
+            )
+            print(f"++ ConstraintStudentsSetMinHoursDaily {klass}: {n}")
 
     # Version for all classes:
     #    time_constraints['ConstraintStudentsMinHoursDaily'] = [
@@ -700,7 +738,36 @@ class Classes_fet(Classes):
     #        }
     #    ]
 
-    ############### FURTHER CONSTRAINTS ###############
+    def constraint_MAX_GAPS_WEEKLY(self, klass, n, t_constraint):
+        """Maximum gaps per week for the specified class.
+        If <n> is not supplied (also if the condition is not specified!)
+        use 0 (no gaps).
+        """
+        if n:
+            try:
+                i = int(n)
+                if i < 0 or i > _MAX_GAPS_PER_WEEK:
+                    raise ValueError
+            except ValueError:
+                REPORT("ERROR", _INVALID_CLASS_CONSTRAINT.format(
+                        klass=klass, constraint=t_constraint))
+                return
+        else:
+            n = "0"
+        add_constraints(
+            self.time_constraints,
+            "ConstraintStudentsSetMaxGapsPerWeek",
+            [
+                {
+                    "Weight_Percentage": "100", # necessary!
+                    "Max_Gaps": n,
+                    "Students": klass,
+                    "Active": "true",
+                    "Comments": None,
+                }
+            ],
+        )
+        print(f"++ ConstraintStudentsSetMaxGapsPerWeek {klass}: {n}")
 
     def class_constraint_data(self, data):
         """Extract info for the various classes, jandling default values."""
@@ -719,68 +786,6 @@ class Classes_fet(Classes):
                 cmap[klass] = v
         return cmap
 
-    def GAPS(self, data):
-        """Maximum gaps per week for each specified class."""
-        constraints = []
-        cmap = {}
-        try:
-            default = data.pop("*")  # WARNING: The entry is now gone!
-        except KeyError:
-            pass
-        else:
-            for klass in _classes.class_days_periods:
-                cmap[klass] = default
-        for klass, v in data.items():
-            cmap[klass] = v
-        for klass, gpw in cmap.items():
-            try:
-                _gpw = int(gpw)
-                if _gpw < 0:
-                    raise ValueError
-                if _gpw > 5:
-                    REPORT(
-                        "WARN",
-                        _DODGY_GAPS_PER_WEEK.format(klass=klass, gaps=gpw),
-                    )
-                    continue
-            except ValueError:
-                raise TT_Error(_BAD_GAPS_PER_WEEK.format(klass=klass, gaps=gpw))
-            constraints.append(
-                {
-                    "Weight_Percentage": "100",
-                    "Max_Gaps": _gpw,
-                    "Students": klass,
-                    "Active": "true",
-                    "Comments": None,
-                }
-            )
-        add_constraints(
-            self.time_constraints,
-            "ConstraintStudentsSetMaxGapsPerWeek",
-            constraints,
-        )
-
-    def LAST_LESSON(self, data):
-        """The lessons should end the day for the respective classes."""
-        constraints = []
-        for tag in data:
-            _tags = self.parallel_tags[tag]
-            if len(_tags) > 1:
-                REPORT("WARN", _LAST_LESSON_TAG_INVALID.format(tag=tag))
-            for lid in self.tag_lids[_tags[0]]:
-                constraints.append(
-                    {
-                        "Weight_Percentage": "100",  # necessary!
-                        "Activity_Id": lid,
-                        "Active": "true",
-                        "Comments": None,
-                    }
-                )
-        add_constraints(
-            self.time_constraints,
-            "ConstraintActivityEndsStudentsDay",
-            constraints,
-        )
 
     def tag_get_sid(self, tag):
         # ?
@@ -857,6 +862,19 @@ class Classes_fet(Classes):
             "ConstraintMinGapsBetweenActivities",
             constraints,
         )
+
+    def add_class_constraints(self):
+        info_names = self.class_constraints.pop('__INFO_NAMES__')
+        for klass in sorted(self.class_constraints):
+            for key, val in self.class_constraints[klass].items():
+                if key[0] == "_":
+                    continue
+                try:
+                    func = getattr(self, f"constraint_{key}")
+                except AttributeError:
+                    print(f"CONSTRAINT {key}: Not yet implemented")
+                    continue
+                func(klass, val, info_names[key])
 
 
 class Teachers_fet(TT_Teachers):
@@ -1630,8 +1648,15 @@ if __name__ == "__main__":
 
 
 
-
+#?
     sid_group_sets = _classes.constraint_day_separation(cards)
+
+
+    print("\nCLASS CONSTRAINTS:")
+    _classes.add_class_constraints()
+
+    quit(0)
+
 
     # For all classes, and with custom values for some classes:
     # minimum lessons per day
