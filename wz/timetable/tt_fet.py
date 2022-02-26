@@ -62,6 +62,10 @@ _TAG_TOO_MANY_TIMES = (
 _INVALID_CLASS_CONSTRAINT = (
     "Klasse {klass}: ungültige Wert für Bedingung {constraint}"
 )
+_XX_SID_IN_CLASS = (
+    "Klasse {klass}: Fachkürzel „{sid}“ von XX-Klasse ist auch in dieser"
+    " Klasse definiert"
+)
 
 
 ########################################################################
@@ -614,12 +618,19 @@ class Classes_fet(Classes):
     def subject_activities(self):
         """Collect the activity ids for every subject in every group in
         every class.
+        Note that there are entries for every atomic group which is
+        involved in a subject.
         """
-#TODO: The entries in classes XX(...) need to be allocated to the approprite classes.
+#TODO: The "+" parts in the subject ids are retained here ...
+# Do they need to be removed? Should it be done here, or later?
 
         self.class2sid2ag2aids: Dict[str,Dict[str,Dict[str,List[str]]]] = {}
+        xclasses: List[str] = []    # collect XX-classes
+        classmap: Dict[str,Dict[str,List[str]]]
         for klass in self.classes:
-            classmap: Dict[str,Dict[str,List[str]]] = {}
+            if klass.startswith("XX"):
+                xclasses.append(klass)
+            classmap = {}
             self.class2sid2ag2aids[klass] = classmap
             sid2lids: Dict[str,List[int]] = {}
             ### Collect subjects
@@ -643,6 +654,21 @@ class Classes_fet(Classes):
                                 sidmap[g] += aids
                             except KeyError:
                                 sidmap[g] = list(aids)
+        # Allocate the entries in XX-classes to the appropriate real classes
+        for klass in xclasses:
+            for sid, ag2aids in self.class2sid2ag2aids.pop(klass).items():
+                for ag, aids in ag2aids.items():
+                    k2 = ag.split(".", 1)[0]
+                    classmap = self.class2sid2ag2aids[k2]
+                    try:
+                        sidmap = classmap[sid]
+                    except KeyError:
+                        classmap[sid] = {ag: aids}
+                        continue
+                    if ag in sidmap:
+                        raise TT_Error(_XX_SID_IN_CLASS.format(klass=klass,
+                                sid=sid))
+                    sidmap[ag] = aids
 
 
 #TODO: use <self.class2sid2ag2aids>
@@ -1690,6 +1716,8 @@ if __name__ == "__main__":
 
     _classes.subject_activities()
     for klass in _classes.classes:
+        if klass.startswith("XX"):
+            continue
         print(f"\n **** Class {klass}")
         for sid, ag2aids in _classes.class2sid2ag2aids[klass].items():
             for ag, aids in ag2aids.items():
