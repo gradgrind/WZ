@@ -126,6 +126,7 @@ class Classes_fet(Classes):
         "time_constraints",
         "space_constraints",
         "lid2aids",
+        "class2sid2ag2aids",
     )
 
     def class_data(self, klass):
@@ -610,24 +611,52 @@ class Classes_fet(Classes):
         #                    print("+++", k, tset)
         return pairs
 
-    def constraint_day_separation(self, placements):
+    def subject_activities(self):
+        """Collect the activity ids for every subject in every group in
+        every class.
+        """
+#TODO: The entries in classes XX(...) need to be allocated to the approprite classes.
+
+        self.class2sid2ag2aids: Dict[str,Dict[str,Dict[str,List[str]]]] = {}
+        for klass in self.classes:
+            classmap: Dict[str,Dict[str,List[str]]] = {}
+            self.class2sid2ag2aids[klass] = classmap
+            sid2lids: Dict[str,List[int]] = {}
+            ### Collect subjects
+            for lid in self.class_lessons[klass]:
+                lesson = self.lesson_list[lid]
+                sid: str = lesson.SID
+                try:
+                    sid2lids[sid].append(lid)
+                except KeyError:
+                    sid2lids[sid] = [lid]
+            # For each atomic group, get the activity ids
+            for sid, lids in sid2lids.items():
+                sidmap: Dict[str,List[str]] = {}
+                classmap[sid] = sidmap
+                aid_lists: List[List[str]] = []
+                for lid in lids:
+                    aids = self.lid2aids.get(lid)
+                    if aids:
+                        for g in self.lesson_list[lid].GROUPS:
+                            try:
+                                sidmap[g] += aids
+                            except KeyError:
+                                sidmap[g] = list(aids)
+
+
+#TODO: use <self.class2sid2ag2aids>
+    def constraint_day_separation(self):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
-        <placements> supplies the tags (as a <Placements_fet> instance),
-        which have fixed positions, and so do not need this constraint.
         """
-        # Actually it's (potentially) a bit more complicated, because the
-        # placements can be weighted, in which case they might not end up
-        # in the specified position!
-
-        # self.class_lessons and self.lid2aids can be used to find activities.
-        # XXtra classes would perhaps need special handling? Why? ...
-
+        # Use <self.class_lessons> and <self.lid2aids> to find activities.
         constraints: List[dict] = []
         for klass in self.classes:
             sid2lids: Dict[str,List[int]] = {}
             ### Collect subjects
 #TODO: Maybe this part should be shared by all subject based constraints?
+# .... see self.__subject_activities
             for lid in self.class_lessons[klass]:
                 lesson = self.lesson_list[lid]
                 sid: str = lesson.SID
@@ -644,8 +673,10 @@ class Classes_fet(Classes):
                 if len(lids) == 1:
                     # Also remember single-lid sids
                     aids = self.lid2aids.get(lids[0])
-                    if aids and len(aids) > 1:
-                        aid_lists.append(aids)
+                    if aids:
+
+                        if len(aids) > 1:
+                            aid_lists.append(aids)
                     else:
                         continue
                 else:
@@ -864,8 +895,10 @@ class Classes_fet(Classes):
         )
 
     def add_class_constraints(self):
-        info_names = self.class_constraints.pop('__INFO_NAMES__')
+        info_names = self.class_constraints['__INFO_NAMES__']
         for klass in sorted(self.class_constraints):
+            if klass[0] == "_":
+                continue
             for key, val in self.class_constraints[klass].items():
                 if key[0] == "_":
                     continue
@@ -1649,11 +1682,22 @@ if __name__ == "__main__":
 
 
 #?
-    sid_group_sets = _classes.constraint_day_separation(cards)
+    sid_group_sets = _classes.constraint_day_separation()
 
 
     print("\nCLASS CONSTRAINTS:")
     _classes.add_class_constraints()
+
+    _classes.subject_activities()
+    for klass in _classes.classes:
+        print(f"\n **** Class {klass}")
+        for sid, ag2aids in _classes.class2sid2ag2aids[klass].items():
+            for ag, aids in ag2aids.items():
+                print(f"     {sid:8}: {ag:10} --> {aids}")
+
+    # Other activity info is available thus:
+    _aid = "550"
+    print(f"\n???? {_aid}:", _classes.activities[int(_aid) - 1])
 
     quit(0)
 
