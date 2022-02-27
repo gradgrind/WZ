@@ -39,18 +39,9 @@ _LESSON_NO_TEACHER = (
     "Klasse {klass}, Fach {sid}: „Unterricht“ ohne"
     " Lehrer.\nDieser Unterricht wird NICHT im Stundenplan erscheinen."
 )
-_LAST_LESSON_TAG_INVALID = (
-    "Bedingung „LAST_LESSON“: Die Kennung {tag}" " wird mehr als einmal benutzt"
-)
-_SUBJECT_PAIR_INVALID = (
-    "Ungültiges Fach-Paar ({item}) unter den „weiteren Bedingungen“"
-)
-_DODGY_GAPS_PER_WEEK = (
-    "Bedingung GAPS für Klasse {klass} ist" " wahrscheinlich fehlerhaft: {gaps}"
-)
-_BAD_GAPS_PER_WEEK = (
-    "Bedingung GAPS für Klasse {klass} ist" " fehlerhaft: {gaps}"
-)
+#_SUBJECT_PAIR_INVALID = (
+#    "Ungültiges Fach-Paar ({item}) unter den „weiteren Bedingungen“"
+#)
 _NO_LESSON_WITH_TAG = (
     "Tabelle der festen Stunden: Kennung {tag} hat keine"
     " entsprechenden Unterrichtsstunden"
@@ -61,10 +52,6 @@ _TAG_TOO_MANY_TIMES = (
 )
 _INVALID_CLASS_CONSTRAINT = (
     "Klasse {klass}: ungültige Wert für Bedingung {constraint}"
-)
-_XX_SID_IN_CLASS = (
-    "Klasse {klass}: Fachkürzel „{sid}“ von XX-Klasse ist auch in dieser"
-    " Klasse definiert"
 )
 
 
@@ -89,7 +76,7 @@ from typing import NamedTuple, Dict, List, Set, FrozenSet, Tuple
 
 ### +++++
 
-from itertools import combinations
+from itertools import combinations, product
 
 import xmltodict
 
@@ -104,6 +91,7 @@ from timetable.tt_base import (
     TT_Error,
     class_group_split,
     LAST_LESSON,
+    weight_value,
 )
 
 ### -----
@@ -805,9 +793,12 @@ class Classes_fet(Classes):
         # ?
         return self.lessons[tag.split("__", 1)[0]]["GROUPS"]
 
-    # TODO: This might be easier using lists of tags and data for each class!
-    def NOT_AFTER(self, data):
+# TODO
+    def constraint_NOT_AFTER(self, klass, pairs, t_constraint):
         """Two subjects should be in the given order, if on the same day."""
+        print("\nTODO: constraint_NOT_AFTER", klass, pairs)
+        return
+
         constraints = []
         cmap = self.class_constraint_data(data)
         pairs = self.__pairs_common_groups(cmap)
@@ -839,34 +830,54 @@ class Classes_fet(Classes):
             constraints,
         )
 
-    def PAIR_GAP(self, data):
+    def constraint_PAIR_GAP(self, klass, pairs, t_constraint):
         """Two subjects should have at least one lesson in between."""
         constraints = []
-        cmap = self.class_constraint_data(data)
-        pairs = self.__pairs_common_groups(cmap)
-        for klass, item_map in cmap.items():
-            for item, weight in item_map.items():
-                percent = WEIGHTS[int(weight)]
-                if not percent:
-                    continue
-                taglist = pairs[item].get(klass) or []
-                for tag, tagset in taglist:
-                    lids2 = []
-                    for t in tagset:
-                        lids2 += self.tag_lids[t]
-                    for lid1 in self.tag_lids[tag]:
-                        # print("???", klass, item, percent, lid1, lids2)
-                        for lid2 in lids2:
+        sid2ag2aids = self.class2sid2ag2aids[klass]
+        for wpair in pairs.split():
+            try:
+                pair, _w = wpair.split(":", 1)
+            except ValueError:
+                pair, w = pairw, 10
+            else:
+                try:
+                    w = weight_value(_w)
+                except ValueError:
+                    REPORT("ERROR", _INVALID_CLASS_CONSTRAINT.format(
+                            klass=klass, constraint=t_constraint))
+                    return
+            percent = WEIGHTS[w]
+            if not percent:
+                continue
+            try:
+                sid1, sid2 = pair.split("+")
+            except ValueError:
+                REPORT("ERROR", _INVALID_CLASS_CONSTRAINT.format(
+                        klass=klass, constraint=t_constraint))
+            try:
+                ag2aids1 = sid2ag2aids[sid1]
+                ag2aids2 = sid2ag2aids[sid2]
+            except KeyError:
+                continue
+            aidpairs = set()
+            for ag in ag2aids1:
+                if ag in ag2aids2:
+                    for aidpair in product(ag2aids1[ag], ag2aids2[ag]):
+                        fs = frozenset(aidpair)
+                        if fs not in aidpairs:
+                            aidpairs.add(fs)
                             constraints.append(
                                 {
                                     "Weight_Percentage": percent,
                                     "Number_of_Activities": "2",
-                                    "Activity_Id": [lid1, lid2],
+                                    "Activity_Id": sorted(aidpair),
                                     "MinGaps": "1",
                                     "Active": "true",
                                     "Comments": None,
-                                }
+                               }
                             )
+            #print(f"??? PAIR_GAP in {klass} ({wpair}):", ", ".join(
+            #    ["+".join(sorted(ap)) for ap in aidpairs]))
         add_constraints(
             self.time_constraints,
             "ConstraintMinGapsBetweenActivities",
@@ -1669,7 +1680,7 @@ if __name__ == "__main__":
             for ag, aids in ag2aids.items():
                 print(f"     {sid:8}: {ag:10} --> {aids}")
 
-    print("\nSubject day-separation constraints:")
+    print("\nSubject day-separation constraints ...")
     _classes.constraint_day_separation()
 
     print("\nCLASS CONSTRAINTS:")

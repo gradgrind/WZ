@@ -1,5 +1,5 @@
 """
-timetable/tt_base.py - last updated 2022-02-26
+timetable/tt_base.py - last updated 2022-02-27
 
 Read timetable information from the various sources ...
 
@@ -1588,9 +1588,7 @@ class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
             weighting: int
             if w:
                 try:
-                    weighting = int(w)
-                    if weighting < 0 or weighting > 10:
-                        raise ValueError
+                    weighting = weight_value(w)
                 except ValueError:
                     raise TT_Error(
                         _BAD_PLACEMENT_WEIGHTING.format(tag=tag, w=w)
@@ -1644,6 +1642,16 @@ class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
         except KeyError:
             REPORT("WARNING", _TAG_NO_ENTRY.format(tag=tag))
             return (10, [])
+
+
+def weight_value(weighting:str) -> int:
+    """Check that a weighting string is an integer between 0 and 10,
+    returning an <int>.
+    """
+    w = int(weighting)
+    if w < 0 or w > 10:
+        raise ValueError
+    return w
 
 
 def lesson_lengths(durations):
