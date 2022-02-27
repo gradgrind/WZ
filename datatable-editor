@@ -2,7 +2,7 @@
 
 thisfile=$( realpath "$0"  )
 thisdir=$( dirname "$thisfile" )
-cd "$thisdir/wz-data/designer"
-export PROGRAM_DATA="$thisdir/wz-data"
-"$thisdir/venv/bin/python" "$thisdir/wz/datatable-editor.py" "$@"
+#cd "$thisdir/wz-data/designer"
+#export PROGRAM_DATA="$thisdir/wz-data"
+~/bin/venv/bin/python "$thisdir/wz/datatable-editor.py" "$@"
 

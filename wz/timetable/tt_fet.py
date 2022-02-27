@@ -1,5 +1,5 @@
 """
-timetable/tt_fet.py - last updated 2022-02-26
+timetable/tt_fet.py - last updated 2022-02-27
 
 Prepare fet-timetables input from the various sources ...
 
@@ -616,146 +616,99 @@ class Classes_fet(Classes):
         return pairs
 
     def subject_activities(self):
-        """Collect the activity ids for every subject in every group in
-        every class.
-        Note that there are entries for every atomic group which is
-        involved in a subject.
+        """Collect the activity ids for every subject in every (atomic)
+        group in every class.
         """
-#TODO: The "+" parts in the subject ids are retained here ...
-# Do they need to be removed? Should it be done here, or later?
-
+        aids: List[str]
+        ag2aids: Dict[str,List[str]]
+        sid2ag2aids: Dict[str,Dict[str,List[str]]]
         self.class2sid2ag2aids: Dict[str,Dict[str,Dict[str,List[str]]]] = {}
-        xclasses: List[str] = []    # collect XX-classes
-        classmap: Dict[str,Dict[str,List[str]]]
-        for klass in self.classes:
-            if klass.startswith("XX"):
-                xclasses.append(klass)
-            classmap = {}
-            self.class2sid2ag2aids[klass] = classmap
-            sid2lids: Dict[str,List[int]] = {}
+        for _klass, lids in self.class_lessons.items():
             ### Collect subjects
-            for lid in self.class_lessons[klass]:
-                lesson = self.lesson_list[lid]
-                sid: str = lesson.SID
-                try:
-                    sid2lids[sid].append(lid)
-                except KeyError:
-                    sid2lids[sid] = [lid]
-            # For each atomic group, get the activity ids
-            for sid, lids in sid2lids.items():
-                sidmap: Dict[str,List[str]] = {}
-                classmap[sid] = sidmap
-                aid_lists: List[List[str]] = []
-                for lid in lids:
-                    aids = self.lid2aids.get(lid)
-                    if aids:
-                        for g in self.lesson_list[lid].GROUPS:
-                            try:
-                                sidmap[g] += aids
-                            except KeyError:
-                                sidmap[g] = list(aids)
-        # Allocate the entries in XX-classes to the appropriate real classes
-        for klass in xclasses:
-            for sid, ag2aids in self.class2sid2ag2aids.pop(klass).items():
-                for ag, aids in ag2aids.items():
-                    k2 = ag.split(".", 1)[0]
-                    classmap = self.class2sid2ag2aids[k2]
+            for lid in lids:
+                aids = self.lid2aids.get(lid)
+                if not aids:
+                    continue
+                lesson: Lesson = self.lesson_list[lid]
+                sid: str = lesson.SID.split("+", 1)[0] # remove "+"-tags
+                for group in lesson.GROUPS:
+                    # For each group, add the activity ids in the appropriate class
+                    klass = group.split(".", 1)[0]
                     try:
-                        sidmap = classmap[sid]
+                        sid2ag2aids = self.class2sid2ag2aids[klass]
                     except KeyError:
-                        classmap[sid] = {ag: aids}
+                        ag2aids = {group: list(aids)}
+                        self.class2sid2ag2aids[klass] = {sid: ag2aids}
                         continue
-                    if ag in sidmap:
-                        raise TT_Error(_XX_SID_IN_CLASS.format(klass=klass,
-                                sid=sid))
-                    sidmap[ag] = aids
+                    try:
+                        ag2aids = sid2ag2aids[sid]
+                    except KeyError:
+                        sid2ag2aids[sid] = {group: list(aids)}
+                        continue
+                    try:
+                        ag2aids[group] += aids
+                    except KeyError:
+                        ag2aids[group] = list(aids)
 
 
-#TODO: use <self.class2sid2ag2aids>
     def constraint_day_separation(self):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
         """
-        # Use <self.class_lessons> and <self.lid2aids> to find activities.
         constraints: List[dict] = []
+        # Use <self.class2sid2ag2aids> to find activities.
+        sid2ag2aids: Dict[str,Dict[str,List[str]]]
+        ag2aids: Dict[str,List[str]]
+        aids: List[str]
+        aidset_map: Dict[int,Set[FrozenSet[str]]] = {}
         for klass in self.classes:
-            sid2lids: Dict[str,List[int]] = {}
-            ### Collect subjects
-#TODO: Maybe this part should be shared by all subject based constraints?
-# .... see self.__subject_activities
-            for lid in self.class_lessons[klass]:
-                lesson = self.lesson_list[lid]
-                sid: str = lesson.SID
-                try:
-                    sid2lids[sid].append(lid)
-                except KeyError:
-                    sid2lids[sid] = [lid]
-
-            #print(f"\n§§§ CLASS {klass}")
-            # Find lids with common atomic groups
-            for sid, lids in sid2lids.items():
-                aid_lists: List[List[str]] = []
-                collected: Dict[str,Set[int]] = {}
-                if len(lids) == 1:
-                    # Also remember single-lid sids
-                    aids = self.lid2aids.get(lids[0])
-                    if aids:
-
-                        if len(aids) > 1:
-                            aid_lists.append(aids)
-                    else:
-                        continue
+            try:
+                sid2ag2aids = self.class2sid2ag2aids[klass]
+            except KeyError:
+                continue
+            for sid, ag2aids in sid2ag2aids.items():
+                for aids in ag2aids.values():
+                    # Skip sets with only one element
+                    l = len(aids)
+                    if l > 1:
+                        aids_i = frozenset(int(aid) for aid in aids)
+                        try:
+                            aidset_map[l].add(aids_i)
+                        except KeyError:
+                            aidset_map[l] = {aids_i}
+        ### Eliminate subsets
+        lengths = sorted(aidset_map, reverse=True)
+        newsets = aidset_map[lengths[0]]   # the largest sets
+        for l in lengths[1:]:
+            xsets = set()
+            for aidset in aidset_map[l]:
+                for s in newsets:
+                    if aidset < s:
+                        break
                 else:
-                    # Get lid list for each atomic group
-                    for lid in lids:
-                        for g in self.lesson_list[lid].GROUPS:
-                            try:
-                                collected[g].add(lid)
-                            except KeyError:
-                                collected[g] = {lid}
-                    lidsorted: List[Set[int]] = sorted(
-                        collected.values(),
-                        key=lambda l: len(l)
-                    )
-                    # Eliminate subsets
-                    lidsets: List[Set[int]] = []
-                    i = 0
-                    for s in lidsorted:
-                        i += 1
-                        for s2 in lidsorted[i:]:
-                            if s <= s2:
-                                break
-                        else:
-                            lidsets.append(s)
-                    # Add extended aid lists
-                    for lidset in lidsets:
-                        aids = []
-                        for lid in lidset:
-                            aids += self.lid2aids[lid]
-                        if len(aids) > 1:
-                            aid_lists.append(aids)
-                for aids in aid_lists:
-                    constraints.append(
-                        {
-                            "Weight_Percentage": "100",
-                            "Consecutive_If_Same_Day": "true",
-                            "Number_of_Activities": str(len(aids)),
-                            "Activity_Id": aids,
-                            "MinDays": "1",
-                            "Active": "true",
-                            "Comments": None,
-                        }
-                    )
-                #print(f"  .. {sid}")
-                #for aids in aid_lists:
-                #    print(f"        {aids}")
+                    xsets.add(aidset)
+            newsets.update(xsets)
+        ### Sort the sets
+        aids_list = sorted([sorted(s) for s in newsets])
+        for aids in aids_list:
+            aids_s = [str(a) for a in aids]
+            #print("§§§§§§§§§§§", aids_s)
+            constraints.append(
+                {
+                    "Weight_Percentage": "100",
+                    "Consecutive_If_Same_Day": "true",
+                    "Number_of_Activities": str(len(aids)),
+                    "Activity_Id": aids,
+                    "MinDays": "1",
+                    "Active": "true",
+                    "Comments": None,
+                }
+            )
         add_constraints(
             self.time_constraints,
             "ConstraintMinDaysBetweenActivities",
             constraints,
         )
-
-#TODO ??        return sid_group_sets
 
     ############### FURTHER CONSTRAINTS ###############
 
@@ -853,7 +806,7 @@ class Classes_fet(Classes):
         return self.lessons[tag.split("__", 1)[0]]["GROUPS"]
 
     # TODO: This might be easier using lists of tags and data for each class!
-    def ORDERED_IF_SAME_DAY(self, data):
+    def NOT_AFTER(self, data):
         """Two subjects should be in the given order, if on the same day."""
         constraints = []
         cmap = self.class_constraint_data(data)
@@ -886,7 +839,7 @@ class Classes_fet(Classes):
             constraints,
         )
 
-    def PAIR_GAPS(self, data):
+    def PAIR_GAP(self, data):
         """Two subjects should have at least one lesson in between."""
         constraints = []
         cmap = self.class_constraint_data(data)
@@ -1705,14 +1658,7 @@ if __name__ == "__main__":
 # TODO: Should this be later? ... as it adds activities
     _classes.lunch_breaks()
 
-
-
-#?
-    sid_group_sets = _classes.constraint_day_separation()
-
-
-    print("\nCLASS CONSTRAINTS:")
-    _classes.add_class_constraints()
+    print("\nBuild subject – activity mapping")
 
     _classes.subject_activities()
     for klass in _classes.classes:
@@ -1723,34 +1669,19 @@ if __name__ == "__main__":
             for ag, aids in ag2aids.items():
                 print(f"     {sid:8}: {ag:10} --> {aids}")
 
-    # Other activity info is available thus:
+    print("\nSubject day-separation constraints:")
+    _classes.constraint_day_separation()
+
+    print("\nCLASS CONSTRAINTS:")
+    _classes.add_class_constraints()
+
+    # Activity info is available thus:
     _aid = "550"
     print(f"\n???? {_aid}:", _classes.activities[int(_aid) - 1])
 
     quit(0)
 
 
-    # For all classes, and with custom values for some classes:
-    # minimum lessons per day
-    # TODO: This one could be table driven?
-    mintable = {
-        k: 5
-        for k in (
-            "01K",
-            "02K",
-            "03K",
-            "04K",
-            "05K",
-            "06K",
-            "07K",
-            "08K",
-            "09K",
-            "10K",
-            "11K",
-            "12K",
-        )
-    }
-    _classes.constraint_min_lessons_per_day(4, mintable)
 
     EXTRA_CONSTRAINTS = MINION(DATAPATH("TIMETABLE/EXTRA_CONSTRAINTS"))
     for key, value in EXTRA_CONSTRAINTS.items():
