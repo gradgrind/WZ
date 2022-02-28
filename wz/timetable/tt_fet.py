@@ -1,5 +1,5 @@
 """
-timetable/tt_fet.py - last updated 2022-02-27
+timetable/tt_fet.py - last updated 2022-02-28
 
 Prepare fet-timetables input from the various sources ...
 
@@ -469,140 +469,6 @@ class Classes_fet(Classes):
             constraints
         )
 
-    def __subject_atomic_group_tags(self, tglist):
-        """Given a list of (atomic-group-set, tag) pairs, collect the
-        tags which have common groups {tag: {tag, ... }]. Tags which
-        have no other tags sharing groups will also be included (as
-        tag1: {tag1}) if the tag represents more than one lesson.
-        The result can, of course, be empty.
-        """
-        tgmap = {}
-        for agroups, tag in tglist:
-            collect = {t for gset, t in tglist if agroups & gset}
-            # This includes single tags (because items are also
-            # compared with themselves).
-            if len(collect) > 1 or len(self.tag_lids[tag]) > 1:
-                # Also include tags with multiple lessons!
-                tgmap[tag] = collect
-        return tgmap
-
-    def __tag_sets_common_groups(self, tgmap):
-        """Given a mapping {tag: {tag, ... } as returned by
-        <__subject_atomic_group_tags>, return a list of tags-sets
-        (with more than one element) with group intersections.
-        Subsets are eliminated.
-        """
-        kcombis = set()
-        for tag, partners in tgmap.items():
-            for l in range(len(partners), 0, -1):
-                for c in combinations(partners, l):
-                    if tag in c:
-                        kcombis.add(frozenset(c))
-        xcombis = []
-        for ycombi in kcombis:
-            # Check with all components
-            #                print("&&&", combi)
-            for p in ycombi:
-                #                    print("%%%", p)
-                plist = tgmap[p]
-                for q in ycombi:
-                    if q not in plist:
-                        break
-                else:
-                    # ok
-                    continue
-                break
-            else:
-                xcombis.append(ycombi)
-        # Eliminate subsets
-        combis = []
-        for c in xcombis:
-            for c2 in xcombis:
-                if c < c2:
-                    break
-            else:
-                combis.append(c)
-        return combis
-
-    def __pairs_common_groups(self, cmap):
-        """For each item (sid1+sid2) get all tag sets with common groups.
-        The result is a mapping. For each item, there is a further mapping,
-        {class: [(tag_sid1, {tag_sid2, ... }), ... ]}.
-        """
-        # First get all subject keys, so that the tag sets need only be
-        # generated once
-        pairs = {}
-        for klass, item_map in cmap.items():
-            for item in item_map:
-                pairs[item] = None
-        for item in pairs:
-            try:
-                sid1, sid2 = item.split("+")
-            except ValueError:
-                raise TT_Error(_SUBJECT_PAIR_INVALID.format(item=item))
-            tglist1 = self.sid_groups[sid1]
-            tglist2 = self.sid_groups[sid2]
-            # <tglistX> is a list of ({set of "atomic" groups}, tag)
-            # pairs for each tag.
-            # Collect the tags which share groups (for this subject)
-            _tgmap = self.__subject_atomic_group_tags(tglist1 + tglist2)
-            tgmap = {k: v for k, v in _tgmap.items() if len(v) > 1}
-            if not tgmap:
-                continue
-            # Get sets of tags with (group) intersections
-            cc = self.__tag_sets_common_groups(tgmap)
-            # Remove tag sets containing only fixed lessons (this
-            # can't cope with tags whose lessons are only partially
-            # placed – they are handled as tags with full placed
-            # lessons).
-            tagsets = set()
-            for tags in cc:
-                for tag in tags:
-                    if tag not in self.placements:
-                        tagsets.add(tags)
-                        break
-            # For every tag-set containing sid1, collect all tags
-            # with joint groups and sid2
-            tagmap = {}
-            for tset in tagsets:
-                _st = {}
-                for tag in tset:
-                    sid = self.tag_get_sid(tag)
-                    try:
-                        _st[sid].append(tag)
-                    except KeyError:
-                        _st[sid] = [tag]
-                if len(_st) > 1:
-                    for tag in _st[sid1]:
-                        for tag2 in _st[sid2]:
-                            try:
-                                tagmap[tag].add(tag2)
-                            except KeyError:
-                                tagmap[tag] = {tag2}
-            # Divide up the sets into classes
-            class_map = {}
-            for tag, tset in tagmap.items():
-                classes = {
-                    class_group_split(g)[0] for g in self.tag_get_groups(tag)
-                }
-                for klass in classes:
-                    tset1 = set()
-                    for t in tset:
-                        for g in self.tag_get_groups(t):
-                            if class_group_split(g)[0] == klass:
-                                tset1.add(t)
-                    if tset1:
-                        tag_tset = (tag, tset1)
-                        try:
-                            class_map[klass].append(tag_tset)
-                        except KeyError:
-                            class_map[klass] = [tag_tset]
-            pairs[item] = class_map
-        #            for k in sorted(class_map):
-        #                for tset in class_map[k]:
-        #                    print("+++", k, tset)
-        return pairs
-
     def subject_activities(self):
         """Collect the activity ids for every subject in every (atomic)
         group in every class.
@@ -724,7 +590,7 @@ class Classes_fet(Classes):
                     }
                 ],
             )
-            print(f"++ ConstraintStudentsSetMinHoursDaily {klass}: {n}")
+            #print(f"++ ConstraintStudentsSetMinHoursDaily {klass}: {n}")
 
     # Version for all classes:
     #    time_constraints['ConstraintStudentsMinHoursDaily'] = [
@@ -765,7 +631,7 @@ class Classes_fet(Classes):
                 }
             ],
         )
-        print(f"++ ConstraintStudentsSetMaxGapsPerWeek {klass}: {n}")
+        #print(f"++ ConstraintStudentsSetMaxGapsPerWeek {klass}: {n}")
 
     def class_constraint_data(self, data):
         """Extract info for the various classes, jandling default values."""
@@ -784,61 +650,24 @@ class Classes_fet(Classes):
                 cmap[klass] = v
         return cmap
 
-
-    def tag_get_sid(self, tag):
-        # ?
-        return self.lessons[tag.split("__", 1)[0]]["SID"]
-
-    def tag_get_groups(self, tag):
-        # ?
-        return self.lessons[tag.split("__", 1)[0]]["GROUPS"]
-
-# TODO
-    def constraint_NOT_AFTER(self, klass, pairs, t_constraint):
-        """Two subjects should be in the given order, if on the same day."""
-        print("\nTODO: constraint_NOT_AFTER", klass, pairs)
-        return
-
-        constraints = []
-        cmap = self.class_constraint_data(data)
-        pairs = self.__pairs_common_groups(cmap)
-        for klass, item_map in cmap.items():
-            for item, weight in item_map.items():
-                percent = WEIGHTS[int(weight)]
-                if not percent:
-                    continue
-                taglist = pairs[item].get(klass) or []
-                for tag, tagset in taglist:
-                    lids2 = []
-                    for t in tagset:
-                        lids2 += self.tag_lids[t]
-                    for lid1 in self.tag_lids[tag]:
-                        # print("???", klass, item, percent, lid1, lids2)
-                        for lid2 in lids2:
-                            constraints.append(
-                                {
-                                    "Weight_Percentage": percent,
-                                    "First_Activity_Id": lid1,
-                                    "Second_Activity_Id": lid2,
-                                    "Active": "true",
-                                    "Comments": None,
-                                }
-                            )
-        add_constraints(
-            self.time_constraints,
-            "ConstraintTwoActivitiesOrderedIfSameDay",
-            constraints,
-        )
-
-    def constraint_PAIR_GAP(self, klass, pairs, t_constraint):
-        """Two subjects should have at least one lesson in between."""
-        constraints = []
+    def pair_constraint(self, klass, pairs, t_constraint) -> List[
+            Tuple[Set[Tuple[int,int]],str]]:
+        """Find pairs of activity ids of activities which link two
+        subjects (subject tags) for a constraint.
+        The returned pairs share at least one "atomic" group.
+        The subject pairs are supplied as parameter <pairs>. There can
+        be multiple pairs (space separated) and each pair can have a
+        weighting (0-10) after a ":" separator, e.g. "En+Fr:8 Eu+Sp".
+        The result is a list of pairs, (set of activity ids, fet-weighting).
+        fet-weighting is a string in the range "0" to "100".
+        """
+        result: List[Tuple[Set[Tuple[int,int]],str]] = []
         sid2ag2aids = self.class2sid2ag2aids[klass]
         for wpair in pairs.split():
             try:
                 pair, _w = wpair.split(":", 1)
             except ValueError:
-                pair, w = pairw, 10
+                pair, w = wpair, 10
             else:
                 try:
                     w = weight_value(_w)
@@ -854,6 +683,7 @@ class Classes_fet(Classes):
             except ValueError:
                 REPORT("ERROR", _INVALID_CLASS_CONSTRAINT.format(
                         klass=klass, constraint=t_constraint))
+                return []
             try:
                 ag2aids1 = sid2ag2aids[sid1]
                 ag2aids2 = sid2ag2aids[sid2]
@@ -863,21 +693,47 @@ class Classes_fet(Classes):
             for ag in ag2aids1:
                 if ag in ag2aids2:
                     for aidpair in product(ag2aids1[ag], ag2aids2[ag]):
-                        fs = frozenset(aidpair)
-                        if fs not in aidpairs:
-                            aidpairs.add(fs)
-                            constraints.append(
-                                {
-                                    "Weight_Percentage": percent,
-                                    "Number_of_Activities": "2",
-                                    "Activity_Id": sorted(aidpair),
-                                    "MinGaps": "1",
-                                    "Active": "true",
-                                    "Comments": None,
-                               }
-                            )
-            #print(f"??? PAIR_GAP in {klass} ({wpair}):", ", ".join(
-            #    ["+".join(sorted(ap)) for ap in aidpairs]))
+                        aidpairs.add(aidpair)
+            result.append((sorted(aidpairs), percent))
+        return result
+
+    def constraint_NOT_AFTER(self, klass, pairs, t_constraint):
+        """Two subjects should be in the given order, if on the same day."""
+        constraints = []
+        for aidpairs, percent in self.pair_constraint(klass, pairs,
+                t_constraint):
+            for aid1, aid2 in aidpairs:
+                constraints.append(
+                    {
+                        "Weight_Percentage": percent,
+                        "First_Activity_Id": aid1,
+                        "Second_Activity_Id": aid2,
+                        "Active": "true",
+                        "Comments": None,
+                    }
+                )
+        add_constraints(
+            self.time_constraints,
+            "ConstraintTwoActivitiesOrderedIfSameDay",
+            constraints,
+        )
+
+    def constraint_PAIR_GAP(self, klass, pairs, t_constraint):
+        """Two subjects should have at least one lesson in between."""
+        constraints = []
+        for aidpairs, percent in self.pair_constraint(klass, pairs,
+                t_constraint):
+            for aidpair in aidpairs:
+                constraints.append(
+                    {
+                        "Weight_Percentage": percent,
+                        "Number_of_Activities": "2",
+                        "Activity_Id": aidpair,
+                        "MinGaps": "1",
+                        "Active": "true",
+                        "Comments": None,
+                   }
+                )
         add_constraints(
             self.time_constraints,
             "ConstraintMinGapsBetweenActivities",
@@ -1683,7 +1539,7 @@ if __name__ == "__main__":
     print("\nSubject day-separation constraints ...")
     _classes.constraint_day_separation()
 
-    print("\nCLASS CONSTRAINTS:")
+    print("\nClass constraints ...")
     _classes.add_class_constraints()
 
     # Activity info is available thus:
