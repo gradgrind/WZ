@@ -1,5 +1,5 @@
 """
-timetable/tt_base.py - last updated 2022-02-27
+timetable/tt_base.py - last updated 2022-02-28
 
 Read timetable information from the various sources ...
 
@@ -619,6 +619,7 @@ class Classes:
                 raise TT_Error(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
             info = ctable["__INFO__"]
             klass = info.pop("CLASS")
+            del(ctable['__INFO_NAMES__']["CLASS"])
             self.class_constraints[klass] = info
             self.class_constraints['__INFO_NAMES__'] = ctable['__INFO_NAMES__']
             available = {}

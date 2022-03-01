@@ -1,5 +1,5 @@
 """
-timetable/tt_fet.py - last updated 2022-02-28
+timetable/tt_fet.py - last updated 2022-03-01
 
 Prepare fet-timetables input from the various sources ...
 
@@ -18,6 +18,8 @@ Copyright 2022 Michael Towers
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+
+#TODO! Major changes: Move to integer aids!!!
 
 __TEST = False
 __TEST = True
@@ -53,6 +55,7 @@ _TAG_TOO_MANY_TIMES = (
 _INVALID_CLASS_CONSTRAINT = (
     "Klasse {klass}: ungültige Wert für Bedingung {constraint}"
 )
+_UNKNOWN_CONSTRAINT = "Klassenbedingung „{name}“ unbekannt"
 
 
 ########################################################################
@@ -217,7 +220,7 @@ class Classes_fet(Classes):
         """
         # First need a hashable representation of <roomlists>, use a string.
         hashable = "&".join(["|".join(rooms) for rooms in roomlists])
-        # print("???????", hashable)
+        #print("???????", hashable)
         try:
             return self.__virtual_rooms[hashable]
         except KeyError:
@@ -247,12 +250,12 @@ class Classes_fet(Classes):
         return name
 
     def next_activity_id(self):
-        return str(len(self.activities) + 1)
+        return len(self.activities) + 1
 
     def get_lessons(self):
         """Build list of lessons for fet-timetables."""
 
-        def make_room_constraint(aid: str, rlist: List[str]) -> None:
+        def make_room_constraint(aid: int, rlist: List[str]) -> None:
             """Make a room constraint for the given activity id and room
             list.
             """
@@ -261,8 +264,8 @@ class Classes_fet(Classes):
                 r_c = "ConstraintActivityPreferredRooms"
                 s_c = {
                     "Weight_Percentage": "100",
-                    "Activity_Id": aid,
-                    "Number_of_Preferred_Rooms": n,
+                    "Activity_Id": str(aid),
+                    "Number_of_Preferred_Rooms": str(n),
                     "Preferred_Room": rlist,
                     "Active": "true",
                     "Comments": None,
@@ -271,7 +274,7 @@ class Classes_fet(Classes):
                 r_c = "ConstraintActivityPreferredRoom"
                 s_c = {
                     "Weight_Percentage": "100",
-                    "Activity_Id": aid,
+                    "Activity_Id": str(aid),
                     "Room": rlist[0],
                     "Permanently_Locked": "true",
                     "Active": "true",
@@ -283,7 +286,7 @@ class Classes_fet(Classes):
 
         self.time_constraints = {}
         self.space_constraints = {}
-        self.activities = []  # fet activities
+        self.activities: List[dict] = []  # fet activities
         # Get initial room list in fet form
         self.fet_rooms: List[dict] = self.ROOMS.get_rooms()
         self.__virtual_rooms = {}  # virtual room cache, internal
@@ -291,8 +294,8 @@ class Classes_fet(Classes):
         # lessons in the various subjects, collect the tags and their
         # pupil groups for each subject:
         #    {sid: [(group-set, activity id), ... ]}
-        self.sid_groups: Dict[str, List[Tuple[FrozenSet[str], str]]] = {}
-        self.lid2aids: Dict[int, List[str]] = {}
+        self.sid_groups: Dict[str, List[Tuple[FrozenSet[str], int]]] = {}
+        self.lid2aids: Dict[int, List[int]] = {}
 
         lesson_index: int = -1  # index of the current "lesson"
         for lesson in self.lesson_list:
@@ -306,7 +309,7 @@ class Classes_fet(Classes):
             if groups:
                 # "Simplify" the groups, building a list of groups
                 activity_groups = sorted(self.combine_atomic_groups(groups))
-                # print("*****", groups, "-->", activity_groups)
+                #print("*****", groups, "-->", activity_groups)
             else:
                 REPORT("WARNING", _LESSON_NO_GROUP.format(klass=klass, sid=sid))
                 activity_groups = []
@@ -373,7 +376,7 @@ class Classes_fet(Classes):
                     {
                         "Duration": dstr,
                         "Total_Duration": dstr,
-                        "Id": activity_id,
+                        "Id": str(activity_id),
                         "Comments": f"{lesson_index}",
                     }
                 )
@@ -386,7 +389,7 @@ class Classes_fet(Classes):
                     self.sid_groups[sid] = [(groups, activity_id)]
             else:
                 i = 0
-                aids = []
+                aids: List[int] = []
                 self.lid2aids[lesson_index] = aids
                 for d in durations:
                     i += 1
@@ -398,7 +401,7 @@ class Classes_fet(Classes):
                         {
                             "Duration": dstr,
                             "Total_Duration": dstr,
-                            "Id": activity_id,
+                            "Id": str(activity_id),
                             "Comments": f"{lesson_index}.{i}",
                         }
                     )
@@ -423,24 +426,24 @@ class Classes_fet(Classes):
                 continue
             atomic_groups = self.class_groups[klass]["*"]
             groupsets = self.groupsets_class[klass]
-            print(f"??? {klass}", atomic_groups)
+            #print(f"??? {klass}", atomic_groups)
             d = -1
             for periods in weekdata:
                 d += 1
                 if periods:
                     nperiods = str(len(periods))
                     day = self.DAYS[d]
-                    print(f"LUNCH {klass}, {day}: {periods}")
+                    #print(f"LUNCH {klass}, {day}: {periods}")
                     # Add lunch-break activity
                     for g in atomic_groups:
-                        aid = self.next_activity_id()
+                        aid_s = str(self.next_activity_id())
                         activity = {
                             #"Teacher": {},
                             "Subject": LUNCH_BREAK[0],
                             "Students": groupsets.get(frozenset([g])) or g,
                             "Duration": "1",
                             "Total_Duration": "1",
-                            "Id": aid,
+                            "Id": aid_s,
                             "Activity_Group_Id": "0",
                             "Active": "true",
                             "Comments": None,
@@ -450,7 +453,7 @@ class Classes_fet(Classes):
                         constraints.append(
                             {
                                 "Weight_Percentage": "100",
-                                "Activity_Id": aid,
+                                "Activity_Id": aid_s,
                                 "Number_of_Preferred_Starting_Times": nperiods,
                                 "Preferred_Starting_Time": [
                                     {
@@ -473,10 +476,10 @@ class Classes_fet(Classes):
         """Collect the activity ids for every subject in every (atomic)
         group in every class.
         """
-        aids: List[str]
-        ag2aids: Dict[str,List[str]]
-        sid2ag2aids: Dict[str,Dict[str,List[str]]]
-        self.class2sid2ag2aids: Dict[str,Dict[str,Dict[str,List[str]]]] = {}
+        aids: List[sint]
+        ag2aids: Dict[str,List[int]]
+        sid2ag2aids: Dict[str,Dict[str,List[int]]]
+        self.class2sid2ag2aids: Dict[str,Dict[str,Dict[str,List[int]]]] = {}
         for _klass, lids in self.class_lessons.items():
             ### Collect subjects
             for lid in lids:
@@ -511,10 +514,10 @@ class Classes_fet(Classes):
         """
         constraints: List[dict] = []
         # Use <self.class2sid2ag2aids> to find activities.
-        sid2ag2aids: Dict[str,Dict[str,List[str]]]
-        ag2aids: Dict[str,List[str]]
-        aids: List[str]
-        aidset_map: Dict[int,Set[FrozenSet[str]]] = {}
+        sid2ag2aids: Dict[str,Dict[str,List[int]]]
+        ag2aids: Dict[str,List[int]]
+        aids: List[int]
+        aidset_map: Dict[int,Set[FrozenSet[int]]] = {}
         for klass in self.classes:
             try:
                 sid2ag2aids = self.class2sid2ag2aids[klass]
@@ -525,11 +528,11 @@ class Classes_fet(Classes):
                     # Skip sets with only one element
                     l = len(aids)
                     if l > 1:
-                        aids_i = frozenset(int(aid) for aid in aids)
+                        aids_fs = frozenset(aids)
                         try:
-                            aidset_map[l].add(aids_i)
+                            aidset_map[l].add(aids_fs)
                         except KeyError:
-                            aidset_map[l] = {aids_i}
+                            aidset_map[l] = {aids_fs}
         ### Eliminate subsets
         lengths = sorted(aidset_map, reverse=True)
         newsets = aidset_map[lengths[0]]   # the largest sets
@@ -545,14 +548,12 @@ class Classes_fet(Classes):
         ### Sort the sets
         aids_list = sorted([sorted(s) for s in newsets])
         for aids in aids_list:
-            aids_s = [str(a) for a in aids]
-            #print("§§§§§§§§§§§", aids_s)
             constraints.append(
                 {
                     "Weight_Percentage": "100",
                     "Consecutive_If_Same_Day": "true",
                     "Number_of_Activities": str(len(aids)),
-                    "Activity_Id": aids,
+                    "Activity_Id": [str(a) for a in aids],
                     "MinDays": "1",
                     "Active": "true",
                     "Comments": None,
@@ -566,20 +567,32 @@ class Classes_fet(Classes):
 
     ############### FURTHER CONSTRAINTS ###############
 
-    def constraint_MIN_PERIODS_DAILY(self, klass, n, t_constraint):
-        if n:
+# Add weighting (ignored here)?
+    def constraints_MIN_PERIODS_DAILY(self, t_constraint):
+        clist: List[dict] = []
+#TODO: Get default from somewhere?
+        default = "4"
+        for klass in self.classes:
             try:
-                i = int(n)
-                if i < 1 or i > len(self.PERIODS):
-                    raise ValueError
-            except ValueError:
-                REPORT("ERROR", _INVALID_CLASS_CONSTRAINT.format(
-                        klass=klass, constraint=t_constraint))
-                return
-            add_constraints(
-                self.time_constraints,
-                "ConstraintStudentsSetMinHoursDaily",
-                [
+                n = self.class_constraints[klass]["MIN_PERIODS_DAILY"]
+            except KeyError:
+                # If the constraint is not present, don't add it for
+                # this class
+                continue
+            if n:
+                if n == '*':
+                    n = default
+                else:
+                    try:
+                        i = int(n)
+                        if i < 1 or i > len(self.PERIODS):
+                            raise ValueError
+                    except ValueError:
+                        REPORT("ERROR", _INVALID_CLASS_CONSTRAINT.format(
+                                klass=klass, constraint=t_constraint))
+                        return
+                    n = str(i)
+                clist.append(
                     {
                         "Weight_Percentage": "100", # necessary!
                         "Minimum_Hours_Daily": n,
@@ -588,9 +601,9 @@ class Classes_fet(Classes):
                         "Active": "true",
                         "Comments": None,
                     }
-                ],
-            )
-            #print(f"++ ConstraintStudentsSetMinHoursDaily {klass}: {n}")
+                )
+                #print(f"++ ConstraintStudentsSetMinHoursDaily {klass}: {n}")
+        return "ConstraintStudentsSetMinHoursDaily", clist
 
     # Version for all classes:
     #    time_constraints['ConstraintStudentsMinHoursDaily'] = [
@@ -602,53 +615,44 @@ class Classes_fet(Classes):
     #        }
     #    ]
 
-    def constraint_MAX_GAPS_WEEKLY(self, klass, n, t_constraint):
-        """Maximum gaps per week for the specified class.
-        If <n> is not supplied (also if the condition is not specified!)
-        use 0 (no gaps).
+    def constraints_MAX_GAPS_WEEKLY(self, t_constraint):
+        """Maximum gaps per week for the specified classes.
+        If the constraint is not specified for a class, that class will
+        not have the constraint. The default value ("*") is "0" (no gaps).
         """
-        if n:
+        clist: List[dict] = []
+        for klass in self.classes:
             try:
-                i = int(n)
-                if i < 0 or i > _MAX_GAPS_PER_WEEK:
-                    raise ValueError
-            except ValueError:
-                REPORT("ERROR", _INVALID_CLASS_CONSTRAINT.format(
-                        klass=klass, constraint=t_constraint))
-                return
-        else:
-            n = "0"
-        add_constraints(
-            self.time_constraints,
-            "ConstraintStudentsSetMaxGapsPerWeek",
-            [
-                {
-                    "Weight_Percentage": "100", # necessary!
-                    "Max_Gaps": n,
-                    "Students": klass,
-                    "Active": "true",
-                    "Comments": None,
-                }
-            ],
-        )
-        #print(f"++ ConstraintStudentsSetMaxGapsPerWeek {klass}: {n}")
-
-    def class_constraint_data(self, data):
-        """Extract info for the various classes, jandling default values."""
-        cmap = {}
-        try:
-            default = data.pop("*")  # WARNING: The entry is now gone!
-        except KeyError:
-            pass
-        else:
-            for klass in _classes.class_days_periods:
-                cmap[klass] = default.copy()
-        for klass, v in data.items():
-            try:
-                cmap[klass].update(v)
+                n = self.class_constraints[klass]["MAX_GAPS_WEEKLY"]
             except KeyError:
-                cmap[klass] = v
-        return cmap
+                # If the constraint is not present, don't add it for
+                # this class
+                continue
+            if n:
+                if n == '*':
+                    # default is "0"
+                    n = "0"
+                else:
+                    try:
+                        i = int(n)
+                        if i < 0 or i > _MAX_GAPS_PER_WEEK:
+                            raise ValueError
+                    except ValueError:
+                        REPORT("ERROR", _INVALID_CLASS_CONSTRAINT.format(
+                                klass=klass, constraint=t_constraint))
+                        continue
+                    n = str(i)
+                clist.append(
+                    {
+                        "Weight_Percentage": "100", # necessary!
+                        "Max_Gaps": n,
+                        "Students": klass,
+                        "Active": "true",
+                        "Comments": None,
+                    }
+                )
+                #print(f"++ ConstraintStudentsSetMaxGapsPerWeek {klass}: {n}")
+        return "ConstraintStudentsSetMaxGapsPerWeek", clist
 
     def pair_constraint(self, klass, pairs, t_constraint) -> List[
             Tuple[Set[Tuple[int,int]],str]]:
@@ -694,66 +698,97 @@ class Classes_fet(Classes):
                 if ag in ag2aids2:
                     for aidpair in product(ag2aids1[ag], ag2aids2[ag]):
                         aidpairs.add(aidpair)
-            result.append((sorted(aidpairs), percent))
+            result.append((aidpairs, percent))
         return result
 
-    def constraint_NOT_AFTER(self, klass, pairs, t_constraint):
-        """Two subjects should be in the given order, if on the same day."""
-        constraints = []
-        for aidpairs, percent in self.pair_constraint(klass, pairs,
-                t_constraint):
-            for aid1, aid2 in aidpairs:
-                constraints.append(
-                    {
-                        "Weight_Percentage": percent,
-                        "First_Activity_Id": aid1,
-                        "Second_Activity_Id": aid2,
-                        "Active": "true",
-                        "Comments": None,
-                    }
-                )
-        add_constraints(
-            self.time_constraints,
-            "ConstraintTwoActivitiesOrderedIfSameDay",
-            constraints,
-        )
+    def constraints_NOT_AFTER(self, t_constraint):
+        """Two subjects should NOT be in the given order, if on the same day."""
+        aidmap: Dict[Tuple[str,str],] = {}
+        for klass in self.classes:
+            try:
+                pairs = self.class_constraints[klass]["NOT_AFTER"]
+            except KeyError:
+                # If the constraint is not present, don't add it for
+                # this class
+                continue
+            for aidpairs, percent in self.pair_constraint(klass, pairs,
+                    t_constraint):
+                for aidpair in aidpairs:
+                    ap = (aidpair[1], aidpair[0])
+                    if ap in aidmap:
+                        if int(percent) <= int(aidmap[ap]):
+                            continue
+                    aidmap[ap] = percent
+        clist: List[dict] = []
+        for aidpair in sorted(aidmap):
+            percent = aidmap[aidpair]
+            clist.append(
+                {
+                    "Weight_Percentage": percent,
+                    "First_Activity_Id": str(aidpair[0]),
+                    "Second_Activity_Id": str(aidpair[1]),
+                    "Active": "true",
+                    "Comments": None,
+                }
+            )
+            #a1 = self.activities[aidpair[0] - 1]["Subject"]
+            #a2 = self.activities[aidpair[1] - 1]["Subject"]
+            #print(f" ++ ConstraintTwoActivitiesOrderedIfSameDay:"
+            #    f" {a1}/{aidpair[0]} {a2}/{aidpair[1]}")
+        return "ConstraintTwoActivitiesOrderedIfSameDay", clist
 
-    def constraint_PAIR_GAP(self, klass, pairs, t_constraint):
+    def constraints_PAIR_GAP(self, t_constraint):
         """Two subjects should have at least one lesson in between."""
-        constraints = []
-        for aidpairs, percent in self.pair_constraint(klass, pairs,
-                t_constraint):
-            for aidpair in aidpairs:
-                constraints.append(
-                    {
-                        "Weight_Percentage": percent,
-                        "Number_of_Activities": "2",
-                        "Activity_Id": aidpair,
-                        "MinGaps": "1",
-                        "Active": "true",
-                        "Comments": None,
-                   }
-                )
-        add_constraints(
-            self.time_constraints,
-            "ConstraintMinGapsBetweenActivities",
-            constraints,
-        )
+        aidmap: Dict[Tuple[str,str],] = {}
+        for klass in self.classes:
+            try:
+                pairs = self.class_constraints[klass]["PAIR_GAP"]
+            except KeyError:
+                # If the constraint is not present, don't add it for
+                # this class
+                continue
+            for aidpairs, percent in self.pair_constraint(klass, pairs,
+                    t_constraint):
+                for aidpair in aidpairs:
+                    # Order the pair elements
+                    if aidpair[0] > aidpair[1]:
+                        aidpair = (aidpair[1], aidpair[0])
+                    if aidpair in aidmap:
+                        if int(percent) <= int(aidmap[aidpair]):
+                            continue
+                    aidmap[aidpair] = percent
+        clist: List[dict] = []
+        for aidpair in sorted(aidmap):
+            percent = aidmap[aidpair]
+            clist.append(
+                {
+                    "Weight_Percentage": percent,
+                    "Number_of_Activities": "2",
+                    "Activity_Id": [str(a) for a in aidpair],
+                    "MinGaps": "1",
+                    "Active": "true",
+                    "Comments": None,
+                }
+            )
+            #a1 = self.activities[aidpair[0] - 1]["Subject"]
+            #a2 = self.activities[aidpair[1] - 1]["Subject"]
+            #print(f" ++ ConstraintMinGapsBetweenActivities:"
+            #    f" {a1}/{aidpair[0]} {a2}/{aidpair[1]}")
+        return "ConstraintMinGapsBetweenActivities", clist
 
     def add_class_constraints(self):
-        info_names = self.class_constraints['__INFO_NAMES__']
-        for klass in sorted(self.class_constraints):
-            if klass[0] == "_":
-                continue
-            for key, val in self.class_constraints[klass].items():
-                if key[0] == "_":
-                    continue
-                try:
-                    func = getattr(self, f"constraint_{key}")
-                except AttributeError:
-                    print(f"CONSTRAINT {key}: Not yet implemented")
-                    continue
-                func(klass, val, info_names[key])
+        """Add time constraints according to the "info" entries in the
+        timetable data files for each class.
+        """
+        constraints: List[dict] = []
+        # Get "local" names of constraints, call handlers
+        for name, t_name in self.class_constraints['__INFO_NAMES__'].items():
+            try:
+                func = getattr(self, f"constraints_{name}")
+            except AttributeError:
+                raise TT_Error(_UNKNOWN_CONSTRAINT.format(name=name_t))
+            cname, clist = func(t_name)
+            add_constraints(self.time_constraints, cname, clist)
 
 
 class Teachers_fet(TT_Teachers):
@@ -1267,7 +1302,7 @@ class Placements_fet(TT_Placements):
         constraints_fixed = []
         constraints_multi = []
         constraints_l = []
-        # print("\n*** Parallel tags ***")
+        #print("\n*** Parallel tags ***")
         for tag, lids in self.classes.parallel_tags.items():
             # for i in lids:
             #    print(f"  {tag}: {i} --> {lid2aids[i]}")
@@ -1545,6 +1580,7 @@ if __name__ == "__main__":
     # Activity info is available thus:
     _aid = "550"
     print(f"\n???? {_aid}:", _classes.activities[int(_aid) - 1])
+
 
     quit(0)
 
