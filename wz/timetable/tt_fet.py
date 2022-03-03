@@ -1,5 +1,5 @@
 """
-timetable/tt_fet.py - last updated 2022-03-01
+timetable/tt_fet.py - last updated 2022-03-03
 
 Prepare fet-timetables input from the various sources ...
 
@@ -19,8 +19,6 @@ Copyright 2022 Michael Towers
    limitations under the License.
 """
 
-#TODO! Major changes: Move to integer aids!!!
-
 __TEST = False
 __TEST = True
 
@@ -29,7 +27,6 @@ FET_VERSION = "6.2.7"
 WEIGHTS = [None, "50", "67", "80", "88", "93", "95", "97", "98", "99", "100"]
 
 LUNCH_BREAK = ("mp", "Mittagspause")
-VIRTUAL_ROOM = ("dummy", "Zusatzraum")
 
 _MAX_GAPS_PER_WEEK = 10 # maximum value for max. gaps per week (for classes)
 
@@ -117,7 +114,6 @@ class Classes_fet(Classes):
         "activities",
         "fet_rooms",
         "__virtual_rooms",
-        "sid_groups",
         "time_constraints",
         "space_constraints",
         "lid2aids",
@@ -245,7 +241,7 @@ class Classes_fet(Classes):
             "Set_of_Real_Rooms": roomlist,
             "Comments": None,
         }
-        self.__virtual_rooms[hashable] = room
+        self.__virtual_rooms[hashable] = name
         self.fet_rooms.append(room)
         return name
 
@@ -291,10 +287,9 @@ class Classes_fet(Classes):
         self.fet_rooms: List[dict] = self.ROOMS.get_rooms()
         self.__virtual_rooms = {}  # virtual room cache, internal
         # For constraints concerning relative placement of individual
-        # lessons in the various subjects, collect the tags and their
-        # pupil groups for each subject:
-        #    {sid: [(group-set, activity id), ... ]}
-        self.sid_groups: Dict[str, List[Tuple[FrozenSet[str], int]]] = {}
+        # lessons in the various subjects, collect the "atomic" pupil
+        # groups and their activity ids for each subject, divided by class:
+        self.class2sid2ag2aids: Dict[str,Dict[str,Dict[str,List[int]]]] = {}
         self.lid2aids: Dict[int, List[int]] = {}
 
         lesson_index: int = -1  # index of the current "lesson"
@@ -363,7 +358,9 @@ class Classes_fet(Classes):
                     if len(activity_groups) == 1
                     else activity_groups
                 )
-            activity0["Subject"] = sid
+            # Split off possible "+" extension on subject id
+            sid0 = sid.split("+", 1)[0]
+            activity0["Subject"] = sid0
             activity0["Activity_Group_Id"] = "0"
             activity0["Active"] = "true"
             durations: List[int] = lesson.LENGTHS
@@ -383,10 +380,7 @@ class Classes_fet(Classes):
                 self.activities.append(activity0)
                 if rooms:
                     make_room_constraint(activity_id, rooms)
-                try:
-                    self.sid_groups[sid].append((groups, activity_id))
-                except KeyError:
-                    self.sid_groups[sid] = [(groups, activity_id)]
+                self.subject_group_activity(sid0, groups, activity_id)
             else:
                 i = 0
                 aids: List[int] = []
@@ -408,10 +402,7 @@ class Classes_fet(Classes):
                     self.activities.append(activity)
                     if rooms:
                         make_room_constraint(activity_id, rooms)
-                    try:
-                        self.sid_groups[sid].append((groups, activity_id))
-                    except KeyError:
-                        self.sid_groups[sid] = [(groups, activity_id)]
+                    self.subject_group_activity(sid0, groups, activity_id)
 
     def lunch_breaks(self):
         """Add activities and constraints for lunch breaks.
@@ -472,41 +463,33 @@ class Classes_fet(Classes):
             constraints
         )
 
-    def subject_activities(self):
-        """Collect the activity ids for every subject in every (atomic)
-        group in every class.
+    def subject_group_activity(self, sid:str, groups:FrozenSet[str],
+            activity_id:int) -> None:
+        """Add the activity/groups to the collection for the appropriate
+        class and subject.
         """
-        aids: List[sint]
+        aids: List[int]
         ag2aids: Dict[str,List[int]]
         sid2ag2aids: Dict[str,Dict[str,List[int]]]
-        self.class2sid2ag2aids: Dict[str,Dict[str,Dict[str,List[int]]]] = {}
-        for _klass, lids in self.class_lessons.items():
-            ### Collect subjects
-            for lid in lids:
-                aids = self.lid2aids.get(lid)
-                if not aids:
-                    continue
-                lesson: Lesson = self.lesson_list[lid]
-                sid: str = lesson.SID.split("+", 1)[0] # remove "+"-tags
-                for group in lesson.GROUPS:
-                    # For each group, add the activity ids in the appropriate class
-                    klass = group.split(".", 1)[0]
-                    try:
-                        sid2ag2aids = self.class2sid2ag2aids[klass]
-                    except KeyError:
-                        ag2aids = {group: list(aids)}
-                        self.class2sid2ag2aids[klass] = {sid: ag2aids}
-                        continue
-                    try:
-                        ag2aids = sid2ag2aids[sid]
-                    except KeyError:
-                        sid2ag2aids[sid] = {group: list(aids)}
-                        continue
-                    try:
-                        ag2aids[group] += aids
-                    except KeyError:
-                        ag2aids[group] = list(aids)
 
+        for group in groups:
+            klass = group.split(".", 1)[0]
+            try:
+                sid2ag2aids = self.class2sid2ag2aids[klass]
+            except KeyError:
+                sid2ag2aids = {}
+                self.class2sid2ag2aids[klass] = {sid: {group: [activity_id]}}
+                continue
+            try:
+                ag2aids = sid2ag2aids[sid]
+            except KeyError:
+                ag2aids = {}
+                sid2ag2aids[sid] = {group: [activity_id]}
+                continue
+            try:
+                ag2aids[group].append(activity_id)
+            except KeyError:
+                ag2aids[group] = [activity_id]
 
     def constraint_day_separation(self):
         """Add constraints to ensure that multiple lessons in any subject
@@ -983,31 +966,15 @@ class Rooms_fet(TT_Rooms):
                 "Building": None,
                 "Capacity": "30000",
                 "Virtual": "false",
-                "Comments": name,
+                "Comments": self[rid],
             }
-            for rid, name in self.items()
+            for rid in sorted(self)
         ]
-
-
-# TODO: special fet bodge.
-# Add virtual rooms when a lesson needs more than one room.
-# Name them according to the contained rooms, e.g. 'rid1,rid2'?
-#                {'Name': 'V1', 'Building': None, 'Capacity': '30000',
-#                    'Virtual': 'true',
-#                    'Number_of_Sets_of_Real_Rooms': '2',
-#                    'Set_of_Real_Rooms': [
-#                        {'Number_of_Real_Rooms': '1', 'Real_Room': 'rid1'},
-#                        {'Number_of_Real_Rooms': '1', 'Real_Room': 'rid2'}
-#                    ], 'Comments': None
-#                },
-# To include more than one room in a set (possibly best to avoid this?):
-# {'Number_of_Real_Rooms': '2', 'Real_Room': ['r2', 'r3']}
 
 
 class Subjects_fet(TT_Subjects):
     def get_subjects(self):
         sids = [{"Name": sid, "Comments": name} for sid, name in self.items()]
-        sids.append({"Name": VIRTUAL_ROOM[0], "Comments": VIRTUAL_ROOM[1]})
         sids.append({"Name": LUNCH_BREAK[0], "Comments": LUNCH_BREAK[1]})
         return sids
 
@@ -1406,14 +1373,14 @@ class Placements_fet(TT_Placements):
                 for e in excess[1:]:
                     if len(e) != l:
                         raise Bug("Mismatch in parallel tag lists, tag = {tag}")
+                excess_n = str(len(excess))
                 for i in range(l):
                     parallel = [e[i] for e in excess]
                     constraints_parallel.append(
                         {
                             "Weight_Percentage": w,
-                            "Number_of_Activities": str(l),
+                            "Number_of_Activities": excess_n,
                             "Activity_Id": parallel,
-                            "Permanently_Locked": "true",
                             "Active": "true",
                             "Comments": None,
                         }
@@ -1474,6 +1441,7 @@ if __name__ == "__main__":
         print("\n  ==================================================")
 
     _rooms = Rooms_fet()
+    rooms = _rooms.get_rooms()
 
     _subjects = Subjects_fet()
     subjects = _subjects.get_subjects()
@@ -1500,6 +1468,8 @@ if __name__ == "__main__":
         print("\nROOMS:")
         for rdata in _classes.fet_rooms:
             print("   ", rdata)
+
+    #quit(0)
 
     if __TEST:
         print("\nTEACHERS:")
@@ -1544,11 +1514,11 @@ if __name__ == "__main__":
     )
     if __TEST:
         print("\n ********* fet LESSONS *********\n")
-        # for l, data in _classes.lessons.items():
-        #    print(f"   {l}:", data)
-        for l in activities:
-            print("   ", l)
-        print("\n  ======================================================\n")
+        ## for l, data in _classes.lessons.items():
+        ##    print(f"   {l}:", data)
+        #for l in activities:
+        #    print("   ", l)
+        #print("\n  ======================================================\n")
 
     # Classes' not-available times
     _classes.constraint_blocked_periods()
@@ -1557,12 +1527,10 @@ if __name__ == "__main__":
     cards = Placements_fet(_classes, _days, _periods)
     cards.placements()
 
-# TODO: Should this be later? ... as it adds activities
     _classes.lunch_breaks()
 
     print("\nBuild subject – activity mapping")
 
-    _classes.subject_activities()
     for klass in _classes.classes:
         if klass.startswith("XX"):
             continue
@@ -1578,26 +1546,14 @@ if __name__ == "__main__":
     _classes.add_class_constraints()
 
     # Activity info is available thus:
-    _aid = "550"
-    print(f"\n???? {_aid}:", _classes.activities[int(_aid) - 1])
+    for _aid in (550,):
+        print(f"\n???? {_aid}:", _classes.activities[_aid - 1])
 
-
-    quit(0)
-
-
-
-    EXTRA_CONSTRAINTS = MINION(DATAPATH("TIMETABLE/EXTRA_CONSTRAINTS"))
-    for key, value in EXTRA_CONSTRAINTS.items():
-        try:
-            func = getattr(_classes, key)
-        except AttributeError:
-            print(f"CONSTRAINT {key}: Not yet implemented")
-            continue
-        func(value)
+    #quit(0)
 
     xml_fet = xmltodict.unparse(
         build_dict_fet(
-            ROOMS=rooms,
+            ROOMS=_classes.fet_rooms,
             DAYS=days,
             PERIODS=periods,
             TEACHERS=teachers,
@@ -1616,11 +1572,7 @@ if __name__ == "__main__":
         fh.write(xml_fet.replace("\t", "   "))
     print("\nTIMETABLE XML ->", outpath)
 
-    #    for sid, gs in sid_group_sets.items():
-    #        print(f"\n +++ {sid}:", gs)
-    #    print(f"\n +++ Mal:", sid_group_sets['Mal'])
-    #    print("\n???divisions 01K:", _classes.class_divisions['01K'])
-    #    print("\n???class_groups 01K:", _classes.class_groups['01K'])
+    quit(0)
 
     import json
 

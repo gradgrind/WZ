@@ -1720,7 +1720,7 @@ if __name__ == "__main__":
     print("\nCLASSES:")
     classes = Classes(days, periods, subjects, rooms, teachers)
 
-    #quit(0)
+    quit(0)
 
     for k in sorted(classes.available):
         print(f"\nCLASS {k} ({classes.class_name[k]}): {classes.address[k]}")
