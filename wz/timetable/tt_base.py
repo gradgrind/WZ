@@ -1,5 +1,5 @@
 """
-timetable/tt_base.py - last updated 2022-02-28
+timetable/tt_base.py - last updated 2022-03-06
 
 Read timetable information from the various sources ...
 
@@ -575,7 +575,7 @@ class Classes:
         # There is also an entry mapping the frozenset of the full class
         # (e.g. "11G") to the class itself.
         "groupsets_class",
-        "timetable_teachers",  # tid -> list of lesson-indexes
+        "timetable_teachers",  # (ordered) tid -> list of lesson-indexes
         "class_lessons",  # class -> list of lesson-indexes
         "class2room",  # class -> class "home" room
         "parallel_tags",  # tag -> list of parallel lesson-indexes
@@ -584,15 +584,17 @@ class Classes:
         "block2roomlists",  # lesson-index -> list of room-choice lists
         "block2minus_list", # lesson-index -> list of block courses with "-" rooms
         "classes",  # list of classes whose subject tables have been read in
-        "DAYS",     # list of short day tags
-        "PERIODS",  # list of short period tags
+        "DAYS",     # list of <Day> instances
+        "daytags",  # list of short day tags
+        "PERIODS",  # list of <Period> instances
+        "periodtags",  # list of short period tags
         "SUBJECTS",
         "ROOMS",
         "TEACHERS",
         "__global_blocks",  # internal mapping of blocks
     )
 
-    def __init__(self, days, periods, SUBJECTS, ROOMS, TEACHERS):
+    def __init__(self):
         """Initialize with the valid lesson slots for each class. The
         data is read from the class-days-tables.
         Build a mapping available via attribute <available>:
@@ -602,8 +604,17 @@ class Classes:
         class tables.
         Finally read and process the data for the individual classes.
         """
-        self.DAYS = [d.short for d in days]
-        self.PERIODS = [p.short for p in periods]
+        self.DAYS = TT_Days()
+        self.daytags = [d.short for d in self.DAYS]
+        self.PERIODS = TT_Periods()
+        self.periodtags = [p.short for p in self.PERIODS]
+        self.SUBJECTS = TT_Subjects()
+        self.ROOMS = TT_Rooms()
+        self.TEACHERS = TT_Teachers(self.DAYS, self.PERIODS)
+        self.timetable_teachers: Dict[str, List[int]] = {
+            tid: [] for tid in self.TEACHERS.list_teachers()
+        }
+
         self.available = {}
         self.address = {}
         self.class_constraints: Dict[str,Dict[str,str]] = {}
@@ -635,14 +646,14 @@ class Classes:
             self.available[klass] = atable
             lunch = []
             self.lunch_periods[klass] = lunch
-            for d in self.DAYS:
+            for d in self.daytags:
                 l = []
                 lunch.append(l)
                 daydata = available[d]
                 daylist = []
                 atable.append(daylist)
                 i = 0
-                for p in self.PERIODS:
+                for p in self.periodtags:
                     val = daydata[p]
                     if val == "+":
                         l.append(i)
@@ -661,7 +672,6 @@ class Classes:
         self.class_divisions: Dict[str, List[List[str]]] = {}
         self.class_groups: Dict[str, Dict[str, FrozenSet[str]]] = {}
         self.groupsets_class: Dict[str, Dict[FrozenSet[str], str]] = {}
-        self.timetable_teachers: Dict[str, List[int]] = {}
         self.class_lessons: Dict[str, List[int]] = {}
         self.class2room: Dict[str, str] = {}
         self.parallel_tags: Dict[str, List[int]] = {}
@@ -675,9 +685,6 @@ class Classes:
         ### <Subjects> class (courses.py).
         ### The successfully read classes are listed at <self.classes>.
 
-        self.SUBJECTS: TT_Subjects = SUBJECTS
-        self.ROOMS: TT_Rooms = ROOMS
-        self.TEACHERS: TT_Teachers = TEACHERS
         self.classes: List[str] = []
         self.__global_blocks = {}
 
@@ -860,10 +867,7 @@ class Classes:
         for lesson_index in self.block2courselist:
             data = self.lesson_list[lesson_index]
             for tid in data.REALTIDS:
-                try:
-                    self.timetable_teachers[tid].append(lesson_index)
-                except KeyError:
-                    self.timetable_teachers[tid] = [lesson_index]
+                self.timetable_teachers[tid].append(lesson_index)
 
     def read_class_data(self, klass):
         """Read the information pertaining to the teaching groups within
@@ -1401,10 +1405,7 @@ class Classes:
                     self.__global_blocks[sid] = self.__lesson_index
             else:
                 for tid in real_teachers:
-                    try:
-                        self.timetable_teachers[tid].append(self.__lesson_index)
-                    except KeyError:
-                        self.timetable_teachers[tid] = [self.__lesson_index]
+                    self.timetable_teachers[tid].append(self.__lesson_index)
             if tag:
                 try:
                     self.parallel_tags[tag].append(self.__lesson_index)
@@ -1451,7 +1452,7 @@ class Classes:
         """Return a "check-list" of the lessons for each teacher."""
         tlist = []
         for tid in self.TEACHERS:
-            lesson_indexes = self.timetable_teachers.get(tid)
+            lesson_indexes = self.timetable_teachers[tid]
             if lesson_indexes:
                 class_lessons = {}
                 for lesson_index in lesson_indexes:
@@ -1536,6 +1537,12 @@ class Classes:
                             lines.append((f"Klasse {klass}", clines))
         return tlist
 
+    def teacher_tags(self):
+        """Return an ordered list of teacher tags for teachers who have
+        at least one lesson.
+        """
+        return [tid for tid, l in self.timetable_teachers.items() if l]
+
 
 # *** Group handling ***#
 # Anything more complicated than "two-level" grouping ('A.G', etc.) is
@@ -1568,10 +1575,10 @@ class TT_Placements(Dict[str, Tuple[int, List[Tuple[int, int]]]]):
     The generated data structure records the placements as pairs of
     integers (day index, period index). Instead of '*', -1 is used.
     """
-    def __init__(self, classes_data, days, periods):
+    def __init__(self, classes_data):
         super().__init__()
-        self.dayx = days.short2index()
-        self.periodx = periods.short2index()
+        self.dayx = classes_data.DAYS.short2index()
+        self.periodx = classes_data.PERIODS.short2index()
         self.classes = classes_data
         lessons = classes_data.lesson_list
         parallel_tags = classes_data.parallel_tags
@@ -1682,20 +1689,21 @@ def lesson_lengths(durations):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    print("\nDAYS: {len(days)}")
-    days = TT_Days()
+    print("\nClasses() ...")
+    classes = Classes()
+
+    print("\nDAYS: {len(classes.DAYS)}")
     i = 0
-    for d in days:
-        print(f"  {d} // {days.bitstring(i)}")
+    for d in classes.DAYS:
+        print(f"  {d} // {classes.DAYS.bitstring(i)}")
         i += 1
 
-    print("\nPERIODS: {len(periods)}")
-    periods = TT_Periods()
-    for p in periods:
+    print("\nPERIODS: {len(classes.PERIODS)}")
+    for p in classes.PERIODS:
         print(f"  {p}")
 
     print("\nROOMS:")
-    rooms = TT_Rooms()
+    rooms = classes.ROOMS
     for r in sorted(rooms):
         print(f"  {r:8}: {rooms[r]}")
     print("\nXROOMS:", rooms.xrooms)
@@ -1704,12 +1712,12 @@ if __name__ == "__main__":
         print(f"  {k:4}: {sorted(rooms.rooms_for_class[k])}")
 
     print("\nSUBJECTS:")
-    subjects = TT_Subjects()
+    subjects = classes.SUBJECTS
     for k in sorted(subjects):
         print(f"  {k:8}: {subjects[k]}")
 
     print("\nTEACHERS:")
-    teachers = TT_Teachers(days, periods)
+    teachers = classes.TEACHERS
     for tid in teachers.list_teachers():
         v = teachers[tid]
         print(f"\n  {tid} ({teachers.alphatag[tid]}): {v}")
@@ -1717,10 +1725,8 @@ if __name__ == "__main__":
         print("   ", teachers.lunch_periods[tid] or "–––")
         print("   ", teachers.constraints[tid])
 
-    print("\nCLASSES:")
-    classes = Classes(days, periods, subjects, rooms, teachers)
 
-    quit(0)
+    #quit(0)
 
     for k in sorted(classes.available):
         print(f"\nCLASS {k} ({classes.class_name[k]}): {classes.address[k]}")
@@ -1744,10 +1750,10 @@ if __name__ == "__main__":
         l = classes.lesson_list[lx]
         print("      ", l.SID, l.GROUPS, l.LENGTHS)
 
-    quit(0)
+    #quit(0)
 
     # Further attributes:
-    #        "timetable_teachers",  # tid -> list of lesson-indexes
+    #        "timetable_teachers",  # (ordered) tid -> list of lesson-indexes
     #        "class_lessons",  # class -> list of lesson-indexes
     #        "parallel_tags",  # tag -> list of parallel lesson-indexes
     #        "block2courselist",  # lesson-index -> list of courses in block
@@ -1759,7 +1765,7 @@ if __name__ == "__main__":
         print(f"  {l.CLASS} {l.SID}: {l.BLOCK} --- {l.REALTIDS}")
     #        print(f"  {li}: {cl}")
 
-    quit(0)
+    #quit(0)
 
     tcl = classes.teacher_check_list()
     odir = DATAPATH("testing/tmp")
@@ -1773,7 +1779,7 @@ if __name__ == "__main__":
         print("\nTeacher check list:", pdffile)
 
     print("\nPLACEMENTS:")
-    placements = TT_Placements(classes, days, periods)
+    placements = TT_Placements(classes)
     for tag, wp in placements.items():
         print(
             f"  {tag:10} @{wp[0]:02}: {', '.join([f'{d}.{p}' for d, p in wp[1]])}"
