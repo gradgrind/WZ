@@ -1,0 +1,15 @@
+*) Leaving an editor with uncommitted changes.
+
+Pending changes are recorded and a "Save" button is activated when there are some
+which could be saved. When some change to the gui is made that would cause the
+view to change (switch of pupil, class, year, whatever), these changes would be
+lost. Therefore, before actually performing this change a pop-up with the choice of
+"Cancel" or "Lose Changes" being offered. The custom <KeySelect> widget (for
+example) uses a callback function when a change is made. If this function returns
+<False>, the previously selected item will be reselected. If <True>, the changes
+will be lost and the switch of view will take place.
+
+*) Pupils database storage.
+
+json is used. On its own it is moderately compact, when gzipped it is very compact.
+It can be used easily in nearly all programming languages and is quite flexible.

@@ -1,7 +1,7 @@
 """
 text/check_list.py
 
-Last updated:  2022-02-05
+Last updated:  2022-03-24
 
 For text reports:
     Build a check-list for the teachers: teacher -> class -> report subjects
@@ -28,7 +28,7 @@ Copyright 2022 Michael Towers
 
 _NO_REPORTS = " *** {tname}: keine Zeugnisse"
 _CLASS_SUBJECTS = "Klasse {klass}: {subject}"
-_TEACHER = "Zeugnisfächer für {tname}"
+_TEACHER = "Zeugnisfächer für „{tname}“"
 _UNKNOWN_TID = "unbekanntes Lehrer-Kürzel: {tid}"
 _CLASS_REPORTS = "Zeugnisfächer in Klasse {klass}"
 _SUPPRESSED = "Lehrkraft ausgeschlossen: {tname}"
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     pdf = PdfCreator()
     pdfbytes = pdf.build_pdf(tlist, title="Lehrer-Klassen-Fächer",
             author="FWS Bothfeld")
-    odir = DATAPATH("testing/tmp")
+    odir = DATAPATH("REPORTS")
     os.makedirs(odir, exist_ok=True)
     pdffile = os.path.join(odir, "Lehrer-Klassen-Fächer.pdf")
     with open(pdffile, "wb") as fh:
@@ -227,8 +227,8 @@ if __name__ == "__main__":
     pdf = PdfCreator()
     pdfbytes = pdf.build_pdf(clist, title="Klassen-Fächer-Lehrer",
             author="FWS Bothfeld")
-    odir = DATAPATH("testing/tmp")
-    os.makedirs(odir, exist_ok=True)
+    #odir = DATAPATH("testing/tmp")
+    #os.makedirs(odir, exist_ok=True)
     pdffile = os.path.join(odir, "Klassen-Fächer-Lehrer.pdf")
     with open(pdffile, "wb") as fh:
         fh.write(pdfbytes)
