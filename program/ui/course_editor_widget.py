@@ -1,7 +1,7 @@
 """
 ui/course_editor_widget.py
 
-Last updated:  2022-04-15
+Last updated:  2022-04-16
 
 A dual table widget with row editing capabilities.
 It is intended for use with course/lesson data. The first table
@@ -28,8 +28,18 @@ Copyright 2022 Michael Towers
 =-LICENCE=================================
 """
 
+#TODO: CLASSES should use a combobox, but not be a foreign key in the
+# COURSES table as the key is displayed (?!).
+# At the moment I have not worked out how to handle the blocks which
+# share a "course tuple" (previously sids like ZwE+9u10).
+
+#TODO: enabling of buttons when table empty ...
+
+#TODO: the lesson table
+
 ### Messages
 _LOSE_CHANGES = "Die Änderungen werden verworfen. Weitermachen?"
+_COURSE_EXISTS = "Der geänderte „Kurs“ existiert schon"
 
 ### Labels
 # Course field editor buttons
@@ -81,8 +91,8 @@ if __name__ == "__main__":
 
     # TODO: Temporary redirection to use real data (there isn't any test data yet!)
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
-    start.setup(os.path.join(basedir, 'DATA'))
-    #start.setup(os.path.join(basedir, "DATA-2023"))
+    #start.setup(os.path.join(basedir, 'DATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
 
 ### +++++
 
@@ -291,13 +301,14 @@ class CourseEditor(QSplitter):
 
     def set_filter_field(self, field):
         self.filter_value_select.set_items(self.filter_list[field])
-        #print("FILTER FIELD:", field)
+        print("FILTER FIELD:", field)
         self.filter_field = field
         self.filter_value_select.trigger()
         return True
 
     def set_filter(self, key):
-        #print("FILTER KEY:", key)
+        print("FILTER KEY:", key)
+        self.filter_value = key
         self.fill_course_table(key)
         return True
 
@@ -330,6 +341,10 @@ class CourseEditor(QSplitter):
         self.coursemodel = QSqlTableModel()
         self.coursemodel.setTable("COURSES")
         self.coursemodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
+        # Set up the view
+        self.coursetable.setModel(self.coursemodel)
+        selection_model = self.coursetable.selectionModel()
+        selection_model.currentChanged.connect(self.course_changed)
         self.filter_list = {}
         for f, t in COURSE_COLS:
             i = self.coursemodel.fieldIndex(f)
@@ -365,25 +380,24 @@ class CourseEditor(QSplitter):
         )
         #print("SELECT:", self.coursemodel.selectStatement())
         self.coursemodel.select()
-
-        # Set up the view
-        self.coursetable.setModel(self.coursemodel)
-        selection_model = self.coursetable.selectionModel()
-        selection_model.currentChanged.connect(self.course_changed)
-#?
-#        selection_model.reset()
-#?
         self.coursetable.selectRow(0)
-
+        if not self.coursetable.currentIndex().isValid():
+            self.course_changed(None, None)
         self.coursetable.resizeColumnsToContents()
 
-
     def course_changed(self, new, old):
-        row = new.row()
-        #print("CURRENT", old.row(), "->", row)
-        record = self.coursemodel.record(row)
-        for f, t in COURSE_COLS:
-            self.editors[f].setText(str(record.value(f)))
+        if new:
+            row = new.row()
+            print("CURRENT", old.row(), "->", row)
+            record = self.coursemodel.record(row)
+            for f, t in COURSE_COLS:
+                self.editors[f].setText(str(record.value(f)))
+        else:
+            # e.g. when entering an empty table
+            print("EMPTY TABLE")
+            for f, t in COURSE_COLS:
+                self.editors[f].setText("")
+            self.editors[self.filter_field].setText(self.filter_value)
         self.form_change_set = set()
         self.form_modified("", False)   # initialize form button states
 
@@ -391,44 +405,96 @@ class CourseEditor(QSplitter):
     def course_delete(self):
         """Delete the current course.
         """
+        model = self.coursemodel
         if self.form_change_set:
             if not YesOrNoDialog(_LOSE_CHANGES):
                 return
-        print("§§§ DELETE COURSE:", self.editors["course"].text())
+#--
+        course = self.editors["course"].text()
+        index = self.coursetable.currentIndex()
+        row = index.row()
+        model.removeRow(row)
+        if model.submitAll():
+#--
+            print("DELETED:", course)
+            if row >= model.rowCount():
+                row = model.rowCount() - 1
+            self.coursetable.selectRow(row)
+            if not self.coursetable.currentIndex().isValid():
+                self.course_changed(None, None)
+        else:
+            error = model.lastError()
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(_COURSE_EXISTS)
+            else:
+                SHOW_ERROR(error.text())
+            model.revertAll()
 
-#TODO ...
     def course_add(self):
         """Add the data in the form editor as a new course.
         """
-        vals = {
-            f: self.editors[f].text()
-            for f, t in COURSE_COLS
-        }
-        vals["course"] = None
-        print("§§§ ADD NEW COURSE:", vals)
+        model = self.coursemodel
+        index = self.coursetable.currentIndex()
+        row0 = index.row()
+        row = 0
+        model.insertRow(row)
+        for f, t in COURSE_COLS[1:]:
+            col = model.fieldIndex(f)
+            val = self.editors[f].text()
+            model.setData(model.index(row, col), val)
+        if model.submitAll():
+            course = model.query().lastInsertId()
+#--
+            print("INSERTED:", course)
+            for r in range(model.rowCount()):
+                if model.data(model.index(r, 0)) == course:
+                    self.coursetable.selectRow(r)
+                    break
+            else:
+                self.coursetable.selectRow(row0)
+        else:
+            error = model.lastError()
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(_COURSE_EXISTS)
+            else:
+                SHOW_ERROR(error.text())
+            model.revertAll()
 
-#TODO ...
+
     def course_update(self):
         """Update the current course with the data in the form editor.
         """
-        changes = {
-            f: self.editors[f].text()
-            for f in self.form_change_set
-        }
-        print("§§§ UPDATE COURSE:", changes)
-        return
-
-#TODO: Get data (to restore in case of failure)
-# Would an "altered" indicator be possible? E.g. enable buttons only when
-# relevant?
-# What about a brake on selction changing if there are uncommitted changes?
-# That would probably be easier if not using the mapper ...
-        if not self.mapper.submit():
-            if "UNIQUE" in QSqlQueryModel.lastError(self.coursemodel).databaseText():
-                REPORT("ERROR", "Der geänderte „Kurs“ existiert schon")
+        model = self.coursemodel
+        index = self.coursetable.currentIndex()
+        course = model.data(index)
+        row = index.row()
+        for f in self.form_change_set:
+            col = model.fieldIndex(f)
+            val = self.editors[f].text()
+            model.setData(model.index(row, col), val)
+        if model.submitAll():
+            # The selection is lost – the changed row may even be in a
+            # different place, perhaps not even displayed.
+            # Try to stay with the same id, if it is displayed,
+            # otherwise the same (or else the last) row.
+            #self.form_change_set = None     # clear change set
+#--
+            print("UPDATED:", course)
+            for r in range(model.rowCount()):
+                if model.data(model.index(r, 0)) == course:
+                    self.coursetable.selectRow(r)
+                    break
             else:
-                REPORT("ERROR", QSqlQueryModel.lastError(self.coursemodel).text())
-            self.coursemodel.revertAll()
+                if row >= model.rowCount():
+                    row = model.rowCount() - 1
+                self.coursetable.selectRow(row)
+        else:
+            error = model.lastError()
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(_COURSE_EXISTS)
+            else:
+                SHOW_ERROR(error.text())
+            model.revertAll()
 
 
 class ForeignKeyItemDelegate(QStyledItemDelegate):
@@ -511,12 +577,16 @@ class FormComboBox(QComboBox):
     def setText(self, text):
         """<text> is the "key".
         """
-        try:
-            i = self.key2i[text]
-        except KeyError:
-            raise Bug(f"Unknown key for editor field {self.field}: {key}")
-        self.setCurrentIndex(i)
-        self.text0 = text
+        if text:
+            try:
+                i = self.key2i[text]
+            except KeyError:
+                raise Bug(f"Unknown key for editor field {self.__field}: '{text}'")
+            self.setCurrentIndex(i)
+            self.text0 = text
+        else:
+            self.setCurrentIndex(0)
+            self.text0 = self.keylist[0]
 
     def change_index(self, i):
         sid = self.keylist[i]
@@ -559,6 +629,10 @@ def enter_classes():
     classes.append("13")
     names.append("13. Klasse")
     classrooms.append("r13")
+
+    classes.append("--")
+    names.append("keine Klasse")
+    classrooms.append("")
 
     query.prepare("insert into CLASSES values (?, ?, ?)")
     query.addBindValue(classes)
