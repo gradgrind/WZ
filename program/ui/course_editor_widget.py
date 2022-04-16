@@ -28,14 +28,13 @@ Copyright 2022 Michael Towers
 =-LICENCE=================================
 """
 
-#TODO: CLASSES should use a combobox, but not be a foreign key in the
-# COURSES table as the key is displayed (?!).
-# At the moment I have not worked out how to handle the blocks which
-# share a "course tuple" (previously sids like ZwE+9u10).
+#TODO: I have not yet worked out how to handle the blocks which
+# share a "course tuple" (previously sids like ZwE+9u10). At the moment
+# I have put the extra bit in the GRP field.
 
-#TODO: enabling of buttons when table empty ...
+#TODO: the lesson table: copying fields to new records
 
-#TODO: the lesson table
+#TODO: add a status bar for short messages, etc.?
 
 ### Messages
 _LOSE_CHANGES = "Die Änderungen werden verworfen. Weitermachen?"
@@ -46,6 +45,7 @@ _COURSE_EXISTS = "Der geänderte „Kurs“ existiert schon"
 _DELETE = "Löschen"
 _UPDATE = "Übernehmen"
 _NEW = "Hinzufügen"
+_COPY_NEW = "Neu (Kopie)"
 
 # Course table title line
 _COURSE_TITLE = "Kurse"
@@ -73,6 +73,15 @@ COURSE_KEY_FIELDS = ("CLASS", "GRP", "SUBJECT", "TEACHER")
 
 # Lesson table
 _LESSONS = "Unterrichts- bzw. Deputatsstunden"
+
+LESSON_COLS = [
+    ("course", "KursNr"),
+    ("LENGTH", "Länge"),
+    ("PAYROLL", "Deputat"),
+    ("TAG", "Kennung"),
+    ("ROOM", "Raum"),
+    ("NOTES", "Notizen")
+]
 
 ########################################################################
 
@@ -104,20 +113,14 @@ from qtpy.QtWidgets import (
     QFormLayout,
     QVBoxLayout,
     QHBoxLayout,
+#--
     QTableWidget,
-
     QLabel,
     QLineEdit,
     QComboBox,
     QPushButton,
-
     QTableView,
-    QDataWidgetMapper,
-
-#    QTableWidgetItem,
-#    QMessageBox,
     QStyledItemDelegate,
-#    QStyleOptionViewItem,
 )
 from qtpy.QtCore import Qt#, QPointF, QRectF, QSize
 #from qtpy.QtGui import QKeySequence
@@ -134,6 +137,7 @@ from qtpy.QtSql import (
 
 ### -----
 
+#--
 class RowSelectTable(QTableWidget):
     """A table which is editable on a row basis. It has column headers,
     but no row headers.
@@ -197,6 +201,7 @@ class CourseEditor(QSplitter):
         if not con.open():
             raise Bug(f"Cannot open database at {dbpath}")
         #print("TABLES:", con.tables())
+        query = QSqlQuery("PRAGMA foreign_keys = ON")
 
         leftframe = QFrame()
         self.addWidget(leftframe)
@@ -246,9 +251,7 @@ class CourseEditor(QSplitter):
             if f == "course":
                 editwidget = QLineEdit()
                 editwidget.setReadOnly(True)
-            elif f == "SUBJECT":
-                editwidget = FormComboBox(f, self.form_modified)
-            elif f == "TEACHER":
+            elif f in ("CLASS", "SUBJECT", "TEACHER"):
                 editwidget = FormComboBox(f, self.form_modified)
             else:
                 editwidget = FormLineEdit(f, self.form_modified)
@@ -275,20 +278,26 @@ class CourseEditor(QSplitter):
         vbox3 = QVBoxLayout(lessonbox)
         vbox3.setContentsMargins(0, 0, 0, 0)
         vbox3.addWidget(QLabel(f"<h4>{_LESSONS}</h4>"))
-#TODO
-        self.lessontable = RowSelectTable(["Länge", "Deputat", "Kennung",
-                "Raum", "Notizen"])
+
+        # The lesson table
+        self.lessontable = QTableView()
+        self.lessontable.setSelectionMode(QTableView.SingleSelection)
+        self.lessontable.setSelectionBehavior(QTableView.SelectRows)
+        #self.lessontable.setEditTriggers(QTableView.NoEditTriggers)   # non-editable
+        #self.lessontable.setStyleSheet("QTableView::item:selected{"
+        #           "background:rgb(135, 206, 255)}")
+        self.lessontable.verticalHeader().hide()
+
         vbox3.addWidget(self.lessontable)
         hbox3 = QHBoxLayout()
         vbox2.addLayout(hbox3)
         hbox3.addStretch(1)
-        del3 = QPushButton("Löschen")
-        hbox3.addWidget(del3)
-        new3 = QPushButton("Kopie Hinzufügen")
-        hbox3.addWidget(new3)
-
-#TODO
-        self.lessontable.setRowCount(5)
+        self.lesson_delete_button = QPushButton(_DELETE)
+        hbox3.addWidget(self.lesson_delete_button)
+        self.lesson_delete_button.clicked.connect(self.lesson_delete)
+        self.lesson_add_button = QPushButton(_COPY_NEW)
+        hbox3.addWidget(self.lesson_add_button)
+        self.lesson_add_button.clicked.connect(self.lesson_add)
 
         self.form_change_set = None
         self.init_data()
@@ -319,7 +328,11 @@ class CourseEditor(QSplitter):
         """
         if self.form_change_set == None:
             return
-        if changed:
+        if self.table_empty:
+            self.course_update_button.setEnabled(False)
+            self.course_add_button.setEnabled(True)
+            self.course_delete_button.setEnabled(False)
+        elif changed:
             self.course_update_button.setEnabled(True)
             self.form_change_set.add(field)
             if field in COURSE_KEY_FIELDS:
@@ -331,17 +344,18 @@ class CourseEditor(QSplitter):
                 if not self.form_change_set.intersection(COURSE_KEY_FIELDS):
                     self.course_add_button.setEnabled(False)
             else:
+                self.course_delete_button.setEnabled(True)
                 self.course_update_button.setEnabled(False)
                 self.course_add_button.setEnabled(False)
         #print("FORM CHANGED SET:", self.form_change_set)
 
     def init_data(self):
         #con = QSqlDatabase.database()
-        # Set up the model
+        # Set up the course model
         self.coursemodel = QSqlTableModel()
         self.coursemodel.setTable("COURSES")
         self.coursemodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
-        # Set up the view
+        # Set up the course view
         self.coursetable.setModel(self.coursemodel)
         selection_model = self.coursetable.selectionModel()
         selection_model.currentChanged.connect(self.course_changed)
@@ -349,6 +363,13 @@ class CourseEditor(QSplitter):
         for f, t in COURSE_COLS:
             i = self.coursemodel.fieldIndex(f)
             editwidget = self.editors[f]
+            if f == "CLASS":
+                kv = db_key_value_list("CLASSES", "CLASS", "NAME", "CLASS")
+                self.filter_list[f] = kv
+                editwidget.setup(kv)
+#                delegate = ForeignKeyItemDelegate(editwidget,
+#                        parent=self.coursemodel)
+#                self.coursetable.setItemDelegateForColumn(i, delegate)
             if f == "SUBJECT":
                 kv = db_key_value_list("SUBJECTS", "SID", "NAME", "NAME")
                 self.filter_list[f] = kv
@@ -364,9 +385,24 @@ class CourseEditor(QSplitter):
                         parent=self.coursemodel)
                 self.coursetable.setItemDelegateForColumn(i, delegate)
             self.coursemodel.setHeaderData(i, Qt.Horizontal, t)
-        self.filter_list["CLASS"] = db_key_value_list(
-            "CLASSES", "CLASS", "NAME", "CLASS"
-        )
+
+#TODO?
+
+        # Set up the lesson model
+        self.lessonmodel = QSqlTableModel()
+        self.lessonmodel.setTable("LESSONS")
+        self.lessonmodel.setEditStrategy(QSqlTableModel.OnFieldChange)
+        # Set up the lesson view
+        self.lessontable.setModel(self.lessonmodel)
+#        selection_model = self.lessontable.selectionModel()
+#        selection_model.currentChanged.connect(self.lesson_changed)
+        for f, t in LESSON_COLS:
+            i = self.lessonmodel.fieldIndex(f)
+            self.lessonmodel.setHeaderData(i, Qt.Horizontal, t)
+        self.lessontable.hideColumn(0)
+        self.lessontable.hideColumn(1)
+
+
         self.filter_field_select.trigger()
 
     def fill_course_table(self, filter_value):
@@ -387,21 +423,24 @@ class CourseEditor(QSplitter):
 
     def course_changed(self, new, old):
         if new:
+            self.table_empty = False
             row = new.row()
             print("CURRENT", old.row(), "->", row)
             record = self.coursemodel.record(row)
             for f, t in COURSE_COLS:
                 self.editors[f].setText(str(record.value(f)))
+            self.set_course(record.value(0))
         else:
             # e.g. when entering an empty table
+            self.table_empty = True
             print("EMPTY TABLE")
             for f, t in COURSE_COLS:
                 self.editors[f].setText("")
             self.editors[self.filter_field].setText(self.filter_value)
+            self.set_course(0)
         self.form_change_set = set()
         self.form_modified("", False)   # initialize form button states
 
-#TODO ...
     def course_delete(self):
         """Delete the current course.
         """
@@ -415,8 +454,12 @@ class CourseEditor(QSplitter):
         row = index.row()
         model.removeRow(row)
         if model.submitAll():
+            # The LESSONS table should have its "course" field (foreign
+            # key) defined as "ON DELETE CASCADE" to ensure that when
+            # a course is deleted also the lessons are removed.
 #--
             print("DELETED:", course)
+
             if row >= model.rowCount():
                 row = model.rowCount() - 1
             self.coursetable.selectRow(row)
@@ -460,7 +503,6 @@ class CourseEditor(QSplitter):
                 SHOW_ERROR(error.text())
             model.revertAll()
 
-
     def course_update(self):
         """Update the current course with the data in the form editor.
         """
@@ -495,6 +537,46 @@ class CourseEditor(QSplitter):
             else:
                 SHOW_ERROR(error.text())
             model.revertAll()
+
+    def set_course(self, course):
+#TODO
+        print("SET COURSE:", course)
+        self.this_course = course
+        self.lessonmodel.setFilter(f'course = {course}')
+        #print("SELECT:", self.lessonmodel.selectStatement())
+        self.lessonmodel.select()
+        self.lessontable.selectRow(0)
+#        if not self.lessontable.currentIndex().isValid():
+#            self.course_changed(None, None)
+        self.lessontable.resizeColumnsToContents()
+
+        # Set up buttons
+        if self.lessonmodel.rowCount():
+            self.lesson_delete_button.setEnabled(True)
+        else:
+            self.lesson_delete_button.setEnabled(False)
+        self.lesson_add_button.setEnabled(course > 0)
+
+    def lesson_delete(self):
+        """Delete the current "lesson".
+        """
+        model = self.lessonmodel
+        index = self.lessontable.currentIndex()
+        row = index.row()
+        model.removeRow(row)
+
+    def lesson_add(self):
+        """Add a new "lesson", copying the current one if possible.
+        """
+        if self.this_course:
+            model = self.lessonmodel
+            index = self.lessontable.currentIndex()
+            if index.isValid():
+                row = index.row()
+            else:
+                row = 0
+            model.insertRow(row)
+            model.setData(model.index(row, 1), self.this_course)
 
 
 class ForeignKeyItemDelegate(QStyledItemDelegate):
@@ -650,95 +732,8 @@ if __name__ == "__main__":
 #    enter_classes()
 #    quit(0)
 
-    """
-    from core.teachers import Teachers
-    teachers = Teachers()
-    lines = []
-    for tid in teachers.list_teachers():
-        lines.append(f"{tid}\t{teachers.name(tid)}\t{teachers[tid]['SORTNAME']}")
-    print("\n ...", len(lines))
-
-    outdir = DATAPATH("testing/tmp")
-    tsvfile = os.path.join(outdir, f"teachers.tsv")
-    with open(tsvfile, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(lines))
-
-    quit(0)
-    """
-
-    """
-    from core.courses import Subjects
-
-    data = {}
-    def read_class_data(klass):
-        lines = subjects.class_subjects(klass)
-        if klass == "XX":
-            klass = ""
-        for line in lines:
-            sid = line["SID"]
-            try:
-                sid0, x = sid.split("+")
-                klass0 = f"{klass}+{x}"
-            except:
-                sid0 = sid
-                klass0 = klass
-
-            group = line["GROUP"]
-            for tid in line["TIDS"].split():
-                key = (klass0, group, sid0, tid)
-#                print(key)
-                try:
-                    keydata = data[key]
-                    print("REPEAT:", keydata)
-                    if keydata["COMPOSITE"] or keydata["SGROUP"]:
-                        if line["COMPOSITE"] or line["SGROUP"]:
-                            print(" ... Conflict:", line)
-                            continue
-                except KeyError:
-                    pass
-                data[key] = line
-
-    subjects = Subjects()
-    __classes = []
-    for k in subjects.classes():
-        if k.startswith("XX"):
-            read_class_data(k)
-        else:
-            __classes.append(k)
-    for k in __classes:
-        read_class_data(k)
-
-    i = 0
-    courses = []
-    lessons = []
-    for key, line in data.items():
-        i += 1
-        i_s = str(i)
-        dbline = (i_s,) + key + (line["SGROUP"], "", line["COMPOSITE"])
-        print("§:", dbline)
-        courses.append("\t".join(dbline))
-        for l in line["LENGTHS"].split():
-            dbxline = (i_s, l, "", line["TAG"], line["ROOMS"])
-            print("      --", dbxline)
-            lessons.append("\t".join(dbxline))
-
-    outdir = DATAPATH("testing/tmp")
-    cfile = os.path.join(outdir, f"courses.tsv")
-    with open(cfile, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(courses))
-
-    lfile = os.path.join(outdir, f"lessons.tsv")
-    with open(lfile, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(lessons))
-    """
-
-#    dbc = _CourseEditor()
-
-#    quit(0)
-
     window = CourseEditor()
     window.setWindowTitle("Edit Courses")
-
     window.show()
 
     theader1 = window.coursetable.horizontalHeader()
@@ -752,91 +747,4 @@ if __name__ == "__main__":
     print("§§§2", l1, l2)
     window.setSizes((l1,l2+10))
     window.resize(l1+l2 + 60,550)
-    app.exec()
-
-    quit(0)
-
-
-
-    # This seems to deactivate activate-on-single-click
-    # (presumably elsewhere as well?)
-    #    app.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
-    def is_modified1(mod):
-        print("MODIFIED1:", mod)
-
-    def is_modified2(mod):
-        print("MODIFIED2:", mod)
-
-    def validate(value):
-        if value == "v":
-            return "invalid value"
-        return None
-
-    window = QSplitter()
-    window.setChildrenCollapsible(False)
-
-    cols = ["id", "Klasse", "Fach", "Gruppe", "Lehrkräfte",
-            "Sammelfach", "Zeugnis", "Noten"]
-    cols2 = ["Länge", "Deputat", "Kennung", "Raum", "Bedingungen"]
-    rows = ["Row %02d" % n for n in range(7)]
-    tablewidget = RowEditTable(cols)
-
-    tablewidget.setRowCount(25)
-
-    tablewidget2 = RowEditTable(cols2)
-    tablewidget2.setRowCount(5)
-
-    window.addWidget(tablewidget)
-    window.addWidget(tablewidget2)
-    window.setWindowTitle("Edit Courses")
-
-    window.show()
-    theader1 = tablewidget.horizontalHeader()
-    theader2 = tablewidget2.horizontalHeader()
-    print("§§§1", theader1.length(), theader2.length())
-    tablewidget.resizeColumnsToContents()
-    tablewidget2.resizeColumnsToContents()
-    l1 = theader1.length()
-    l2 = theader2.length()
-    print("§§§2", l1, l2)
-    window.setSizes((l1,l2))
-    window.resize(l1+l2 + 50,500)
-    app.exec()
-
-    quit(0)
-
-    # setItemDelegate doesn't take ownership of the custom delegates,
-    # so I retain references (otherwise there will be a segfault).
-    idel1 = VerticalTextDelegate()
-    #    idel2 = MyDelegate()
-    tablewidget.setItemDelegateForRow(2, idel1)
-    #    tablewidget.setItemDelegateForRow(1, idel2)
-
-    sparse_data = []
-    r, c = 2, 3
-    sparse_data.append((r, c, "R%02d:C%02d" % (r, c)))
-    r, c = 1, 4
-    sparse_data.append((r, c, "R%02d:C%02d" % (r, c)))
-    tablewidget.init_sparse_data(len(rows), len(cols), sparse_data)
-
-    tablewidget.resizeRowToContents(1)
-    tablewidget.resizeRowToContents(2)
-    tablewidget.resizeColumnToContents(3)
-    tablewidget.resize(600, 400)
-    tablewidget.show()
-
-    tw2 = EdiTableWidget()
-    tw2.setup(
-        undo_redo=True,
-        cut=True,
-        paste=True,
-        row_add_del=True,
-        column_add_del=True,
-        on_changed=is_modified2,
-    )
-    tw2.init_data([["1", "2", "3", "4"], [""] * 4])
-    tw2.item(1, 0).set_validator(validate)
-    tw2.resize(400, 300)
-    tw2.show()
-
     app.exec()
