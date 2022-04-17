@@ -274,6 +274,7 @@ class CourseEditor(QSplitter):
 
         self.form_change_set = None
         self.init_data()
+        self.setStretchFactor(0, 1)   # stretch only left panel
 
     def leave_ok(self):
         if self.form_change_set:
@@ -714,6 +715,5 @@ if __name__ == "__main__":
     window = CourseEditor()
     window.setWindowTitle("Edit Courses")
     window.show()
-    window.setStretchFactor(0, 1)   # stretch only left panel
     window.resize(1000, 550)
     app.exec()
