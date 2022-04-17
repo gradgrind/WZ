@@ -2,13 +2,13 @@
 """
 ui/ui_extra.py
 
-Last updated:  2021-12-10
+Last updated:  2022-04-17
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
 
 =+LICENCE=============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ _INPUT_TITLE = "Eingabe"
 _YESORNO_TITLE = "Ja oder Nein?"
 _TEXTAREA_TITLE = "Text eingeben"
 _LOSE_CHANGES_TITLE = "Ungespeicherte Änderungen"
-_LOSE_CHANGES = "Sind Sie damit einverstanden, dass die Änderungen verloren gehen?"
+_LOSE_CHANGES = "Die Änderungen werden verworfen. Weitermachen?"
 
 _INFO = "Mitteilung"
 _WARNING = "Warnung"
@@ -58,6 +58,7 @@ import sys, os, builtins, traceback, glob
 from qtpy.QtWidgets import *
 from qtpy.QtGui import *
 from qtpy.QtCore import *
+from qtpy.QtSql import *
 
 APP = QApplication(sys.argv)
 path = QLibraryInfo.location(QLibraryInfo.TranslationsPath)
@@ -66,6 +67,25 @@ if translator.load(QLocale.system(), "qtbase", "_", path):
     APP.installTranslator(translator)
 # ?
 SETTINGS = QSettings(QSettings.IniFormat, QSettings.UserScope, "MT", "WZ")
+
+def open_database():
+    dbpath = DATAPATH("db1.sqlite")
+    con = QSqlDatabase.database()
+    if con.isValid():
+        if con.databaseName() == dbpath:
+            return
+        con.close()
+        connectionName = con.connectionName()
+        con = None  # needed to release the database object
+        QSqlDatabase.removeDatabase(connectionName)
+    con = QSqlDatabase.addDatabase("QSQLITE")
+    con.setDatabaseName(dbpath)
+    if not con.open():
+        raise Bug(f"Cannot open database at {dbpath}")
+    #print("TABLES:", con.tables())
+    foreign_keys_on = "PRAGMA foreign_keys = ON"
+    if not QSqlQuery(foreign_keys_on).isActive():
+        raise Bug(f"Failed: {foreign_keys_on}")
 
 
 def run(window):
@@ -126,7 +146,7 @@ class StackPage(QWidget):
         changes), otherwise <False>.
         """
         if self.is_modified():
-            return YesOrNoDialog(_LOSE_CHANGES, _LOSE_CHANGES_TITLE)
+            return LoseChangesDialog()
         return True
 
     def is_modified(self):
@@ -140,7 +160,7 @@ class StandalonePage(StackPage):
     def closeEvent(self, event):
         if self.leave_ok():
             event.accept()
-        #            super().closeEvent(event)
+            #super().closeEvent(event)
         else:
             event.ignore()
 
@@ -230,6 +250,10 @@ def YesOrNoDialog(message, title=None):
     bbox.addWidget(ok)
     cancel.setDefault(True)
     return qd.exec_() == QDialog.Accepted
+
+
+def LoseChangesDialog():
+    return YesOrNoDialog(_LOSE_CHANGES, _LOSE_CHANGES_TITLE)
 
 
 def LineDialog(message, text=None, title=None):
