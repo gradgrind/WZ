@@ -1,14 +1,28 @@
 """
 ui/course_editor_widget.py
 
-Last updated:  2022-04-16
+Last updated:  2022-04-17
 
-A dual table widget with row editing capabilities.
-It is intended for use with course/lesson data. The first table
-includes basic course information and information for the pupil reports.
+A specialized dual-table widget for editing course/lesson data.
+
+The first table is for "courses", specifying class, group, subject and
+teacher. These are the "course-defining" fields and must be unique (in
+combination) in the table.
+This table also includes information for the pupils' reports (grade and
+text reports).
+
 The second table handles information for teaching hours and the
 timetable, the displayed rows being dependent on the row selected in
 the first table.
+
+Both tables are based on single row selection. The course table is edited
+via a form interface. The current entry can be edited "as a whole" before
+being submitted to update the entry. Alternatively, the form data may be
+submitted to a new course entry – provided the "course-defining" fields
+are not already present (in combination) in the course table.
+
+The lesson table is editable directly on a "one field at a time" basis.
+
 
 =+LICENCE=================================
 Copyright 2022 Michael Towers
@@ -31,8 +45,6 @@ Copyright 2022 Michael Towers
 #TODO: I have not yet worked out how to handle the blocks which
 # share a "course tuple" (previously sids like ZwE+9u10). At the moment
 # I have put the extra bit in the GRP field.
-
-#TODO: the lesson table: copying fields to new records
 
 #TODO: add a status bar for short messages, etc.?
 
@@ -62,6 +74,8 @@ COURSE_COLS = [
     ("GRADE", "Note"),
     ("COMPOSITE", "Sammelfach")
 ]
+# SUBJECT, CLASS and TEACHER are foreign keys with:
+#  on delete cascade + on update cascade
 
 FILTER_FIELDS = [
     cc for cc in COURSE_COLS
@@ -113,8 +127,6 @@ from qtpy.QtWidgets import (
     QFormLayout,
     QVBoxLayout,
     QHBoxLayout,
-#--
-    QTableWidget,
     QLabel,
     QLineEdit,
     QComboBox,
@@ -122,47 +134,15 @@ from qtpy.QtWidgets import (
     QTableView,
     QStyledItemDelegate,
 )
-from qtpy.QtCore import Qt#, QPointF, QRectF, QSize
-#from qtpy.QtGui import QKeySequence
-#from qtpy.QtWidgets import QAction  # in Qt6 it is in QtGui
+from qtpy.QtCore import Qt
 from qtpy.QtSql import (
     QSqlDatabase,
     QSqlQueryModel,
     QSqlQuery,
     QSqlTableModel,
-#    QSqlRelationalTableModel,
-#    QSqlRelation,
-#    QSqlRelationalDelegate
 )
 
 ### -----
-
-#--
-class RowSelectTable(QTableWidget):
-    """A table which is editable on a row basis. It has column headers,
-    but no row headers.
-#?
-    The column headers can have display texts which
-    differ from the internal data field names.
-    """
-    def __init__(self, headers, parent=None, readonly=False):
-        super().__init__(parent=parent)
-        self.setSelectionMode(self.SingleSelection)
-        self.setSelectionBehavior(self.SelectRows)
-        if readonly:
-            self.setEditTriggers(self.NoEditTriggers)   # non-editable
-        self.verticalHeader().hide()
-        self.itemSelectionChanged.connect(self.selection_changed)
-        self.setColumnCount(len(headers))
-        self.setHorizontalHeaderLabels(headers)
-
-    def selection_changed(self):
-        try:
-            modelindex = self.selectedIndexes()[0]
-            print("SELECT", modelindex.row())
-        except IndexError:
-            print("UNSELECT")
-
 
 class CourseTableView(QTableView):
     """This avoids some very strange selection behaviour in QTableView,
@@ -230,11 +210,7 @@ class CourseEditor(QSplitter):
         self.coursetable.setSelectionMode(QTableView.SingleSelection)
         self.coursetable.setSelectionBehavior(QTableView.SelectRows)
         self.coursetable.setEditTriggers(QTableView.NoEditTriggers)   # non-editable
-        #self.coursetable.setStyleSheet("QTableView::item:selected{"
-        #           "background:rgb(135, 206, 255)}")
         self.coursetable.verticalHeader().hide()
-        #self.coursetable.setLineWidth(2)
-        #self.coursetable.setFrameShape(self.Box)
         vbox1.addWidget(self.coursetable)
 
         self.rightframe = QFrame()
@@ -283,9 +259,6 @@ class CourseEditor(QSplitter):
         self.lessontable = QTableView()
         self.lessontable.setSelectionMode(QTableView.SingleSelection)
         self.lessontable.setSelectionBehavior(QTableView.SelectRows)
-        #self.lessontable.setEditTriggers(QTableView.NoEditTriggers)   # non-editable
-        #self.lessontable.setStyleSheet("QTableView::item:selected{"
-        #           "background:rgb(135, 206, 255)}")
         self.lessontable.verticalHeader().hide()
 
         vbox3.addWidget(self.lessontable)
@@ -305,18 +278,17 @@ class CourseEditor(QSplitter):
     def leave_ok(self):
         if self.form_change_set:
             return YesOrNoDialog(_LOSE_CHANGES)
-#TODO: check for pending changes to lesson table
         return True
 
     def set_filter_field(self, field):
         self.filter_value_select.set_items(self.filter_list[field])
-        print("FILTER FIELD:", field)
+        #print("FILTER FIELD:", field)
         self.filter_field = field
         self.filter_value_select.trigger()
         return True
 
     def set_filter(self, key):
-        print("FILTER KEY:", key)
+        #print("FILTER KEY:", key)
         self.filter_value = key
         self.fill_course_table(key)
         return True
@@ -367,9 +339,9 @@ class CourseEditor(QSplitter):
                 kv = db_key_value_list("CLASSES", "CLASS", "NAME", "CLASS")
                 self.filter_list[f] = kv
                 editwidget.setup(kv)
-#                delegate = ForeignKeyItemDelegate(editwidget,
-#                        parent=self.coursemodel)
-#                self.coursetable.setItemDelegateForColumn(i, delegate)
+                #delegate = ForeignKeyItemDelegate(editwidget,
+                #        parent=self.coursemodel)
+                #self.coursetable.setItemDelegateForColumn(i, delegate)
             if f == "SUBJECT":
                 kv = db_key_value_list("SUBJECTS", "SID", "NAME", "NAME")
                 self.filter_list[f] = kv
@@ -386,16 +358,12 @@ class CourseEditor(QSplitter):
                 self.coursetable.setItemDelegateForColumn(i, delegate)
             self.coursemodel.setHeaderData(i, Qt.Horizontal, t)
 
-#TODO?
-
         # Set up the lesson model
         self.lessonmodel = QSqlTableModel()
         self.lessonmodel.setTable("LESSONS")
         self.lessonmodel.setEditStrategy(QSqlTableModel.OnFieldChange)
         # Set up the lesson view
         self.lessontable.setModel(self.lessonmodel)
-#        selection_model = self.lessontable.selectionModel()
-#        selection_model.currentChanged.connect(self.lesson_changed)
         for f, t in LESSON_COLS:
             i = self.lessonmodel.fieldIndex(f)
             self.lessonmodel.setHeaderData(i, Qt.Horizontal, t)
@@ -425,7 +393,7 @@ class CourseEditor(QSplitter):
         if new:
             self.table_empty = False
             row = new.row()
-            print("CURRENT", old.row(), "->", row)
+            #print("CURRENT", old.row(), "->", row)
             record = self.coursemodel.record(row)
             for f, t in COURSE_COLS:
                 self.editors[f].setText(str(record.value(f)))
@@ -433,7 +401,7 @@ class CourseEditor(QSplitter):
         else:
             # e.g. when entering an empty table
             self.table_empty = True
-            print("EMPTY TABLE")
+            #print("EMPTY TABLE")
             for f, t in COURSE_COLS:
                 self.editors[f].setText("")
             self.editors[self.filter_field].setText(self.filter_value)
@@ -448,8 +416,7 @@ class CourseEditor(QSplitter):
         if self.form_change_set:
             if not YesOrNoDialog(_LOSE_CHANGES):
                 return
-#--
-        course = self.editors["course"].text()
+        #course = self.editors["course"].text()
         index = self.coursetable.currentIndex()
         row = index.row()
         model.removeRow(row)
@@ -457,9 +424,7 @@ class CourseEditor(QSplitter):
             # The LESSONS table should have its "course" field (foreign
             # key) defined as "ON DELETE CASCADE" to ensure that when
             # a course is deleted also the lessons are removed.
-#--
-            print("DELETED:", course)
-
+            #print("DELETED:", course)
             if row >= model.rowCount():
                 row = model.rowCount() - 1
             self.coursetable.selectRow(row)
@@ -487,8 +452,7 @@ class CourseEditor(QSplitter):
             model.setData(model.index(row, col), val)
         if model.submitAll():
             course = model.query().lastInsertId()
-#--
-            print("INSERTED:", course)
+            #print("INSERTED:", course)
             for r in range(model.rowCount()):
                 if model.data(model.index(r, 0)) == course:
                     self.coursetable.selectRow(r)
@@ -519,9 +483,7 @@ class CourseEditor(QSplitter):
             # different place, perhaps not even displayed.
             # Try to stay with the same id, if it is displayed,
             # otherwise the same (or else the last) row.
-            #self.form_change_set = None     # clear change set
-#--
-            print("UPDATED:", course)
+            #print("UPDATED:", course)
             for r in range(model.rowCount()):
                 if model.data(model.index(r, 0)) == course:
                     self.coursetable.selectRow(r)
@@ -539,18 +501,14 @@ class CourseEditor(QSplitter):
             model.revertAll()
 
     def set_course(self, course):
-#TODO
-        print("SET COURSE:", course)
+        #print("SET COURSE:", course)
         self.this_course = course
         self.lessonmodel.setFilter(f'course = {course}')
         #print("SELECT:", self.lessonmodel.selectStatement())
         self.lessonmodel.select()
         self.lessontable.selectRow(0)
-#        if not self.lessontable.currentIndex().isValid():
-#            self.course_changed(None, None)
         self.lessontable.resizeColumnsToContents()
-
-        # Set up buttons
+        # Enable or disable lesson butttons
         if self.lessonmodel.rowCount():
             self.lesson_delete_button.setEnabled(True)
         else:
@@ -563,7 +521,17 @@ class CourseEditor(QSplitter):
         model = self.lessonmodel
         index = self.lessontable.currentIndex()
         row = index.row()
-        model.removeRow(row)
+        if model.removeRow(row):
+            model.select()
+            n = model.rowCount()
+            if n == 0:
+                self.lesson_delete_button.setEnabled(False)
+            elif row >= n:
+                self.lessontable.selectRow(n - 1)
+            else:
+                self.lessontable.selectRow(row)
+        else:
+            SHOW_ERROR(f"DB Error: {model.lastError().text()}")
 
     def lesson_add(self):
         """Add a new "lesson", copying the current one if possible.
@@ -573,10 +541,21 @@ class CourseEditor(QSplitter):
             index = self.lessontable.currentIndex()
             if index.isValid():
                 row = index.row()
+                model.select()  # necessary to ensure current row is up to date
+                record = model.record(row)
+                #print("RECORD:", [record.value(i) for i in range(record.count())])
+                record.setValue(0, None)
+                n = model.rowCount()
             else:
-                row = 0
-            model.insertRow(row)
-            model.setData(model.index(row, 1), self.this_course)
+                record = model.record()
+                record.setValue(1, self.this_course)
+                n = 0
+            if model.insertRecord(-1, record):
+                model.select()  # necessary to make new row immediately usable
+                self.lessontable.selectRow(n)
+                self.lesson_delete_button.setEnabled(True)
+            else:
+                SHOW_ERROR(f"DB Error: {model.lastError().text()}")
 
 
 class ForeignKeyItemDelegate(QStyledItemDelegate):
@@ -735,16 +714,6 @@ if __name__ == "__main__":
     window = CourseEditor()
     window.setWindowTitle("Edit Courses")
     window.show()
-
-    theader1 = window.coursetable.horizontalHeader()
-    theader2 = window.lessontable.horizontalHeader()
-    print("§§§1", theader1.length(), theader2.length())
-    window.coursetable.resizeColumnsToContents()
-    window.lessontable.resizeColumnsToContents()
-    l1 = theader1.length()
-    l2 = theader2.length()
-    theader2.setStretchLastSection(True)
-    print("§§§2", l1, l2)
-    window.setSizes((l1,l2+10))
-    window.resize(l1+l2 + 60,550)
+    window.setStretchFactor(0, 1)   # stretch only left panel
+    window.resize(1000, 550)
     app.exec()
