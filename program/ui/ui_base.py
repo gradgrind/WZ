@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 ui/ui_extra.py
 
-Last updated:  2022-04-17
+Last updated:  2022-04-18
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -50,17 +49,20 @@ _CONFIRMATION = "Bestätigen"
 
 #####################################################
 
-import sys, os, builtins, traceback, glob
+import sys, os, locale, builtins, traceback, glob
 
 # TODO: PySide6 only?: If I use this feature, this is probably the wrong path ...
 # Without the environment variable there is a disquieting error message.
 #    os.environ['PYSIDE_DESIGNER_PLUGINS'] = this
+
+# Import all qt stuff
 from qtpy.QtWidgets import *
 from qtpy.QtGui import *
 from qtpy.QtCore import *
 from qtpy.QtSql import *
 
 APP = QApplication(sys.argv)
+print("LOCALE:", locale.setlocale(locale.LC_ALL, ""))
 path = QLibraryInfo.location(QLibraryInfo.TranslationsPath)
 translator = QTranslator(APP)
 if translator.load(QLocale.system(), "qtbase", "_", path):
@@ -68,24 +70,9 @@ if translator.load(QLocale.system(), "qtbase", "_", path):
 # ?
 SETTINGS = QSettings(QSettings.IniFormat, QSettings.UserScope, "MT", "WZ")
 
-def open_database():
-    dbpath = DATAPATH("db1.sqlite")
-    con = QSqlDatabase.database()
-    if con.isValid():
-        if con.databaseName() == dbpath:
-            return
-        con.close()
-        connectionName = con.connectionName()
-        con = None  # needed to release the database object
-        QSqlDatabase.removeDatabase(connectionName)
-    con = QSqlDatabase.addDatabase("QSQLITE")
-    con.setDatabaseName(dbpath)
-    if not con.open():
-        raise Bug(f"Cannot open database at {dbpath}")
-    #print("TABLES:", con.tables())
-    foreign_keys_on = "PRAGMA foreign_keys = ON"
-    if not QSqlQuery(foreign_keys_on).isActive():
-        raise Bug(f"Failed: {foreign_keys_on}")
+# This seems to deactivate activate-on-single-click in filedialog
+# (presumably elsewhere as well?)
+APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
 
 def run(window):
@@ -482,14 +469,12 @@ def _popupConfirm(question):
         == QMessageBox.Ok
     )
 
-
 builtins.SHOW_INFO = _popupInfo
 builtins.SHOW_WARNING = _popupWarn
 builtins.SHOW_ERROR = _popupError
 builtins.SHOW_CONFIRM = _popupConfirm
 
 ### File/Folder Dialogs
-
 
 def openDialog(filetype, title=None):
     dir0 = SETTINGS.value("LAST_LOAD_DIR") or os.path.expanduser("~")
@@ -520,6 +505,143 @@ def saveDialog(filetype, filename, title=None):
     if fpath:
         SETTINGS.setValue("LAST_SAVE_DIR", os.path.dirname(fpath))
     return fpath
+
+
+class TableViewRowSelect(QTableView):
+    """A QTableView with single row selection and restrictions on change
+    of selection.
+
+    In order to accept a change of row via the mouse, the "main" widget
+    (supplied as argument to the constructor) must have a "modified"
+    method returning false. If the result is true, a pop-up will ask
+    for confirmation.
+
+    This implementation avoids some very strange selection behaviour
+    in QTableView, which I assume to be a bug:
+    Programmatic switching of the selected row doesn't necessarily cause
+    the visible selection (blue background) to move, although the
+    current (selected) row does change. Clicking and moving (slightly
+    dragging) the mouse produce different responses.
+    """
+#TODO: Note that when the selection is changed via the keyboard, the
+# "modified" method is not called! However, in the intended use case,
+# it is pretty unlikely that this will be a problem.
+
+    def __init__(self, main_widget):
+        super().__init__()
+        self.__modified = main_widget.modified
+        self.setSelectionMode(QTableView.SingleSelection)
+        self.setSelectionBehavior(QTableView.SelectRows)
+
+    def mousePressEvent(self, e):
+        index = self.indexAt(e.pos())
+        if index.isValid() and (
+            (not self.__modified()) or LoseChangesDialog()
+        ):
+            self.selectRow(index.row())
+
+    def mouseMoveEvent(self, e):
+        pass
+
+
+class FormLineEdit(QLineEdit):
+    """A specialized line editor for use in the editor form for a
+    "TableViewRowSelect" table view.
+
+    The constructor receives the name of the field and a function which
+    is to be called when the selected value is changed. This function
+    takes the field name and a boolean (value != initial value, set by
+    "setText" method).
+    """
+
+    def __init__(self, field, modified, parent=None):
+        super().__init__(parent)
+        self.__modified = modified
+        self.__field = field
+        self.text0 = None
+        self.textEdited.connect(self.text_edited)
+
+    def setText(self, text):
+        super().setText(text)
+        self.text0 = text
+
+    def text_edited(self, text):
+        self.__modified(self.__field, text != self.text0)
+
+
+class FormComboBox(QComboBox):
+    """A specialized combobox for use in the editor form for a
+    "TableViewRowSelect" table view. This combobox is used for editing
+    foreign key fields by offering the available values to choose from.
+
+    The constructor receives the name of the field and a function which
+    is to be called when the selected value is changed. This function
+    takes the field name and a boolean (value != initial value, set by
+    "setText" method).
+
+    Also the "setup" method must be called to initialize the contents.
+    """
+
+    def __init__(self, field, modified, parent=None):
+        super().__init__(parent)
+        self.__modified = modified
+        self.__field = field
+        self.text0 = None
+        self.currentIndexChanged.connect(self.change_index)
+
+    def setup(self, key_value_list):
+        """Set up the indexes required for the table's item delegate
+        and the combobox (<editwidget>).
+
+        The argument is a list of (key, value) pairs.
+        """
+        self.keylist = []
+        self.key2i = {}
+        self.clear()
+        i = 0
+        for k, v in key_value_list:
+            self.key2i[k] = i
+            self.keylist.append(k)
+            self.addItem(v)
+            i += 1
+
+    def text(self):
+        """Return the current "key"."""
+        return self.keylist[self.currentIndex()]
+
+    def setText(self, text):
+        """<text> is the "key"."""
+        if text:
+            try:
+                i = self.key2i[text]
+            except KeyError:
+                raise Bug(
+                    f"Unknown key for editor field {self.__field}: '{text}'"
+                )
+            self.setCurrentIndex(i)
+            self.text0 = text
+        else:
+            self.setCurrentIndex(0)
+            self.text0 = self.keylist[0]
+
+    def change_index(self, i):
+        self.__modified(self.__field, self.keylist[i] != self.text0)
+
+
+class ForeignKeyItemDelegate(QStyledItemDelegate):
+    """An "item delegate" for displaying referenced values in
+    foreign key fields.
+
+    Specifically, these objects rely on separate field editor widgets
+    (<FormComboBox> instances) to supply the key -> value mapping.
+    """
+
+    def __init__(self, editwidget, parent=None):
+        super().__init__(parent)
+        self.editwidget = editwidget
+
+    def displayText(self, value, locale):
+        return self.editwidget.itemText(self.editwidget.key2i[value])
 
 
 ############### Handle uncaught exceptions ###############

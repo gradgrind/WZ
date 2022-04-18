@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-04-17
+Last updated:  2022-04-18
 
 Edit course and lesson data.
 
@@ -31,7 +31,6 @@ Copyright 2022 Michael Towers
 # TODO: add a status bar for short messages, etc.?
 
 ### Messages
-_LOSE_CHANGES = "Die Änderungen werden verworfen. Weitermachen?"
 _COURSE_EXISTS = "Der geänderte „Kurs“ existiert schon"
 
 ### Labels
@@ -63,9 +62,7 @@ COURSE_COLS = [
 #  on delete cascade + on update cascade
 FOREIGN_FIELDS = ("CLASS", "TEACHER", "SUBJECT")
 
-FILTER_FIELDS = [
-    cc for cc in COURSE_COLS if cc[0] in FOREIGN_FIELDS
-]
+FILTER_FIELDS = [cc for cc in COURSE_COLS if cc[0] in FOREIGN_FIELDS]
 
 # Group of fields which determines a course (the tuple must be unique)
 COURSE_KEY_FIELDS = ("CLASS", "GRP", "SUBJECT", "TEACHER")
@@ -85,9 +82,8 @@ LESSON_COLS = [
 ########################################################################
 
 if __name__ == "__main__":
-    import locale, sys, os, builtins
+    import sys, os, builtins
 
-    print("LOCALE:", locale.setlocale(locale.LC_ALL, ""))
     this = sys.path[0]
     appdir = os.path.dirname(os.path.dirname(this))
     sys.path[0] = appdir
@@ -107,12 +103,17 @@ else:
 
 ### +++++
 
+from utility.db_management import open_database, db_key_value_list
+
 from ui.ui_base import (
-    open_database,
     HLine,
     LoseChangesDialog,
     KeySelector,
-    # QtWidgets
+    TableViewRowSelect,
+    FormLineEdit,
+    FormComboBox,
+    ForeignKeyItemDelegate,
+    ### QtWidgets:
     QSplitter,
     QFrame,
     QFormLayout,
@@ -120,16 +121,11 @@ from ui.ui_base import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QComboBox,
     QPushButton,
     QTableView,
-    QStyledItemDelegate,
-    # QtCore
+    ### QtCore:
     Qt,
-    # QtSql
-    QSqlDatabase,
-    QSqlQueryModel,
-    QSqlQuery,
+    ### QtSql:
     QSqlTableModel,
 )
 
@@ -162,30 +158,6 @@ class Courses(Page):
 # ++++++++++++++ The widget implementation ++++++++++++++
 
 
-class CourseTableView(QTableView):
-    """This avoids some very strange selection behaviour in QTableView,
-    which I assume to be a bug:
-    Programmatic switching of the selected row doesn't necessarily cause
-    the visible selection (blue background) to move, although the
-    current (selected) row does change. Clicking and moving (slightly
-    dragging) the mouse produce different responses.
-    """
-
-    def __init__(self, main_widget):
-        super().__init__()
-        self.main_widget = main_widget
-
-    def mousePressEvent(self, e):
-        index = self.indexAt(e.pos())
-        if index.isValid() and (
-            (not self.main_widget.form_change_set) or LoseChangesDialog()
-        ):
-            self.selectRow(index.row())
-
-    def mouseMoveEvent(self, e):
-        pass
-
-
 class CourseEditor(QSplitter):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -211,7 +183,7 @@ class CourseEditor(QSplitter):
         hbox1.addWidget(self.filter_value_select)
 
         # The course table itself
-        self.coursetable = CourseTableView(self)
+        self.coursetable = TableViewRowSelect(self)
         self.coursetable.setSelectionMode(QTableView.SingleSelection)
         self.coursetable.setSelectionBehavior(QTableView.SelectRows)
         self.coursetable.setEditTriggers(
@@ -281,6 +253,9 @@ class CourseEditor(QSplitter):
 
         self.form_change_set = None
         self.setStretchFactor(0, 1)  # stretch only left panel
+
+    def modified(self):
+        return bool(self.form_change_set)
 
     def leave_ok(self):
         if self.form_change_set:
@@ -566,159 +541,9 @@ class CourseEditor(QSplitter):
                 SHOW_ERROR(f"DB Error: {model.lastError().text()}")
 
 
-class ForeignKeyItemDelegate(QStyledItemDelegate):
-    """An "item delegate" for displaying referenced values in
-    foreign key fields.
-
-    Specifically, these objects rely on separate field editor widgets
-    (<FormComboBox> instances) to supply the key -> value mapping.
-    """
-
-    def __init__(self, editwidget, parent=None):
-        super().__init__(parent)
-        self.editwidget = editwidget
-
-    def displayText(self, value, locale):
-        return self.editwidget.itemText(self.editwidget.key2i[value])
-
-
-class FormLineEdit(QLineEdit):
-    """A specialized line editor for use in the course editor form."""
-
-    def __init__(self, field, modified, parent=None):
-        super().__init__(parent)
-        self.__modified = modified
-        self.__field = field
-        self.text0 = None
-        self.textEdited.connect(self.text_edited)
-
-    def setText(self, text):
-        super().setText(text)
-        self.text0 = text
-
-    def text_edited(self, text):
-        self.__modified(self.__field, text != self.text0)
-
-
-def db_key_value_list(table, key_field, value_field, sort_field):
-    """Return a list of (key, value) pairs from the given database table."""
-    model = QSqlQueryModel()
-    model.setQuery(
-        f"SELECT {key_field}, {value_field} FROM {table}"
-        f" ORDER BY {sort_field}"
-    )
-    key_value_list = []
-    for i in range(model.rowCount()):
-        record = model.record(i)
-        key_value_list.append((record.value(0), record.value(1)))
-    return key_value_list
-
-
-class FormComboBox(QComboBox):
-    """A specialized combobox for use in the course editor form."""
-
-    def __init__(self, field, modified, parent=None):
-        super().__init__(parent)
-        self.__modified = modified
-        self.__field = field
-        self.text0 = None
-        self.currentIndexChanged.connect(self.change_index)
-
-    def setup(self, key_value_list):
-        """Set up the indexes required for the table's item delegate
-        and the combobox (<editwidget>).
-        """
-        self.keylist = []
-        self.key2i = {}
-        self.clear()
-        i = 0
-        for k, v in key_value_list:
-            self.key2i[k] = i
-            self.keylist.append(k)
-            self.addItem(v)
-            i += 1
-
-    def text(self):
-        """Return the current "key"."""
-        return self.keylist[self.currentIndex()]
-
-    def setText(self, text):
-        """<text> is the "key"."""
-        if text:
-            try:
-                i = self.key2i[text]
-            except KeyError:
-                raise Bug(
-                    f"Unknown key for editor field {self.__field}: '{text}'"
-                )
-            self.setCurrentIndex(i)
-            self.text0 = text
-        else:
-            self.setCurrentIndex(0)
-            self.text0 = self.keylist[0]
-
-    def change_index(self, i):
-        sid = self.keylist[i]
-        self.__modified(self.__field, sid != self.text0)
-
-
-# An example of code to create and populate the CLASSES table
-def enter_classes():
-    from qtpy.QtSql import QSqlQuery
-
-    dbpath = DATAPATH("db1.sqlite")
-    con = QSqlDatabase.addDatabase("QSQLITE")
-    con.setDatabaseName(dbpath)
-    if not con.open():
-        raise Bug(f"Cannot open database at {dbpath}")
-    print("TABLES:", con.tables())
-
-    query = QSqlQuery()
-    query.exec("drop table CLASSES")
-    if not query.exec(
-        "create table CLASSES(CLASS text primary key,"
-        " NAME text unique not null, CLASSROOM text)"
-    ):
-        error = query.lastError()
-        print("!!!", error.databaseText())
-        # print("!!!2", error.text())
-
-    classes = []
-    names = []
-    classrooms = []
-    for i in range(1, 13):
-        k = f"{i:02}G"
-        classes.append(k)
-        names.append(f"{i}. Großklasse")
-        classrooms.append(f"r{k}")
-        k = f"{i:02}K"
-        classes.append(k)
-        names.append(f"{i}. Kleinklasse")
-        classrooms.append(f"r{k}")
-    classes.append("13")
-    names.append("13. Klasse")
-    classrooms.append("r13")
-
-    classes.append("--")
-    names.append("keine Klasse")
-    classrooms.append("")
-
-    query.prepare("insert into CLASSES values (?, ?, ?)")
-    query.addBindValue(classes)
-    query.addBindValue(names)
-    query.addBindValue(classrooms)
-    if not query.execBatch():
-        error = query.lastError()
-        print("!!!", error.databaseText())
-        # print("!!!2", error.text())
-
-
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    #    enter_classes()
-    #    quit(0)
-
     from ui.ui_base import run
 
     widget = Courses()
