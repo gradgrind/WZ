@@ -1,7 +1,7 @@
 """
-ui/ui_extra.py
+ui/ui_base.py
 
-Last updated:  2022-04-18
+Last updated:  2022-04-19
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -23,29 +23,6 @@ Copyright 2022 Michael Towers
 
 =-LICENCE========================================
 """
-
-### Messages
-_UNKNOWN_KEY = "Ungültige Selektion: '{key}'"
-
-### Dialog buttons, etc.
-_CANCEL = "Abbrechen"
-_OK = "OK"
-
-_INPUT_TITLE = "Eingabe"
-_YESORNO_TITLE = "Ja oder Nein?"
-_TEXTAREA_TITLE = "Text eingeben"
-_LOSE_CHANGES_TITLE = "Ungespeicherte Änderungen"
-_LOSE_CHANGES = "Die Änderungen werden verworfen. Weitermachen?"
-
-_INFO = "Mitteilung"
-_WARNING = "Warnung"
-_ERROR = "Fehler"
-
-_FILEOPEN = "Datei öffnen"
-_DIROPEN = "Ordner öffnen"
-_FILESAVE = "Datei speichern"
-
-_CONFIRMATION = "Bestätigen"
 
 #####################################################
 
@@ -84,6 +61,8 @@ class GuiError(Exception):
     pass
 
 
+T = TRANSLATIONS("ui.ui_base")
+
 ### -----
 
 
@@ -102,7 +81,7 @@ class VLine(QFrame):
 
 
 def get_icon(name):
-    ilist = glob.glob(os.path.join(PROGRAM_DATA, "icons", f"{name}.*"))
+    ilist = glob.glob(APPDATAPATH(f"icons/{name}.*"))
     return QIcon(ilist[0])
 
 
@@ -112,8 +91,8 @@ class StackPage(QWidget):
     The actual visible widget is referenced by its name.
     """
 
-    name = "StackPage"
-    title = "Page Title"
+    name = T["MODULE_NAME"]
+    title = T["MODULE_TITLE"]
 
     def enter(self):
         """Called when a tab page is activated (selected) and when there
@@ -199,7 +178,7 @@ class KeySelector(QComboBox):
             i += 1
         else:
             self.changed_callback = self._cb  # reenable callback
-            raise GuiError(_UNKNOWN_KEY.format(key=key))
+            raise GuiError(T["UNKNOWN_KEY"].format(key=key))
         self.changed_callback = self._cb  # reenable callback
 
     def trigger(self):
@@ -229,10 +208,10 @@ def YesOrNoDialog(message, title=None):
     bbox = QHBoxLayout()
     vbox.addLayout(bbox)
     bbox.addStretch(1)
-    cancel = QPushButton(_CANCEL)
+    cancel = QPushButton(T["CANCEL"])
     cancel.clicked.connect(qd.reject)
     bbox.addWidget(cancel)
-    ok = QPushButton(_OK)
+    ok = QPushButton(T["OK"])
     ok.clicked.connect(qd.accept)
     bbox.addWidget(ok)
     cancel.setDefault(True)
@@ -240,7 +219,7 @@ def YesOrNoDialog(message, title=None):
 
 
 def LoseChangesDialog():
-    return YesOrNoDialog(_LOSE_CHANGES, _LOSE_CHANGES_TITLE)
+    return YesOrNoDialog(T["LOSE_CHANGES"], T["LOSE_CHANGES_TITLE"])
 
 
 def LineDialog(message, text=None, title=None):
@@ -254,10 +233,10 @@ def LineDialog(message, text=None, title=None):
     bbox = QHBoxLayout()
     vbox.addLayout(bbox)
     bbox.addStretch(1)
-    cancel = QPushButton(_CANCEL)
+    cancel = QPushButton(T["CANCEL"])
     cancel.clicked.connect(td.reject)
     bbox.addWidget(cancel)
-    ok = QPushButton(_OK)
+    ok = QPushButton(T["OK"])
     ok.clicked.connect(td.accept)
     bbox.addWidget(ok)
     cancel.setDefault(True)
@@ -268,7 +247,7 @@ def LineDialog(message, text=None, title=None):
 
 def TextAreaDialog(message=None, text=None, title=None):
     td = QDialog()
-    td.setWindowTitle(title or _TEXTAREA_TITLE)
+    td.setWindowTitle(title or T["TEXTAREA_TITLE"])
     vbox = QVBoxLayout(td)
     if message:
         msg = QTextEdit(message)
@@ -280,10 +259,10 @@ def TextAreaDialog(message=None, text=None, title=None):
     bbox = QHBoxLayout()
     vbox.addLayout(bbox)
     bbox.addStretch(1)
-    cancel = QPushButton(_CANCEL)
+    cancel = QPushButton(T["CANCEL"])
     cancel.clicked.connect(td.reject)
     bbox.addWidget(cancel)
-    ok = QPushButton(_OK)
+    ok = QPushButton(T["OK"])
     ok.clicked.connect(td.accept)
     bbox.addWidget(ok)
     cancel.setDefault(True)
@@ -326,7 +305,7 @@ def ListSelect(title, message, data, button=None):
     bbox = QHBoxLayout()
     layout.addLayout(bbox)
     bbox.addStretch(1)
-    cancel = QPushButton(_CANCEL)
+    cancel = QPushButton(T["CANCEL"])
     cancel.setDefault(True)
     cancel.clicked.connect(select.reject)
     bbox.addWidget(cancel)
@@ -377,7 +356,7 @@ def TreeDialog(title, message, data, button=None):
     bbox = QHBoxLayout()
     layout.addLayout(bbox)
     bbox.addStretch(1)
-    cancel = QPushButton(_CANCEL)
+    cancel = QPushButton(T["CANCEL"])
     cancel.setDefault(True)
     cancel.clicked.connect(select.reject)
     bbox.addWidget(cancel)
@@ -427,10 +406,10 @@ def TreeMultiSelect(title, message, data, checked=False):
     bbox = QHBoxLayout()
     layout.addLayout(bbox)
     bbox.addStretch(1)
-    cancel = QPushButton(_CANCEL)
+    cancel = QPushButton(T["CANCEL"])
     cancel.clicked.connect(select.reject)
     bbox.addWidget(cancel)
-    ok = QPushButton(_OK)
+    ok = QPushButton(T["OK"])
     ok.setDefault(True)
     ok.clicked.connect(select.accept)
     bbox.addWidget(ok)
@@ -446,22 +425,22 @@ def TreeMultiSelect(title, message, data, checked=False):
 
 
 def _popupInfo(message):
-    QMessageBox.information(None, _INFO, message)
+    QMessageBox.information(None, T["INFO"], message)
 
 
 def _popupWarn(message):
-    QMessageBox.warning(None, _WARNING, message)
+    QMessageBox.warning(None, T["WARNING"], message)
 
 
 def _popupError(message):
-    QMessageBox.critical(None, _ERROR, message)
+    QMessageBox.critical(None, T["ERROR"], message)
 
 
 def _popupConfirm(question):
     return (
         QMessageBox.question(
             None,
-            _CONFIRMATION,
+            T["CONFIRMATION"],
             question,
             buttons=QMessageBox.Ok | QMessageBox.Cancel,
             defaultButton=QMessageBox.Ok,
@@ -488,7 +467,7 @@ def dirDialog(title=None):
     dir0 = SETTINGS.value("LAST_LOAD_DIR") or os.path.expanduser("~")
     dpath = QFileDialog.getExistingDirectory(
         None,
-        title or _DIROPEN,
+        title or T["DIROPEN"],
         dir0,
         QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
     )
@@ -500,7 +479,7 @@ def dirDialog(title=None):
 def saveDialog(filetype, filename, title=None):
     dir0 = SETTINGS.value("LAST_SAVE_DIR") or os.path.expanduser("~")
     fpath = QFileDialog.getSaveFileName(
-        None, title or _FILESAVE, os.path.join(dir0, filename), filetype
+        None, title or T["FILESAVE"], os.path.join(dir0, filename), filetype
     )[0]
     if fpath:
         SETTINGS.setValue("LAST_SAVE_DIR", os.path.dirname(fpath))
@@ -551,7 +530,7 @@ class FormLineEdit(QLineEdit):
     The constructor receives the name of the field and a function which
     is to be called when the selected value is changed. This function
     takes the field name and a boolean (value != initial value, set by
-    "setText" method).
+    the "setText" method).
     """
 
     def __init__(self, field, modified, parent=None):
@@ -577,7 +556,7 @@ class FormComboBox(QComboBox):
     The constructor receives the name of the field and a function which
     is to be called when the selected value is changed. This function
     takes the field name and a boolean (value != initial value, set by
-    "setText" method).
+    the "setText" method).
 
     Also the "setup" method must be called to initialize the contents.
     """

@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-04-18
+Last updated:  2022-04-19
 
 Edit course and lesson data.
 
@@ -30,55 +30,6 @@ Copyright 2022 Michael Towers
 
 # TODO: add a status bar for short messages, etc.?
 
-### Messages
-_COURSE_EXISTS = "Der geänderte „Kurs“ existiert schon"
-
-### Labels
-_NAME = "Kurse/Stunden"
-_TITLE = "Unterrichtskurse und -stunden verwalten"
-
-# Course field editor buttons
-_DELETE = "Löschen"
-_UPDATE = "Übernehmen"
-_NEW = "Hinzufügen"
-_COPY_NEW = "Neu (Kopie)"
-
-# Course table title line
-_COURSE_TITLE = "Kurse"
-_FILTER = "Filter:"
-
-# Course table fields
-COURSE_COLS = [
-    ("course", "KursNr"),
-    ("CLASS", "Klasse"),
-    ("GRP", "Gruppe"),
-    ("SUBJECT", "Fach"),
-    ("TEACHER", "Lehrkraft"),
-    ("REPORT", "Zeugnis"),
-    ("GRADE", "Note"),
-    ("COMPOSITE", "Sammelfach"),
-]
-# SUBJECT, CLASS and TEACHER are foreign keys with:
-#  on delete cascade + on update cascade
-FOREIGN_FIELDS = ("CLASS", "TEACHER", "SUBJECT")
-
-FILTER_FIELDS = [cc for cc in COURSE_COLS if cc[0] in FOREIGN_FIELDS]
-
-# Group of fields which determines a course (the tuple must be unique)
-COURSE_KEY_FIELDS = ("CLASS", "GRP", "SUBJECT", "TEACHER")
-
-# Lesson table
-_LESSONS = "Unterrichts- bzw. Deputatsstunden"
-
-LESSON_COLS = [
-    ("course", "KursNr"),
-    ("LENGTH", "Länge"),
-    ("PAYROLL", "Deputat"),
-    ("TAG", "Kennung"),
-    ("ROOM", "Raum"),
-    ("NOTES", "Notizen"),
-]
-
 ########################################################################
 
 if __name__ == "__main__":
@@ -92,14 +43,16 @@ if __name__ == "__main__":
     except KeyError:
         basedir = os.path.dirname(appdir)
         builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
-    from ui.ui_base import StandalonePage as Page
     from core.base import start
+    from ui.ui_base import StandalonePage as Page
 
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 else:
     from ui.ui_base import StackPage as Page
+
+T = TRANSLATIONS("ui.modules.course_lessons")
 
 ### +++++
 
@@ -129,6 +82,37 @@ from ui.ui_base import (
     QSqlTableModel,
 )
 
+# Course table fields
+COURSE_COLS = [(f, T[f]) for f in (
+        "course",
+        "CLASS",
+        "GRP",
+        "SUBJECT",
+        "TEACHER",
+        "REPORT",
+        "GRADE",
+        "COMPOSITE"
+    )
+]
+# SUBJECT, CLASS and TEACHER are foreign keys with:
+#  on delete cascade + on update cascade
+FOREIGN_FIELDS = ("CLASS", "TEACHER", "SUBJECT")
+
+FILTER_FIELDS = [cc for cc in COURSE_COLS if cc[0] in FOREIGN_FIELDS]
+
+# Group of fields which determines a course (the tuple must be unique)
+COURSE_KEY_FIELDS = ("CLASS", "GRP", "SUBJECT", "TEACHER")
+
+LESSON_COLS = [(f, T[f]) for f in (
+        "course",
+        "LENGTH",
+        "PAYROLL",
+        "TAG",
+        "ROOM",
+        "NOTES"
+    )
+]
+
 ### -----
 
 
@@ -137,8 +121,8 @@ def init():
 
 
 class Courses(Page):
-    name = _NAME
-    title = _TITLE
+    name = T["MODULE_NAME"]
+    title = T["MODULE_TITLE"]
 
     def __init__(self):
         super().__init__()
@@ -172,9 +156,9 @@ class CourseEditor(QSplitter):
         # Course table title and filter settings
         hbox1 = QHBoxLayout()
         vbox1.addLayout(hbox1)
-        hbox1.addWidget(QLabel(f"<h4>{_COURSE_TITLE}</h4>"))
+        hbox1.addWidget(QLabel(f"<h4>{T['COURSE_TITLE']}</h4>"))
         hbox1.addStretch(1)
-        hbox1.addWidget(QLabel(f"<h5>{_FILTER}</h5>"))
+        hbox1.addWidget(QLabel(f"<h5>{T['FILTER']}</h5>"))
         self.filter_field_select = KeySelector(
             value_mapping=FILTER_FIELDS, changed_callback=self.set_filter_field
         )
@@ -216,13 +200,13 @@ class CourseEditor(QSplitter):
         hbox2 = QHBoxLayout()
         vbox2.addLayout(hbox2)
         hbox2.addStretch(1)
-        self.course_delete_button = QPushButton(_DELETE)
+        self.course_delete_button = QPushButton(T["DELETE"])
         self.course_delete_button.clicked.connect(self.course_delete)
         hbox2.addWidget(self.course_delete_button)
-        self.course_update_button = QPushButton(_UPDATE)
+        self.course_update_button = QPushButton(T["UPDATE"])
         self.course_update_button.clicked.connect(self.course_update)
         hbox2.addWidget(self.course_update_button)
-        self.course_add_button = QPushButton(_NEW)
+        self.course_add_button = QPushButton(T["NEW"])
         self.course_add_button.clicked.connect(self.course_add)
         hbox2.addWidget(self.course_add_button)
 
@@ -232,7 +216,7 @@ class CourseEditor(QSplitter):
         vbox2.addWidget(lessonbox)
         vbox3 = QVBoxLayout(lessonbox)
         vbox3.setContentsMargins(0, 0, 0, 0)
-        vbox3.addWidget(QLabel(f"<h4>{_LESSONS}</h4>"))
+        vbox3.addWidget(QLabel(f"<h4>{T['LESSONS']}</h4>"))
 
         # The lesson table
         self.lessontable = QTableView()
@@ -244,10 +228,10 @@ class CourseEditor(QSplitter):
         hbox3 = QHBoxLayout()
         vbox2.addLayout(hbox3)
         hbox3.addStretch(1)
-        self.lesson_delete_button = QPushButton(_DELETE)
+        self.lesson_delete_button = QPushButton(T['DELETE'])
         hbox3.addWidget(self.lesson_delete_button)
         self.lesson_delete_button.clicked.connect(self.lesson_delete)
-        self.lesson_add_button = QPushButton(_COPY_NEW)
+        self.lesson_add_button = QPushButton(T['COPY_NEW'])
         hbox3.addWidget(self.lesson_add_button)
         self.lesson_add_button.clicked.connect(self.lesson_add)
 
@@ -420,7 +404,7 @@ class CourseEditor(QSplitter):
         else:
             error = model.lastError()
             if "UNIQUE" in error.databaseText():
-                SHOW_ERROR(_COURSE_EXISTS)
+                SHOW_ERROR(T["COURSE_EXISTS"])
             else:
                 SHOW_ERROR(error.text())
             model.revertAll()
@@ -448,7 +432,7 @@ class CourseEditor(QSplitter):
         else:
             error = model.lastError()
             if "UNIQUE" in error.databaseText():
-                SHOW_ERROR(_COURSE_EXISTS)
+                SHOW_ERROR(T["COURSE_EXISTS"])
             else:
                 SHOW_ERROR(error.text())
             model.revertAll()
@@ -480,7 +464,7 @@ class CourseEditor(QSplitter):
         else:
             error = model.lastError()
             if "UNIQUE" in error.databaseText():
-                SHOW_ERROR(_COURSE_EXISTS)
+                SHOW_ERROR(T["COURSE_EXISTS"])
             else:
                 SHOW_ERROR(error.text())
             model.revertAll()

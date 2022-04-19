@@ -1,7 +1,7 @@
 """
 ui/modules/teachers.py
 
-Last updated:  2022-04-18
+Last updated:  2022-04-19
 
 Edit teachers' data.
 
@@ -27,34 +27,6 @@ Copyright 2022 Michael Towers
 #TODO: get from db? info table?
 DAYS = [1,2,3,4,5]
 
-### Messages
-
-### Labels
-_NAME = "Lehrkräfte"
-_TITLE = "Lehrerdaten verwalten"
-
-#TODO? ...
-# Teacher field editor buttons
-_DELETE = "Löschen"
-_UPDATE = "Übernehmen"
-_NEW = "Hinzufügen"
-_COPY_NEW = "Neu (Kopie)"
-
-# Teacher table fields
-TEACHER_COLS = [
-    ("TID", "Kürzel"),
-    ("NAME", "Name"),
-    ("FULLNAME", "Vollname"),
-    ("SORTNAME", "Sortiername"),
-    ("TT_DATA", "Stundenplandaten"),
-]
-
-# Lesson table
-_LESSONS = "Verfügbarkeit"
-
-_DAY = "Tag"
-#TODO: The period tags are in a configuration file? Or in the database?
-
 ########################################################################
 
 if __name__ == "__main__":
@@ -68,8 +40,8 @@ if __name__ == "__main__":
     except KeyError:
         basedir = os.path.dirname(appdir)
         builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
-    from ui.ui_base import StandalonePage as Page
     from core.base import start
+    from ui.ui_base import StandalonePage as Page
 
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
@@ -77,9 +49,15 @@ if __name__ == "__main__":
 else:
     from ui.ui_base import StackPage as Page
 
+T = TRANSLATIONS("ui.modules.teachers")
+
 ### +++++
 
-from utility.db_management import open_database, db_key_value_list
+from utility.db_management import (
+    open_database,
+    db_key_value_list,
+    read_pairs
+)
 
 from ui.ui_base import (
     HLine,
@@ -102,6 +80,18 @@ from ui.ui_base import (
 )
 from ui.editable import EdiTableWidget
 
+# Teacher table fields
+TEACHER_COLS = [(f, T[f]) for f in (
+        "TID",
+        "NAME",
+        "FULLNAME",
+        "SORTNAME",
+        "TT_DATA"
+    )
+]
+
+from timetable.constraints_teacher import CONSTRAINT_FIELDS
+
 ### -----
 
 
@@ -110,8 +100,8 @@ def init():
 
 
 class Teachers(Page):
-    name = _NAME
-    title = _TITLE
+    name = T["MODULE_NAME"]
+    title = T["MODULE_TITLE"]
 
     def __init__(self):
         super().__init__()
@@ -160,44 +150,47 @@ class TeacherEditor(QSplitter):
         vbox2.addWidget(editorbox)
         self.editors = {}
         for f, t in TEACHER_COLS:
-            editwidget = FormLineEdit(f, self.form_modified)
-            self.editors[f] = editwidget
-            if f != "TT_DATA":
+            if f == "TT_DATA":
+                editwidget = FormSpecialEdit(f, self.form_modified, t)
+#?
+#TODO: If there are too many constraints, the widget will get very tall ...
+# What about a QScrollArea (perhaps with QSplitter) like in the datatable editor?
+                for f_, t_ in CONSTRAINT_FIELDS:
+
+                    if f_ == "AVAILABLE":
+                        ewidget = WeekTable(
+                            f_,
+                            editwidget.form_modified,
+                            t_
+                        )
+#TODO: This is a temporary bodge?
+                        self.weektable = ewidget.get_table()
+
+                        editwidget.addRow(f_, ewidget)
+                    else:
+                        ewidget = FormLineEdit(f_, editwidget.form_modified)
+                        editwidget.addRow(f_, ewidget, t_)
+
+                self.teachereditor.addRow(editwidget)
+            else:
+                editwidget = FormLineEdit(f, self.form_modified)
                 self.teachereditor.addRow(t, editwidget)
+            self.editors[f] = editwidget
 
         hbox2 = QHBoxLayout()
         vbox2.addLayout(hbox2)
         hbox2.addStretch(1)
-        self.teacher_delete_button = QPushButton(_DELETE)
+        self.teacher_delete_button = QPushButton(T["DELETE"])
         self.teacher_delete_button.clicked.connect(self.teacher_delete)
         hbox2.addWidget(self.teacher_delete_button)
-        self.teacher_update_button = QPushButton(_UPDATE)
+        self.teacher_update_button = QPushButton(T["UPDATE"])
         self.teacher_update_button.clicked.connect(self.teacher_update)
         hbox2.addWidget(self.teacher_update_button)
-        self.teacher_add_button = QPushButton(_NEW)
+        self.teacher_add_button = QPushButton(T["NEW"])
         self.teacher_add_button.clicked.connect(self.teacher_add)
         hbox2.addWidget(self.teacher_add_button)
 
         vbox2.addWidget(HLine())
-
-#TODO: constraint fields ...
-
-        lessonbox = QFrame()
-        vbox2.addWidget(lessonbox)
-        vbox3 = QVBoxLayout(lessonbox)
-        vbox3.setContentsMargins(0, 0, 0, 0)
-        vbox3.addWidget(QLabel(f"<h4>{_LESSONS}</h4>"))
-
-        # The lesson table
-# Rather use an "editable", or a simplified version? With validation?
-        self.weektable = EdiTableWidget()
-#        self.lessontable = QTableView()
-#        self.lessontable.setSelectionMode(QTableView.SingleSelection)
-#        self.lessontable.setSelectionBehavior(QTableView.SelectRows)
-
-#        self.weektable.verticalHeader().hide()
-
-        vbox3.addWidget(self.weektable)
 
         self.form_change_set = None
         self.setStretchFactor(0, 1)  # stretch only left panel
@@ -293,6 +286,7 @@ class TeacherEditor(QSplitter):
         self.teachertable.resizeColumnsToContents()
 
     def teacher_changed(self, new, old):
+#???
         if new:
             self.table_empty = False
             row = new.row()
@@ -307,6 +301,7 @@ class TeacherEditor(QSplitter):
             # print("EMPTY TABLE")
             for f, t in TEACHER_COLS:
                 self.editors[f].setText("")
+#???
             self.editors[self.filter_field].setText(self.filter_value)
             self.set_teacher(0)
         self.form_change_set = set()
@@ -391,12 +386,13 @@ class TeacherEditor(QSplitter):
             SHOW_ERROR(error.text())
             model.revertAll()
 
+#TODO: Perhaps not needed any more?
     def set_teacher(self, teacher):
         # print("SET TEACHER:", teacher)
         self.this_teacher = teacher
 #TODO
         tt_data = self.editors["TT_DATA"].text()
-        print("§§§", tt_data)
+        print("§§§", read_pairs(tt_data))
 #? self.tt_data_col ... perhaps not needed
 # Use a special "editor widget" to handle the tt data?
         return
@@ -451,6 +447,95 @@ class TeacherEditor(QSplitter):
                 self.lesson_delete_button.setEnabled(True)
             else:
                 SHOW_ERROR(f"DB Error: {model.lastError().text()}")
+
+
+#TODO: integration of the table functions ... modifications, data, etc.
+class WeekTable(QFrame):
+    def __init__(self, field, modified, title, parent=None):
+        super().__init__(parent)
+        self.setLineWidth(2)
+        self.setFrameShape(self.Box)
+        self.__table = EdiTableWidget()
+        vbox = QVBoxLayout(self)
+        vbox.addWidget(QLabel(f"<h4>{title}</h4>"))
+        vbox.addWidget(self.__table)
+        self.__modified = modified
+        self.__field = field
+        self.text0 = None
+        self.value = ""
+
+    def get_table(self):
+        return self.__table
+
+    def text(self):
+        return self.value
+
+    def setText(self, text):
+        self.value = text
+        self.text0 = text
+        # Set up table
+        daysdata = text.split("_")
+        for d in range(self.__table.row_count()):
+            try:
+                daydata = daysdata[d]
+            except IndexError:
+                daydata = ""
+            for p in range(self.__table.col_count()):
+                try:
+                    pdata = daydata[p]
+                except IndexError:
+                    pdata = '+'
+                self.__table.set_text(d, p, pdata)
+#TODO: Handling modifications?
+
+
+class FormSpecialEdit(QFormLayout):
+    """A specialized editor widget for use in the editor form for a
+    "TableViewRowSelect" table view.
+
+    The constructor receives the name of the field and a function which
+    is to be called when the selected value is changed. This function
+    takes the field name and a boolean (value != initial value, set by
+    the "setText" method).
+    """
+
+    def __init__(self, field, modified, title, parent=None):
+        super().__init__(parent)
+        super().addRow(HLine())
+        super().addRow(QLabel(f"<h4>{title}</h4>"))
+        self.__widgets = {}
+        self.__modified = modified
+        self.__field = field
+        self.text0 = None
+        self.value = ""
+
+    def addRow(self, tag, widget, name=None):
+        if name:
+            super().addRow(name, widget)
+        else:
+            super().addRow(widget)
+        self.__widgets[tag] = widget
+
+    def text(self):
+        return self.value
+
+    def setText(self, text):
+        self.value = text
+        self.text0 = text
+        # Set up subwidgets
+        data = dict(read_pairs(text))
+        for f, t in CONSTRAINT_FIELDS:
+            self.__widgets[f].setText(data.get(f) or "")
+
+    def new_value(self, text):
+        """Change the current value.
+        """
+        self.value = text
+        self.__modified(self.__field, text != self.text0)
+
+#TODO
+    def form_modified(self, field, changed):
+        print("?????", field, changed)
 
 
 

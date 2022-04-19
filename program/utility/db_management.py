@@ -98,6 +98,25 @@ def db_key_value_list(table, key_field, value_field, sort_field):
     return key_value_list
 
 
+def read_pairs(data):
+    """Read a list of (key, value) pairs from the given string.
+
+    Each line of the input supplies one such pair.
+    This format is used for special database fields which
+    contain multiple key-value pairs.
+    """
+    pairs = []
+    for line in data.splitlines():
+        try:
+            k, v = line.split(None, 1)
+            pairs.append((k, v))
+        except ValueError:
+            SHOW_ERROR(_BAD_KEY_VALUE_LIST.format(data))
+    return pairs
+
+
+# -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+
 # An example of code to create and populate the CLASSES table
 def enter_classes():
     con = open_database()

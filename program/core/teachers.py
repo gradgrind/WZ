@@ -1,5 +1,6 @@
+#DEPRECATED: moving to sqlite
 """
-core/teachers.py - last updated 2022-02-12
+core/teachers.py - last updated 2022-04-19
 
 Manage teacher data.
 
@@ -41,8 +42,9 @@ if __name__ == "__main__":
     from core.base import start
 
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
-    #    start.setup(os.path.join(basedir, "DATA"))
-    start.setup(os.path.join(basedir, "NEXT"))
+    #start.setup(os.path.join(basedir, "DATA"))
+    #start.setup(os.path.join(basedir, "NEXT"))
+    start.setup(os.path.join(basedir, "DATA-2023"))
 
 ### +++++
 
@@ -130,6 +132,48 @@ class __TeachersCache(dict):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
+    from utility.db_management import open_database, QSqlQuery, db_key_value_list
+    open_database()
+    tt_periods = db_key_value_list("TT_PERIODS", "N", "TAG", "N")
+    print("\nPERIODS:", tt_periods)
+
     teachers = Teachers()
     for tid in teachers.list_teachers():
-        print(f"  {tid}: {teachers.name(tid)} // {teachers[tid]}")
+        #print(f"  {tid}: {teachers.name(tid)} // {teachers[tid]}")
+        data = []
+        tdata = teachers[tid]
+        for k in ('MINPERDAY', 'MAXGAPSPERDAY', 'MAXGAPSPERWEEK', 'MAXBLOCK'):
+            v = tdata[k]
+            if v:
+                data.append(f"{k}\t{v}")
+        days = []
+        for d, v in tdata['AVAILABLE'].items():
+            xv = []
+            for p, q in tt_periods:
+                try:
+                    x = v[q]
+                except KeyError:
+                    x = '+'
+                else:
+                    if x == 'X':
+                        x = '+'
+                    elif x == '+':
+                        x = '*'
+                    elif not x:
+                        x = '-'
+                    else:
+                        print("BAD VALUE:", repr(x))
+                        quit(1)
+                xv.append(x)
+            xvt = "".join(xv)
+            days.append(xvt)
+        data.append(f"AVAILABLE\t{'_'.join(days)}")
+        tdtext = '\n'.join(data)
+        #print(f"{tid}:\n{tdtext}")
+        query = QSqlQuery()
+        query.prepare("UPDATE TEACHERS SET TT_DATA = ? WHERE TID = ?")
+        query.addBindValue(tdtext)
+        query.addBindValue(tid)
+        if not query.exec():
+            raise Bug(f"Failed: {query.lastError()}\n *****\n{query.lastQuery()}")
+        #quit(0)

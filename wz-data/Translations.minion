@@ -1,0 +1,99 @@
+### Translations
+
+ui.ui_base: {
+    # Messages
+    UNKNOWN_KEY:    "Ungültige Selektion: '{key}'"
+    
+    # Labels
+    MODULE_NAME:    StackPage
+    MODULE_TITLE:   "Page Title"
+
+    # Dialog buttons, etc.
+    CANCEL:         Abbrechen
+    OK:             OK
+
+    INPUT_TITLE:    Eingabe
+    YESORNO_TITLE:  "Ja oder Nein?"
+    TEXTAREA_TITLE: "Text eingeben"
+    LOSE_CHANGES_TITLE: "Ungespeicherte Änderungen"
+    LOSE_CHANGES:   "Die Änderungen werden verworfen. Weitermachen?"
+
+    INFO:           Mitteilung
+    WARNING:        Warnung
+    ERROR:          Fehler
+
+    FILEOPEN:       "Datei öffnen"
+    DIROPEN:        "Ordner öffnen"
+    FILESAVE:       "Datei speichern"
+
+    CONFIRMATION:   Bestätigen
+}
+
+ui.modules.teachers: {
+    # Labels
+    MODULE_NAME:    Lehrkräfte
+    MODULE_TITLE:   "Lehrerdaten verwalten"
+
+#TODO? ...
+    # Teacher field editor buttons
+    DELETE:         Löschen
+    UPDATE:         Übernehmen
+    NEW:            Hinzufügen
+
+    # Teacher table fields
+    TID:            Kürzel
+    NAME:           Name
+    FULLNAME:       Vollname
+    SORTNAME:       Sortiername
+    TT_DATA:        Stundenplandaten
+
+    # Constraints
+    AVAILABILITY:   Verfügbarkeit
+}
+
+ui.modules.course_lessons: {
+    # Messages
+    COURSE_EXISTS:  "Der geänderte „Kurs“ existiert schon"
+
+    # Labels
+    MODULE_NAME:    "Kurse/Stunden"
+    MODULE_TITLE:   "Unterrichtskurse und -stunden verwalten"
+
+    # Course field editor buttons
+    DELETE:         Löschen
+    UPDATE:         Übernehmen
+    NEW:            Hinzufügen
+    COPY_NEW:       "Neu (Kopie)"
+
+    # Course table title line
+    COURSE_TITLE:   Kurse
+    FILTER:         "Filter:"
+
+    # Course table fields
+    course:         KursNr
+    CLASS:          Klasse
+    GRP:            Gruppe
+    SUBJECT:        Fach
+    TEACHER:        Lehrkraft
+    REPORT:         Zeugnis
+    GRADE:          Note
+    COMPOSITE:      Sammelfach
+
+    # Lesson table
+    LESSONS:        "Unterrichts- bzw. Deputatsstunden"
+
+    LENGTH:         Länge
+    PAYROLL:        Deputat
+    TAG:            Kennung
+    ROOM:           Raum
+    NOTES:          Notizen
+}
+
+timetable.constraints_teacher: {
+    # CONSTRAINT_FIELDS
+    MINPERDAY:      "Stunden pro Tag – mindestens"
+    MAXGAPSPERDAY:  "Lücken pro Tag – maximal"
+    MAXGAPSPERWEEK: "Lücken pro Woche – maximal"
+    MAXBLOCK:       "aufeinanderfolgende Stunden – maximal"
+    AVAILABLE:      "Verfügbarkeit"
+}

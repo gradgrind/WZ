@@ -1,7 +1,7 @@
 """
 core/base.py
 
-Last updated:  2022-01-03
+Last updated:  2022-04-19
 
 Basic configuration and structural stuff.
 
@@ -47,9 +47,16 @@ if __name__ == "__main__":
     this = sys.path[0]
     appdir = os.path.dirname(this)
     sys.path[0] = appdir
-    basedir = os.path.dirname(appdir)
-#    appdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-#    basedir = os.path.dirname(appdir)
+else:
+    appdir = sys.path[0]
+basedir = os.path.dirname(appdir)
+
+def __programdata(path):
+    """Return a path within the school-data folder.
+    <path> is a '/'-separated path relative to this folder.
+    """
+    return os.path.join(basedir, "wz-data", *path.split("/"))
+builtins.APPDATAPATH = __programdata
 
 ### +++++
 
@@ -64,6 +71,11 @@ from minion2 import Minion
 
 _Minion = Minion()
 builtins.MINION = _Minion.parse_file
+
+__TRANSLATIONS = MINION(APPDATAPATH("Translations.minion"))
+def __translations(module):
+    return __TRANSLATIONS[module]
+builtins.TRANSLATIONS = __translations
 
 ### -----
 
@@ -368,8 +380,9 @@ def archive_testdata():
 if __name__ == "__main__":
 
 # TODO: use TESTDATA?
-    #    start.setup(os.path.join(basedir, 'TESTDATA'))
-    start.setup(os.path.join(basedir, "DATA"))
+    #start.setup(os.path.join(basedir, 'TESTDATA'))
+    #start.setup(os.path.join(basedir, "DATA"))
+    start.setup(os.path.join(basedir, "DATA-2023"))
     print("Today (possibly faked):", Dates.today())
     print("Current school year:", Dates.get_schoolyear())
     print("School year of data:", SCHOOLYEAR)

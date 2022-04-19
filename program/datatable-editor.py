@@ -2,12 +2,12 @@
 """
 datatable-editor.py
 
-Last updated:  2021-11-18
+Last updated:  2022-04-19
 
 Gui editor for "DataTables".
 
 =+LICENCE=================================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -49,14 +49,6 @@ _SAVING_FORMAT = (
 ########################################################################
 
 import sys, os, builtins, traceback
-
-if __name__ == "__main__":
-    try:
-        builtins.PROGRAM_DATA = os.environ["PROGRAM_DATA"]
-    except KeyError:
-        this = sys.path[0]
-        basedir = os.path.dirname(this)
-        builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
 
 from ui.ui_base import APP, run, openDialog, saveDialog, get_icon, QLineEdit
 
