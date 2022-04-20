@@ -1,7 +1,7 @@
 """
 ui/modules/teachers.py
 
-Last updated:  2022-04-19
+Last updated:  2022-04-20
 
 Edit teachers' data.
 
@@ -23,9 +23,6 @@ Copyright 2022 Michael Towers
 
 =-LICENCE========================================
 """
-
-#TODO: get from db? info table?
-DAYS = [1,2,3,4,5]
 
 ########################################################################
 
@@ -53,11 +50,7 @@ T = TRANSLATIONS("ui.modules.teachers")
 
 ### +++++
 
-from utility.db_management import (
-    open_database,
-    db_key_value_list,
-    read_pairs
-)
+from utility.db_management import open_database, db_key_value_list, read_pairs
 
 from ui.ui_base import (
     HLine,
@@ -67,6 +60,8 @@ from ui.ui_base import (
     # QtWidgets
     QSplitter,
     QFrame,
+    QScrollArea,
+    QWidget,
     QFormLayout,
     QVBoxLayout,
     QHBoxLayout,
@@ -81,13 +76,8 @@ from ui.ui_base import (
 from ui.editable import EdiTableWidget
 
 # Teacher table fields
-TEACHER_COLS = [(f, T[f]) for f in (
-        "TID",
-        "NAME",
-        "FULLNAME",
-        "SORTNAME",
-        "TT_DATA"
-    )
+TEACHER_COLS = [
+    (f, T[f]) for f in ("TID", "NAME", "FULLNAME", "SORTNAME", "TT_DATA")
 ]
 
 from timetable.constraints_teacher import CONSTRAINT_FIELDS
@@ -119,6 +109,7 @@ class Teachers(Page):
 
 
 # ++++++++++++++ The widget implementation ++++++++++++++
+
 
 class TeacherEditor(QSplitter):
     def __init__(self, parent=None):
@@ -152,21 +143,10 @@ class TeacherEditor(QSplitter):
         for f, t in TEACHER_COLS:
             if f == "TT_DATA":
                 editwidget = FormSpecialEdit(f, self.form_modified, t)
-#?
-#TODO: If there are too many constraints, the widget will get very tall ...
-# What about a QScrollArea (perhaps with QSplitter) like in the datatable editor?
                 for f_, t_ in CONSTRAINT_FIELDS:
-
                     if f_ == "AVAILABLE":
-                        ewidget = WeekTable(
-                            f_,
-                            editwidget.form_modified,
-                            t_
-                        )
-#TODO: This is a temporary bodge?
-                        self.weektable = ewidget.get_table()
-
-                        editwidget.addRow(f_, ewidget)
+                        ewidget = WeekTable(f_, editwidget.form_modified, t_)
+                        editwidget.addBox(f_, ewidget)
                     else:
                         ewidget = FormLineEdit(f_, editwidget.form_modified)
                         editwidget.addRow(f_, ewidget, t_)
@@ -189,8 +169,7 @@ class TeacherEditor(QSplitter):
         self.teacher_add_button = QPushButton(T["NEW"])
         self.teacher_add_button.clicked.connect(self.teacher_add)
         hbox2.addWidget(self.teacher_add_button)
-
-        vbox2.addWidget(HLine())
+        vbox2.addStretch(1)
 
         self.form_change_set = None
         self.setStretchFactor(0, 1)  # stretch only left panel
@@ -222,8 +201,7 @@ class TeacherEditor(QSplitter):
         else:
             self.form_change_set.discard(field)
             if self.form_change_set:
-#?                if not self.form_change_set.intersection(COURSE_KEY_FIELDS):
-                    self.teacher_add_button.setEnabled(False)
+                self.teacher_add_button.setEnabled(False)
             else:
                 self.teacher_delete_button.setEnabled(True)
                 self.teacher_update_button.setEnabled(False)
@@ -234,9 +212,6 @@ class TeacherEditor(QSplitter):
         # Set up the teacher model, first clearing the "model-view"
         # widgets (in case this is a reentry)
         self.teachertable.setModel(None)
-
-#        self.lessontable.setModel(None)
-
         self.teachermodel = QSqlTableModel()
         self.teachermodel.setTable("TEACHERS")
         self.teachermodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
@@ -246,30 +221,13 @@ class TeacherEditor(QSplitter):
         selection_model.currentChanged.connect(self.teacher_changed)
         for f, t in TEACHER_COLS:
             i = self.teachermodel.fieldIndex(f)
-#            editwidget = self.editors[f]
             self.teachermodel.setHeaderData(i, Qt.Horizontal, t)
             if f == "TT_DATA":
                 self.tt_data_col = i
                 self.teachertable.hideColumn(i)
-
-        # Set up the week table
-        self.tt_days = db_key_value_list("TT_DAYS", "N", "NAME", "N")
-        self.tt_periods = db_key_value_list("TT_PERIODS", "N", "TAG", "N")
-        self.weektable.setup(
-            colheaders=[p[1] for p in self.tt_periods],
-            rowheaders=[d[1] for d in self.tt_days],
-            undo_redo=False,
-            cut=False,
-            paste=True,
-            row_add_del=False,
-            column_add_del=False,
-            on_changed=None,
-        )
-        self.weektable.resizeColumnsToContents()
-        hh = self.weektable.horizontalHeader().length()
-        vh = self.weektable.verticalHeader().sizeHint().width()
-        self.weektable.setMinimumWidth(hh + vh + 10)
-
+                # Set up the week table
+                self.editors[f].widgets["AVAILABLE"].setup()
+        # Initialize the teacher table
         self.fill_teacher_table()
 
     def fill_teacher_table(self):
@@ -286,7 +244,6 @@ class TeacherEditor(QSplitter):
         self.teachertable.resizeColumnsToContents()
 
     def teacher_changed(self, new, old):
-#???
         if new:
             self.table_empty = False
             row = new.row()
@@ -294,16 +251,12 @@ class TeacherEditor(QSplitter):
             record = self.teachermodel.record(row)
             for f, t in TEACHER_COLS:
                 self.editors[f].setText(str(record.value(f)))
-            self.set_teacher(record.value(0))
         else:
             # e.g. when entering an empty table
             self.table_empty = True
             # print("EMPTY TABLE")
             for f, t in TEACHER_COLS:
                 self.editors[f].setText("")
-#???
-            self.editors[self.filter_field].setText(self.filter_value)
-            self.set_teacher(0)
         self.form_change_set = set()
         self.form_modified("", False)  # initialize form button states
 
@@ -313,15 +266,10 @@ class TeacherEditor(QSplitter):
         if self.form_change_set:
             if not LoseChangesDialog():
                 return
-        # teacher = self.editors["teacher"].text()
         index = self.teachertable.currentIndex()
         row = index.row()
         model.removeRow(row)
         if model.submitAll():
-            # The LESSONS table should have its "teacher" field (foreign
-            # key) defined as "ON DELETE CASCADE" to ensure that when
-            # a teacher is deleted also the lessons are removed.
-            # print("DELETED:", teacher)
             if row >= model.rowCount():
                 row = model.rowCount() - 1
             self.teachertable.selectRow(row)
@@ -339,15 +287,18 @@ class TeacherEditor(QSplitter):
         row0 = index.row()
         row = 0
         model.insertRow(row)
-        for f, t in TEACHER_COLS[1:]:
+        for f, t in TEACHER_COLS:
             col = model.fieldIndex(f)
             val = self.editors[f].text()
+            if f == "TID":
+                inserted = val
+                icol = col
             model.setData(model.index(row, col), val)
         if model.submitAll():
-            teacher = model.query().lastInsertId()
-            # print("INSERTED:", teacher)
+            # print("INSERTED:", inserted)
+            # Try to select the new entry
             for r in range(model.rowCount()):
-                if model.data(model.index(r, 0)) == teacher:
+                if model.data(model.index(r, icol)) == inserted:
                     self.teachertable.selectRow(r)
                     break
             else:
@@ -386,111 +337,81 @@ class TeacherEditor(QSplitter):
             SHOW_ERROR(error.text())
             model.revertAll()
 
-#TODO: Perhaps not needed any more?
-    def set_teacher(self, teacher):
-        # print("SET TEACHER:", teacher)
-        self.this_teacher = teacher
-#TODO
-        tt_data = self.editors["TT_DATA"].text()
-        print("§§§", read_pairs(tt_data))
-#? self.tt_data_col ... perhaps not needed
-# Use a special "editor widget" to handle the tt data?
-        return
 
-        # print("SELECT:", self.lessonmodel.selectStatement())
-        self.lessonmodel.select()
-        self.lessontable.selectRow(0)
-        self.lessontable.resizeColumnsToContents()
-        # Enable or disable lesson butttons
-        if self.lessonmodel.rowCount():
-            self.lesson_delete_button.setEnabled(True)
-        else:
-            self.lesson_delete_button.setEnabled(False)
-        self.lesson_add_button.setEnabled(teacher > 0)
-
-    def lesson_delete(self):
-        """Delete the current "lesson"."""
-        model = self.lessonmodel
-        index = self.lessontable.currentIndex()
-        row = index.row()
-        if model.removeRow(row):
-            model.select()
-            n = model.rowCount()
-            if n == 0:
-                self.lesson_delete_button.setEnabled(False)
-            elif row >= n:
-                self.lessontable.selectRow(n - 1)
-            else:
-                self.lessontable.selectRow(row)
-        else:
-            SHOW_ERROR(f"DB Error: {model.lastError().text()}")
-
-    def lesson_add(self):
-        """Add a new "lesson", copying the current one if possible."""
-        if self.this_teacher:
-            model = self.lessonmodel
-            index = self.lessontable.currentIndex()
-            if index.isValid():
-                row = index.row()
-                model.select()  # necessary to ensure current row is up to date
-                record = model.record(row)
-                # print("RECORD:", [record.value(i) for i in range(record.count())])
-                record.setValue(0, None)
-                n = model.rowCount()
-            else:
-                record = model.record()
-                record.setValue(1, self.this_teacher)
-                n = 0
-            if model.insertRecord(-1, record):
-                model.select()  # necessary to make new row immediately usable
-                self.lessontable.selectRow(n)
-                self.lesson_delete_button.setEnabled(True)
-            else:
-                SHOW_ERROR(f"DB Error: {model.lastError().text()}")
-
-
-#TODO: integration of the table functions ... modifications, data, etc.
 class WeekTable(QFrame):
+#class WeekTable(QWidget):
     def __init__(self, field, modified, title, parent=None):
         super().__init__(parent)
-        self.setLineWidth(2)
-        self.setFrameShape(self.Box)
+        self.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+
         self.__table = EdiTableWidget()
         vbox = QVBoxLayout(self)
-        vbox.addWidget(QLabel(f"<h4>{title}</h4>"))
+        vbox.setContentsMargins(3, 3, 3, 3)
+
+        label = QLabel(f"<h4>{title}</h4>")
+        vbox.addWidget(label)
         vbox.addWidget(self.__table)
         self.__modified = modified
         self.__field = field
-        self.text0 = None
-        self.value = ""
 
-    def get_table(self):
-        return self.__table
+    # TODO: add validators? (or use appropriate comboboxes for cells?)
+    def setup(self):
+        tt_days = db_key_value_list("TT_DAYS", "N", "NAME", "N")
+        tt_periods = db_key_value_list("TT_PERIODS", "N", "TAG", "N")
+        self.__table.setup(
+            colheaders=[p[1] for p in tt_periods],
+            rowheaders=[d[1] for d in tt_days],
+            undo_redo=False,
+            cut=False,
+            paste=True,
+            row_add_del=False,
+            column_add_del=False,
+            on_changed=self.table_changed,
+        )
+        self.__table.resizeColumnsToContents()
+        # A very dodgy attempt to find an appropriate size for the table
+        Hhd = self.__table.horizontalHeader()
+        Vhd = self.__table.verticalHeader()
+        Hw = Hhd.length()
+        Hh = Hhd.sizeHint().height()
+        Vw = Vhd.sizeHint().width()
+        Vh = Vhd.length()
+        self.__table.setMinimumWidth(Hw + Vw + 10)
+        self.__table.setFixedHeight(Vh + Hh + 10)
+#        self.__table.setMaximumHeight(Vh + Hh + 10)
 
     def text(self):
-        return self.value
+        table = self.__table.read_all()
+        return "_".join(["".join(row) for row in table])
 
     def setText(self, text):
-        self.value = text
-        self.text0 = text
         # Set up table
+        tdata = []
         daysdata = text.split("_")
         for d in range(self.__table.row_count()):
+            ddata = []
+            tdata.append(ddata)
             try:
                 daydata = daysdata[d]
             except IndexError:
                 daydata = ""
             for p in range(self.__table.col_count()):
+
+                # TODO: validate?
                 try:
-                    pdata = daydata[p]
+                    ddata.append(daydata[p])
                 except IndexError:
-                    pdata = '+'
-                self.__table.set_text(d, p, pdata)
-#TODO: Handling modifications?
+                    ddata.append("+")
+
+        self.__table.init_data(tdata)
+
+    def table_changed(self, mod):
+        self.__modified(self.__field, mod)
 
 
-class FormSpecialEdit(QFormLayout):
-    """A specialized editor widget for use in the editor form for a
+class FormSpecialEdit(QVBoxLayout):
+    """A specialized editor widget – though as far as Qt is concerned,
+    it is actually a layout – for use in the editor form for a
     "TableViewRowSelect" table view.
 
     The constructor receives the name of the field and a function which
@@ -501,42 +422,54 @@ class FormSpecialEdit(QFormLayout):
 
     def __init__(self, field, modified, title, parent=None):
         super().__init__(parent)
-        super().addRow(HLine())
-        super().addRow(QLabel(f"<h4>{title}</h4>"))
-        self.__widgets = {}
+        #self.setContentsMargins(0, 0, 0, 0)
+        self.addWidget(HLine())
+        self.addWidget(QLabel(f"<h4>{title}</h4>"))
+        formbox = QScrollArea()
+        formbox.setWidgetResizable(True)
+        self.addWidget(formbox)
+        formwidget = QWidget()
+        self.__form = QFormLayout(formwidget)
+        self.__form.setContentsMargins(3, 3, 3, 3)
+        formbox.setWidget(formwidget)
+        self.widgets = {}
         self.__modified = modified
         self.__field = field
         self.text0 = None
-        self.value = ""
 
-    def addRow(self, tag, widget, name=None):
-        if name:
-            super().addRow(name, widget)
-        else:
-            super().addRow(widget)
-        self.__widgets[tag] = widget
+    def addRow(self, tag, widget, name):
+        self.__form.addRow(name, widget)
+        self.widgets[tag] = widget
+
+    def addBox(self, tag, widget):
+        self.addWidget(widget)
+        self.widgets[tag] = widget
 
     def text(self):
-        return self.value
+        # Construct value from the component widgets
+        vals = [f"{f}:{w.text()}" for f, w in self.widgets.items()]
+        return "\n".join(vals)
 
     def setText(self, text):
-        self.value = text
+        self.change_set = set()
+        # print("??? FormSpecialEdit.setText:", text)
         self.text0 = text
         # Set up subwidgets
         data = dict(read_pairs(text))
         for f, t in CONSTRAINT_FIELDS:
-            self.__widgets[f].setText(data.get(f) or "")
+            self.widgets[f].setText(data.get(f) or "")
+        # print("??? FormSpecialEdit.setText done")
 
-    def new_value(self, text):
-        """Change the current value.
-        """
-        self.value = text
-        self.__modified(self.__field, text != self.text0)
-
-#TODO
     def form_modified(self, field, changed):
-        print("?????", field, changed)
-
+        # print("?????", field, changed)
+        if changed:
+            if not self.change_set:
+                self.__modified(self.__field, True)
+            self.change_set.add(field)
+        elif self.change_set:
+            self.change_set.discard(field)
+            if not self.change_set:
+                self.__modified(self.__field, False)
 
 
 # ComboBox delegate?

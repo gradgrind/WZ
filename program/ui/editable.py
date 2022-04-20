@@ -1,7 +1,7 @@
 """
 ui/editable.py
 
-Last updated:  2022-03-31
+Last updated:  2022-04-20
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -206,16 +206,13 @@ class UndoRedo:
         self.table.redoAction.setEnabled(False)
 
     def change(self, chtype, change):
-        if self.enabled:
-            if not self.blocked:
-                # print("CHANGE:", chtype, change)
-                del self.changes[self.index :]
-                self.changes.append((chtype, change))
-                self.table.undoAction.setEnabled(True)
-                self.index = len(self.changes)
-                self.table.set_modified(True)
-        else:
-            self.table.set_modified(True)
+        #print("CHANGE:", chtype, change, self.enabled, self.blocked)
+        if self.enabled and not self.blocked:
+            # print("CHANGE:", chtype, change)
+            del self.changes[self.index :]
+            self.changes.append((chtype, change))
+            self.table.undoAction.setEnabled(True)
+            self.index = len(self.changes)
 
     def undo(self):
         def do_undo():
@@ -249,7 +246,6 @@ class UndoRedo:
             else:
                 do_undo()
             self.blocked = False
-            self.table.set_modified(self.index != self.index0)
             if self.index == 0:
                 self.table.undoAction.setEnabled(False)
             self.table.redoAction.setEnabled(True)
@@ -286,7 +282,6 @@ class UndoRedo:
             else:
                 do_redo()
             self.blocked = False
-            self.table.set_modified(self.index != self.index0)
             if self.index == len(self.changes):
                 self.table.redoAction.setEnabled(False)
             self.table.undoAction.setEnabled(True)
@@ -558,6 +553,7 @@ class EdiTableWidget(QTableWidget):
             pass
 
         # +
+        self.table_data0 = data
         rows = len(data)
         columns = len(data[0])
         self.init0(rows, columns)
@@ -640,6 +636,19 @@ class EdiTableWidget(QTableWidget):
         """
         pass
         #print("§§§", r, c, repr(self.get_text(r, c)))
+
+    def cell_value_changed(self, r, c, value, v0):
+        #print("§§§", r, c, value, v0, self.table_changes)
+        if self.table_data0[r][c] == value:
+            # == initial value
+            self.table_changes.discard((r, c))
+            if not self.table_changes:
+                self.set_modified(False)
+        else:
+            # != initial value
+            self.table_changes.add((r, c))
+            self.set_modified(True)
+        self.add_change(Change_CELL, (r, c, v0, value))
 
     def read_all(self):
         """Read all the table data.
@@ -789,8 +798,10 @@ class EdiTableWidget(QTableWidget):
 #        self.editItem(self.item(row, col))
 
     def activated(self, row, col):
-        # This is called when a cell is left-clicked or when the (single)
-        # selected cell has "Return/Newline" pressed.
+        # This is called when two conditions are fulfilled:
+        #   1) the control button is pressed,
+        #   2) a cell is left-clicked, or the (single) selected cell
+        #      has "Return/Newline" pressed.
         # See 'activate-on-singleclick' below.
         print("ACTIVATED:", row, col)
 
@@ -1007,15 +1018,15 @@ class EdiTableWidget(QTableWidget):
 
     def set_modified(self, mod):
         """Whenever a change away from the "initial" table data is made,
-        this is called with <mod> true. When undo/redo is enabled, it is
-        also possible to return to the initial data state. In that case
-        <mod> is false.
+        this is called with <mod> true. When all changes are reverted,
+        this is called with <mod> false.
         This method keeps the <self.__modified> flag up-to-date. When
         a change to that flag occurs here, the callback <self.on_changed>
         will be called with the new flag value.
         It is also possible to specify a new "initial" state: see the
         method <self.reset_modified>.
         """
+        #print("§§§MOD", mod, self.__modified, self.on_changed)
         if mod != self.__modified:
             self.__modified = mod
             if self.on_changed:
@@ -1031,6 +1042,7 @@ class EdiTableWidget(QTableWidget):
         can return to a state previous to the new initial state.
         """
         self.set_modified(False)
+        self.table_changes = set()
         self.undoredo.mark0(clear)
 
     def is_modified(self):
@@ -1117,10 +1129,11 @@ class ValidatingWidgetItem(QTableWidgetItem):
             v0 = self.data(role)
             if v0 == value:
                 return
-            # print(f"CHANGED @({self.row()}, {self.column()}): {v0} -> {value}")
             tw = self.tableWidget()
             if tw:
-                tw.add_change(Change_CELL, (self.row(), self.column(), v0, value))
+                r, c = self.row(), self.column()
+                #print(f"CHANGED @({r}, {c}): {v0} -> {value}")
+                tw.cell_value_changed(r, c, value, v0)
         super().setData(role, value)
 
 

@@ -1,5 +1,10 @@
 ### Translations
 
+utility.db_management: {
+    # Messages
+    BAD_KEY_VALUE_LIST: "Ungültige Schlüssel-Wert-Liste,\nein Paar pro Zeile, Trennung durch ':':\n{text}"
+}
+
 ui.ui_base: {
     # Messages
     UNKNOWN_KEY:    "Ungültige Selektion: '{key}'"
@@ -91,9 +96,9 @@ ui.modules.course_lessons: {
 
 timetable.constraints_teacher: {
     # CONSTRAINT_FIELDS
-    MINPERDAY:      "Stunden pro Tag – mindestens"
-    MAXGAPSPERDAY:  "Lücken pro Tag – maximal"
-    MAXGAPSPERWEEK: "Lücken pro Woche – maximal"
-    MAXBLOCK:       "aufeinanderfolgende Stunden – maximal"
+    MINPERDAY:      "Stunden pro Tag – mind."
+    MAXGAPSPERDAY:  "Lücken pro Tag – max."
+    MAXGAPSPERWEEK: "Lücken pro Woche – max."
+    MAXBLOCK:       "aufeinanderfolgende Stunden – max."
     AVAILABLE:      "Verfügbarkeit"
 }

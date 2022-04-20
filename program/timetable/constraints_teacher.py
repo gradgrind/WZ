@@ -39,6 +39,10 @@ CONSTRAINT_FIELDS = [(f, T[f]) for f in (
         "AVAILABLE"
     )
 ]
+
+#for testing only
+#CONSTRAINT_FIELDS += [("X1", "TX1"), ("X2", "TX2"), ("X3", "TX3"), ("X4", "TX4"), ("X5", "TX5"), ("X6", "TX6")]
+
 # Feldwerte der Stundenplanung:
 #   leer ⇒ keine Angabe
 #   * ⇒ Standardwert (DEFAULT)

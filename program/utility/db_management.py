@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-04-18
+Last updated:  2022-04-19
 
 Edit course and lesson data.
 
@@ -26,10 +26,11 @@ Copyright 2022 Michael Towers
 
 DATABASE = "db1.sqlite"
 
-### Messages
-
-
 ########################################################################
+
+T = TRANSLATIONS("utility.db_management")
+
+### +++++
 
 if __name__ == "__main__":
     import sys, os
@@ -102,16 +103,17 @@ def read_pairs(data):
     """Read a list of (key, value) pairs from the given string.
 
     Each line of the input supplies one such pair.
+    Key and value are separated by ':'.
     This format is used for special database fields which
     contain multiple key-value pairs.
     """
     pairs = []
     for line in data.splitlines():
         try:
-            k, v = line.split(None, 1)
-            pairs.append((k, v))
+            k, v = line.split(':', 1)
+            pairs.append((k.strip(), v.strip()))
         except ValueError:
-            SHOW_ERROR(_BAD_KEY_VALUE_LIST.format(data))
+            SHOW_ERROR(T["BAD_KEY_VALUE_LIST"].format(text=data))
     return pairs
 
 

@@ -145,7 +145,7 @@ if __name__ == "__main__":
         for k in ('MINPERDAY', 'MAXGAPSPERDAY', 'MAXGAPSPERWEEK', 'MAXBLOCK'):
             v = tdata[k]
             if v:
-                data.append(f"{k}\t{v}")
+                data.append(f"{k}:{v}")
         days = []
         for d, v in tdata['AVAILABLE'].items():
             xv = []
@@ -167,7 +167,7 @@ if __name__ == "__main__":
                 xv.append(x)
             xvt = "".join(xv)
             days.append(xvt)
-        data.append(f"AVAILABLE\t{'_'.join(days)}")
+        data.append(f"AVAILABLE:{'_'.join(days)}")
         tdtext = '\n'.join(data)
         #print(f"{tid}:\n{tdtext}")
         query = QSqlQuery()
