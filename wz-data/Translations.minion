@@ -35,11 +35,13 @@ ui.ui_base: {
 }
 
 ui.modules.teachers: {
+    # Messages
+    INVALID_PERIOD_VALUES:  "Die Verfügbarkeitsdaten mussten {n}-mal angepasst werden.\n  Ursprünglich:\n{val}"
+
     # Labels
     MODULE_NAME:    Lehrkräfte
     MODULE_TITLE:   "Lehrerdaten verwalten"
 
-#TODO? ...
     # Teacher field editor buttons
     DELETE:         Löschen
     UPDATE:         Übernehmen
@@ -48,7 +50,7 @@ ui.modules.teachers: {
     # Teacher table fields
     TID:            Kürzel
     NAME:           Name
-    FULLNAME:       Vollname
+    SIGNED:         gezeichnet
     SORTNAME:       Sortiername
     TT_DATA:        Stundenplandaten
 
@@ -95,6 +97,9 @@ ui.modules.course_lessons: {
 }
 
 timetable.constraints_teacher: {
+    #MESSAGES
+    INVALID_AVAILABILITY:   "Gültig sind '+', '-' und '*', nicht '{val}'"
+
     # CONSTRAINT_FIELDS
     MINPERDAY:      "Stunden pro Tag – mind."
     MAXGAPSPERDAY:  "Lücken pro Tag – max."

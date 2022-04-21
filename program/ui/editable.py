@@ -1,7 +1,7 @@
 """
 ui/editable.py
 
-Last updated:  2022-04-20
+Last updated:  2022-04-21
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -630,6 +630,18 @@ class EdiTableWidget(QTableWidget):
             rows.append(rowdata)
         return rows
 
+    def set_validator(self, row, col, f_validate):
+        """Set a validator on the cell at (row, col).
+        This uses the <set_validator> method of the widget item
+        (QTableWidgetItem) at the given position. A <ValidatingWidgetItem>
+        provides this method.
+
+        <f_validate> is a function taking just the value as argument.
+        If this is valid, the function returns <None>. Otherwise it
+        returns an error message.
+        """
+        self.item(row, col).set_validator(f_validate)
+
     def cell_changed(self, r, c):
         """Handle cell-value changed. The arguments are row and column.
         OVERRIDE to use.
@@ -1218,7 +1230,7 @@ if __name__ == "__main__":
         on_changed=is_modified2,
     )
     tw2.init_data([["1", "2", "3", "4"], [""] * 4])
-    tw2.item(1, 0).set_validator(validate)
+    tw2.set_validator(1, 0, validate)
     tw2.resize(400, 300)
     tw2.show()
 

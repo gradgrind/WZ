@@ -1,7 +1,7 @@
 """
 ui/modules/teachers.py
 
-Last updated:  2022-04-20
+Last updated:  2022-04-21
 
 Edit teachers' data.
 
@@ -77,10 +77,10 @@ from ui.editable import EdiTableWidget
 
 # Teacher table fields
 TEACHER_COLS = [
-    (f, T[f]) for f in ("TID", "NAME", "FULLNAME", "SORTNAME", "TT_DATA")
+    (f, T[f]) for f in ("TID", "NAME", "SIGNED", "SORTNAME", "TT_DATA")
 ]
 
-from timetable.constraints_teacher import CONSTRAINT_FIELDS
+from timetable.constraints_teacher import CONSTRAINT_FIELDS, period_validator
 
 ### -----
 
@@ -354,7 +354,6 @@ class WeekTable(QFrame):
         self.__modified = modified
         self.__field = field
 
-    # TODO: add validators? (or use appropriate comboboxes for cells?)
     def setup(self):
         tt_days = db_key_value_list("TT_DAYS", "N", "NAME", "N")
         tt_periods = db_key_value_list("TT_PERIODS", "N", "TAG", "N")
@@ -386,24 +385,55 @@ class WeekTable(QFrame):
 
     def setText(self, text):
         # Set up table
+        table = self.__table
         tdata = []
         daysdata = text.split("_")
-        for d in range(self.__table.row_count()):
+        nrows = table.row_count()
+        ncols = table.col_count()
+        if len(daysdata) > nrows:
+            errors = len(daysdata) - nrows
+        else:
+            errors = 0
+        for d in range(nrows):
             ddata = []
             tdata.append(ddata)
             try:
                 daydata = daysdata[d]
+                if len(daydata) > ncols:
+                    errors += 1
             except IndexError:
                 daydata = ""
-            for p in range(self.__table.col_count()):
-
-                # TODO: validate?
+            for p in range(ncols):
                 try:
-                    ddata.append(daydata[p])
+                    v = daydata[p]
                 except IndexError:
-                    ddata.append("+")
+                    errors += 1
+                    v = "+"
+                else:
+                    # Check validity
+                    if period_validator(v):
+                        errors += 1
+                        v = "+"
+                ddata.append(v)
+        table.init_data(tdata)
+        if errors:
+            SHOW_WARNING(T["INVALID_PERIOD_VALUES"].format(
+                    n=errors,
+                    val=text
+                )
+            )
 
-        self.__table.init_data(tdata)
+#TODO: update db if errors?
+# This doesn't work:
+#            self.__modified(self.__field, True)
+# Perhaps by setting up a dummy (hidden) form field it could work?
+# This field could be set to "changed" when a setText initialisation
+# returns False?
+
+        # Add cell validators
+        for r in range(nrows):
+            for c in range(ncols):
+                table.set_validator(r, c, period_validator)
 
     def table_changed(self, mod):
         self.__modified(self.__field, mod)

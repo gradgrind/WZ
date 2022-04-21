@@ -1,7 +1,7 @@
 """
 ui/timetable/constraints_teacher.py
 
-Last updated:  2022-04-19
+Last updated:  2022-04-21
 
 Manage teacher constraints.
 
@@ -29,6 +29,14 @@ Copyright 2022 Michael Towers
 T = TRANSLATIONS("timetable.constraints_teacher")
 
 ### +++++
+
+
+def period_validator(value):
+    """Validator for teacher period availabilöity table.
+    """
+    if value in ("+", "-", "*"):
+        return None
+    return T["INVALID_AVAILABILITY"].format(val=value)
 
 
 CONSTRAINT_FIELDS = [(f, T[f]) for f in (
