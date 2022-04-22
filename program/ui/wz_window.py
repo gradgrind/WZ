@@ -1,7 +1,7 @@
 """
 ui/wz_window.py
 
-Last updated:  2022-04-17
+Last updated:  2022-04-22
 
 The main window of the WZ GUI.
 
@@ -36,17 +36,12 @@ if __name__ == '__main__':
     this = sys.path[0]
     appdir = os.path.dirname(this)
     sys.path[0] = appdir
-    import locale
-    print("LOCALE:", locale.setlocale(locale.LC_ALL, ''))
-    try:
-        builtins.PROGRAM_DATA = os.environ["PROGRAM_DATA"]
-    except KeyError:
-        basedir = os.path.dirname(appdir)
-        builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
+    basedir = os.path.dirname(appdir)
     from core.base import start
-#    start.setup(os.path.join(basedir, 'TESTDATA'))
-#    start.setup(os.path.join(basedir, 'DATA'))
-    start.setup(os.path.join(basedir, 'DATA-2023'))
+    import ui.ui_base
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    #    start.setup(os.path.join(basedir, 'DATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
 
 from ui.ui_base import QWidget, QVBoxLayout, QHBoxLayout, \
         QLabel, QStackedWidget, QFrame, QPushButton, HLine, run

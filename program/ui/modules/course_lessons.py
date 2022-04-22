@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-04-19
+Last updated:  2022-04-22
 
 Edit course and lesson data.
 
@@ -38,14 +38,9 @@ if __name__ == "__main__":
     this = sys.path[0]
     appdir = os.path.dirname(os.path.dirname(this))
     sys.path[0] = appdir
-    try:
-        builtins.PROGRAM_DATA = os.environ["PROGRAM_DATA"]
-    except KeyError:
-        basedir = os.path.dirname(appdir)
-        builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
+    basedir = os.path.dirname(appdir)
     from core.base import start
     from ui.ui_base import StandalonePage as Page
-
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))

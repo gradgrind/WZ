@@ -2,7 +2,7 @@
 """
 ui/wz_main.py
 
-Last updated:  2022-02-09
+Last updated:  2022-04-22
 
 The timetable "main" window.
 
@@ -39,32 +39,30 @@ if __name__ == '__main__':
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
-#TODO: Temporary redirection to use real data (there isn't any test data yet!)
-#    start.setup(os.path.join(basedir, 'TESTDATA'))
-    start.setup(os.path.join(basedir, 'DATA'))
+    from ui.ui_base import StandalonePage as Page
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    #    start.setup(os.path.join(basedir, 'DATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
+else:
+    from ui.ui_base import StackPage as Page
 
-    #TODO: IF I use this feature, this is probably the wrong path ...
-    # Without the environment variable there is a disquieting error message.
-#    os.environ['PYSIDE_DESIGNER_PLUGINS'] = this
-
-    from qtpy.QtWidgets import QApplication#, QStyleFactory
-    from qtpy.QtCore import QLocale, QTranslator, QLibraryInfo
-    #print(QStyleFactory.keys())
-    #QApplication.setStyle('windows')
-    # Qt initialization
-    app = QApplication([])
-    # Set up language/locale for Qt
-    LOCALE = QLocale(QLocale.German, QLocale.Germany)
-    QLocale.setDefault(LOCALE)
-    qtr = QTranslator()
-    qtr.load("qt_" + LOCALE.name(),
-            QLibraryInfo.location(QLibraryInfo.TranslationsPath))
-    app.installTranslator(qtr)
-
-from qtpy.QtWidgets import QGraphicsScene, QGraphicsRectItem, \
-        QGraphicsSimpleTextItem, QGraphicsView
-from qtpy.QtCore import Qt#, QSettings
-from qtpy.QtGui import QIcon, QPen, QBrush, QColor, QPainter, QTransform
+from ui.ui_base import (
+    APP,
+    # QtWidgets
+    QGraphicsScene,
+    QGraphicsRectItem,
+    QGraphicsSimpleTextItem,
+    QGraphicsView,
+    # QtCore
+    Qt,
+    #QtGui
+    QIcon,
+    QPen,
+    QBrush,
+    QColor,
+    QPainter,
+    QTransform
+)
 
 ### +++++
 
@@ -93,10 +91,10 @@ BREAKS = ('1', '3', '5')
 ### -----
 
 def main(args):
-    font = app.font()
+    font = APP.font()
     #print("FONT:", font.pointSize())
     font.setPointSize(12)
-    app.setFont(font)
+    APP.setFont(font)
 
     #from qtpy.QtGui import QFontInfo
     #qfi = QFontInfo(font)
@@ -117,8 +115,9 @@ def main(args):
     t = QTransform().scale(scale, scale)
     WINDOW.setTransform(t)
 
-    app.setWindowIcon(QIcon(os.path.join(basedir, "wz-data", "icons", "tt.svg")))
-    screen = app.primaryScreen()
+#TODO: Only standalone!
+    APP.setWindowIcon(QIcon(APPDATAPATH("icons/tt.svg")))
+    screen = APP.primaryScreen()
     screensize = screen.availableSize()
     WINDOW.resize(int(screensize.width()*0.6), int(screensize.height()*0.6))
     WINDOW.show()
@@ -127,7 +126,7 @@ def main(args):
     grid.place_tile("T1", (2, 3))
     t2 = grid.new_tile("T2", duration=2, nmsg=1, offset=0, total=4, text="tg B", colour="FF77E0")
     grid.place_tile("T2", (2, 3))
-    sys.exit(app.exec())
+    sys.exit(APP.exec())
 
 
 class GridView(QGraphicsView):

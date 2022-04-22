@@ -51,7 +51,6 @@ SETTINGS = QSettings(QSettings.IniFormat, QSettings.UserScope, "MT", "WZ")
 # (presumably elsewhere as well?)
 APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
-
 def run(window):
     window.show()
     sys.exit(APP.exec())

@@ -32,14 +32,9 @@ if __name__ == "__main__":
     this = sys.path[0]
     appdir = os.path.dirname(os.path.dirname(this))
     sys.path[0] = appdir
-    try:
-        builtins.PROGRAM_DATA = os.environ["PROGRAM_DATA"]
-    except KeyError:
-        basedir = os.path.dirname(appdir)
-        builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
+    basedir = os.path.dirname(appdir)
     from core.base import start
     from ui.ui_base import StandalonePage as Page
-
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
@@ -187,7 +182,7 @@ class TeacherEditor(QSplitter):
         Maintain the set of changed fields (<self.form_change_set>).
         Enable and disable the pushbuttons appropriately.
         """
-        #print("???form_modified:", field, changed, self.form_change_set)
+        # print("???form_modified:", field, changed, self.form_change_set)
         if changed:
             self.form_change_set.add(field)
         else:
@@ -258,7 +253,7 @@ class TeacherEditor(QSplitter):
             # print("EMPTY TABLE")
             for f, t in TEACHER_COLS:
                 self.editors[f].setText("")
-        #print("===", self.form_change_set)
+        # print("===", self.form_change_set)
         self.set_buttons()
 
     def teacher_delete(self):
@@ -318,7 +313,7 @@ class TeacherEditor(QSplitter):
         index = self.teachertable.currentIndex()
         teacher = model.data(index)
         row = index.row()
-        #print("???teacher_update:", self.form_change_set)
+        # print("???teacher_update:", self.form_change_set)
         for f in self.form_change_set:
             if f:
                 col = model.fieldIndex(f)
@@ -385,7 +380,8 @@ class WeekTable(QFrame):
         Vh = Vhd.length()
         self.__table.setMinimumWidth(Hw + Vw + 10)
         self.__table.setFixedHeight(Vh + Hh + 10)
-#        self.__table.setMaximumHeight(Vh + Hh + 10)
+
+    #        self.__table.setMaximumHeight(Vh + Hh + 10)
 
     def text(self):
         table = self.__table.read_all()
@@ -426,11 +422,7 @@ class WeekTable(QFrame):
         table.init_data(tdata)
         self.block_unchanged = bool(errors)
         if errors:
-            SHOW_WARNING(T["INVALID_PERIOD_VALUES"].format(
-                    n=errors,
-                    val=text
-                )
-            )
+            SHOW_WARNING(T["INVALID_PERIOD_VALUES"].format(n=errors, val=text))
             self.__modified(self.__field, True)
         # Add cell validators
         for r in range(nrows):
@@ -455,7 +447,7 @@ class FormSpecialEdit(QVBoxLayout):
 
     def __init__(self, field, modified, title, parent=None):
         super().__init__(parent)
-        #self.setContentsMargins(0, 0, 0, 0)
+        # self.setContentsMargins(0, 0, 0, 0)
         self.addWidget(HLine())
         self.addWidget(QLabel(f"<h4>{title}</h4>"))
         formbox = QScrollArea()
@@ -492,7 +484,7 @@ class FormSpecialEdit(QVBoxLayout):
             self.widgets[f].setText(data.get(f) or "")
 
     def form_modified(self, field, changed):
-        #print(f"???FormSpecialEdit ({self.__field}): <{field}> {changed}\n +++ {self.change_set}")
+        # print(f"???FormSpecialEdit ({self.__field}): <{field}> {changed}\n +++ {self.change_set}")
         if changed:
             if not self.change_set:
                 self.__modified(self.__field, True)
