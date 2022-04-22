@@ -37,7 +37,8 @@ ui.ui_base: {
 ui.modules.teachers: {
     # Messages
     INVALID_PERIOD_VALUES:  "Die Verfügbarkeitsdaten mussten {n}-mal angepasst werden.\n  Ursprünglich:\n{val}"
-
+    UNIQUE_FIELDS:  "Die Hauptfelder müssen einmalig sein."
+    
     # Labels
     MODULE_NAME:    Lehrkräfte
     MODULE_TITLE:   "Lehrerdaten verwalten"

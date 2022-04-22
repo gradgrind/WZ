@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-04-19
+Last updated:  2022-04-22
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 

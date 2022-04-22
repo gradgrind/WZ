@@ -187,26 +187,26 @@ class TeacherEditor(QSplitter):
         Maintain the set of changed fields (<self.form_change_set>).
         Enable and disable the pushbuttons appropriately.
         """
-        if self.form_change_set == None:
-            return
+        #print("???form_modified:", field, changed, self.form_change_set)
+        if changed:
+            self.form_change_set.add(field)
+        else:
+            self.form_change_set.discard(field)
+        self.set_buttons()
+
+    def set_buttons(self):
         if self.table_empty:
             self.teacher_update_button.setEnabled(False)
             self.teacher_add_button.setEnabled(True)
             self.teacher_delete_button.setEnabled(False)
-        elif changed:
+        elif self.form_change_set:
             self.teacher_update_button.setEnabled(True)
-            self.form_change_set.add(field)
             self.teacher_add_button.setEnabled(True)
-            self.form_change_set.add(field)
+            self.teacher_delete_button.setEnabled(True)
         else:
-            self.form_change_set.discard(field)
-            if self.form_change_set:
-                self.teacher_add_button.setEnabled(False)
-            else:
-                self.teacher_delete_button.setEnabled(True)
-                self.teacher_update_button.setEnabled(False)
-                self.teacher_add_button.setEnabled(False)
-        # print("FORM CHANGED SET:", self.form_change_set)
+            self.teacher_update_button.setEnabled(False)
+            self.teacher_add_button.setEnabled(False)
+            self.teacher_delete_button.setEnabled(True)
 
     def init_data(self):
         # Set up the teacher model, first clearing the "model-view"
@@ -244,6 +244,7 @@ class TeacherEditor(QSplitter):
         self.teachertable.resizeColumnsToContents()
 
     def teacher_changed(self, new, old):
+        self.form_change_set = set()
         if new:
             self.table_empty = False
             row = new.row()
@@ -257,8 +258,8 @@ class TeacherEditor(QSplitter):
             # print("EMPTY TABLE")
             for f, t in TEACHER_COLS:
                 self.editors[f].setText("")
-        self.form_change_set = set()
-        self.form_modified("", False)  # initialize form button states
+        #print("===", self.form_change_set)
+        self.set_buttons()
 
     def teacher_delete(self):
         """Delete the current teacher."""
@@ -305,7 +306,10 @@ class TeacherEditor(QSplitter):
                 self.teachertable.selectRow(row0)
         else:
             error = model.lastError()
-            SHOW_ERROR(error.text())
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(T["UNIQUE_FIELDS"])
+            else:
+                SHOW_ERROR(error.text())
             model.revertAll()
 
     def teacher_update(self):
@@ -314,10 +318,12 @@ class TeacherEditor(QSplitter):
         index = self.teachertable.currentIndex()
         teacher = model.data(index)
         row = index.row()
+        #print("???teacher_update:", self.form_change_set)
         for f in self.form_change_set:
-            col = model.fieldIndex(f)
-            val = self.editors[f].text()
-            model.setData(model.index(row, col), val)
+            if f:
+                col = model.fieldIndex(f)
+                val = self.editors[f].text()
+                model.setData(model.index(row, col), val)
         if model.submitAll():
             # The selection is lost – the changed row may even be in a
             # different place, perhaps not even displayed.
@@ -334,12 +340,14 @@ class TeacherEditor(QSplitter):
                 self.teachertable.selectRow(row)
         else:
             error = model.lastError()
-            SHOW_ERROR(error.text())
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(T["UNIQUE_FIELDS"])
+            else:
+                SHOW_ERROR(error.text())
             model.revertAll()
 
 
 class WeekTable(QFrame):
-#class WeekTable(QWidget):
     def __init__(self, field, modified, title, parent=None):
         super().__init__(parent)
         self.setFrameStyle(QFrame.Panel | QFrame.Sunken)
@@ -416,27 +424,22 @@ class WeekTable(QFrame):
                         v = "+"
                 ddata.append(v)
         table.init_data(tdata)
+        self.block_unchanged = bool(errors)
         if errors:
             SHOW_WARNING(T["INVALID_PERIOD_VALUES"].format(
                     n=errors,
                     val=text
                 )
             )
-
-#TODO: update db if errors?
-# This doesn't work:
-#            self.__modified(self.__field, True)
-# Perhaps by setting up a dummy (hidden) form field it could work?
-# This field could be set to "changed" when a setText initialisation
-# returns False?
-
+            self.__modified(self.__field, True)
         # Add cell validators
         for r in range(nrows):
             for c in range(ncols):
                 table.set_validator(r, c, period_validator)
 
     def table_changed(self, mod):
-        self.__modified(self.__field, mod)
+        if not self.block_unchanged:
+            self.__modified(self.__field, mod)
 
 
 class FormSpecialEdit(QVBoxLayout):
@@ -482,16 +485,14 @@ class FormSpecialEdit(QVBoxLayout):
 
     def setText(self, text):
         self.change_set = set()
-        # print("??? FormSpecialEdit.setText:", text)
         self.text0 = text
         # Set up subwidgets
         data = dict(read_pairs(text))
         for f, t in CONSTRAINT_FIELDS:
             self.widgets[f].setText(data.get(f) or "")
-        # print("??? FormSpecialEdit.setText done")
 
     def form_modified(self, field, changed):
-        # print("?????", field, changed)
+        #print(f"???FormSpecialEdit ({self.__field}): <{field}> {changed}\n +++ {self.change_set}")
         if changed:
             if not self.change_set:
                 self.__modified(self.__field, True)
