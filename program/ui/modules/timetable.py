@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-ui/wz_main.py
+ui/modules/timetable.py
 
-Last updated:  2022-04-22
+Last updated:  2022-04-23
 
 The timetable "main" window.
 
@@ -35,7 +34,7 @@ import sys, os, builtins
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
-    appdir = os.path.dirname(this)
+    appdir = os.path.dirname(os.path.dirname(this))
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
@@ -51,12 +50,14 @@ from ui.ui_base import (
     # QtWidgets
     QGraphicsScene,
     QGraphicsRectItem,
+    QGraphicsLineItem,
     QGraphicsSimpleTextItem,
     QGraphicsView,
     # QtCore
     Qt,
-    #QtGui
+    # QtGui
     QIcon,
+    QFont,
     QPen,
     QBrush,
     QColor,
@@ -66,67 +67,137 @@ from ui.ui_base import (
 
 ### +++++
 
-# Sizes in points
-_BOXWIDTH = 80
-_BOXHEIGHT = 80
-_SEPWIDTH = 10
-_LINEWIDTH = 2
-_TITLEHEIGHT = 20
-_TITLEWIDTH = 40
+MM2PT = 2.83464549
+PT2MM = 0.3527778
 
-BORDER_COLOUR = '6060d0'         # rrggbb
-HEADER_COLOUR = 'b0b0b0'
-CELL_HIGHLIGHT_COLOUR = 'a0a0ff' # rrggbb
-#FONT_COLOUR = '442222'           # rrggbb
-SELECT_COLOUR = 'ff0000'         # rrggbb
+# Sizes in points
+A4 = (841.995, 595.35)
+A3 = (1190.7, 841.995)
+PAGE_SIZE = A4
+
+_MARGIN_LEFT = 30
+_MARGIN_RIGHT = 30
+_MARGIN_TOP = 50
+_MARGIN_BOTTOM = 50
+_HEADER = 40
+_FOOTER = 25
+
+_TIMEWIDTH = 82
+_BOXWIDTH = 142
+_BOXHEIGHT = 51
+_LINEWIDTH = 2
+_TITLEHEIGHT = 30
+_TITLEWIDTH = 82
+
+_SUBTEXTGAP = 10    # minimum horizontal space between tile "subtexts"
+
+# Fonts
+FONT_DEFAULT = "Droid Sans"
+#FONT_DEFAULT = "Sans"
+FONT_SIZE_DEFAULT = 12
+FONT_COLOUR = "442222"  # rrggbb
+FONT_HEADER_SIZE = 14
+FONT_CENTRE_SIZE = 18
+FONT_CORNER_SIZE = 11
+
+# Colours (rrggbb)
+BORDER_COLOUR = '12c6f8'
+HEADER_COLOUR = 'f0f0f0'
+MARGIN_LINE_COLOUR = '000000'
+BREAK_COLOUR = '6060d0'
+CELL_HIGHLIGHT_COLOUR = 'a0a0ff'
+#FONT_COLOUR = '442222'
+SELECT_COLOUR = 'ff0000'
+
+# Tile corner enum
+TILE_TOP_LEFT = 0
+TILE_TOP_RIGHT = 1
+TILE_BOTTOM_RIGHT = 2
+TILE_BOTTOM_LEFT = 3
 
 #TODO: these should be in a config file:
 DAYS = ('Mo', 'Di', 'Mi', 'Do', 'Fr')
 PERIODS = ('A', 'B', '1', '2', '3', '4', '5', '6', '7')
 BREAKS = ('1', '3', '5')
 
-
-#TODO: point to pixel conversions???
+SIZES = {}
 
 ### -----
 
-def main(args):
-    font = APP.font()
-    #print("FONT:", font.pointSize())
-    font.setPointSize(12)
-    APP.setFont(font)
+class StyleCache:
+    __pens = {}
+    __brushes = {}
+    __fonts = {}
 
-    #from qtpy.QtGui import QFontInfo
-    #qfi = QFontInfo(font)
-    #print("FONT PIXELS / POINTS:", qfi.pixelSize(), qfi.pointSize())
-    # Persistent Settings:
-#    builtins.SETTINGS = QSettings(
-#            QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
-    #builtins.WINDOW = GridViewRescaling()
-    #builtins.WINDOW = GridViewHFit()
-    builtins.WINDOW = GridView()
+    @classmethod
+    def getPen(cls, width, colour):
+        """Manage a cache for pens of different width and colour.
+        <width> should be a small integer.
+        <colour> is a colour in the form 'RRGGBB'.
+        """
+        if width:
+            wc = (width, colour)
+            try:
+                return cls.__pens[wc]
+            except KeyError:
+                pass
+            pen = QPen(QColor('#FF' + wc[1]))
+            pen.setWidthF(wc[0])
+            cls.__pens[wc] = pen
+            return pen
+        else:
+            try:
+                return cls.__pens['*']
+            except KeyError:
+                noPen = QPen()
+                noPen.setStyle(Qt.NoPen)
+                cls.__pens['*'] = noPen
+                return noPen
 
-    # Set up grid
-    grid = GridPeriodsDays(DAYS, PERIODS, BREAKS)
-    WINDOW.setScene(grid)
+    @classmethod
+    def getBrush(cls, colour=None):
+        """Manage a cache for brushes of different colour.
+        <colour> is a colour in the form 'RRGGBB'.
+        """
+        try:
+            return cls.__brushes[colour or '*']
+        except KeyError:
+            pass
+        if colour:
+            brush = QBrush(QColor('#FF' + colour))
+            cls.__brushes[colour] = brush
+        else:
+            brush = QBrush()    # no fill
+            cls.__brushes['*'] = brush
+        return brush
 
-    # Scaling: only makes sense if using basic, unscaled GridView
-    scale = WINDOW.pdpi / WINDOW.ldpi
-    t = QTransform().scale(scale, scale)
-    WINDOW.setTransform(t)
-
-#TODO: Only standalone!
-    APP.setWindowIcon(QIcon(APPDATAPATH("icons/tt.svg")))
-    screen = APP.primaryScreen()
-    screensize = screen.availableSize()
-    WINDOW.resize(int(screensize.width()*0.6), int(screensize.height()*0.6))
-    WINDOW.show()
-
-    t1 = grid.new_tile("T1", duration=1, nmsg=1, offset=1, total=4, text="De p1", colour="FFFF44")
-    grid.place_tile("T1", (2, 3))
-    t2 = grid.new_tile("T2", duration=2, nmsg=1, offset=0, total=4, text="tg B", colour="FF77E0")
-    grid.place_tile("T2", (2, 3))
-    sys.exit(APP.exec())
+    @classmethod
+    def getFont(
+        cls,
+        fontFamily=FONT_DEFAULT,
+        fontSize=FONT_SIZE_DEFAULT,
+        fontBold=False,
+        fontItalic=False,
+    ):
+        """Manage a cache for fonts. The font parameters are passed as
+        arguments.
+        """
+        ftag = (fontFamily, fontSize, fontBold, fontItalic)
+        try:
+            return cls.__fonts[ftag]
+        except KeyError:
+            pass
+        font = QFont()
+        if fontFamily:
+            font.setFamily(fontFamily)
+        if fontSize:
+            font.setPointSizeF(fontSize)
+        if fontBold:
+            font.setBold(True)
+        if fontItalic:
+            font.setItalic(True)
+        cls.__fonts[ftag] = font
+        return font
 
 
 class GridView(QGraphicsView):
@@ -145,20 +216,36 @@ class GridView(QGraphicsView):
         # self.setRenderHints(QPainter.TextAntialiasing)
         self.ldpi = self.logicalDpiX()
         self.pdpi = self.physicalDpiX()
+        #print("LDPI:", self.ldpi)
         #print("PDPI:", self.pdpi)
 # Scaling the scene by pdpi/ldpi should display the correct size ...
-        #        self.MM2PT = self.ldpi / 25.4
+        #self.MM2PT = self.ldpi / 25.4
 #        self.scene = QGraphicsScene()
 #        self.setScene(self.scene)
 
         ### Set up sizes (globally)
-        global BOXWIDTH, BOXHEIGHT, SEPWIDTH, LINEWIDTH, TITLEHEIGHT, TITLEWIDTH
-        BOXWIDTH = self.pt2px(_BOXWIDTH)
-        BOXHEIGHT = self.pt2px(_BOXHEIGHT)
-        SEPWIDTH = self.pt2px(_SEPWIDTH)
-        LINEWIDTH = self.pt2px(_LINEWIDTH)
-        TITLEHEIGHT = self.pt2px(_TITLEHEIGHT)
-        TITLEWIDTH = self.pt2px(_TITLEWIDTH)
+        SIZES["TITLEHEIGHT"] = self.pt2px(_TITLEHEIGHT)
+        SIZES["TITLEWIDTH"] = self.pt2px(_TITLEWIDTH)
+        SIZES["LINEWIDTH"] = self.pt2px(_LINEWIDTH)
+        SIZES["SUBTEXTGAP"] = self.pt2px(_SUBTEXTGAP)
+
+        SIZES["MARGIN_LEFT"] = self.pt2px(_MARGIN_LEFT)
+        SIZES["MARGIN_RIGHT"] = self.pt2px(_MARGIN_RIGHT)
+        SIZES["MARGIN_TOP"] = self.pt2px(_MARGIN_TOP)
+        SIZES["MARGIN_BOTTOM"] = self.pt2px(_MARGIN_BOTTOM)
+        SIZES["HEADER"] = self.pt2px(_HEADER)
+        SIZES["FOOTER"] = self.pt2px(_FOOTER)
+
+        SIZES["TABLEHEIGHT"] = (
+            self.pt2px(
+                PAGE_SIZE[1]) - SIZES["MARGIN_TOP"]
+                - SIZES["MARGIN_BOTTOM"] - SIZES["HEADER"]
+                - SIZES["FOOTER"]
+        )
+        SIZES["TABLEWIDTH"] = (
+            self.pt2px(PAGE_SIZE[0]) - SIZES["MARGIN_LEFT"]
+            - SIZES["MARGIN_RIGHT"]
+        )
 
     def pt2px(self, pt):
         px = self.ldpi * pt / 72.0
@@ -166,7 +253,9 @@ class GridView(QGraphicsView):
         return px
 
     def px2mm(self, px):
-        return px * 25.4 / self.ldpi
+        mm = px * 25.4 / self.ldpi
+        #print(f"px2mm: {px} -> {mm} (LDPI: {self.ldpi})")
+        return mm
 
 
 class GridViewRescaling(GridView):
@@ -224,58 +313,78 @@ class GridViewHFit(GridView):
 
 
 class GridPeriodsDays(QGraphicsScene):
+    font_header = StyleCache.getFont(fontSize = FONT_HEADER_SIZE)
+
     def __init__(self, days, periods, breaks):
         self.tiles = {}
         super().__init__()
+        SIZES["BOXWIDTH"] = (
+            SIZES["TABLEWIDTH"] - SIZES["TITLEWIDTH"]
+        ) / len(days)
+        SIZES["BOXHEIGHT"] = (
+            SIZES["TABLEHEIGHT"] - SIZES["TITLEHEIGHT"]
+        ) / len(periods)
         self.xslots = [0]    # x-coordinate of column left side
         self.yslots = [0]    # y-coordinate of row top side
         # Cell at top left-hand corner
-        self.addItem(Cell(0, 0, TITLEWIDTH, TITLEHEIGHT, -1, -1))
+        self.addItem(Cell(0, 0, SIZES["TITLEWIDTH"], SIZES["TITLEHEIGHT"], -1, -1))
         # Add column headers
-        x = TITLEWIDTH
+        x = SIZES["TITLEWIDTH"]
         icol = 0
-        for col_header in periods:
-            if col_header in breaks:
-                x += SEPWIDTH
+        for col_header in days:
             self.xslots.append(x)
-            cell = Cell(x, 0, BOXWIDTH, TITLEHEIGHT, -1, icol)
-            cell.set_text(col_header)
+            cell = Cell(x, 0, SIZES["BOXWIDTH"], SIZES["TITLEHEIGHT"], -1, icol)
+            cell.set_text(col_header, self.font_header)
             cell.set_background(HEADER_COLOUR)
             self.addItem(cell)
             icol += 1
-            x += BOXWIDTH
+            x += SIZES["BOXWIDTH"]
         self.grid_width = x
         # Add row headers and rows
         self.cell_matrix = []
         irow = 0
-        y = TITLEHEIGHT
-        for row_header in days:
+        y = SIZES["TITLEHEIGHT"]
+        for row_header in periods:
+            if row_header in breaks:
+                line = QGraphicsLineItem(0, y, self.grid_width, y)
+                line.setPen(StyleCache.getPen(SIZES["LINEWIDTH"], BREAK_COLOUR))
+                self.addItem(line)
+                line.setZValue(1)
             day_list = []
             self.cell_matrix.append(day_list)
             self.yslots.append(y)
             # row header
-            cell = Cell(0, y, TITLEWIDTH, BOXHEIGHT, irow, -1)
-            cell.set_text(row_header)
+            cell = Cell(0, y, SIZES["TITLEWIDTH"], SIZES["BOXHEIGHT"], irow, -1)
+            cell.set_text(row_header, self.font_header)
             cell.set_background(HEADER_COLOUR)
             self.addItem(cell)
-            # period cells
+            # day cells
             for i in range(icol):
-                cell = Cell(self.xslots[i + 1], y, BOXWIDTH, BOXHEIGHT, irow, i)
+                cell = Cell(self.xslots[i + 1], y, SIZES["BOXWIDTH"], SIZES["BOXHEIGHT"], irow, i)
                 day_list.append(cell)
                 self.addItem(cell)
             irow += 1
-            y += BOXHEIGHT
+            y += SIZES["BOXHEIGHT"]
         self.grid_height = y
-        self.select = QGraphicsRectItem(0, 0, BOXWIDTH, BOXHEIGHT)
-        self.select.setPen(StyleCache.getPen(LINEWIDTH*2, SELECT_COLOUR))
+        # Set colour of header margin lines
+        line = QGraphicsLineItem(0, SIZES["TITLEHEIGHT"], self.grid_width, SIZES["TITLEHEIGHT"])
+        line.setPen(StyleCache.getPen(SIZES["LINEWIDTH"], MARGIN_LINE_COLOUR))
+        self.addItem(line)
+        line.setZValue(1)
+        line = QGraphicsLineItem(SIZES["TITLEWIDTH"], 0, SIZES["TITLEWIDTH"], self.grid_height)
+        line.setPen(StyleCache.getPen(SIZES["LINEWIDTH"], MARGIN_LINE_COLOUR))
+        self.addItem(line)
+        line.setZValue(1)
+        # Make a rectangle for the "selected" marking
+        self.select = QGraphicsRectItem(0, 0, SIZES["BOXWIDTH"], SIZES["BOXHEIGHT"])
+        self.select.setPen(StyleCache.getPen(SIZES["LINEWIDTH"]*2, SELECT_COLOUR))
         self.select.setZValue(20)
         self.select.hide()
         self.addItem(self.select)
 
-#
     def get_cell(self, row, col):
         return self.cell_matrix[row][col]
-#
+
     def mousePressEvent(self, event):
         point = event.scenePos()
         items = self.items(point)
@@ -327,19 +436,17 @@ class GridPeriodsDays(QGraphicsScene):
                     pass
                 print (f"Cell – context menu @ {item.cell}")
 
-    def new_tile(self, tag, duration, nmsg, offset, total, text, colour):
+    def new_tile(self, tag, duration, nmsg, offset, total, text, colour=None):
         t = Tile(duration, nmsg, offset, total, text, colour)
         self.addItem(t)
         self.tiles[tag] = t
+        return t
 
     def place_tile(self, tag, cell):
         tile = self.tiles[tag]
         x = self.xslots[cell[0] + 1]    # first cell is header
         y = self.yslots[cell[1] + 1]    # first cell is header
-        w = BOXWIDTH - LINEWIDTH #* 2
-        if tile.duration > 1:
-            w += self.xslots[cell[0] + tile.duration] - x
-        tile.set_cell(x, y, w)
+        tile.set_cell(x, y)
 
     def select_cell(self, cell):
         x = self.xslots[cell[0] + 1]    # first cell is header
@@ -349,38 +456,119 @@ class GridPeriodsDays(QGraphicsScene):
 
 
 class Tile(QGraphicsRectItem):
+    font_centre = StyleCache.getFont(fontSize=FONT_CENTRE_SIZE)
+    font_corner = StyleCache.getFont(fontSize=FONT_CORNER_SIZE)
+
     def __init__(self, duration, nmsg, offset, total, text, colour):
+        #   duration: number of periods
+        #   nmsg: number of "minimal subgroups"
+        #   total: number of all "minimal subgroups"
+        # Thus nmsg / total builds a fraction of the total box width.
+        #   offset: starting offset as number of "minimal subgroups"
+        # Thus offset + nmsg must be smaller than or equal to total.
+        #   text: the text for the central position
+        #   colour: the box background colour (<None> => white)
         self.duration = duration
-        self.height = BOXHEIGHT  * nmsg / total# - LINEWIDTH# * 2
-        self.y = BOXHEIGHT * offset / total + LINEWIDTH/2
+#        self.width = SIZES["BOXWIDTH"] * nmsg / total - SIZES["SIZES["LINEWIDTH"]"]
+        self.width = (SIZES["BOXWIDTH"] - SIZES["LINEWIDTH"]) * nmsg / total
+        self.x = SIZES["BOXWIDTH"] * offset / total + SIZES["LINEWIDTH"]/2
+        self.height = SIZES["BOXHEIGHT"] * duration # can vary on placement
         super().__init__(
-            LINEWIDTH/2,
-            self.y,
-            BOXWIDTH,
-            self.height
+            self.x,
+            SIZES["LINEWIDTH"]/2,
+            self.width,
+            self.height - SIZES["LINEWIDTH"]
         )
+        if not colour:
+            colour = "ffffff"
         self.setBrush(StyleCache.getBrush(colour))
         self.text_item = QGraphicsSimpleTextItem(self)
+        self.text_item.setFont(self.font_centre)
         self.set_text(text)
+        self.setZValue(5)
         self.hide()
+        self.corners = [None] * 4
 
     def set_text(self, text):
         self.text_item.setText(text)
         text_rect = self.text_item.boundingRect()
-        rect = self.rect()
-        self.text_width = text_rect.width()
-        self.yshift = self.y + (rect.height() - text_rect.height()) / 2
-        xshift = (rect.width() - self.text_width) / 2
-        self.text_item.setPos(xshift, self.yshift)
+        text_width = text_rect.width()
+        part = text_width / (self.width - SIZES["LINEWIDTH"])
+        if part > 1:
+            self.text_item.setScale(1 / part)
+            text_rect = self.text_item.mapRectToParent(text_rect)
+            text_width = text_rect.width()
+        self.text_height = text_rect.height()
+        self.xshift = self.x + (self.width - text_width) / 2
+        yshift = (self.height - self.text_height) / 2
+        self.text_item.setPos(self.xshift, yshift)
 
-    def set_cell(self, x, y, w):
-        rect = self.rect()
-        rect.setWidth(w)
-        self.setRect(rect)
+    def set_cell(self, x, y):
         self.setPos(x, y)
-        self.text_item.setPos((w - self.text_width) / 2, self.yshift)
         self.show()
 
+    def set_corner(self, corner, text):
+        """Place a text item in one of the four corners.
+        """
+        text_item = self.corners[corner]
+        if not text_item:
+            text_item = QGraphicsSimpleTextItem(self)
+            text_item.setFont(self.font_corner)
+            self.corners[corner] = text_item
+        text_item.setText(text)
+        if corner == TILE_TOP_LEFT:
+            self.fit_corners(text_item, self.corners[TILE_TOP_RIGHT], True)
+        elif corner == TILE_TOP_RIGHT:
+            self.fit_corners(self.corners[TILE_TOP_LEFT], text_item, True)
+        elif corner == TILE_BOTTOM_RIGHT:
+            self.fit_corners(self.corners[TILE_BOTTOM_LEFT], text_item, False)
+        elif corner == TILE_BOTTOM_LEFT:
+            self.fit_corners(text_item, self.corners[TILE_BOTTOM_RIGHT], False)
+        else:
+            raise Bug(f"Invalid Tile Corner: {corner}")
+
+#TODO: I might need some sort of line wrapping if the text is very long ...
+    def fit_corners(self, left, right, is_top):
+        width = self.width - SIZES["LINEWIDTH"] - SIZES["SUBTEXTGAP"]
+        if left:
+            br = left.boundingRect()
+            left_width = br.width()
+            left_height = br.height()
+        else:
+            left_width = 0
+            left_height = 0
+        if right:
+            br = right.boundingRect()
+            right_width = br.width()
+            right_height = br.height()
+        else:
+            right_width = 0
+            right_height = 0
+        part = (left_width + right_width) / width
+        scale = 1 / part if part > 1 else 1
+        if left:
+            left.setScale(scale)
+            left_width *= scale
+            if is_top:
+                left.setPos(self.x + SIZES["LINEWIDTH"], SIZES["LINEWIDTH"])
+            else:
+                left.setPos(
+                    self.x + SIZES["LINEWIDTH"],
+                    self.height - SIZES["LINEWIDTH"] - left_height
+                )
+        if right:
+            right.setScale(scale)
+            right_width *= scale
+            if is_top:
+                right.setPos(
+                    self.x + self.width - SIZES["LINEWIDTH"] - right_width,
+                    SIZES["LINEWIDTH"]
+                )
+            else:
+                right.setPos(
+                    self.x + self.width - SIZES["LINEWIDTH"] - right_width,
+                    self.height - SIZES["LINEWIDTH"] - right_height
+                )
 
 
 class Box(QGraphicsRectItem):
@@ -394,7 +582,7 @@ class Box(QGraphicsRectItem):
         self.setPos(x, y)
         self.setPen(StyleCache.getPen(width, colour or BORDER_COLOUR))
 #
-    def set_text(self, text):
+    def set_text(self, text, font=None):
         """Set a centred text item. Calling the function a second time
         updates the text.
         """
@@ -403,6 +591,8 @@ class Box(QGraphicsRectItem):
         except AttributeError:
             item = QGraphicsSimpleTextItem(self)
             self.text_item = item
+        if font:
+            item.setFont(font)
         item.setText(text)
         bdrect = item.boundingRect()
         #print("§§§", text, bdrect)
@@ -412,6 +602,12 @@ class Box(QGraphicsRectItem):
         xshift = (rect.width() - wt) / 2
         yshift = (rect.height() - ht) / 2
         item.setPos(xshift, yshift)
+
+    def set_background(self, colour):
+        """Set the cell background colour.
+        <colour> can be <None> ("no fill") or a colour in the form 'RRGGBB'.
+        """
+        self.setBrush(StyleCache.getBrush(colour))
 
 ###
 
@@ -428,8 +624,8 @@ class Cell(Box):
 #    def setup(cls):
 #        cls.nBrush = StyleCache.getBrush(None)
 #        cls.hBrush = StyleCache.getBrush(CELL_HIGHLIGHT_COLOUR)
-#        cls.nPen = StyleCache.getPen(LINEWIDTH + 2, BORDER_COLOUR)
-#        cls.sPen = StyleCache.getPen(LINEWIDTH + 2, SELECT_COLOUR)
+#        cls.nPen = StyleCache.getPen(SIZES["SIZES["LINEWIDTH"]"] + 2, BORDER_COLOUR)
+#        cls.sPen = StyleCache.getPen(SIZES["SIZES["LINEWIDTH"]"] + 2, SELECT_COLOUR)
 
 #    @classmethod
 #    def select(cls, cell):
@@ -446,7 +642,7 @@ class Cell(Box):
         """Create a box at scene coordinates (x, y) with width w and
         height h. irow and icol are row and column indexes.
         """
-        super().__init__(x, y, w, h, width=LINEWIDTH)
+        super().__init__(x, y, w, h, width=SIZES["LINEWIDTH"])
         self.x0 = x
         self.y0 = y
         self.cell = (icol, irow)
@@ -459,15 +655,10 @@ class Cell(Box):
     def hoverLeaveEvent(self, event):
         print("Leave", self.cell)
 
-    def set_background(self, colour):
-        """Set the cell background colour.
-        <colour> can be <None> ("no fill") or a colour in the form 'RRGGBB'.
-        """
-        self.setBrush(StyleCache.getBrush(colour))
+###---------------------------------------------------
 
-###
-
-#TODO
+#TODO: I'm just keeping this for the moment for reference, in case I
+# need something from it ...
 class Tile0(QGraphicsRectItem):
     """The graphical representation of a lesson.
     """
@@ -539,56 +730,44 @@ class Tile0(QGraphicsRectItem):
         print("Action triggered from {}".format(self.id_))
 
 
-###
-
-class StyleCache:
-    __pens = {}
-    __brushes = {}
-
-    @classmethod
-    def getPen(cls, width, colour):
-        """Manage a cache for pens of different width and colour.
-        <width> should be a small integer.
-        <colour> is a colour in the form 'RRGGBB'.
-        """
-        if width:
-            wc = (width, colour)
-            try:
-                return cls.__pens[wc]
-            except KeyError:
-                pass
-            pen = QPen(QColor('#FF' + wc[1]))
-            pen.setWidthF(wc[0])
-            cls.__pens[wc] = pen
-            return pen
-        else:
-            try:
-                return cls.__pens['*']
-            except KeyError:
-                noPen = QPen()
-                noPen.setStyle(Qt.NoPen)
-                cls.__pens['*'] = noPen
-                return noPen
-
-    @classmethod
-    def getBrush(cls, colour=None):
-        """Manage a cache for brushes of different colour.
-        <colour> is a colour in the form 'RRGGBB'.
-        """
-        try:
-            return cls.__brushes[colour or '*']
-        except KeyError:
-            pass
-        if colour:
-            brush = QBrush(QColor('#FF' + colour))
-            cls.__brushes[colour] = brush
-        else:
-            brush = QBrush()    # no fill
-            cls.__brushes['*'] = brush
-        return brush
-
-
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+
+def main(args):
+#TODO: Will need various font sizes ...
+# And playing around with the app font may not be such a good idea!
+#    font = APP.font()
+    #print("FONT:", font.pointSize())
+#    font.setPointSize(12)
+#    APP.setFont(font)
+
+    #from qtpy.QtGui import QFontInfo
+    #qfi = QFontInfo(font)
+    #print("FONT PIXELS / POINTS:", qfi.pixelSize(), qfi.pointSize())
+    # Persistent Settings:
+#    builtins.SETTINGS = QSettings(
+#            QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
+    #builtins.WINDOW = GridViewRescaling()
+    #builtins.WINDOW = GridViewHFit()
+    builtins.WINDOW = GridView()
+
+    # Set up grid
+    grid = GridPeriodsDays(DAYS, PERIODS, BREAKS)
+    WINDOW.setScene(grid)
+
+    # Scaling: only makes sense if using basic, unscaled GridView
+    scale = WINDOW.pdpi / WINDOW.ldpi
+    t = QTransform().scale(scale, scale)
+    WINDOW.setTransform(t)
+
+#TODO: Only standalone!
+    APP.setWindowIcon(QIcon(APPDATAPATH("icons/tt.svg")))
+    screen = APP.primaryScreen()
+    screensize = screen.availableSize()
+    WINDOW.resize(int(screensize.width()*0.6), int(screensize.height()*0.75))
+    WINDOW.show()
+
+    return grid
+
 
 if __name__ == '__main__':
     args = set(sys.argv[1:])
@@ -603,4 +782,34 @@ if __name__ == '__main__':
     builtins.DEBUG = __debug
     DEBUG("sys.argv:", sys.argv)
 
-    main(set(sys.path[1:]))
+    grid = main(set(sys.path[1:]))
+
+    t1 = grid.new_tile("T1", duration=1, nmsg=1, offset=1, total=4, text="De p1 xx", colour="FFFF44")
+    grid.place_tile("T1", (2, 3))
+    t2 = grid.new_tile("T2", duration=2, nmsg=1, offset=0, total=4, text="tg B", colour="FFE0F0")
+    t2.set_corner(0, "AB / CD / EF / GH / IJ")
+    t2.set_corner(1, "B")
+    grid.place_tile("T2", (0, 2))
+    t3 = grid.new_tile("T3", duration=2, nmsg=1, offset=0, total=4, text="---", colour="E0F0FF")
+    grid.place_tile("T3", (2, 3))
+    t4 = grid.new_tile("T4", duration=1, nmsg=2, offset=2, total=4, text="Ma")
+    t4.set_corner(0, "AB / CD / EF / GH / IJ")
+    t4.set_corner(1, "B")
+    grid.place_tile("T4", (2, 3))
+    t5 = grid.new_tile("T5", duration=2, nmsg=1, offset=0, total=1, text="Hu")
+    t5.set_corner(0, "BTH / WS\nAR / PQ")
+    t5.set_corner(1, "alle")
+    grid.place_tile("T5", (4, 0))
+    t6 = grid.new_tile("T6", duration=1, nmsg=1, offset=0, total=2, text="Ta")
+    t6.set_corner(0, "BMW")
+    t6.set_corner(1, "A")
+    t6.set_corner(2, "r10G")
+    t6.set_corner(3, "?")
+    grid.place_tile("T6", (3, 5))
+
+    grid.select_cell((1,6))
+
+    #for k, v in SIZES.items():
+    #    print(f"SIZE (mm) {k:16}: {WINDOW.px2mm(v)}")
+
+    sys.exit(APP.exec())

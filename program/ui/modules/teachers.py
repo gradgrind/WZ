@@ -1,7 +1,7 @@
 """
 ui/modules/teachers.py
 
-Last updated:  2022-04-21
+Last updated:  2022-04-22
 
 Edit teachers' data.
 
@@ -63,6 +63,7 @@ from ui.ui_base import (
     QLabel,
     QPushButton,
     QTableView,
+    QHeaderView,
     # QtCore
     Qt,
     # QtSql
@@ -347,7 +348,7 @@ class WeekTable(QFrame):
         super().__init__(parent)
         self.setFrameStyle(QFrame.Panel | QFrame.Sunken)
 
-        self.__table = EdiTableWidget()
+        self.__table = EdiTableWidget(align_centre=True)
         vbox = QVBoxLayout(self)
         vbox.setContentsMargins(3, 3, 3, 3)
 
@@ -370,9 +371,10 @@ class WeekTable(QFrame):
             column_add_del=False,
             on_changed=self.table_changed,
         )
-        self.__table.resizeColumnsToContents()
-        # A very dodgy attempt to find an appropriate size for the table
         Hhd = self.__table.horizontalHeader()
+        Hhd.setMinimumSectionSize(20)
+        self.__table.resizeColumnsToContents()
+        # A rather messy attempt to find an appropriate size for the table
         Vhd = self.__table.verticalHeader()
         Hw = Hhd.length()
         Hh = Hhd.sizeHint().height()
@@ -380,8 +382,9 @@ class WeekTable(QFrame):
         Vh = Vhd.length()
         self.__table.setMinimumWidth(Hw + Vw + 10)
         self.__table.setFixedHeight(Vh + Hh + 10)
-
-    #        self.__table.setMaximumHeight(Vh + Hh + 10)
+        # self.__table.setMaximumHeight(Vh + Hh + 10)
+        Hhd.setSectionResizeMode(QHeaderView.Stretch)
+        Vhd.setSectionResizeMode(QHeaderView.Stretch)
 
     def text(self):
         table = self.__table.read_all()

@@ -337,6 +337,7 @@ class CourseEditor(QSplitter):
             self.lessonmodel.setHeaderData(i, Qt.Horizontal, t)
         self.lessontable.hideColumn(0)
         self.lessontable.hideColumn(1)
+        self.lessontable.horizontalHeader().setStretchLastSection(True)
 
         self.filter_field_select.trigger()
 
