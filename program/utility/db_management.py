@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-04-19
+Last updated:  2022-04-23
 
 Edit course and lesson data.
 
@@ -99,6 +99,23 @@ def db_key_value_list(table, key_field, value_field, sort_field):
     return key_value_list
 
 
+def db_values(table, value_field, **keys):
+    where_cond = [f"{k} = '{v}'" for k, v in keys.items()]
+    if where_cond:
+        where_clause = f" WHERE {' AND '.join(where_cond)}"
+    else:
+        where_clause = ""
+    selquery = f"SELECT {value_field} FROM {table}{where_clause}"
+    query = QSqlQuery(selquery)
+    value_list = []
+    while (query.next()):
+        value_list.append(query.value(0))
+#        QString country = query.value(fieldNo).toString();
+    return value_list
+
+
+
+
 def read_pairs(data):
     """Read a list of (key, value) pairs from the given string.
 
@@ -166,4 +183,5 @@ def enter_classes():
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    enter_classes()
+#    enter_classes()
+    pass
