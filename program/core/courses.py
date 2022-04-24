@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
 from typing import NamedTuple
 
-from utility.db_management import open_database, db_read_fields
+from core.db_management import open_database, db_read_fields
 
 ### -----
 
@@ -69,33 +69,46 @@ def get_timetable_data():
             class2courses[klass] = [course]
 
     class LessonData(NamedTuple):
-        id: int
+        #id: int
         course: CourseData
         length: str
         tag: str
         room: str
         notes: str
 
+    lessons = []
+    idmax = 0
     class2lessons = {}
     for id, course, length, tag, room, notes in db_read_fields(
         "LESSONS",
         ("id", "course", "LENGTH", "TAG", "ROOM", "NOTES")
     ):
+        if id > idmax:
+            idmax = id
         if length:
             coursedata = course2data[course]
             lessondata = LessonData(
-                id=id,
+                #id=id,
                 course=coursedata,
                 length=length,
                 tag=tag,
                 room=room,
                 notes=notes
             )
+            lessons.append((id, lessondata))
             try:
-                class2lessons[coursedata.klass].append(lessondata)
+                class2lessons[coursedata.klass].append(id)
             except KeyError:
-                class2lessons[coursedata.klass] = [lessondata]
-    return class2lessons
+                class2lessons[coursedata.klass] = [id]
+
+    lessonlist = [None] * (idmax + 1)
+    print("idmax =", idmax)
+    for id, lessondata in lessons:
+        lessonlist[id] = lessondata
+
+    print("???", sys.getsizeof(lessons), sys.getsizeof(lessonlist))
+
+    return lessonlist, class2lessons
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -104,9 +117,9 @@ if __name__ == "__main__":
     open_database()
 
     # For the timetable
-    class2lessons = get_timetable_data()
-    for klass, lessonlist in class2lessons.items():
-        print(f"CLASS {klass}:")
-        for lessondata in lessonlist:
-            print(f"  {lessondata}")
-
+    lessons, class2lessons = get_timetable_data()
+    klass = "10G"
+    print(f"CLASS {klass}:")
+    lids = class2lessons[klass]
+    for lid in lids:
+        print(f"  {lessons[lid]}")

@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-04-22
+Last updated:  2022-04-24
 
 Edit course and lesson data.
 
@@ -51,7 +51,7 @@ T = TRANSLATIONS("ui.modules.course_lessons")
 
 ### +++++
 
-from utility.db_management import open_database, db_key_value_list
+from core.db_management import open_database, db_key_value_list
 
 from ui.ui_base import (
     HLine,
@@ -136,6 +136,21 @@ class Courses(Page):
 
 # ++++++++++++++ The widget implementation ++++++++++++++
 
+class XTableView(QTableView):
+    def keyPressEvent(self, e):
+        key = e.key()
+        i = self.currentIndex()
+        if not self.isPersistentEditorOpen(i):
+            if key == Qt.Key_Return:
+                # start editing
+                self.edit(i)
+                return
+            elif key == Qt.Key_Delete:
+                # clear cell
+                self.model().setData(i, "")
+                return
+        super().keyPressEvent(e)
+
 
 class CourseEditor(QSplitter):
     def __init__(self, parent=None):
@@ -214,7 +229,17 @@ class CourseEditor(QSplitter):
         vbox3.addWidget(QLabel(f"<h4>{T['LESSONS']}</h4>"))
 
         # The lesson table
-        self.lessontable = QTableView()
+        self.lessontable = XTableView()
+        self.lessontable.setStyleSheet(
+            """QTableView {
+               selection-background-color: #e0e0ff;
+               selection-color: black;
+            }
+            QTableView::item:focus {
+                selection-background-color: #d0ffff;
+            }
+            """
+        )
         self.lessontable.setSelectionMode(QTableView.SingleSelection)
         self.lessontable.setSelectionBehavior(QTableView.SelectRows)
         self.lessontable.verticalHeader().hide()
@@ -479,6 +504,13 @@ class CourseEditor(QSplitter):
         else:
             self.lesson_delete_button.setEnabled(False)
         self.lesson_add_button.setEnabled(course > 0)
+
+        # Toggle the stretch on the last section here because of a
+        # possible bug in Qt, where the stretch can be lost when
+        # repopulating.
+        hh = self.lessontable.horizontalHeader()
+        hh.setStretchLastSection(False)
+        hh.setStretchLastSection(True)
 
     def lesson_delete(self):
         """Delete the current "lesson"."""

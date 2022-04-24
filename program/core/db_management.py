@@ -79,6 +79,23 @@ def open_database():
     return con
 
 
+#def table_extent(table):
+#    query = QSqlQuery(
+#        f"SELECT MAX(rowid) FROM {table}"
+#    )
+#    res = []
+#    while (query.next()):
+#        res.append(query.value(0))
+#    print("MAX rowid:", res)
+#    query = QSqlQuery(
+#        f"SELECT COUNT(rowid) FROM {table}"
+#    )
+#    res = []
+#    while (query.next()):
+#        res.append(query.value(0))
+#    print("COUNT:", res)
+
+
 def db_read_fields(table, fields, sort_field=None):
     """Read all records from the given table.
     Return a list of tuples containing these fields in the given order.
@@ -206,3 +223,7 @@ if __name__ == "__main__":
     _tid = "MF"
     print(f"\nCOURSES for {_tid} in {_sid}:")
     print("  ", db_values("COURSES", "CLASS", TEACHER=_tid, SUBJECT=_sid))
+
+    #table = "LESSONS"
+    #print("\nExtent of table {table}:")
+    #table_extent(table)

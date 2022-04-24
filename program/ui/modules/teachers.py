@@ -1,7 +1,7 @@
 """
 ui/modules/teachers.py
 
-Last updated:  2022-04-22
+Last updated:  2022-04-24
 
 Edit teachers' data.
 
@@ -45,7 +45,7 @@ T = TRANSLATIONS("ui.modules.teachers")
 
 ### +++++
 
-from utility.db_management import open_database, db_key_value_list, read_pairs
+from core.db_management import open_database, db_key_value_list, read_pairs
 
 from ui.ui_base import (
     HLine,
@@ -349,6 +349,17 @@ class WeekTable(QFrame):
         self.setFrameStyle(QFrame.Panel | QFrame.Sunken)
 
         self.__table = EdiTableWidget(align_centre=True)
+        self.__table.setStyleSheet(
+            """QTableView {
+               selection-background-color: #e0e0ff;
+               selection-color: black;
+            }
+            QTableView::item:focus {
+                selection-background-color: #d0ffff;
+            }
+            """
+        )
+
         vbox = QVBoxLayout(self)
         vbox.setContentsMargins(3, 3, 3, 3)
 

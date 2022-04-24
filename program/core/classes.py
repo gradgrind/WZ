@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-04-23
+core/classes.py - last updated 2022-04-24
 
 Manage class data.
 
@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
 ### +++++
 
-from utility.db_management import open_database, db_key_value_list, db_values
+from core.db_management import open_database, db_key_value_list, db_values
 
 ### -----
 
