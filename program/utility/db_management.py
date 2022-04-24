@@ -1,9 +1,9 @@
 """
-ui/modules/course_lessons.py
+uutility/db_management.py
 
-Last updated:  2022-04-23
+Last updated:  2022-04-24
 
-Edit course and lesson data.
+Helper functions for accessing the database.
 
 
 =+LICENCE=============================
@@ -28,23 +28,18 @@ DATABASE = "db1.sqlite"
 
 ########################################################################
 
-T = TRANSLATIONS("utility.db_management")
-
-### +++++
-
 if __name__ == "__main__":
     import sys, os
-
-    # Enable package import if running as module
     this = sys.path[0]
     appdir = os.path.dirname(this)
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    #    start.setup(os.path.join(basedir, 'DATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
 
-    start.setup(os.path.join(basedir, "TESTDATA"))
-    # start.setup(os.path.join(basedir, 'DATA'))
-    # start.setup(os.path.join(basedir, "DATA-2023"))
+T = TRANSLATIONS("utility.db_management")
 
 ### +++++
 
@@ -52,7 +47,6 @@ from ui.ui_base import (
     ### QtSql:
     QSqlDatabase,
     QSqlQuery,
-    QSqlQueryModel,
 )
 
 ### -----
@@ -85,17 +79,31 @@ def open_database():
     return con
 
 
+def db_read_fields(table, fields, sort_field=None):
+    """Read all records from the given table.
+    Return a list of tuples containing these fields in the given order.
+    """
+    qfields = ", ".join(fields)
+    o = f" ORDER BY {sort_field}" if sort_field else ""
+    query = QSqlQuery(
+        f"SELECT {', '.join(fields)} FROM {table}{o}"
+    )
+    record_list = []
+    n = len(fields)
+    while (query.next()):
+        record_list.append(tuple(query.value(i) for i in range(n)))
+    return record_list
+
+
 def db_key_value_list(table, key_field, value_field, sort_field):
     """Return a list of (key, value) pairs from the given database table."""
-    model = QSqlQueryModel()
-    model.setQuery(
+    query = QSqlQuery(
         f"SELECT {key_field}, {value_field} FROM {table}"
         f" ORDER BY {sort_field}"
     )
     key_value_list = []
-    for i in range(model.rowCount()):
-        record = model.record(i)
-        key_value_list.append((record.value(0), record.value(1)))
+    while (query.next()):
+        key_value_list.append((query.value(0), query.value(1)))
     return key_value_list
 
 
@@ -105,15 +113,11 @@ def db_values(table, value_field, **keys):
         where_clause = f" WHERE {' AND '.join(where_cond)}"
     else:
         where_clause = ""
-    selquery = f"SELECT {value_field} FROM {table}{where_clause}"
-    query = QSqlQuery(selquery)
+    query = QSqlQuery(f"SELECT {value_field} FROM {table}{where_clause}")
     value_list = []
     while (query.next()):
         value_list.append(query.value(0))
-#        QString country = query.value(fieldNo).toString();
     return value_list
-
-
 
 
 def read_pairs(data):
@@ -184,4 +188,21 @@ def enter_classes():
 
 if __name__ == "__main__":
 #    enter_classes()
-    pass
+
+    open_database()
+
+    print("\nTEACHERS:")
+    for k, v in db_key_value_list("TEACHERS", "TID", "NAME", "SORTNAME"):
+        print(f"  {k:6}: {v}")
+
+    print("\nCOURSES:")
+    for r in db_read_fields(
+        "COURSES",
+        ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
+    ):
+        print("  ", r)
+
+    _sid = "En"
+    _tid = "MF"
+    print(f"\nCOURSES for {_tid} in {_sid}:")
+    print("  ", db_values("COURSES", "CLASS", TEACHER=_tid, SUBJECT=_sid))
