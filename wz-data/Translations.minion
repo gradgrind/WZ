@@ -59,6 +59,30 @@ ui.modules.teachers: {
     AVAILABILITY:   Verfügbarkeit
 }
 
+ui.modules.classes: {
+    # Messages
+    INVALID_PERIOD_VALUES:  "Die Verfügbarkeitsdaten mussten {n}-mal angepasst werden.\n  Ursprünglich:\n{val}"
+    UNIQUE_FIELDS:  "Die Hauptfelder müssen einmalig sein."
+    
+    # Labels
+    MODULE_NAME:    Klassen
+    MODULE_TITLE:   "Klassendaten verwalten"
+
+    # Class field editor buttons
+    DELETE:         Löschen
+    UPDATE:         Übernehmen
+    NEW:            Hinzufügen
+
+    # Class table fields
+    CLASS:          Klasse
+    NAME:           Name
+    CLASSROOM:      Klassenraum
+    TT_DATA:        Stundenplandaten
+
+    # Constraints
+    AVAILABILITY:   Verfügbarkeit
+}
+
 ui.modules.course_lessons: {
     # Messages
     COURSE_EXISTS:  "Der geänderte „Kurs“ existiert schon"
@@ -98,6 +122,18 @@ ui.modules.course_lessons: {
 }
 
 timetable.constraints_teacher: {
+    #MESSAGES
+    INVALID_AVAILABILITY:   "Gültig sind '+', '-' und '*', nicht '{val}'"
+
+    # CONSTRAINT_FIELDS
+    MINPERDAY:      "Stunden pro Tag – mind."
+    MAXGAPSPERDAY:  "Lücken pro Tag – max."
+    MAXGAPSPERWEEK: "Lücken pro Woche – max."
+    MAXBLOCK:       "aufeinanderfolgende Stunden – max."
+    AVAILABLE:      "Verfügbarkeit"
+}
+
+timetable.constraints_class: {
     #MESSAGES
     INVALID_AVAILABILITY:   "Gültig sind '+', '-' und '*', nicht '{val}'"
 

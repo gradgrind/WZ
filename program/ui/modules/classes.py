@@ -1,9 +1,9 @@
 """
-ui/modules/teachers.py
+ui/modules/classes.py
 
-Last updated:  2022-04-24
+Last updated:  2022-04-26
 
-Edit teachers' data.
+Edit classes' data.
 
 
 =+LICENCE=============================
@@ -24,6 +24,8 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
+#TODO ...
+
 ########################################################################
 
 if __name__ == "__main__":
@@ -41,7 +43,7 @@ if __name__ == "__main__":
 else:
     from ui.ui_base import StackPage as Page
 
-T = TRANSLATIONS("ui.modules.teachers")
+T = TRANSLATIONS("ui.modules.classes")
 
 ### +++++
 
@@ -71,43 +73,43 @@ from ui.ui_base import (
 )
 from ui.editable import EdiTableWidget
 
-# Teacher table fields
-TEACHER_COLS = [
-    (f, T[f]) for f in ("TID", "NAME", "SIGNED", "SORTNAME", "TT_DATA")
+# Class table fields
+CLASS_COLS = [
+    (f, T[f]) for f in ("CLASS", "NAME", "CLASSROOM", "TT_DATA")
 ]
 
-from timetable.constraints_teacher import CONSTRAINT_FIELDS, period_validator
+from timetable.constraints_class import CONSTRAINT_FIELDS, period_validator
 
 ### -----
 
 
 def init():
-    MAIN_WIDGET.add_tab(Teachers())
+    MAIN_WIDGET.add_tab(Classes())
 
 
-class Teachers(Page):
+class Classes(Page):
     name = T["MODULE_NAME"]
     title = T["MODULE_TITLE"]
 
     def __init__(self):
         super().__init__()
-        self.teacher_editor = TeacherEditor()
+        self.class_editor = ClassEditor()
         hbox = QHBoxLayout(self)
         hbox.setContentsMargins(0, 0, 0, 0)
-        hbox.addWidget(self.teacher_editor)
+        hbox.addWidget(self.class_editor)
 
     def enter(self):
         open_database()
-        self.teacher_editor.init_data()
+        self.class_editor.init_data()
 
     def is_modified(self):
-        return bool(self.teacher_editor.form_change_set)
+        return bool(self.class_editor.form_change_set)
 
 
 # ++++++++++++++ The widget implementation ++++++++++++++
 
 
-class TeacherEditor(QSplitter):
+class ClassEditor(QSplitter):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setChildrenCollapsible(False)
@@ -118,13 +120,13 @@ class TeacherEditor(QSplitter):
         leftframe.setFrameShape(self.Box)
         vbox1 = QVBoxLayout(leftframe)
 
-        # The main teacher table
-        self.teachertable = TableViewRowSelect(self)
-        self.teachertable.setEditTriggers(
+        # The main class table
+        self.classtable = TableViewRowSelect(self)
+        self.classtable.setEditTriggers(
             QTableView.NoEditTriggers
         )  # non-editable
-        self.teachertable.verticalHeader().hide()
-        vbox1.addWidget(self.teachertable)
+        self.classtable.verticalHeader().hide()
+        vbox1.addWidget(self.classtable)
 
         self.rightframe = QFrame()
         self.addWidget(self.rightframe)
@@ -133,10 +135,10 @@ class TeacherEditor(QSplitter):
 
         vbox2 = QVBoxLayout(self.rightframe)
         editorbox = QFrame()
-        self.teachereditor = QFormLayout(editorbox)
+        self.classeditor = QFormLayout(editorbox)
         vbox2.addWidget(editorbox)
         self.editors = {}
-        for f, t in TEACHER_COLS:
+        for f, t in CLASS_COLS:
             if f == "TT_DATA":
                 editwidget = FormSpecialEdit(f, self.form_modified, t)
                 for f_, t_ in CONSTRAINT_FIELDS:
@@ -147,24 +149,24 @@ class TeacherEditor(QSplitter):
                         ewidget = FormLineEdit(f_, editwidget.form_modified)
                         editwidget.addRow(f_, ewidget, t_)
 
-                self.teachereditor.addRow(editwidget)
+                self.classeditor.addRow(editwidget)
             else:
                 editwidget = FormLineEdit(f, self.form_modified)
-                self.teachereditor.addRow(t, editwidget)
+                self.classeditor.addRow(t, editwidget)
             self.editors[f] = editwidget
 
         hbox2 = QHBoxLayout()
         vbox2.addLayout(hbox2)
         hbox2.addStretch(1)
-        self.teacher_delete_button = QPushButton(T["DELETE"])
-        self.teacher_delete_button.clicked.connect(self.teacher_delete)
-        hbox2.addWidget(self.teacher_delete_button)
-        self.teacher_update_button = QPushButton(T["UPDATE"])
-        self.teacher_update_button.clicked.connect(self.teacher_update)
-        hbox2.addWidget(self.teacher_update_button)
-        self.teacher_add_button = QPushButton(T["NEW"])
-        self.teacher_add_button.clicked.connect(self.teacher_add)
-        hbox2.addWidget(self.teacher_add_button)
+        self.class_delete_button = QPushButton(T["DELETE"])
+        self.class_delete_button.clicked.connect(self.class_delete)
+        hbox2.addWidget(self.class_delete_button)
+        self.class_update_button = QPushButton(T["UPDATE"])
+        self.class_update_button.clicked.connect(self.class_update)
+        hbox2.addWidget(self.class_update_button)
+        self.class_add_button = QPushButton(T["NEW"])
+        self.class_add_button.clicked.connect(self.class_add)
+        hbox2.addWidget(self.class_add_button)
         vbox2.addStretch(1)
 
         self.form_change_set = None
@@ -192,99 +194,99 @@ class TeacherEditor(QSplitter):
 
     def set_buttons(self):
         if self.table_empty:
-            self.teacher_update_button.setEnabled(False)
-            self.teacher_add_button.setEnabled(True)
-            self.teacher_delete_button.setEnabled(False)
+            self.class_update_button.setEnabled(False)
+            self.class_add_button.setEnabled(True)
+            self.class_delete_button.setEnabled(False)
         elif self.form_change_set:
-            self.teacher_update_button.setEnabled(True)
-            self.teacher_add_button.setEnabled(True)
-            self.teacher_delete_button.setEnabled(True)
+            self.class_update_button.setEnabled(True)
+            self.class_add_button.setEnabled(True)
+            self.class_delete_button.setEnabled(True)
         else:
-            self.teacher_update_button.setEnabled(False)
-            self.teacher_add_button.setEnabled(False)
-            self.teacher_delete_button.setEnabled(True)
+            self.class_update_button.setEnabled(False)
+            self.class_add_button.setEnabled(False)
+            self.class_delete_button.setEnabled(True)
 
     def init_data(self):
-        # Set up the teacher model, first clearing the "model-view"
+        # Set up the class model, first clearing the "model-view"
         # widgets (in case this is a reentry)
-        self.teachertable.setModel(None)
-        self.teachermodel = QSqlTableModel()
-        self.teachermodel.setTable("TEACHERS")
-        self.teachermodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
-        # Set up the teacher view
-        self.teachertable.setModel(self.teachermodel)
-        selection_model = self.teachertable.selectionModel()
-        selection_model.currentChanged.connect(self.teacher_changed)
-        for f, t in TEACHER_COLS:
-            i = self.teachermodel.fieldIndex(f)
-            self.teachermodel.setHeaderData(i, Qt.Horizontal, t)
+        self.classtable.setModel(None)
+        self.classmodel = QSqlTableModel()
+        self.classmodel.setTable("CLASSES")
+        self.classmodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
+        # Set up the class view
+        self.classtable.setModel(self.classmodel)
+        selection_model = self.classtable.selectionModel()
+        selection_model.currentChanged.connect(self.class_changed)
+        for f, t in CLASS_COLS:
+            i = self.classmodel.fieldIndex(f)
+            self.classmodel.setHeaderData(i, Qt.Horizontal, t)
             if f == "TT_DATA":
                 self.tt_data_col = i
-                self.teachertable.hideColumn(i)
+                self.classtable.hideColumn(i)
                 # Set up the week table
                 self.editors[f].widgets["AVAILABLE"].setup()
-        # Initialize the teacher table
-        self.fill_teacher_table()
+        # Initialize the class table
+        self.fill_class_table()
 
-    def fill_teacher_table(self):
+    def fill_class_table(self):
         """Set filter and sort criteria, then populate table."""
-        self.teachermodel.setSort(
-            self.teachermodel.fieldIndex("SORTNAME"),
+        self.classmodel.setSort(
+            self.classmodel.fieldIndex("SORTNAME"),
             Qt.AscendingOrder,
         )
-        # print("SELECT:", self.teachermodel.selectStatement())
-        self.teachermodel.select()
-        self.teachertable.selectRow(0)
-        if not self.teachertable.currentIndex().isValid():
-            self.teacher_changed(None, None)
-        self.teachertable.resizeColumnsToContents()
+        # print("SELECT:", self.classmodel.selectStatement())
+        self.classmodel.select()
+        self.classtable.selectRow(0)
+        if not self.classtable.currentIndex().isValid():
+            self.class_changed(None, None)
+        self.classtable.resizeColumnsToContents()
 
-    def teacher_changed(self, new, old):
+    def class_changed(self, new, old):
         self.form_change_set = set()
         if new:
             self.table_empty = False
             row = new.row()
             # print("CURRENT", old.row(), "->", row)
-            record = self.teachermodel.record(row)
-            for f, t in TEACHER_COLS:
+            record = self.classmodel.record(row)
+            for f, t in CLASS_COLS:
                 self.editors[f].setText(str(record.value(f)))
         else:
             # e.g. when entering an empty table
             self.table_empty = True
             # print("EMPTY TABLE")
-            for f, t in TEACHER_COLS:
+            for f, t in CLASS_COLS:
                 self.editors[f].setText("")
         # print("===", self.form_change_set)
         self.set_buttons()
 
-    def teacher_delete(self):
-        """Delete the current teacher."""
-        model = self.teachermodel
+    def class_delete(self):
+        """Delete the current class."""
+        model = self.classmodel
         if self.form_change_set:
             if not LoseChangesDialog():
                 return
-        index = self.teachertable.currentIndex()
+        index = self.classtable.currentIndex()
         row = index.row()
         model.removeRow(row)
         if model.submitAll():
             if row >= model.rowCount():
                 row = model.rowCount() - 1
-            self.teachertable.selectRow(row)
-            if not self.teachertable.currentIndex().isValid():
-                self.teacher_changed(None, None)
+            self.classtable.selectRow(row)
+            if not self.classtable.currentIndex().isValid():
+                self.class_changed(None, None)
         else:
             error = model.lastError()
             SHOW_ERROR(error.text())
             model.revertAll()
 
-    def teacher_add(self):
-        """Add the data in the form editor as a new teacher."""
-        model = self.teachermodel
-        index = self.teachertable.currentIndex()
+    def class_add(self):
+        """Add the data in the form editor as a new class."""
+        model = self.classmodel
+        index = self.classtable.currentIndex()
         row0 = index.row()
         row = 0
         model.insertRow(row)
-        for f, t in TEACHER_COLS:
+        for f, t in CLASS_COLS:
             col = model.fieldIndex(f)
             val = self.editors[f].text()
             if f == "TID":
@@ -296,10 +298,10 @@ class TeacherEditor(QSplitter):
             # Try to select the new entry
             for r in range(model.rowCount()):
                 if model.data(model.index(r, icol)) == inserted:
-                    self.teachertable.selectRow(r)
+                    self.classtable.selectRow(r)
                     break
             else:
-                self.teachertable.selectRow(row0)
+                self.classtable.selectRow(row0)
         else:
             error = model.lastError()
             if "UNIQUE" in error.databaseText():
@@ -308,13 +310,13 @@ class TeacherEditor(QSplitter):
                 SHOW_ERROR(error.text())
             model.revertAll()
 
-    def teacher_update(self):
-        """Update the current teacher with the data in the form editor."""
-        model = self.teachermodel
-        index = self.teachertable.currentIndex()
-        teacher = model.data(index)
+    def class_update(self):
+        """Update the current class with the data in the form editor."""
+        model = self.classmodel
+        index = self.classtable.currentIndex()
+        klass = model.data(index)
         row = index.row()
-        # print("???teacher_update:", self.form_change_set)
+        # print("???class_update:", self.form_change_set)
         for f in self.form_change_set:
             if f:
                 col = model.fieldIndex(f)
@@ -325,15 +327,15 @@ class TeacherEditor(QSplitter):
             # different place, perhaps not even displayed.
             # Try to stay with the same id, if it is displayed,
             # otherwise the same (or else the last) row.
-            # print("UPDATED:", teacher)
+            # print("UPDATED:", klass)
             for r in range(model.rowCount()):
-                if model.data(model.index(r, 0)) == teacher:
-                    self.teachertable.selectRow(r)
+                if model.data(model.index(r, 0)) == klass:
+                    self.classtable.selectRow(r)
                     break
             else:
                 if row >= model.rowCount():
                     row = model.rowCount() - 1
-                self.teachertable.selectRow(row)
+                self.classtable.selectRow(row)
         else:
             error = model.lastError()
             if "UNIQUE" in error.databaseText():
@@ -514,7 +516,7 @@ class FormSpecialEdit(QVBoxLayout):
 if __name__ == "__main__":
     from ui.ui_base import run
 
-    widget = Teachers()
+    widget = Classes()
     widget.enter()
     widget.resize(1000, 550)
     run(widget)
