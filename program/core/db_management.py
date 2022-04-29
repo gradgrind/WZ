@@ -1,7 +1,7 @@
 """
 uutility/db_management.py
 
-Last updated:  2022-04-24
+Last updated:  2022-04-29
 
 Helper functions for accessing the database.
 
@@ -79,63 +79,119 @@ def open_database():
     return con
 
 
-#def table_extent(table):
-#    query = QSqlQuery(
-#        f"SELECT MAX(rowid) FROM {table}"
-#    )
-#    res = []
-#    while (query.next()):
-#        res.append(query.value(0))
-#    print("MAX rowid:", res)
-#    query = QSqlQuery(
-#        f"SELECT COUNT(rowid) FROM {table}"
-#    )
-#    res = []
-#    while (query.next()):
-#        res.append(query.value(0))
-#    print("COUNT:", res)
+"""
+def table_extent(table):
+    query = QSqlQuery(
+        f"SELECT MAX(rowid) FROM {table}"
+    )
+    res = []
+    while (query.next()):
+        res.append(query.value(0))
+    print("MAX rowid:", res)
+    query = QSqlQuery(
+        f"SELECT COUNT(rowid) FROM {table}"
+    )
+    res = []
+    while (query.next()):
+        res.append(query.value(0))
+    print("COUNT:", res)
+"""
+
+def db_query(query_text):
+    query = QSqlQuery(query_text)
+    rec = query.record()
+    nfields = rec.count()
+    value_list = []
+    while (query.next()):
+        value_list.append([query.value(i) for i in range(nfields)])
+    return value_list
+
+
+def db_read_table(table, fields, *wheres, sort_field=None, **keys):
+    """Read a list of table entries.
+    <fields> specifies which fields are to be read. It may be
+        - null/empty (=> '*'),
+        - a list of strings (field names).
+    <wheres> are WHERE conditions (as strings).
+    <sort_field> is an optional field to sort on.
+    <keys> are WHERE conditions with "=" (value is str) or "IN" (value
+    is list).
+    Return a list of fields and a list of records (each is a list).
+    """
+    where_cond = [w for w in wheres]
+    for k, v in keys.items():
+        if isinstance(v, str):
+            where_cond.append(f'"{k}" = "{v}"')
+        elif isinstance(v, int):
+            where_cond.append(f'"{k}" = {v}')
+        elif isinstance(v, list):
+            instring = ', '.join(
+                [f'"{_v}"' if isinstance(_v, str) else str(_v) for _v in v]
+            )
+            where_cond.append(f'"{k}" IN ( {instring} )')
+        else:
+            raise Bug("Unexpected comparison value: '{repr({v})'")
+    if where_cond:
+        where_clause = f" WHERE {' AND '.join(where_cond)}"
+    else:
+        where_clause = ""
+    f = ', '.join([f'"{f}"' for f in fields]) if fields else '*'
+    o = f' ORDER BY "{sort_field}"' if sort_field else ""
+    #print("§§§", f"SELECT {f} FROM {table}{where_clause}{o}")
+    query = QSqlQuery(f"SELECT {f} FROM {table}{where_clause}{o}")
+    rec = query.record()
+    nfields = rec.count()
+    value_list = []
+    while (query.next()):
+        value_list.append([query.value(i) for i in range(nfields)])
+    if fields:
+        if len(fields) != nfields:
+            raise Bug("Wrong number of fields in record")
+        return fields, value_list
+    else:
+        return [rec.fieldName(i) for i in range(nfields)], value_list
+
+
+def db_read_full_table(table, *wheres, sort_field=None, **keys):
+    return db_read_table(table, None, *wheres, sort_field=None, **keys)
+
+
+def db_values(table, value_field, *wheres, **keys):
+    """Wrapper for db_read_table returning a single list, just the
+    first fields of each record. Thus it is especially suitable when
+    only a single field is to be read from the table.
+    """
+    fields, value_list = db_read_table(table, [value_field], *wheres, **keys)
+    return [v[0] for v in value_list]
+
+
+def db_key_value_list(table, key_field, value_field, sort_field=None):
+    """Return a list of (key, value) pairs from the given database table."""
+    fields, value_list = db_read_table(table, [key_field, value_field],
+            sort_field=sort_field)
+    return value_list
 
 
 def db_read_fields(table, fields, sort_field=None):
     """Read all records from the given table.
     Return a list of tuples containing these fields in the given order.
     """
-    qfields = ", ".join(fields)
-    o = f" ORDER BY {sort_field}" if sort_field else ""
-    query = QSqlQuery(
-        f"SELECT {', '.join(fields)} FROM {table}{o}"
-    )
-    record_list = []
-    n = len(fields)
-    while (query.next()):
-        record_list.append(tuple(query.value(i) for i in range(n)))
-    return record_list
-
-
-def db_key_value_list(table, key_field, value_field, sort_field):
-    """Return a list of (key, value) pairs from the given database table."""
-    query = QSqlQuery(
-        f"SELECT {key_field}, {value_field} FROM {table}"
-        f" ORDER BY {sort_field}"
-    )
-    key_value_list = []
-    while (query.next()):
-        key_value_list.append((query.value(0), query.value(1)))
-    return key_value_list
-
-
-def db_values(table, value_field, **keys):
-    where_cond = [f"{k} = '{v}'" for k, v in keys.items()]
-    if where_cond:
-        where_clause = f" WHERE {' AND '.join(where_cond)}"
-    else:
-        where_clause = ""
-    query = QSqlQuery(f"SELECT {value_field} FROM {table}{where_clause}")
-    value_list = []
-    while (query.next()):
-        value_list.append(query.value(0))
+    fields, value_list = db_read_table(table, fields, sort_field=sort_field)
     return value_list
 
+
+"""
+# This picks up unique columns, but not unique constraints on multiple columns
+def db_unique_fields(table):
+    fieldinfo = db_query(f"PRAGMA table_info({table})")
+    fields = []
+    for uf in db_query(f"PRAGMA index_list({table})"):
+        if uf[2] == 1:  # "unique"
+            # second element is like f'sqlite_autoindex_{table}_n'
+            index = int(uf[1].rsplit('_', 1)[1]) - 1
+            fields.append(fieldinfo[index][1])
+    return fields
+"""
 
 def read_pairs(data):
     """Read a list of (key, value) pairs from the given string.
@@ -224,6 +280,21 @@ if __name__ == "__main__":
     print(f"\nCOURSES for {_tid} in {_sid}:")
     print("  ", db_values("COURSES", "CLASS", TEACHER=_tid, SUBJECT=_sid))
 
-    #table = "LESSONS"
+    fields, values = db_read_full_table("COURSES", CLASS="10G")
+    print("\nCOURSES in 10G:", fields)
+    for row in values:
+        print("  ", row)
+
+
+    table = "LESSONS"
     #print("\nExtent of table {table}:")
     #table_extent(table)
+    fields, values = db_read_full_table(table, 'course > 2')
+    print(f"\n{table} table: {fields}")
+    for row in values[:10]:
+        print("  ", row)
+
+
+    #print("\nUNIQUE FIELDS")
+    #for table in "CLASSES", "TEACHERS", "COURSES", "LESSONS":
+    #    print(f"  {table}:", db_unique_fields(table))

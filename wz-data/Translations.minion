@@ -138,9 +138,9 @@ timetable.constraints_class: {
     INVALID_AVAILABILITY:   "Gültig sind '+', '-' und '*', nicht '{val}'"
 
     # CONSTRAINT_FIELDS
-    MINPERDAY:      "Stunden pro Tag – mind."
-    MAXGAPSPERDAY:  "Lücken pro Tag – max."
-    MAXGAPSPERWEEK: "Lücken pro Woche – max."
-    MAXBLOCK:       "aufeinanderfolgende Stunden – max."
+    MINDAILY:       "Stunden pro Tag – mind."
+    MAXGAPSWEEKLY:  "Lücken pro Woche – max."
+    NOTAFTER:       "Fach B nicht nach Fach A"
+    PAIRGAP:        "Lücke zwischen Fach A und Fach B"
     AVAILABLE:      "Verfügbarkeit"
 }

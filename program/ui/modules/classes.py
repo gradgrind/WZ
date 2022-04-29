@@ -289,7 +289,7 @@ class ClassEditor(QSplitter):
         for f, t in CLASS_COLS:
             col = model.fieldIndex(f)
             val = self.editors[f].text()
-            if f == "TID":
+            if f == "CLASS":
                 inserted = val
                 icol = col
             model.setData(model.index(row, col), val)

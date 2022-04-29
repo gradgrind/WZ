@@ -40,10 +40,10 @@ def period_validator(value):
 
 
 CONSTRAINT_FIELDS = [(f, T[f]) for f in (
-        "MINPERDAY",
-        "MAXGAPSPERDAY",
-        "MAXGAPSPERWEEK",
-        "MAXBLOCK",
+        "MINDAILY",
+        "MAXGAPSWEEKLY",
+        "NOTAFTER",
+        "PAIRGAP",
         "AVAILABLE"
     )
 ]

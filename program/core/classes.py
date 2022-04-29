@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-04-24
+core/classes.py - last updated 2022-04-27
 
 Manage class data.
 
@@ -42,7 +42,8 @@ from core.db_management import open_database, db_key_value_list, db_values
 ### -----
 
 def get_class_list(skip_null=True):
-    open_database()
+#?    open_database()
+
     classes = []
     for k, v in db_key_value_list("CLASSES", "CLASS", "NAME", "CLASS"):
         if k == '--' and skip_null:
@@ -60,6 +61,7 @@ def get_classroom(klass):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
+    open_database()
     for k, v in get_class_list(False):
         print(f" ::: {k:6}: {v} // {get_classroom(k)}")
 
