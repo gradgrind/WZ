@@ -1,7 +1,7 @@
 """
 ui/modules/classes.py
 
-Last updated:  2022-04-26
+Last updated:  2022-04-30
 
 Edit classes' data.
 
@@ -52,7 +52,7 @@ from core.db_management import open_database, db_key_value_list, read_pairs
 from ui.ui_base import (
     HLine,
     LoseChangesDialog,
-    TableViewRowSelect,
+    RowSelectTable,
     FormLineEdit,
     # QtWidgets
     QSplitter,
@@ -121,7 +121,8 @@ class ClassEditor(QSplitter):
         vbox1 = QVBoxLayout(leftframe)
 
         # The main class table
-        self.classtable = TableViewRowSelect(self)
+        self.classtable = RowSelectTable(self.modified)
+        self.classtable.set_callback(self.class_changed)
         self.classtable.setEditTriggers(
             QTableView.NoEditTriggers
         )  # non-editable
@@ -175,6 +176,9 @@ class ClassEditor(QSplitter):
     def modified(self):
         return bool(self.form_change_set)
 
+    def clear_modified(self):
+        self.form_change_set = set()
+
     def leave_ok(self):
         if self.form_change_set:
             return LoseChangesDialog()
@@ -215,8 +219,6 @@ class ClassEditor(QSplitter):
         self.classmodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
         # Set up the class view
         self.classtable.setModel(self.classmodel)
-        selection_model = self.classtable.selectionModel()
-        selection_model.currentChanged.connect(self.class_changed)
         for f, t in CLASS_COLS:
             i = self.classmodel.fieldIndex(f)
             self.classmodel.setHeaderData(i, Qt.Horizontal, t)
@@ -231,29 +233,27 @@ class ClassEditor(QSplitter):
     def fill_class_table(self):
         """Set filter and sort criteria, then populate table."""
         self.classmodel.setSort(
-            self.classmodel.fieldIndex("SORTNAME"),
+            self.classmodel.fieldIndex("CLASS"),
             Qt.AscendingOrder,
         )
         # print("SELECT:", self.classmodel.selectStatement())
         self.classmodel.select()
         self.classtable.selectRow(0)
         if not self.classtable.currentIndex().isValid():
-            self.class_changed(None, None)
+            self.class_changed(-1)
         self.classtable.resizeColumnsToContents()
 
-    def class_changed(self, new, old):
-        self.form_change_set = set()
-        if new:
+    def class_changed(self, row):
+        self.clear_modified()
+        if row >= 0:
             self.table_empty = False
-            row = new.row()
-            # print("CURRENT", old.row(), "->", row)
             record = self.classmodel.record(row)
             for f, t in CLASS_COLS:
                 self.editors[f].setText(str(record.value(f)))
         else:
             # e.g. when entering an empty table
-            self.table_empty = True
             # print("EMPTY TABLE")
+            self.table_empty = True
             for f, t in CLASS_COLS:
                 self.editors[f].setText("")
         # print("===", self.form_change_set)
@@ -273,7 +273,7 @@ class ClassEditor(QSplitter):
                 row = model.rowCount() - 1
             self.classtable.selectRow(row)
             if not self.classtable.currentIndex().isValid():
-                self.class_changed(None, None)
+                self.class_changed(-1)
         else:
             error = model.lastError()
             SHOW_ERROR(error.text())
@@ -295,6 +295,7 @@ class ClassEditor(QSplitter):
             model.setData(model.index(row, col), val)
         if model.submitAll():
             # print("INSERTED:", inserted)
+            self.clear_modified()
             # Try to select the new entry
             for r in range(model.rowCount()):
                 if model.data(model.index(r, icol)) == inserted:
@@ -453,7 +454,7 @@ class WeekTable(QFrame):
 class FormSpecialEdit(QVBoxLayout):
     """A specialized editor widget – though as far as Qt is concerned,
     it is actually a layout – for use in the editor form for a
-    "TableViewRowSelect" table view.
+    "RowSelectTable" table view.
 
     The constructor receives the name of the field and a function which
     is to be called when the selected value is changed. This function

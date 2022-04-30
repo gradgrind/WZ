@@ -62,7 +62,34 @@ class MyItemDelegate(QStyledItemDelegate):
         return edit
 
 
+####### A styled tableview with delete-cell and activate-on-return handling
 
+#class XTableView(QTableView):
+#    def keyPressEvent(self, e):
+#        key = e.key()
+#        i = self.currentIndex()
+#        if not self.isPersistentEditorOpen(i):
+#            if key == Qt.Key_Return:
+#                # start editing
+#                self.edit(i)
+#                return
+#            elif key == Qt.Key_Delete:
+#                # clear cell
+#                self.model().setData(i, "")
+#                return
+#        super().keyPressEvent(e)
+
+#    table = XTableView()
+#    table.setStyleSheet(
+#        """QTableView {
+#           selection-background-color: #e0e0ff;
+#           selection-color: black;
+#        }
+#        QTableView::item:focus {
+#            selection-background-color: #d0ffff;
+#        }
+#        """
+#    )
 
 
 

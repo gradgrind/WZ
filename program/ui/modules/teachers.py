@@ -50,7 +50,7 @@ from core.db_management import open_database, db_key_value_list, read_pairs
 from ui.ui_base import (
     HLine,
     LoseChangesDialog,
-    TableViewRowSelect,
+    RowSelectTable,
     FormLineEdit,
     # QtWidgets
     QSplitter,
@@ -119,7 +119,8 @@ class TeacherEditor(QSplitter):
         vbox1 = QVBoxLayout(leftframe)
 
         # The main teacher table
-        self.teachertable = TableViewRowSelect(self)
+        self.teachertable = RowSelectTable(self.modified)
+        self.teachertable.set_callback(self.teacher_changed)
         self.teachertable.setEditTriggers(
             QTableView.NoEditTriggers
         )  # non-editable
@@ -171,7 +172,11 @@ class TeacherEditor(QSplitter):
         self.setStretchFactor(0, 1)  # stretch only left panel
 
     def modified(self):
+        #return self.form_change_set
         return bool(self.form_change_set)
+
+    def clear_modified(self):
+        self.form_change_set = set()
 
     def leave_ok(self):
         if self.form_change_set:
@@ -183,7 +188,7 @@ class TeacherEditor(QSplitter):
         Maintain the set of changed fields (<self.form_change_set>).
         Enable and disable the pushbuttons appropriately.
         """
-        # print("???form_modified:", field, changed, self.form_change_set)
+        #print("???form_modified:", field, changed, self.form_change_set)
         if changed:
             self.form_change_set.add(field)
         else:
@@ -213,8 +218,6 @@ class TeacherEditor(QSplitter):
         self.teachermodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
         # Set up the teacher view
         self.teachertable.setModel(self.teachermodel)
-        selection_model = self.teachertable.selectionModel()
-        selection_model.currentChanged.connect(self.teacher_changed)
         for f, t in TEACHER_COLS:
             i = self.teachermodel.fieldIndex(f)
             self.teachermodel.setHeaderData(i, Qt.Horizontal, t)
@@ -239,22 +242,20 @@ class TeacherEditor(QSplitter):
             self.teacher_changed(None, None)
         self.teachertable.resizeColumnsToContents()
 
-    def teacher_changed(self, new, old):
-        self.form_change_set = set()
-        if new:
+    def teacher_changed(self, row):
+        self.clear_modified()
+        if row >= 0:
             self.table_empty = False
-            row = new.row()
-            # print("CURRENT", old.row(), "->", row)
             record = self.teachermodel.record(row)
             for f, t in TEACHER_COLS:
                 self.editors[f].setText(str(record.value(f)))
         else:
             # e.g. when entering an empty table
+            #print("EMPTY TABLE")
             self.table_empty = True
-            # print("EMPTY TABLE")
             for f, t in TEACHER_COLS:
                 self.editors[f].setText("")
-        # print("===", self.form_change_set)
+        #print("===", self.form_change_set)
         self.set_buttons()
 
     def teacher_delete(self):
@@ -292,7 +293,8 @@ class TeacherEditor(QSplitter):
                 icol = col
             model.setData(model.index(row, col), val)
         if model.submitAll():
-            # print("INSERTED:", inserted)
+            #print("INSERTED:", inserted)
+            self.clear_modified()
             # Try to select the new entry
             for r in range(model.rowCount()):
                 if model.data(model.index(r, icol)) == inserted:
@@ -307,6 +309,8 @@ class TeacherEditor(QSplitter):
             else:
                 SHOW_ERROR(error.text())
             model.revertAll()
+#TODO: Changes seem to be left when this is done ...
+
 
     def teacher_update(self):
         """Update the current teacher with the data in the form editor."""
@@ -451,7 +455,7 @@ class WeekTable(QFrame):
 class FormSpecialEdit(QVBoxLayout):
     """A specialized editor widget – though as far as Qt is concerned,
     it is actually a layout – for use in the editor form for a
-    "TableViewRowSelect" table view.
+    "RowSelectTable" table view.
 
     The constructor receives the name of the field and a function which
     is to be called when the selected value is changed. This function

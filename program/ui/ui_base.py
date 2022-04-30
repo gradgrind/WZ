@@ -486,44 +486,44 @@ def saveDialog(filetype, filename, title=None):
 
 
 #TODO: deprecated, see <RowSelectTable>
-class TableViewRowSelect(QTableView):
-    """A QTableView with single row selection and restrictions on change
-    of selection.
-
-    In order to accept a change of row via the mouse, the "main" widget
-    (supplied as argument to the constructor) must have a "modified"
-    method returning false. If the result is true, a pop-up will ask
-    for confirmation.
-
-    This implementation avoids some very strange selection behaviour
-    in QTableView, which I assume to be a bug:
-    Programmatic switching of the selected row doesn't necessarily cause
-    the visible selection (blue background) to move, although the
-    current (selected) row does change. Clicking and moving (slightly
-    dragging) the mouse produce different responses.
-    """
+#class TableViewRowSelect(QTableView):
+#    """A QTableView with single row selection and restrictions on change
+#    of selection.
+#
+#    In order to accept a change of row via the mouse, the "main" widget
+#    (supplied as argument to the constructor) must have a "modified"
+#    method returning false. If the result is true, a pop-up will ask
+#    for confirmation.
+#
+#    This implementation avoids some very strange selection behaviour
+#    in QTableView, which I assume to be a bug:
+#    Programmatic switching of the selected row doesn't necessarily cause
+#    the visible selection (blue background) to move, although the
+#    current (selected) row does change. Clicking and moving (slightly
+#    dragging) the mouse produce different responses.
+#    """
 #TODO: Note that when the selection is changed via the keyboard, the
 # "modified" method is not called! However, in the intended use case,
 # it is pretty unlikely that this will be a problem.
-
+#
 # By using a QTimer I think the normal selection-changed signal can be
 # used, together with a memory of the currently active item ...
-
-    def __init__(self, main_widget):
-        super().__init__()
-        self.__modified = main_widget.modified
-        self.setSelectionMode(QTableView.SingleSelection)
-        self.setSelectionBehavior(QTableView.SelectRows)
-
-    def mousePressEvent(self, e):
-        index = self.indexAt(e.pos())
-        if index.isValid() and (
-            (not self.__modified()) or LoseChangesDialog()
-        ):
-            self.selectRow(index.row())
-
-    def mouseMoveEvent(self, e):
-        pass
+#
+#    def __init__(self, main_widget):
+#        super().__init__()
+#        self.__modified = main_widget.modified
+#        self.setSelectionMode(QTableView.SingleSelection)
+#        self.setSelectionBehavior(QTableView.SelectRows)
+#
+#    def mousePressEvent(self, e):
+#        index = self.indexAt(e.pos())
+#        if index.isValid() and (
+#            (not self.__modified()) or LoseChangesDialog()
+#        ):
+#            self.selectRow(index.row())
+#
+#    def mouseMoveEvent(self, e):
+#        pass
 
 
 class RowSelectTable(QTableView):
@@ -578,7 +578,7 @@ class RowSelectTable(QTableView):
 
 class FormLineEdit(QLineEdit):
     """A specialized line editor for use in the editor form for a
-    "TableViewRowSelect" table view.
+    "RowSelectTable" table view.
 
     The constructor receives the name of the field and a function which
     is to be called when the selected value is changed. This function
@@ -603,7 +603,7 @@ class FormLineEdit(QLineEdit):
 
 class FormComboBox(QComboBox):
     """A specialized combobox for use in the editor form for a
-    "TableViewRowSelect" table view. This combobox is used for editing
+    "RowSelectTable" table view. This combobox is used for editing
     foreign key fields by offering the available values to choose from.
 
     The constructor receives the name of the field and a function which
