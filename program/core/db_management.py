@@ -1,7 +1,7 @@
 """
 uutility/db_management.py
 
-Last updated:  2022-04-29
+Last updated:  2022-04-30
 
 Helper functions for accessing the database.
 
@@ -24,7 +24,9 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
+#TODO
 DATABASE = "db1.sqlite"
+DATABASE = "db1-test.sqlite"
 
 ########################################################################
 

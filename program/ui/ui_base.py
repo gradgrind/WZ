@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-04-22
+Last updated:  2022-04-30
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -485,6 +485,7 @@ def saveDialog(filetype, filename, title=None):
     return fpath
 
 
+#TODO: deprecated, see <RowSelectTable>
 class TableViewRowSelect(QTableView):
     """A QTableView with single row selection and restrictions on change
     of selection.
@@ -505,6 +506,9 @@ class TableViewRowSelect(QTableView):
 # "modified" method is not called! However, in the intended use case,
 # it is pretty unlikely that this will be a problem.
 
+# By using a QTimer I think the normal selection-changed signal can be
+# used, together with a memory of the currently active item ...
+
     def __init__(self, main_widget):
         super().__init__()
         self.__modified = main_widget.modified
@@ -520,6 +524,56 @@ class TableViewRowSelect(QTableView):
 
     def mouseMoveEvent(self, e):
         pass
+
+
+class RowSelectTable(QTableView):
+    """A QTableView with single row selection and the possibility to
+    block selection changes when there is unsaved data.
+
+    A callback function (<is_modified>) can be provided which is called
+    when the current item changes. If this returns true, a dialog will
+    pop up asking whether to ignore (i.e. lose) changes. If the
+    dialog returns false, the item change will not be permitted.
+    """
+    def __init__(self, is_modified=None, name=None):
+        super().__init__()
+        self.__name = name
+        self.__row = -1
+        self.__modified = is_modified
+        self.__callback = None
+        self.setSelectionMode(QTableView.SingleSelection)
+        self.setSelectionBehavior(QTableView.SelectRows)
+
+    def set_callback(self, row_changed):
+        self.__callback = row_changed
+
+    def __revert(self):
+        self.selectRow(self.__row)
+
+    def currentChanged(self, currentitem, olditem):
+        super().currentChanged(currentitem, olditem)
+        # This is normally(!) not called with -1 as the new row.
+        row = currentitem.row()
+        if row < 0:
+            return
+        #print(f"CURRENT CHANGED ({self.__name}):", olditem.row(), "-->", row)
+        if self.__modified:
+            if row == self.__row:
+                self.__row = -1
+                return
+            if self.__modified():
+                if self.__row >= 0:
+                    raise Bug("Row change error")
+                elif not LoseChangesDialog():
+                    self.__row = olditem.row()
+                    # The timer is necessary to avoid the selection and
+                    # current item getting out of sync
+                    QTimer.singleShot(0, self.__revert)
+                    return
+            self.__row = -1
+        #print("  ... ACCEPTED")
+        if self.__callback:
+            self.__callback(row)
 
 
 class FormLineEdit(QLineEdit):
@@ -596,11 +650,11 @@ class FormComboBox(QComboBox):
                 raise Bug(
                     f"Unknown key for editor field {self.__field}: '{text}'"
                 )
-            self.setCurrentIndex(i)
             self.text0 = text
+            self.setCurrentIndex(i)
         else:
-            self.setCurrentIndex(0)
             self.text0 = self.keylist[0]
+            self.setCurrentIndex(0)
 
     def change_index(self, i):
         self.__modified(self.__field, self.keylist[i] != self.text0)

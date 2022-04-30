@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-04-24
+Last updated:  2022-04-30
 
 Edit course and lesson data.
 
@@ -58,6 +58,7 @@ from ui.ui_base import (
     LoseChangesDialog,
     KeySelector,
     TableViewRowSelect,
+    RowSelectTable,
     FormLineEdit,
     FormComboBox,
     ForeignKeyItemDelegate,
@@ -70,9 +71,11 @@ from ui.ui_base import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QTableView,
+#    QTableView,
+    QAbstractItemView,
     ### QtCore:
     Qt,
+    QTimer,
     ### QtSql:
     QSqlTableModel,
 )
@@ -136,20 +139,20 @@ class Courses(Page):
 
 # ++++++++++++++ The widget implementation ++++++++++++++
 
-class XTableView(QTableView):
-    def keyPressEvent(self, e):
-        key = e.key()
-        i = self.currentIndex()
-        if not self.isPersistentEditorOpen(i):
-            if key == Qt.Key_Return:
-                # start editing
-                self.edit(i)
-                return
-            elif key == Qt.Key_Delete:
-                # clear cell
-                self.model().setData(i, "")
-                return
-        super().keyPressEvent(e)
+#class XTableView(QTableView):
+#    def keyPressEvent(self, e):
+#        key = e.key()
+#        i = self.currentIndex()
+#        if not self.isPersistentEditorOpen(i):
+#            if key == Qt.Key_Return:
+#                # start editing
+#                self.edit(i)
+#                return
+#            elif key == Qt.Key_Delete:
+#                # clear cell
+#                self.model().setData(i, "")
+#                return
+#        super().keyPressEvent(e)
 
 
 class CourseEditor(QSplitter):
@@ -177,11 +180,15 @@ class CourseEditor(QSplitter):
         hbox1.addWidget(self.filter_value_select)
 
         # The course table itself
-        self.coursetable = TableViewRowSelect(self)
-        self.coursetable.setSelectionMode(QTableView.SingleSelection)
-        self.coursetable.setSelectionBehavior(QTableView.SelectRows)
+        self.coursetable = RowSelectTable(is_modified=self.modified, name="courses")
+        self.coursetable.set_callback(self.course_changed)
+#        self.coursetable.setSelectionMode(QAbstractItemView.SingleSelection)
+#        self.coursetable.setSelectionBehavior(QAbstractItemView.SelectRows)
+
+#TODO: see lessontable for an improved change detection
+
         self.coursetable.setEditTriggers(
-            QTableView.NoEditTriggers
+            QAbstractItemView.NoEditTriggers
         )  # non-editable
         self.coursetable.verticalHeader().hide()
         vbox1.addWidget(self.coursetable)
@@ -200,12 +207,16 @@ class CourseEditor(QSplitter):
             if f == "course":
                 editwidget = QLineEdit()
                 editwidget.setReadOnly(True)
+                editwidget.__real = False
             elif f in FOREIGN_FIELDS:
                 editwidget = FormComboBox(f, self.form_modified)
+                editwidget.__real = True
             else:
                 editwidget = FormLineEdit(f, self.form_modified)
+                editwidget.__real = True
             self.editors[f] = editwidget
-            self.courseeditor.addRow(t, editwidget)
+            if editwidget.__real:
+                self.courseeditor.addRow(t, editwidget)
 
         hbox2 = QHBoxLayout()
         vbox2.addLayout(hbox2)
@@ -229,19 +240,23 @@ class CourseEditor(QSplitter):
         vbox3.addWidget(QLabel(f"<h4>{T['LESSONS']}</h4>"))
 
         # The lesson table
-        self.lessontable = XTableView()
-        self.lessontable.setStyleSheet(
-            """QTableView {
-               selection-background-color: #e0e0ff;
-               selection-color: black;
-            }
-            QTableView::item:focus {
-                selection-background-color: #d0ffff;
-            }
-            """
-        )
-        self.lessontable.setSelectionMode(QTableView.SingleSelection)
-        self.lessontable.setSelectionBehavior(QTableView.SelectRows)
+#        self.lessontable = XTableView()
+#        self.lessontable.setStyleSheet(
+#            """QTableView {
+#               selection-background-color: #e0e0ff;
+#               selection-color: black;
+#            }
+#            QTableView::item:focus {
+#                selection-background-color: #d0ffff;
+#            }
+#            """
+#        )
+        self.lessontable = RowSelectTable(is_modified=self.modified, name="lessons")
+        self.lessontable.setEditTriggers(
+            QAbstractItemView.NoEditTriggers
+        )  # non-editable
+#        self.lessontable.setSelectionMode(QAbstractItemView.SingleSelection)
+#        self.lessontable.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.lessontable.verticalHeader().hide()
 
         vbox3.addWidget(self.lessontable)
@@ -259,7 +274,12 @@ class CourseEditor(QSplitter):
         self.setStretchFactor(0, 1)  # stretch only left panel
 
     def modified(self):
+#TODO ...
+        return self.form_change_set
         return bool(self.form_change_set)
+
+    def clear_modified(self):
+        self.form_change_set = set()
 
     def leave_ok(self):
         if self.form_change_set:
@@ -267,6 +287,11 @@ class CourseEditor(QSplitter):
         return True
 
     def set_filter_field(self, field):
+        if self.modified():
+            if LoseChangesDialog():
+                self.clear_modified()
+            else:
+                return False
         self.filter_value_select.set_items(self.filter_list[field])
         # print("FILTER FIELD:", field)
         self.filter_field = field
@@ -274,6 +299,11 @@ class CourseEditor(QSplitter):
         return True
 
     def set_filter(self, key):
+        if self.modified():
+            if LoseChangesDialog():
+                self.clear_modified()
+            else:
+                return False
         # print("FILTER KEY:", key)
         self.filter_value = key
         self.fill_course_table(key)
@@ -320,8 +350,9 @@ class CourseEditor(QSplitter):
         self.coursemodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
         # Set up the course view
         self.coursetable.setModel(self.coursemodel)
-        selection_model = self.coursetable.selectionModel()
-        selection_model.currentChanged.connect(self.course_changed)
+#        selection_model = self.coursetable.selectionModel()
+#        selection_model.currentChanged.connect(self.course_changed)
+        self.coursetable.hideColumn(0)
         self.filter_list = {}
         for f, t in COURSE_COLS:
             i = self.coursemodel.fieldIndex(f)
@@ -362,7 +393,13 @@ class CourseEditor(QSplitter):
             self.lessonmodel.setHeaderData(i, Qt.Horizontal, t)
         self.lessontable.hideColumn(0)
         self.lessontable.hideColumn(1)
-        self.lessontable.horizontalHeader().setStretchLastSection(True)
+
+#        self.lessontable.horizontalHeader().setStretchLastSection(True)
+#        selection_model = self.lessontable.selectionModel()
+
+#TODO: Is there a danger of amassing multiple connections, even preventing
+# the release of old models?
+#        selection_model.currentChanged.connect(self.lesson_changed)
 
         self.filter_field_select.trigger()
 
@@ -378,28 +415,29 @@ class CourseEditor(QSplitter):
         # print("SELECT:", self.coursemodel.selectStatement())
         self.coursemodel.select()
         self.coursetable.selectRow(0)
+#??????????
         if not self.coursetable.currentIndex().isValid():
-            self.course_changed(None, None)
+            #self.course_changed(None, None)
+            self.course_changed(-1)
         self.coursetable.resizeColumnsToContents()
 
-    def course_changed(self, new, old):
-        if new:
+    def course_changed(self, row):
+        self.clear_modified()
+        if row >= 0:
+            print("EXEC COURSE CHANGED:", row)
             self.table_empty = False
-            row = new.row()
-            # print("CURRENT", old.row(), "->", row)
             record = self.coursemodel.record(row)
             for f, t in COURSE_COLS:
                 self.editors[f].setText(str(record.value(f)))
             self.set_course(record.value(0))
         else:
             # e.g. when entering an empty table
+            print("EMPTY TABLE")
             self.table_empty = True
-            # print("EMPTY TABLE")
             for f, t in COURSE_COLS:
                 self.editors[f].setText("")
             self.editors[self.filter_field].setText(self.filter_value)
             self.set_course(0)
-        self.form_change_set = set()
         self.form_modified("", False)  # initialize form button states
 
     def course_delete(self):
@@ -496,6 +534,9 @@ class CourseEditor(QSplitter):
         self.lessonmodel.setFilter(f"course = {course}")
         # print("SELECT:", self.lessonmodel.selectStatement())
         self.lessonmodel.select()
+#?
+        self.lesson_row = -1
+
         self.lessontable.selectRow(0)
         self.lessontable.resizeColumnsToContents()
         # Enable or disable lesson butttons
@@ -551,6 +592,13 @@ class CourseEditor(QSplitter):
                 self.lesson_delete_button.setEnabled(True)
             else:
                 SHOW_ERROR(f"DB Error: {model.lastError().text()}")
+
+
+#TODO: --
+class TestClass:
+    def modified(self):
+        print("§§§ Modified?")
+        return False
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
