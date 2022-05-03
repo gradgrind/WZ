@@ -102,6 +102,7 @@ ui.modules.course_lessons: {
     FILTER:         "Filter:"
 
     # Course table fields
+    id:             ID
     course:         KursNr
     CLASS:          Klasse
     GRP:            Gruppe
@@ -118,6 +119,7 @@ ui.modules.course_lessons: {
     PAYROLL:        Deputat
     TAG:            Kennung
     ROOM:           Raum
+    PLACE:          Zeit
     NOTES:          Notizen
 }
 

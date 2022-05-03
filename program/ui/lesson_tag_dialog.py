@@ -1,7 +1,7 @@
 """
 ui/lesson_tag_dialog.py
 
-Last updated:  2022-04-29
+Last updated:  2022-05-03
 
 Handle lesson tags (course blocks and parallel lessons).
 
@@ -54,6 +54,9 @@ from ui.ui_base import (
     QTableWidgetItem,
     QListWidget,
     QAbstractItemView,
+    QComboBox,
+    QCheckBox,
+    QValidator,
 
 
 
@@ -157,10 +160,58 @@ COL_LIST = [
 
 ### -----
 
+class BlocknameValidator(QValidator):
+    def validate(self, text, pos):
+        print("VALIDATE:", pos, text)
+        if text.startswith("+"):
+            return (QValidator.State.Invalid, text, pos)
+        if text.endswith("+"):
+            return (QValidator.State.Intermediate, text, pos)
+        return (QValidator.State.Acceptable, text, pos)
+
+
+class EditableComboBox(QComboBox):
+    def __init__(self):
+        super().__init__(editable=True)
+
+    def focusOutEvent(self, e):
+        """Close the editor when focus leaves it. This reverts any
+        partially entered text.
+        """
+        self.clearEditText()
+        self.setCurrentIndex(self.currentIndex())
+
+
 class LessonTagDialog(QDialog):
     def __init__(self):
         super().__init__()
         vbox0 = QVBoxLayout(self)
+
+        hbox0 =QHBoxLayout()
+        vbox0.addLayout(hbox0)
+        self.blockmember = QCheckBox("Blockmitglied")
+        hbox0.addWidget(self.blockmember)
+        hbox0.addStretch(1)
+        hbox0.addWidget(QLabel("Kennzeichen:"))
+# It might be preferable to use a non-editable combobox with a separate
+# button+popup (or whatever) to add a new identifier.
+        self.identifier = EditableComboBox()
+        self.identifier.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        #self.identifier.setInsertPolicy(QComboBox.InsertPolicy.InsertAtTop)
+        # Alphabetical insertion doesn't apply to the items added programmatically
+        self.identifier.setInsertPolicy(QComboBox.InsertPolicy.InsertAlphabetically)
+        self.identifier.addItems(("10Gzwe", "Short", "Extremely_long_identifier"))
+        self.identifier.setItemData(0, "First item", Qt.ToolTipRole)
+        self.identifier.setItemData(1, "A rather longer tooltip,\n very rambly actually ...", Qt.ToolTipRole)
+        bn_validator = BlocknameValidator()
+        self.identifier.setValidator(bn_validator)
+        self.identifier.currentIndexChanged.connect(self.index_changed)
+        self.identifier.currentTextChanged.connect(self.text_changed)
+        self.identifier.activated.connect(self.activated_index)
+        self.identifier.textActivated.connect(self.text_activated)
+
+        hbox0.addWidget(self.identifier)
+
         hbox1 = QHBoxLayout()
         vbox0.addLayout(hbox1)
         self.classlist = ListWidget()
@@ -185,6 +236,26 @@ class LessonTagDialog(QDialog):
         #hbox1.addStretch(1)
 
         self.init_classes()
+
+    def index_changed(self, i):
+        # called only after editing, but may be called twice then
+        print("NEW INDEX:", i)
+
+    def activated_index(self, i):
+        # This seems the best for registering changes.
+        # However, incomplete edits can still hang around ...
+        print("ACTIVATED:", i)
+
+    def text_changed(self, text):
+        # called every time a character is edited ...
+        print("NEW TEXT:", text)
+
+    def text_activated(self, text):
+        # Seems just like activated_index, but passes text
+        print("ACTIVATED TEXT:", text)
+
+
+
 
     def form(self):
         # Actually only (some of) the lesson fields should be editable,
@@ -272,7 +343,6 @@ class ListWidget(QListWidget):
     s.setWidth(self.sizeHintForColumn(0))
     print("???", s)
     return s
-
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

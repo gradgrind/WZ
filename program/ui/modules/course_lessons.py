@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-04-30
+Last updated:  2022-05-03
 
 Edit course and lesson data.
 
@@ -33,7 +33,7 @@ Copyright 2022 Michael Towers
 ########################################################################
 
 if __name__ == "__main__":
-    import sys, os, builtins
+    import sys, os
 
     this = sys.path[0]
     appdir = os.path.dirname(os.path.dirname(this))
@@ -70,11 +70,21 @@ from ui.ui_base import (
     QLabel,
     QLineEdit,
     QPushButton,
+
+#?
+    QWidget,
+    QComboBox,
+    QCheckBox,
+    QValidator,
+    QStackedLayout,
+    QGridLayout,
+    QSizePolicy,
+    QSize,
+
 #    QTableView,
     QAbstractItemView,
     ### QtCore:
     Qt,
-    QTimer,
     ### QtSql:
     QSqlTableModel,
 )
@@ -101,14 +111,17 @@ FILTER_FIELDS = [cc for cc in COURSE_COLS if cc[0] in FOREIGN_FIELDS]
 COURSE_KEY_FIELDS = ("CLASS", "GRP", "SUBJECT", "TEACHER")
 
 LESSON_COLS = [(f, T[f]) for f in (
+        "id",
         "course",
         "LENGTH",
         "PAYROLL",
         "TAG",
         "ROOM",
+        "PLACE",
         "NOTES"
     )
 ]
+LESSONCOLS_SHOW = ("LENGTH", "PAYROLL", "TAG")
 
 ### -----
 
@@ -224,8 +237,8 @@ class CourseEditor(QSplitter):
             QAbstractItemView.NoEditTriggers
         )  # non-editable
         self.lessontable.verticalHeader().hide()
-        self.lessontable.hideColumn(0)
-        self.lessontable.hideColumn(1)
+        self.lessontable.set_callback(self.lesson_selected)
+#        self.lessontable.activated.connect(self.lesson_activated)
 
         vbox3.addWidget(self.lessontable)
         hbox3 = QHBoxLayout()
@@ -240,6 +253,9 @@ class CourseEditor(QSplitter):
 
         self.form_change_set = None
         self.setStretchFactor(0, 1)  # stretch only left panel
+
+        self.lesson_editor = LessonEditor()
+        vbox3.addWidget(self.lesson_editor)
 
     def modified(self):
         #return self.form_change_set
@@ -351,12 +367,18 @@ class CourseEditor(QSplitter):
         # Set up the lesson model
         self.lessonmodel = QSqlTableModel()
         self.lessonmodel.setTable("LESSONS")
-        self.lessonmodel.setEditStrategy(QSqlTableModel.OnFieldChange)
+#?
+        #self.lessonmodel.setEditStrategy(QSqlTableModel.OnFieldChange)
+        self.lessonmodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
         # Set up the lesson view
         self.lessontable.setModel(self.lessonmodel)
         for f, t in LESSON_COLS:
             i = self.lessonmodel.fieldIndex(f)
             self.lessonmodel.setHeaderData(i, Qt.Horizontal, t)
+            if f not in LESSONCOLS_SHOW:
+                self.lessontable.hideColumn(i)
+#        self.lessontable.hideColumn(0)
+#        self.lessontable.hideColumn(1)
 
         self.filter_field_select.trigger()
 
@@ -522,6 +544,103 @@ class CourseEditor(QSplitter):
         else:
             SHOW_ERROR(f"DB Error: {model.lastError().text()}")
 
+#TODO
+#    def lesson_activated(self, index):
+        #row = index.row()
+    def lesson_selected(self, row):
+        #print("ACTIVATED:", row)
+        record = self.lessonmodel.record(row)
+        data = {f: record.value(f) for f, t in LESSON_COLS}
+#--
+        self.lesson_type(data)
+
+        self.lesson_editor.set_data(data)
+
+    def lesson_type(self, data):
+        """Determine the "type" of a lesson entry.
+        """
+#TODO
+# It looks a bit complicated ... maybe it would be better to encode the
+# type in the TAG field? E.g. "tag.type". Then a search can be for "tag.*".
+        for f, v in data.items():
+            print(f"  {f:10}: {repr(v)}")
+        tag = data["TAG"]
+        course = data["course"]
+        length = data["LENGTH"]
+        if tag:
+            try:
+                key, lt = tag.split(".", 1)
+            except ValueError:
+                ltype = -1
+            else:
+                try:
+                    ltype = int(lt)
+                except ValueError:
+                    ltype = -1
+            if ltype < 0 or ltype > 7:
+                SHOW_ERROR(f"Invalid lesson tag: {tag}")
+        else:
+            # "Normal" lesson or (length = 0) entry purely for the payroll
+            try:
+                l = int(length)
+            except ValueError:
+                l = -1 if length else 0
+            if l > 0:
+                ltype = 1
+            elif l == 0:
+                ltype = 0
+            else:
+                SHOW_ERROR(f"Invalid lesson length: {length}")
+                ltype = -1
+        print("LESSON TYPE:", ltype)
+#TODO: checks
+        return
+#TODO: not needed?
+        payroll = data["PAYROLL"]
+        if tag:
+            if course:
+                if length:
+                    if length == "*":
+                        if data["PAYROLL"] == '*':
+                            print(f" $6a: geteilte Stunde")
+                        else:
+                            print(f" $6: Block-Komponente (Epoche)")
+                    else:
+                        try:
+                            l = int(length)
+                        except ValueError:
+                            print(f" $: ERROR – bad length for parallel lesson: {repr(length)}")
+                            #raise Bug(f"Bad length for parallel lesson: {repr(length)}")
+                            return
+                        print(f" $2: parallele Unterrichtsstunde")
+                else:
+                    print(f" $4: Unterrichtsblock (z.B. für Epochen)")
+            else:
+                if length:
+                    #TODO: Possibly rather with course?
+                    print(" $5: ?? Platzierung für Blockstunde ??")
+                    try:
+                         l = int(length)
+                    except ValueError:
+                        print(f" $: ERROR – bad length for block lesson: {repr(length)}")
+                        #raise Bug(f"Bad length for block lesson: {repr(length)}")
+                        return
+                else:
+                    print(" $3: Platzierung für Parallelen")
+        else:
+            try:
+                l = int(length)
+            except ValueError:
+                print(f" $: ERROR – bad length for empty tag: {repr(length)}")
+                #raise Bug(f"Bad length for empty tag: {repr(length)}")
+                return
+            if l == 0:
+                print(" $7: nur Deputat")
+            else:
+                print(" $1: normale Unterrichtsstunde")
+#TODO: further checks (rooms, payroll, etc.)
+
+
     def lesson_add(self):
         """Add a new "lesson", copying the current one if possible."""
         if self.this_course:
@@ -544,6 +663,122 @@ class CourseEditor(QSplitter):
                 self.lesson_delete_button.setEnabled(True)
             else:
                 SHOW_ERROR(f"DB Error: {model.lastError().text()}")
+
+
+class EditableComboBox(QComboBox):
+    def __init__(self):
+        super().__init__(editable=True)
+
+    def focusOutEvent(self, e):
+        """Close the editor when focus leaves it. This reverts any
+        partially entered text.
+        """
+        self.clearEditText()
+        self.setCurrentIndex(self.currentIndex())
+
+
+class BlocknameValidator(QValidator):
+    def validate(self, text, pos):
+        print("VALIDATE:", pos, text)
+        if text.startswith("+"):
+            return (QValidator.State.Invalid, text, pos)
+        if text.endswith("+"):
+            return (QValidator.State.Intermediate, text, pos)
+        return (QValidator.State.Acceptable, text, pos)
+
+
+class LessonEditor(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        vbox1 = QVBoxLayout(self)
+        vbox1.setContentsMargins(0, 0, 0, 0)
+        hbox1 = QHBoxLayout()
+        vbox1.addLayout(hbox1)
+        self.blockmember = QCheckBox("Blockmitglied")
+        hbox1.addWidget(self.blockmember)
+        hbox1.addStretch(1)
+        hbox1.addWidget(QLabel("Kennzeichen:"))
+# It might be preferable to use a non-editable combobox with a separate
+# button+popup (or whatever) to add a new identifier.
+        self.identifier = EditableComboBox()
+        #self.identifier.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        #self.identifier.setInsertPolicy(QComboBox.InsertPolicy.InsertAtTop)
+        # Alphabetical insertion doesn't apply to the items added programmatically
+        self.identifier.setInsertPolicy(QComboBox.InsertPolicy.InsertAlphabetically)
+        self.identifier.addItems(("10Gzwe", "Short", "Long_identifier"))
+        self.identifier.setItemData(0, "First item", Qt.ToolTipRole)
+        self.identifier.setItemData(1, "A rather longer tooltip,\n very rambly actually ...", Qt.ToolTipRole)
+        bn_validator = BlocknameValidator()
+        self.identifier.setValidator(bn_validator)
+        self.identifier.textActivated.connect(self.text_activated)
+        hbox1.addWidget(self.identifier)
+
+        self.stack = QStackedLayout(vbox1)
+
+        box1 = QFrame()
+        self.stack.addWidget(box1)
+        #editor1 = QFormLayout(box1)
+        editor1 = QGridLayout(box1)
+        editor1.setContentsMargins(0, 0, 0, 0)
+
+        self.elist2 = {}
+#        for f, t in COURSE_COLS:
+#            e1 = FormLineEdit("LENGTH", self.lform_modified)
+        e1 = MiniLineEdit()
+        #e1.setMinimumWidth(50)
+        self.elist2["LENGTH"] = e1
+        editor1.addWidget(QLabel("LENGTH:"), 0, 0)
+        editor1.addWidget(e1, 0, 1)
+        editor1.setColumnMinimumWidth(2, 30)
+        editor1.setColumnStretch(2, 1)
+        #e1.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        e2 = MiniLineEdit()
+        #e2.setMinimumWidth(50)
+        self.elist2["PAYROLL"] = e2
+        editor1.addWidget(QLabel("PAYROLL:"), 0, 3)
+        editor1.addWidget(e2, 0, 4)
+        e3 = QLineEdit()
+        editor1.addWidget(QLabel("ROOM:"), 1, 0)
+        editor1.addWidget(e3, 1, 1, 1, 4)
+        self.elist2["ROOM"] = e3
+        e4 = QLineEdit()
+        editor1.addWidget(QLabel("NOTES:"), 2, 0)
+        self.elist2["NOTES"] = e4
+        editor1.addWidget(e4, 2, 1, 1, 4)
+
+#TODO: Pane for block members, pane activation, pane filling ...
+
+
+    def text_activated(self, text):
+        # Seems just like activated_index, but passes text
+        print("ACTIVATED TEXT:", text)
+
+    def set_data(self, data):
+        tag = data["TAG"]
+        if tag.startswith(">"):
+            self.blockmember.setChecked(True)
+            # ...
+        else:
+            self.blockmember.setChecked(False)
+            # ...
+        self.identifier.setCurrentText(tag)
+        self.elist2["LENGTH"].setText(data["LENGTH"])
+        self.elist2["PAYROLL"].setText(data["PAYROLL"])
+        self.elist2["ROOM"].setText(data["ROOM"])
+        self.elist2["NOTES"].setText(data["NOTES"])
+
+
+
+class MiniLineEdit(QLineEdit):
+#    def __init__(self, parent=None):
+#        super().__init__(parent)
+
+    def sizeHint(self):
+        sh = super().sizeHint()
+        if sh.isValid():
+            return QSize(50, sh.height())
+        else:
+            return sh
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
