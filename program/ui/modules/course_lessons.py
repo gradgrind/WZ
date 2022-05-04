@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-05-03
+Last updated:  2022-05-04
 
 Edit course and lesson data.
 
@@ -24,11 +24,7 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
-# TODO: I have not yet worked out how to handle the blocks which
-# share a "course tuple" (previously sids like ZwE+9u10). At the moment
-# I have put the extra bit in the GRP field.
-
-# TODO: add a status bar for short messages, etc.?
+#TODO: Rework using Dialogs for the form editors
 
 ########################################################################
 
@@ -72,6 +68,7 @@ from ui.ui_base import (
     QPushButton,
 
 #?
+    QDialog,
     QWidget,
     QComboBox,
     QCheckBox,
@@ -190,6 +187,13 @@ class CourseEditor(QSplitter):
         self.rightframe.setFrameShape(QFrame.Box)
 
         vbox2 = QVBoxLayout(self.rightframe)
+
+#NEW
+        self.course_dialog = CourseEditorForm()
+        edit_button = QPushButton("EDIT")
+        vbox2.addWidget(edit_button)
+        edit_button.clicked.connect(self.edit_course)
+
         editorbox = QFrame()
         self.courseeditor = QFormLayout(editorbox)
         vbox2.addWidget(editorbox)
@@ -256,6 +260,10 @@ class CourseEditor(QSplitter):
 
         self.lesson_editor = LessonEditor()
         vbox3.addWidget(self.lesson_editor)
+
+    def edit_course(self):
+#TODO
+        self.course_dialog.activate(self.current_row)
 
     def modified(self):
         #return self.form_change_set
@@ -335,6 +343,9 @@ class CourseEditor(QSplitter):
         # Set up the course view
         self.coursetable.setModel(self.coursemodel)
         self.coursetable.hideColumn(0)
+
+        self.course_dialog.init(self.coursemodel)
+
         self.filter_list = {}
         for f, t in COURSE_COLS:
             i = self.coursemodel.fieldIndex(f)
@@ -399,6 +410,7 @@ class CourseEditor(QSplitter):
         self.coursetable.resizeColumnsToContents()
 
     def course_changed(self, row):
+        self.current_row = row
         self.clear_modified()
         if row >= 0:
             #print("EXEC COURSE CHANGED:", row)
@@ -769,6 +781,7 @@ class LessonEditor(QWidget):
 
 
 
+# Use FormLineEdit instead
 class MiniLineEdit(QLineEdit):
 #    def __init__(self, parent=None):
 #        super().__init__(parent)
@@ -779,6 +792,145 @@ class MiniLineEdit(QLineEdit):
             return QSize(50, sh.height())
         else:
             return sh
+
+
+class CourseEditorForm(QDialog):
+    def __init__(self):
+        super().__init__()
+        vbox0 = QVBoxLayout(self)
+        form = QFormLayout()
+        vbox0.addLayout(form)
+        self.editors = {}
+        for f, t in COURSE_COLS:
+            if f == "course":
+                editwidget = QLineEdit()
+                editwidget.setReadOnly(True)
+                editwidget.__real = False
+            elif f in FOREIGN_FIELDS:
+                editwidget = FormComboBox(f, self.form_modified)
+                editwidget.__real = True
+            else:
+                editwidget = FormLineEdit(f, self.form_modified)
+                editwidget.__real = True
+            self.editors[f] = editwidget
+            if editwidget.__real:
+                form.addRow(t, editwidget)
+
+        hbox1 = QHBoxLayout()
+        vbox0.addLayout(hbox1)
+        hbox1.addStretch(1)
+        self.course_delete_button = QPushButton(T["DELETE"])
+        self.course_delete_button.clicked.connect(self.course_delete)
+        hbox1.addWidget(self.course_delete_button)
+        self.course_update_button = QPushButton(T["UPDATE"])
+        self.course_update_button.clicked.connect(self.course_update)
+        hbox1.addWidget(self.course_update_button)
+        self.course_add_button = QPushButton(T["NEW"])
+        self.course_add_button.clicked.connect(self.course_add)
+        hbox1.addWidget(self.course_add_button)
+
+    def closeEvent(self, event):
+        """Prevent dialog closure if there are changes.
+        """
+        if self.modified() and not LoseChangesDialog():
+            event.ignore()
+        else:
+            event.accept()
+
+    def modified(self):
+        #return self.form_change_set
+        return bool(self.form_change_set)
+
+    def clear_modified(self):
+        self.form_change_set = set()
+
+    def leave_ok(self):
+        if self.modified():
+            return LoseChangesDialog()
+        return True
+
+    def init(self, model):
+        self.model = model
+
+#TODO: Probably not optimal ... see how main table can be set up with
+# its delegates etc. Perhaps the value lists are better generated there?
+        self.table_empty = None
+        for f, t in COURSE_COLS:
+            editwidget = self.editors[f]
+            if f == "CLASS":
+                kv = db_key_value_list("CLASSES", "CLASS", "NAME", "CLASS")
+                editwidget.setup(kv)
+            if f == "SUBJECT":
+                kv = db_key_value_list("SUBJECTS", "SID", "NAME", "NAME")
+                editwidget.setup(kv)
+            elif f == "TEACHER":
+                kv = db_key_value_list("TEACHERS", "TID", "NAME", "SORTNAME")
+                editwidget.setup(kv)
+
+
+
+    def activate(self, row):
+        self.clear_modified()
+#--
+        print ("TODO: CourseEditorForm.init")
+
+        if row >= 0:
+            self.table_empty = False
+            record = self.model.record(row)
+            for f, t in COURSE_COLS:
+                self.editors[f].setText(str(record.value(f)))
+        else:
+            #print("EMPTY TABLE")
+            self.table_empty = True
+            for f, t in COURSE_COLS:
+                self.editors[f].setText("")
+#?            self.editors[self.filter_field].setText(self.filter_value)
+        self.form_modified("", False)  # initialize form button states
+
+
+
+
+
+        self.exec()
+        print ("Return something? ... a new row number?")
+
+    def course_delete(self):
+        print("TODO: course_delete")
+
+    def course_update(self):
+        print("TODO: course_update")
+
+    def course_add(self):
+        print("TODO: course_add")
+
+    def form_modified(self, field, changed):
+        """Handle a change in a form editor field.
+        Maintain the set of changed fields (<self.form_change_set>).
+        Enable and disable the pushbuttons appropriately.
+        """
+        if self.table_empty:
+            self.course_update_button.setEnabled(False)
+            self.course_add_button.setEnabled(True)
+            self.course_delete_button.setEnabled(False)
+        elif self.table_empty == None:
+            # ignore – not yet set up
+            return
+        elif changed:
+            self.course_update_button.setEnabled(True)
+            self.form_change_set.add(field)
+            if field in COURSE_KEY_FIELDS:
+                self.course_add_button.setEnabled(True)
+            self.form_change_set.add(field)
+        else:
+            self.form_change_set.discard(field)
+            if self.form_change_set:
+                if not self.form_change_set.intersection(COURSE_KEY_FIELDS):
+                    self.course_add_button.setEnabled(False)
+            else:
+                self.course_delete_button.setEnabled(True)
+                self.course_update_button.setEnabled(False)
+                self.course_add_button.setEnabled(False)
+        # print("FORM CHANGED SET:", self.form_change_set)
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

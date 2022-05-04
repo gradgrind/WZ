@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-04-30
+Last updated:  2022-05-04
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -584,9 +584,12 @@ class FormLineEdit(QLineEdit):
     is to be called when the selected value is changed. This function
     takes the field name and a boolean (value != initial value, set by
     the "setText" method).
+    The extra parameter "width_hint" allows the default width of the
+    widget to be set; in particular this allows narrower widgets.
     """
 
-    def __init__(self, field, modified, parent=None):
+    def __init__(self, field, modified, parent=None, width_hint=None):
+        self.width_hint = width_hint
         super().__init__(parent)
         self.__modified = modified
         self.__field = field
@@ -599,6 +602,13 @@ class FormLineEdit(QLineEdit):
 
     def text_edited(self, text):
         self.__modified(self.__field, text != self.text0)
+
+    def sizeHint(self):
+        sh = super().sizeHint()
+        if self.width_hint and sh.isValid():
+            return QSize(self.width_hint, sh.height())
+        return sh
+
 
 
 class FormComboBox(QComboBox):
