@@ -86,12 +86,16 @@ ui.modules.classes: {
 ui.modules.course_lessons: {
     # Messages
     COURSE_EXISTS:  "Der geänderte „Kurs“ existiert schon"
+    REALLY_DELETE:  "Soll dieser „Kurs“ wirklich gelöscht werden?"
+    COURSE_ADDED:   "„Kurs“ in Klasse {klass} eingefügt"
 
     # Labels
     MODULE_NAME:    "Kurse/Stunden"
     MODULE_TITLE:   "Unterrichtskurse und -stunden verwalten"
 
     # Course field editor buttons
+    EDIT_COURSE:    "Kursdaten bearbeiten"
+    DELETE_COURSE:  "Kurs löschen"
     DELETE:         Löschen
     UPDATE:         Übernehmen
     NEW:            Hinzufügen

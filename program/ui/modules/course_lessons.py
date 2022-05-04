@@ -175,6 +175,7 @@ class CourseEditor(QSplitter):
         self.coursetable = RowSelectTable(is_modified=self.modified,
                 name="courses")
         self.coursetable.set_callback(self.course_changed)
+        self.coursetable.activated.connect(self.course_activate)
         self.coursetable.setEditTriggers(
             QAbstractItemView.NoEditTriggers
         )  # non-editable
@@ -189,42 +190,20 @@ class CourseEditor(QSplitter):
         vbox2 = QVBoxLayout(self.rightframe)
 
 #NEW
-        self.course_dialog = CourseEditorForm()
-        edit_button = QPushButton("EDIT")
-        vbox2.addWidget(edit_button)
-        edit_button.clicked.connect(self.edit_course)
-
-        editorbox = QFrame()
-        self.courseeditor = QFormLayout(editorbox)
-        vbox2.addWidget(editorbox)
-        self.editors = {}
-        for f, t in COURSE_COLS:
-            if f == "course":
-                editwidget = QLineEdit()
-                editwidget.setReadOnly(True)
-                editwidget.__real = False
-            elif f in FOREIGN_FIELDS:
-                editwidget = FormComboBox(f, self.form_modified)
-                editwidget.__real = True
-            else:
-                editwidget = FormLineEdit(f, self.form_modified)
-                editwidget.__real = True
-            self.editors[f] = editwidget
-            if editwidget.__real:
-                self.courseeditor.addRow(t, editwidget)
-
-        hbox2 = QHBoxLayout()
-        vbox2.addLayout(hbox2)
-        hbox2.addStretch(1)
-        self.course_delete_button = QPushButton(T["DELETE"])
+        hboxB = QHBoxLayout()
+        vbox2.addLayout(hboxB)
+        #+
+        self.course_delete_button = QPushButton(T["DELETE_COURSE"])
+        hboxB.addWidget(self.course_delete_button)
         self.course_delete_button.clicked.connect(self.course_delete)
-        hbox2.addWidget(self.course_delete_button)
-        self.course_update_button = QPushButton(T["UPDATE"])
-        self.course_update_button.clicked.connect(self.course_update)
-        hbox2.addWidget(self.course_update_button)
-        self.course_add_button = QPushButton(T["NEW"])
-        self.course_add_button.clicked.connect(self.course_add)
-        hbox2.addWidget(self.course_add_button)
+#TODO: self.course_delete_button: handle enabling and disabling (empty table)
+        #+
+        hboxB.addStretch(1)
+        #+
+        self.course_dialog = CourseEditorForm()
+        edit_button = QPushButton(T["EDIT_COURSE"])
+        hboxB.addWidget(edit_button)
+        edit_button.clicked.connect(self.edit_course)
 
         vbox2.addWidget(HLine())
 
@@ -261,9 +240,18 @@ class CourseEditor(QSplitter):
         self.lesson_editor = LessonEditor()
         vbox3.addWidget(self.lesson_editor)
 
+    def course_activate(self, modelindex):
+        self.edit_course()
+
     def edit_course(self):
-#TODO
-        self.course_dialog.activate(self.current_row)
+        row = self.course_dialog.activate(
+            self.current_row,
+            (self.filter_field, self.filter_value)
+        )
+        if row >= 0:
+            self.coursetable.selectRow(row)
+
+
 
     def modified(self):
         #return self.form_change_set
@@ -308,24 +296,25 @@ class CourseEditor(QSplitter):
         if self.form_change_set == None:
             return
         if self.table_empty:
-            self.course_update_button.setEnabled(False)
-            self.course_add_button.setEnabled(True)
+#            self.course_update_button.setEnabled(False)
+#            self.course_add_button.setEnabled(True)
             self.course_delete_button.setEnabled(False)
         elif changed:
-            self.course_update_button.setEnabled(True)
+#            self.course_update_button.setEnabled(True)
             self.form_change_set.add(field)
-            if field in COURSE_KEY_FIELDS:
-                self.course_add_button.setEnabled(True)
+#            if field in COURSE_KEY_FIELDS:
+#                self.course_add_button.setEnabled(True)
             self.form_change_set.add(field)
         else:
             self.form_change_set.discard(field)
             if self.form_change_set:
-                if not self.form_change_set.intersection(COURSE_KEY_FIELDS):
-                    self.course_add_button.setEnabled(False)
+                pass
+#                if not self.form_change_set.intersection(COURSE_KEY_FIELDS):
+#                    self.course_add_button.setEnabled(False)
             else:
                 self.course_delete_button.setEnabled(True)
-                self.course_update_button.setEnabled(False)
-                self.course_add_button.setEnabled(False)
+#                self.course_update_button.setEnabled(False)
+#                self.course_add_button.setEnabled(False)
         # print("FORM CHANGED SET:", self.form_change_set)
 
     def init_data(self):
@@ -334,8 +323,8 @@ class CourseEditor(QSplitter):
         """
         self.coursetable.setModel(None)
         self.lessontable.setModel(None)
-        for f in FOREIGN_FIELDS:
-            self.editors[f].clear()
+#        for f in FOREIGN_FIELDS:
+#            self.editors[f].clear()
 
         self.coursemodel = QSqlTableModel()
         self.coursemodel.setTable("COURSES")
@@ -349,30 +338,33 @@ class CourseEditor(QSplitter):
         self.filter_list = {}
         for f, t in COURSE_COLS:
             i = self.coursemodel.fieldIndex(f)
-            editwidget = self.editors[f]
+#            editwidget = self.editors[f]
             if f == "CLASS":
                 kv = db_key_value_list("CLASSES", "CLASS", "NAME", "CLASS")
                 self.filter_list[f] = kv
-                editwidget.setup(kv)
+#                editwidget.setup(kv)
                 # delegate = ForeignKeyItemDelegate(editwidget,
                 #        parent=self.coursemodel)
                 # self.coursetable.setItemDelegateForColumn(i, delegate)
             if f == "SUBJECT":
                 kv = db_key_value_list("SUBJECTS", "SID", "NAME", "NAME")
                 self.filter_list[f] = kv
-                editwidget.setup(kv)
-                delegate = ForeignKeyItemDelegate(
-                    editwidget, parent=self.coursemodel
-                )
-                self.coursetable.setItemDelegateForColumn(i, delegate)
+
+#TODO: need the delegates, but without the editors ...
+
+#                editwidget.setup(kv)
+#                delegate = ForeignKeyItemDelegate(
+#                    editwidget, parent=self.coursemodel
+#                )
+#                self.coursetable.setItemDelegateForColumn(i, delegate)
             elif f == "TEACHER":
                 kv = db_key_value_list("TEACHERS", "TID", "NAME", "SORTNAME")
                 self.filter_list[f] = kv
-                editwidget.setup(kv)
-                delegate = ForeignKeyItemDelegate(
-                    editwidget, parent=self.coursemodel
-                )
-                self.coursetable.setItemDelegateForColumn(i, delegate)
+#                editwidget.setup(kv)
+#                delegate = ForeignKeyItemDelegate(
+#                    editwidget, parent=self.coursemodel
+#                )
+#                self.coursetable.setItemDelegateForColumn(i, delegate)
             self.coursemodel.setHeaderData(i, Qt.Horizontal, t)
 
         # Set up the lesson model
@@ -416,16 +408,16 @@ class CourseEditor(QSplitter):
             #print("EXEC COURSE CHANGED:", row)
             self.table_empty = False
             record = self.coursemodel.record(row)
-            for f, t in COURSE_COLS:
-                self.editors[f].setText(str(record.value(f)))
+#            for f, t in COURSE_COLS:
+#                self.editors[f].setText(str(record.value(f)))
             self.set_course(record.value(0))
         else:
             # e.g. when entering an empty table
             #print("EMPTY TABLE")
             self.table_empty = True
-            for f, t in COURSE_COLS:
-                self.editors[f].setText("")
-            self.editors[self.filter_field].setText(self.filter_value)
+#            for f, t in COURSE_COLS:
+#                self.editors[f].setText("")
+#            self.editors[self.filter_field].setText(self.filter_value)
             self.set_course(0)
         self.form_modified("", False)  # initialize form button states
 
@@ -435,6 +427,8 @@ class CourseEditor(QSplitter):
         if self.form_change_set:
             if not LoseChangesDialog():
                 return
+        if not SHOW_CONFIRM(T["REALLY_DELETE"]):
+            return
         # course = self.editors["course"].text()
         index = self.coursetable.currentIndex()
         row = index.row()
@@ -451,70 +445,7 @@ class CourseEditor(QSplitter):
                 self.course_changed(None, None)
         else:
             error = model.lastError()
-            if "UNIQUE" in error.databaseText():
-                SHOW_ERROR(T["COURSE_EXISTS"])
-            else:
-                SHOW_ERROR(error.text())
-            model.revertAll()
-
-    def course_add(self):
-        """Add the data in the form editor as a new course."""
-        model = self.coursemodel
-        index = self.coursetable.currentIndex()
-        row0 = index.row()
-        row = 0
-        model.insertRow(row)
-        for f, t in COURSE_COLS[1:]:
-            col = model.fieldIndex(f)
-            val = self.editors[f].text()
-            model.setData(model.index(row, col), val)
-        if model.submitAll():
-            course = model.query().lastInsertId()
-            # print("INSERTED:", course)
-            for r in range(model.rowCount()):
-                if model.data(model.index(r, 0)) == course:
-                    self.coursetable.selectRow(r)
-                    break
-            else:
-                self.coursetable.selectRow(row0)
-        else:
-            error = model.lastError()
-            if "UNIQUE" in error.databaseText():
-                SHOW_ERROR(T["COURSE_EXISTS"])
-            else:
-                SHOW_ERROR(error.text())
-            model.revertAll()
-
-    def course_update(self):
-        """Update the current course with the data in the form editor."""
-        model = self.coursemodel
-        index = self.coursetable.currentIndex()
-        course = model.data(index)
-        row = index.row()
-        for f in self.form_change_set:
-            col = model.fieldIndex(f)
-            val = self.editors[f].text()
-            model.setData(model.index(row, col), val)
-        if model.submitAll():
-            # The selection is lost – the changed row may even be in a
-            # different place, perhaps not even displayed.
-            # Try to stay with the same id, if it is displayed,
-            # otherwise the same (or else the last) row.
-            # print("UPDATED:", course)
-            for r in range(model.rowCount()):
-                if model.data(model.index(r, 0)) == course:
-                    self.coursetable.selectRow(r)
-                    break
-            else:
-                if row >= model.rowCount():
-                    row = model.rowCount() - 1
-                self.coursetable.selectRow(row)
-        else:
-            error = model.lastError()
-            if "UNIQUE" in error.databaseText():
-                SHOW_ERROR(T["COURSE_EXISTS"])
-            else:
-                SHOW_ERROR(error.text())
+            SHOW_ERROR(error.text())
             model.revertAll()
 
     def set_course(self, course):
@@ -819,9 +750,6 @@ class CourseEditorForm(QDialog):
         hbox1 = QHBoxLayout()
         vbox0.addLayout(hbox1)
         hbox1.addStretch(1)
-        self.course_delete_button = QPushButton(T["DELETE"])
-        self.course_delete_button.clicked.connect(self.course_delete)
-        hbox1.addWidget(self.course_delete_button)
         self.course_update_button = QPushButton(T["UPDATE"])
         self.course_update_button.clicked.connect(self.course_update)
         hbox1.addWidget(self.course_update_button)
@@ -869,11 +797,16 @@ class CourseEditorForm(QDialog):
 
 
 
-    def activate(self, row):
-        self.clear_modified()
-#--
-        print ("TODO: CourseEditorForm.init")
+    def activate(self, row, filter_field=None):
+        """Initialize the dialog with values from the current course
+        and show it.
 
+        The idea behind the extra parameter is that, on empty tables, at
+        least the filter field should be set. To do that here, this
+        field and its value must be passed as a tuple: (field value).
+        """
+        self.clear_modified()
+        self.current_row = row
         if row >= 0:
             self.table_empty = False
             record = self.model.record(row)
@@ -884,24 +817,83 @@ class CourseEditorForm(QDialog):
             self.table_empty = True
             for f, t in COURSE_COLS:
                 self.editors[f].setText("")
-#?            self.editors[self.filter_field].setText(self.filter_value)
+            if filter_field:
+                self.editors[filter_field[0]].setText(filter_field[1])
         self.form_modified("", False)  # initialize form button states
 
-
-
-
-
+        self.__value = -1   # Default return value => don't change row
         self.exec()
-        print ("Return something? ... a new row number?")
+        return self.__value
 
-    def course_delete(self):
-        print("TODO: course_delete")
-
-    def course_update(self):
-        print("TODO: course_update")
+    def return_value(self, row):
+        """Quit the dialog, returning the given row number.
+        Value -1 => don't change row, otherwise select the given row.
+        """
+        self.__value = row
+        self.accept()
 
     def course_add(self):
-        print("TODO: course_add")
+        """Add the data in the form editor as a new course."""
+        model = self.model
+        row = 0
+        model.insertRow(row)
+        for f, t in COURSE_COLS[1:]:
+            col = model.fieldIndex(f)
+            val = self.editors[f].text()
+            if f == "CLASS":
+                klass = val
+            model.setData(model.index(row, col), val)
+        if model.submitAll():
+            course = model.query().lastInsertId()
+            # print("INSERTED:", course)
+            for r in range(model.rowCount()):
+                if model.data(model.index(r, 0)) == course:
+                    self.return_value(r)            # Select this row
+                    break
+            else:
+                SHOW_INFO(T["COURSE_ADDED"].format(klass=klass))
+                self.return_value(self.current_row) # Reselect current row
+        else:
+            error = model.lastError()
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(T["COURSE_EXISTS"])
+            else:
+                SHOW_ERROR(error.text())
+            model.revertAll()
+
+#TODO
+    def course_update(self):
+        """Update the current course with the data in the form editor."""
+        model = self.model
+        course = model.data(index)
+        row = self.current_row
+        for f in self.form_change_set:
+            col = model.fieldIndex(f)
+            val = self.editors[f].text()
+            model.setData(model.index(row, col), val)
+        if model.submitAll():
+            # The selection is lost – the changed row may even be in a
+            # different place, perhaps not even displayed.
+            # Try to stay with the same id, if it is displayed,
+            # otherwise the same (or else the last) row.
+            # print("UPDATED:", course)
+            for r in range(model.rowCount()):
+                if model.data(model.index(r, 0)) == course:
+                    self.return_value(r)    # Select this row
+                    break
+            else:
+                if row >= model.rowCount():
+                    row = model.rowCount() - 1
+                    self.return_value(row)  # Select this row
+        else:
+            error = model.lastError()
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(T["COURSE_EXISTS"])
+            else:
+                SHOW_ERROR(error.text())
+            model.revertAll()
+
+
 
     def form_modified(self, field, changed):
         """Handle a change in a form editor field.
@@ -911,7 +903,6 @@ class CourseEditorForm(QDialog):
         if self.table_empty:
             self.course_update_button.setEnabled(False)
             self.course_add_button.setEnabled(True)
-            self.course_delete_button.setEnabled(False)
         elif self.table_empty == None:
             # ignore – not yet set up
             return
@@ -927,7 +918,6 @@ class CourseEditorForm(QDialog):
                 if not self.form_change_set.intersection(COURSE_KEY_FIELDS):
                     self.course_add_button.setEnabled(False)
             else:
-                self.course_delete_button.setEnabled(True)
                 self.course_update_button.setEnabled(False)
                 self.course_add_button.setEnabled(False)
         # print("FORM CHANGED SET:", self.form_change_set)
