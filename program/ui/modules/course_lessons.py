@@ -288,7 +288,16 @@ class CourseEditor(QSplitter):
         self.fill_course_table(key)
         return True
 
+# TODO: This now only handles empty tables? DEPRECATED, not used
     def form_modified(self, field, changed):
+        print("???????!!!:", repr(field), changed, self.table_empty, self.form_change_set)
+
+#Enter empty table ->
+#???????!!!: '' False True set()
+#Otherwise ->
+#???????!!!: '' False False set()
+
+
         """Handle a change in a form editor field.
         Maintain the set of changed fields (<self.form_change_set>).
         Enable and disable the pushbuttons appropriately.
@@ -333,45 +342,30 @@ class CourseEditor(QSplitter):
         self.coursetable.setModel(self.coursemodel)
         self.coursetable.hideColumn(0)
 
-        self.course_dialog.init(self.coursemodel)
-
         self.filter_list = {}
         for f, t in COURSE_COLS:
             i = self.coursemodel.fieldIndex(f)
-#            editwidget = self.editors[f]
             if f == "CLASS":
                 kv = db_key_value_list("CLASSES", "CLASS", "NAME", "CLASS")
                 self.filter_list[f] = kv
-#                editwidget.setup(kv)
-                # delegate = ForeignKeyItemDelegate(editwidget,
-                #        parent=self.coursemodel)
-                # self.coursetable.setItemDelegateForColumn(i, delegate)
+                #delegate = ForeignKeyItemDelegate(kv, parent=self.coursemodel)
+                #self.coursetable.setItemDelegateForColumn(i, delegate)
             if f == "SUBJECT":
                 kv = db_key_value_list("SUBJECTS", "SID", "NAME", "NAME")
                 self.filter_list[f] = kv
-
-#TODO: need the delegates, but without the editors ...
-
-#                editwidget.setup(kv)
-#                delegate = ForeignKeyItemDelegate(
-#                    editwidget, parent=self.coursemodel
-#                )
-#                self.coursetable.setItemDelegateForColumn(i, delegate)
+                delegate = ForeignKeyItemDelegate(kv, parent=self.coursemodel)
+                self.coursetable.setItemDelegateForColumn(i, delegate)
             elif f == "TEACHER":
                 kv = db_key_value_list("TEACHERS", "TID", "NAME", "SORTNAME")
                 self.filter_list[f] = kv
-#                editwidget.setup(kv)
-#                delegate = ForeignKeyItemDelegate(
-#                    editwidget, parent=self.coursemodel
-#                )
-#                self.coursetable.setItemDelegateForColumn(i, delegate)
+                delegate = ForeignKeyItemDelegate(kv, parent=self.coursemodel)
+                self.coursetable.setItemDelegateForColumn(i, delegate)
             self.coursemodel.setHeaderData(i, Qt.Horizontal, t)
+        self.course_dialog.init(self.coursemodel, self.filter_list)
 
         # Set up the lesson model
         self.lessonmodel = QSqlTableModel()
         self.lessonmodel.setTable("LESSONS")
-#?
-        #self.lessonmodel.setEditStrategy(QSqlTableModel.OnFieldChange)
         self.lessonmodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
         # Set up the lesson view
         self.lessontable.setModel(self.lessonmodel)
@@ -380,8 +374,6 @@ class CourseEditor(QSplitter):
             self.lessonmodel.setHeaderData(i, Qt.Horizontal, t)
             if f not in LESSONCOLS_SHOW:
                 self.lessontable.hideColumn(i)
-#        self.lessontable.hideColumn(0)
-#        self.lessontable.hideColumn(1)
 
         self.filter_field_select.trigger()
 
@@ -419,7 +411,8 @@ class CourseEditor(QSplitter):
 #                self.editors[f].setText("")
 #            self.editors[self.filter_field].setText(self.filter_value)
             self.set_course(0)
-        self.form_modified("", False)  # initialize form button states
+#        self.form_modified("", False)  # initialize form button states
+        self.course_delete_button.setEnabled(not self.table_empty)
 
     def course_delete(self):
         """Delete the current course."""
@@ -442,7 +435,7 @@ class CourseEditor(QSplitter):
                 row = model.rowCount() - 1
             self.coursetable.selectRow(row)
             if not self.coursetable.currentIndex().isValid():
-                self.course_changed(None, None)
+                self.course_changed(-1)
         else:
             error = model.lastError()
             SHOW_ERROR(error.text())
@@ -777,25 +770,12 @@ class CourseEditorForm(QDialog):
             return LoseChangesDialog()
         return True
 
-    def init(self, model):
+    def init(self, model, keymaps):
         self.model = model
-
-#TODO: Probably not optimal ... see how main table can be set up with
-# its delegates etc. Perhaps the value lists are better generated there?
         self.table_empty = None
-        for f, t in COURSE_COLS:
+        for f, kv in keymaps.items():
             editwidget = self.editors[f]
-            if f == "CLASS":
-                kv = db_key_value_list("CLASSES", "CLASS", "NAME", "CLASS")
-                editwidget.setup(kv)
-            if f == "SUBJECT":
-                kv = db_key_value_list("SUBJECTS", "SID", "NAME", "NAME")
-                editwidget.setup(kv)
-            elif f == "TEACHER":
-                kv = db_key_value_list("TEACHERS", "TID", "NAME", "SORTNAME")
-                editwidget.setup(kv)
-
-
+            editwidget.setup(kv)
 
     def activate(self, row, filter_field=None):
         """Initialize the dialog with values from the current course
@@ -861,12 +841,11 @@ class CourseEditorForm(QDialog):
                 SHOW_ERROR(error.text())
             model.revertAll()
 
-#TODO
     def course_update(self):
         """Update the current course with the data in the form editor."""
         model = self.model
-        course = model.data(index)
         row = self.current_row
+        course = model.data(model.index(row, model.fieldIndex("course")))
         for f in self.form_change_set:
             col = model.fieldIndex(f)
             val = self.editors[f].text()

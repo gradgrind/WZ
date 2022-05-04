@@ -631,17 +631,17 @@ class FormComboBox(QComboBox):
         self.text0 = None
         self.currentIndexChanged.connect(self.change_index)
 
-    def setup(self, key_value_list):
+    def setup(self, key_value):
         """Set up the indexes required for the table's item delegate
         and the combobox (<editwidget>).
 
-        The argument is a list of (key, value) pairs.
+        The argument is a list [(key, value), ... ].
         """
         self.keylist = []
         self.key2i = {}
         self.clear()
         i = 0
-        for k, v in key_value_list:
+        for k, v in key_value:
             self.key2i[k] = i
             self.keylist.append(k)
             self.addItem(v)
@@ -672,18 +672,16 @@ class FormComboBox(QComboBox):
 
 class ForeignKeyItemDelegate(QStyledItemDelegate):
     """An "item delegate" for displaying referenced values in
-    foreign key fields.
-
-    Specifically, these objects rely on separate field editor widgets
-    (<FormComboBox> instances) to supply the key -> value mapping.
+    foreign key fields. The mapping to the display values is supplied
+    as a parameter, a list: [(key, value), ... ].
     """
 
-    def __init__(self, editwidget, parent=None):
+    def __init__(self, key_value, parent=None):
         super().__init__(parent)
-        self.editwidget = editwidget
+        self.key2value = dict(key_value)
 
-    def displayText(self, value, locale):
-        return self.editwidget.itemText(self.editwidget.key2i[value])
+    def displayText(self, key, locale):
+        return self.key2value[key]
 
 
 ############### Handle uncaught exceptions ###############
