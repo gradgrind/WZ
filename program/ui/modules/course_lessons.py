@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-05-04
+Last updated:  2022-05-05
 
 Edit course and lesson data.
 
@@ -172,8 +172,7 @@ class CourseEditor(QSplitter):
         hbox1.addWidget(self.filter_value_select)
 
         # The course table itself
-        self.coursetable = RowSelectTable(is_modified=self.modified,
-                name="courses")
+        self.coursetable = RowSelectTable(name="courses")
         self.coursetable.set_callback(self.course_changed)
         self.coursetable.activated.connect(self.course_activate)
         self.coursetable.setEditTriggers(
@@ -189,7 +188,7 @@ class CourseEditor(QSplitter):
 
         vbox2 = QVBoxLayout(self.rightframe)
 
-#NEW
+        # Course management buttons
         hboxB = QHBoxLayout()
         vbox2.addLayout(hboxB)
         #+
@@ -206,27 +205,33 @@ class CourseEditor(QSplitter):
         edit_button.clicked.connect(self.edit_course)
 
         vbox2.addWidget(HLine())
+        vbox2.addStretch(1)
 
-        lessonbox = QFrame()
-        vbox2.addWidget(lessonbox)
-        vbox3 = QVBoxLayout(lessonbox)
-        vbox3.setContentsMargins(0, 0, 0, 0)
-        vbox3.addWidget(QLabel(f"<h4>{T['LESSONS']}</h4>"))
+        vbox2.addWidget(QLabel(f"<h4>{T['LESSONS']}</h4>"))
 
         # The lesson table
-        self.lessontable = RowSelectTable(is_modified=self.modified,
-                name="lessons")
+        self.lessontable = RowSelectTable(name="lessons")
         self.lessontable.setEditTriggers(
             QAbstractItemView.NoEditTriggers
         )  # non-editable
         self.lessontable.verticalHeader().hide()
         self.lessontable.set_callback(self.lesson_selected)
-#        self.lessontable.activated.connect(self.lesson_activated)
+        self.lessontable.activated.connect(self.lesson_activate)
+        vbox2.addWidget(self.lessontable)
 
-        vbox3.addWidget(self.lessontable)
+        form = QFormLayout()
+        vbox2.addLayout(form)
+        self.field_lines = {}
+        for f, t in LESSON_COLS:
+            if f not in LESSONCOLS_SHOW:
+                widget = QLineEdit()
+                widget.setReadOnly(True)
+                self.field_lines[f] = widget
+                form.addRow(t, widget)
+
+        vbox2.addSpacing(20)
         hbox3 = QHBoxLayout()
         vbox2.addLayout(hbox3)
-        hbox3.addStretch(1)
         self.lesson_delete_button = QPushButton(T['DELETE'])
         hbox3.addWidget(self.lesson_delete_button)
         self.lesson_delete_button.clicked.connect(self.lesson_delete)
@@ -234,11 +239,10 @@ class CourseEditor(QSplitter):
         hbox3.addWidget(self.lesson_add_button)
         self.lesson_add_button.clicked.connect(self.lesson_add)
 
-        self.form_change_set = None
         self.setStretchFactor(0, 1)  # stretch only left panel
 
         self.lesson_editor = LessonEditor()
-        vbox3.addWidget(self.lesson_editor)
+#        vbox3.addWidget(self.lesson_editor)
 
     def course_activate(self, modelindex):
         self.edit_course()
@@ -253,24 +257,24 @@ class CourseEditor(QSplitter):
 
 
 
-    def modified(self):
-        #return self.form_change_set
-        return bool(self.form_change_set)
+#    def modified(self):
+#        #return self.form_change_set
+#        return bool(self.form_change_set)
 
-    def clear_modified(self):
-        self.form_change_set = set()
+#    def clear_modified(self):
+#        self.form_change_set = set()
 
     def leave_ok(self):
-        if self.form_change_set:
-            return LoseChangesDialog()
+#        if self.form_change_set:
+#            return LoseChangesDialog()
         return True
 
     def set_filter_field(self, field):
-        if self.modified():
-            if LoseChangesDialog():
-                self.clear_modified()
-            else:
-                return False
+#        if self.modified():
+#            if LoseChangesDialog():
+#                self.clear_modified()
+#            else:
+#                return False
         self.filter_value_select.set_items(self.filter_list[field])
         # print("FILTER FIELD:", field)
         self.filter_field = field
@@ -278,19 +282,19 @@ class CourseEditor(QSplitter):
         return True
 
     def set_filter(self, key):
-        if self.modified():
-            if LoseChangesDialog():
-                self.clear_modified()
-            else:
-                return False
+#        if self.modified():
+#            if LoseChangesDialog():
+#                self.clear_modified()
+#            else:
+#                return False
         # print("FILTER KEY:", key)
         self.filter_value = key
         self.fill_course_table(key)
         return True
 
 # TODO: This now only handles empty tables? DEPRECATED, not used
-    def form_modified(self, field, changed):
-        print("???????!!!:", repr(field), changed, self.table_empty, self.form_change_set)
+#    def form_modified(self, field, changed):
+#        print("???????!!!:", repr(field), changed, self.table_empty, self.form_change_set)
 
 #Enter empty table ->
 #???????!!!: '' False True set()
@@ -395,31 +399,23 @@ class CourseEditor(QSplitter):
 
     def course_changed(self, row):
         self.current_row = row
-        self.clear_modified()
         if row >= 0:
             #print("EXEC COURSE CHANGED:", row)
-            self.table_empty = False
             record = self.coursemodel.record(row)
-#            for f, t in COURSE_COLS:
-#                self.editors[f].setText(str(record.value(f)))
             self.set_course(record.value(0))
+            self.course_delete_button.setEnabled(True)
         else:
             # e.g. when entering an empty table
             #print("EMPTY TABLE")
-            self.table_empty = True
-#            for f, t in COURSE_COLS:
-#                self.editors[f].setText("")
-#            self.editors[self.filter_field].setText(self.filter_value)
             self.set_course(0)
-#        self.form_modified("", False)  # initialize form button states
-        self.course_delete_button.setEnabled(not self.table_empty)
+            self.course_delete_button.setEnabled(False)
 
     def course_delete(self):
         """Delete the current course."""
         model = self.coursemodel
-        if self.form_change_set:
-            if not LoseChangesDialog():
-                return
+#        if self.form_change_set:
+#            if not LoseChangesDialog():
+#                return
         if not SHOW_CONFIRM(T["REALLY_DELETE"]):
             return
         # course = self.editors["course"].text()
@@ -442,7 +438,7 @@ class CourseEditor(QSplitter):
             model.revertAll()
 
     def set_course(self, course):
-        # print("SET COURSE:", course)
+        print("SET COURSE:", course)
         self.this_course = course
         self.lessonmodel.setFilter(f"course = {course}")
         # print("SELECT:", self.lessonmodel.selectStatement())
@@ -450,10 +446,8 @@ class CourseEditor(QSplitter):
         self.lessontable.selectRow(0)
         self.lessontable.resizeColumnsToContents()
         # Enable or disable lesson butttons
-        if self.lessonmodel.rowCount():
-            self.lesson_delete_button.setEnabled(True)
-        else:
-            self.lesson_delete_button.setEnabled(False)
+        if not self.lessonmodel.rowCount():
+            self.lesson_selected(-1)
         self.lesson_add_button.setEnabled(course > 0)
 
         # Toggle the stretch on the last section here because of a
@@ -463,147 +457,80 @@ class CourseEditor(QSplitter):
         hh.setStretchLastSection(False)
         hh.setStretchLastSection(True)
 
+    def lesson_selected(self, row):
+        #print("SELECT LESSON", row)
+        if row >= 0:
+            self.lesson_delete_button.setEnabled(True)
+        else:
+            self.lesson_delete_button.setEnabled(False)
+        record = self.lessonmodel.record(row)
+        for f, t in LESSON_COLS:
+            if f not in LESSONCOLS_SHOW:
+                self.field_lines[f].setText(str(record.value(f)))
+
+    def lesson_activate(self, index):
+#TODO
+        print("ACTIVATE LESSON", index.row())
+
+    def lesson_add(self):
+        """Add a new "lesson", copying the current one if possible."""
+        if self.this_course:    # If this is null (0), no lessons can be added
+            model = self.lessonmodel
+            index = self.lessontable.currentIndex()
+            if index.isValid():
+                row = index.row()
+                #model.select()  # necessary to ensure current row is up to date
+                record = model.record(row)
+                # print("RECORD:", [record.value(i) for i in range(record.count())])
+                length = record.value("LENGTH")
+                try:
+                    i = int(length)
+                except ValueError:
+                    record.setValue("LENGTH", "1")
+                    record.setValue("PAYROLL", "*")
+                    record.setValue("ROOM", "?")
+                record.setValue(model.fieldIndex("id"), None)
+                record.setValue(model.fieldIndex("TAG"), None)
+                n = model.rowCount()
+            else:
+                # Create a basic "normal" lesson
+                record = model.record()
+                record.setValue("course", self.this_course)
+                record.setValue("LENGTH", "1")
+                record.setValue("PAYROLL", "*")
+                record.setValue("ROOM", "?")
+                n = 0
+            record.setValue("PLACE", "?")
+            if model.insertRecord(-1, record) and model.submitAll():
+                #lid = model.query().lastInsertId()
+                #print("INSERTED:", lid, model.rowCount())
+                self.lessontable.selectRow(n)
+            else:
+                SHOW_ERROR(f"DB Error: {model.lastError().text()}")
+                model.revertAll()
+
     def lesson_delete(self):
         """Delete the current "lesson"."""
         model = self.lessonmodel
         index = self.lessontable.currentIndex()
         row = index.row()
-        if model.removeRow(row):
-            model.select()
+        if model.removeRow(row) and model.submitAll():
+            #model.select()
             n = model.rowCount()
-            if n == 0:
-                self.lesson_delete_button.setEnabled(False)
-            elif row >= n:
-                self.lessontable.selectRow(n - 1)
-            else:
-                self.lessontable.selectRow(row)
+            if row >= n:
+                row = n - 1
+                if row < 0:
+                    self.lesson_selected(-1)
+                    return
+            self.lessontable.selectRow(row)
         else:
             SHOW_ERROR(f"DB Error: {model.lastError().text()}")
-
-#TODO
-#    def lesson_activated(self, index):
-        #row = index.row()
-    def lesson_selected(self, row):
-        #print("ACTIVATED:", row)
-        record = self.lessonmodel.record(row)
-        data = {f: record.value(f) for f, t in LESSON_COLS}
-#--
-        self.lesson_type(data)
-
-        self.lesson_editor.set_data(data)
-
-    def lesson_type(self, data):
-        """Determine the "type" of a lesson entry.
-        """
-#TODO
-# It looks a bit complicated ... maybe it would be better to encode the
-# type in the TAG field? E.g. "tag.type". Then a search can be for "tag.*".
-        for f, v in data.items():
-            print(f"  {f:10}: {repr(v)}")
-        tag = data["TAG"]
-        course = data["course"]
-        length = data["LENGTH"]
-        if tag:
-            try:
-                key, lt = tag.split(".", 1)
-            except ValueError:
-                ltype = -1
-            else:
-                try:
-                    ltype = int(lt)
-                except ValueError:
-                    ltype = -1
-            if ltype < 0 or ltype > 7:
-                SHOW_ERROR(f"Invalid lesson tag: {tag}")
-        else:
-            # "Normal" lesson or (length = 0) entry purely for the payroll
-            try:
-                l = int(length)
-            except ValueError:
-                l = -1 if length else 0
-            if l > 0:
-                ltype = 1
-            elif l == 0:
-                ltype = 0
-            else:
-                SHOW_ERROR(f"Invalid lesson length: {length}")
-                ltype = -1
-        print("LESSON TYPE:", ltype)
-#TODO: checks
-        return
-#TODO: not needed?
-        payroll = data["PAYROLL"]
-        if tag:
-            if course:
-                if length:
-                    if length == "*":
-                        if data["PAYROLL"] == '*':
-                            print(f" $6a: geteilte Stunde")
-                        else:
-                            print(f" $6: Block-Komponente (Epoche)")
-                    else:
-                        try:
-                            l = int(length)
-                        except ValueError:
-                            print(f" $: ERROR – bad length for parallel lesson: {repr(length)}")
-                            #raise Bug(f"Bad length for parallel lesson: {repr(length)}")
-                            return
-                        print(f" $2: parallele Unterrichtsstunde")
-                else:
-                    print(f" $4: Unterrichtsblock (z.B. für Epochen)")
-            else:
-                if length:
-                    #TODO: Possibly rather with course?
-                    print(" $5: ?? Platzierung für Blockstunde ??")
-                    try:
-                         l = int(length)
-                    except ValueError:
-                        print(f" $: ERROR – bad length for block lesson: {repr(length)}")
-                        #raise Bug(f"Bad length for block lesson: {repr(length)}")
-                        return
-                else:
-                    print(" $3: Platzierung für Parallelen")
-        else:
-            try:
-                l = int(length)
-            except ValueError:
-                print(f" $: ERROR – bad length for empty tag: {repr(length)}")
-                #raise Bug(f"Bad length for empty tag: {repr(length)}")
-                return
-            if l == 0:
-                print(" $7: nur Deputat")
-            else:
-                print(" $1: normale Unterrichtsstunde")
-#TODO: further checks (rooms, payroll, etc.)
-
-
-    def lesson_add(self):
-        """Add a new "lesson", copying the current one if possible."""
-        if self.this_course:
-            model = self.lessonmodel
-            index = self.lessontable.currentIndex()
-            if index.isValid():
-                row = index.row()
-                model.select()  # necessary to ensure current row is up to date
-                record = model.record(row)
-                # print("RECORD:", [record.value(i) for i in range(record.count())])
-                record.setValue(0, None)
-                n = model.rowCount()
-            else:
-                record = model.record()
-                record.setValue(1, self.this_course)
-                n = 0
-            if model.insertRecord(-1, record):
-                model.select()  # necessary to make new row immediately usable
-                self.lessontable.selectRow(n)
-                self.lesson_delete_button.setEnabled(True)
-            else:
-                SHOW_ERROR(f"DB Error: {model.lastError().text()}")
+            model.revertAll()
 
 
 class EditableComboBox(QComboBox):
-    def __init__(self):
-        super().__init__(editable=True)
+    def __init__(self, parent=None):
+        super().__init__(parent=parent, editable=True)
 
     def focusOutEvent(self, e):
         """Close the editor when focus leaves it. This reverts any
@@ -871,8 +798,6 @@ class CourseEditorForm(QDialog):
             else:
                 SHOW_ERROR(error.text())
             model.revertAll()
-
-
 
     def form_modified(self, field, changed):
         """Handle a change in a form editor field.

@@ -552,11 +552,12 @@ class RowSelectTable(QTableView):
 
     def currentChanged(self, currentitem, olditem):
         super().currentChanged(currentitem, olditem)
-        # This is normally(!) not called with -1 as the new row.
-        row = currentitem.row()
-        if row < 0:
-            return
+        row = currentitem.row() # -1 => no current item
         #print(f"CURRENT CHANGED ({self.__name}):", olditem.row(), "-->", row)
+        if olditem.row() == row:
+            # Actually, this shouldn't be possible, but -1 -> -1 does
+            # occur!
+            return
         if self.__modified:
             if row == self.__row:
                 self.__row = -1
