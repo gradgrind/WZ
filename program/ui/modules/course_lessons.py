@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-05-05
+Last updated:  2022-05-06
 
 Edit course and lesson data.
 
@@ -142,8 +142,8 @@ class Courses(Page):
         open_database()
         self.course_editor.init_data()
 
-    def is_modified(self):
-        return bool(self.course_editor.form_change_set)
+#    def is_modified(self):
+#        return bool(self.course_editor.form_change_set)
 
 # ++++++++++++++ The widget implementation ++++++++++++++
 
@@ -471,6 +471,7 @@ class CourseEditor(QSplitter):
     def lesson_activate(self, index):
 #TODO
         print("ACTIVATE LESSON", index.row())
+        LessonEditorForm().exec()
 
     def lesson_add(self):
         """Add a new "lesson", copying the current one if possible."""
@@ -686,6 +687,258 @@ class CourseEditorForm(QDialog):
             event.accept()
 
     def modified(self):
+        #return self.form_change_set
+        return bool(self.form_change_set)
+
+    def clear_modified(self):
+        self.form_change_set = set()
+
+    def leave_ok(self):
+        if self.modified():
+            return LoseChangesDialog()
+        return True
+
+    def init(self, model, keymaps):
+        self.model = model
+        self.table_empty = None
+        for f, kv in keymaps.items():
+            editwidget = self.editors[f]
+            editwidget.setup(kv)
+
+    def activate(self, row, filter_field=None):
+        """Initialize the dialog with values from the current course
+        and show it.
+
+        The idea behind the extra parameter is that, on empty tables, at
+        least the filter field should be set. To do that here, this
+        field and its value must be passed as a tuple: (field value).
+        """
+        self.clear_modified()
+        self.current_row = row
+        if row >= 0:
+            self.table_empty = False
+            record = self.model.record(row)
+            for f, t in COURSE_COLS:
+                self.editors[f].setText(str(record.value(f)))
+        else:
+            #print("EMPTY TABLE")
+            self.table_empty = True
+            for f, t in COURSE_COLS:
+                self.editors[f].setText("")
+            if filter_field:
+                self.editors[filter_field[0]].setText(filter_field[1])
+        self.form_modified("", False)  # initialize form button states
+
+        self.__value = -1   # Default return value => don't change row
+        self.exec()
+        return self.__value
+
+    def return_value(self, row):
+        """Quit the dialog, returning the given row number.
+        Value -1 => don't change row, otherwise select the given row.
+        """
+        self.__value = row
+        self.accept()
+
+    def course_add(self):
+        """Add the data in the form editor as a new course."""
+        model = self.model
+        row = 0
+        model.insertRow(row)
+        for f, t in COURSE_COLS[1:]:
+            col = model.fieldIndex(f)
+            val = self.editors[f].text()
+            if f == "CLASS":
+                klass = val
+            model.setData(model.index(row, col), val)
+        if model.submitAll():
+            course = model.query().lastInsertId()
+            # print("INSERTED:", course)
+            for r in range(model.rowCount()):
+                if model.data(model.index(r, 0)) == course:
+                    self.return_value(r)            # Select this row
+                    break
+            else:
+                SHOW_INFO(T["COURSE_ADDED"].format(klass=klass))
+                self.return_value(self.current_row) # Reselect current row
+        else:
+            error = model.lastError()
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(T["COURSE_EXISTS"])
+            else:
+                SHOW_ERROR(error.text())
+            model.revertAll()
+
+    def course_update(self):
+        """Update the current course with the data in the form editor."""
+        model = self.model
+        row = self.current_row
+        course = model.data(model.index(row, model.fieldIndex("course")))
+        for f in self.form_change_set:
+            col = model.fieldIndex(f)
+            val = self.editors[f].text()
+            model.setData(model.index(row, col), val)
+        if model.submitAll():
+            # The selection is lost – the changed row may even be in a
+            # different place, perhaps not even displayed.
+            # Try to stay with the same id, if it is displayed,
+            # otherwise the same (or else the last) row.
+            # print("UPDATED:", course)
+            for r in range(model.rowCount()):
+                if model.data(model.index(r, 0)) == course:
+                    self.return_value(r)    # Select this row
+                    break
+            else:
+                if row >= model.rowCount():
+                    row = model.rowCount() - 1
+                    self.return_value(row)  # Select this row
+        else:
+            error = model.lastError()
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(T["COURSE_EXISTS"])
+            else:
+                SHOW_ERROR(error.text())
+            model.revertAll()
+
+    def form_modified(self, field, changed):
+        """Handle a change in a form editor field.
+        Maintain the set of changed fields (<self.form_change_set>).
+        Enable and disable the pushbuttons appropriately.
+        """
+        if self.table_empty:
+            self.course_update_button.setEnabled(False)
+            self.course_add_button.setEnabled(True)
+        elif self.table_empty == None:
+            # ignore – not yet set up
+            return
+        elif changed:
+            self.course_update_button.setEnabled(True)
+            self.form_change_set.add(field)
+            if field in COURSE_KEY_FIELDS:
+                self.course_add_button.setEnabled(True)
+            self.form_change_set.add(field)
+        else:
+            self.form_change_set.discard(field)
+            if self.form_change_set:
+                if not self.form_change_set.intersection(COURSE_KEY_FIELDS):
+                    self.course_add_button.setEnabled(False)
+            else:
+                self.course_update_button.setEnabled(False)
+                self.course_add_button.setEnabled(False)
+        # print("FORM CHANGED SET:", self.form_change_set)
+
+
+#TODO
+class LessonEditorForm(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        vbox1 = QVBoxLayout(self)
+        #vbox1.setContentsMargins(0, 0, 0, 0)
+        self.coursedata = {}
+        box0 = QFrame()
+        box0.setLineWidth(1)
+        box0.setMidLineWidth(1)
+        box0.setFrameShape(QFrame.Shape.Box)
+        box0.setFrameShadow(QFrame.Shadow.Sunken)
+
+        # The course data
+        vbox1.addWidget(box0)
+        form0 = QFormLayout(box0)
+        for f in COURSE_KEY_FIELDS:
+            widget = QLineEdit()
+            widget.setReadOnly(True)
+            self.coursedata[f] = widget
+            form0.addRow(T[f], widget)
+        vbox1.addWidget(HLine())
+
+        # Block member or simple lesson?
+        hbox1 = QHBoxLayout()
+        vbox1.addLayout(hbox1)
+        self.blockmember = QCheckBox(T["BLOCK_MEMBER"])
+        self.blockmember.stateChanged.connect(self.toggle_block)
+        hbox1.addWidget(self.blockmember)
+        hbox1.addStretch(1)
+        hbox1.addWidget(QLabel(f'{T["TAG"]}:'))
+# It might be preferable to use a non-editable combobox with a separate
+# button+popup (or whatever) to add a new identifier.
+        self.identifier = EditableComboBox()
+        #self.identifier.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        #self.identifier.setInsertPolicy(QComboBox.InsertPolicy.InsertAtTop)
+        # Alphabetical insertion doesn't apply to the items added programmatically
+        self.identifier.setInsertPolicy(QComboBox.InsertPolicy.InsertAlphabetically)
+        self.identifier.addItems(("10Gzwe", "Short", "Long_identifier"))
+        self.identifier.setItemData(0, "First item", Qt.ToolTipRole)
+        self.identifier.setItemData(1, "A rather longer tooltip,\n very rambly actually ...", Qt.ToolTipRole)
+        bn_validator = BlocknameValidator()
+        self.identifier.setValidator(bn_validator)
+#        self.identifier.textActivated.connect(self.text_activated)
+        hbox1.addWidget(self.identifier)
+
+        self.stack = QStackedLayout(vbox1)
+
+        # Fields for "simple lesson"
+        box1 = QFrame()
+        self.stack.addWidget(box1)
+        form = QFormLayout(box1)
+        #vbox0.addLayout(form)
+        self.editors = {}
+        for f in "LENGTH", "PAYROLL", "ROOM", "NOTES":
+            editwidget = FormLineEdit(f, self.form_modified)
+            self.editors[f] = editwidget
+            form.addRow(T[f], editwidget)
+
+        # Fields for "block member"
+        box2 = QFrame()
+        self.stack.addWidget(box2)
+        form = QFormLayout(box2)
+
+        # The button-box
+        hbox2 = QHBoxLayout()
+        vbox1.addLayout(hbox2)
+        hbox2.addStretch(1)
+        self.course_update_button = QPushButton(T["UPDATE"])
+        self.course_update_button.clicked.connect(self.course_update)
+        hbox2.addWidget(self.course_update_button)
+        self.course_add_button = QPushButton(T["NEW"])
+        self.course_add_button.clicked.connect(self.course_add)
+        hbox2.addWidget(self.course_add_button)
+
+    def toggle_block(self, state):
+#TODO
+        self.blockmember.clear() # or clearEditText()
+# Actually, it might be better to have two, completely distinct comboboxes,
+# one for blocks and one for parallels, rather than reloading them each time.
+# On the other hand, of course, the lists are dynamic, so they would need
+# reloading anyway ...
+# The parallels tags are from the TAG field. This must be empty for
+# block components? Where do the block-tags go, then? I could use PLACE,
+# but would that be any better than TAG? If it's all in TAG, I can use the
+# same list, but differently filtered.
+# I need a way to add and remove tags – maybe adding be entering new
+# values and removing, when the last usage is removed. The removal could
+# happen automatically – but entries for blocks in class "--" would
+# also need to be removed. Perhaps for blocks, new entries should only
+# be possible in class "--" (or via a special dialog)?
+        if state:
+            self.stack.setCurrentIndex(1)
+        else:
+            self.stack.setCurrentIndex(0)
+
+
+
+### FROM CourseEditorForm ...
+
+    def closeEvent(self, event):
+        """Prevent dialog closure if there are changes.
+        """
+        if self.modified() and not LoseChangesDialog():
+            event.ignore()
+        else:
+            event.accept()
+
+    def modified(self):
+#--
+        return False
         #return self.form_change_set
         return bool(self.form_change_set)
 

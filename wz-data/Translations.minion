@@ -118,10 +118,11 @@ ui.modules.course_lessons: {
 
     # Lesson table
     LESSONS:        "Unterrichts- bzw. Deputatsstunden"
+    BLOCK_MEMBER:   Blockmitglied
 
     LENGTH:         Länge
     PAYROLL:        Deputat
-    TAG:            Kennung
+    TAG:            Kennzeichen
     ROOM:           Raum
     PLACE:          Zeit
     NOTES:          Notizen
