@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-05-04
+Last updated:  2022-05-14
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -152,8 +152,8 @@ class KeySelector(QComboBox):
 
     def selected(self, display=False):
         try:
-            return self.value_mapping[self.widget.currentIndex()][1 if display else 0]
-        except:
+            return self.value_mapping[self.currentIndex()][1 if display else 0]
+        except IndexError:
             return None
 
     def _new(self, index):

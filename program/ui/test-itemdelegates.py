@@ -7,7 +7,8 @@ from core.base import start
 
 from ui.ui_base import (
     QStyledItemDelegate, QTableWidget, run, QComboBox, Qt,
-    QLineEdit, QCompleter, QTimer, QDialog
+    QLineEdit, QCompleter, QTimer, QDialog,
+    QAbstractItemView
 )
 
 class ComboBoxItemDelegate(QStyledItemDelegate):
@@ -92,9 +93,43 @@ class MyItemDelegate(QStyledItemDelegate):
 #    )
 
 
+class TableWidget(QTableWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.activated.connect(self.do_activated)
+        self.setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked
+            | QAbstractItemView.EditTrigger.AnyKeyPressed
+            | QAbstractItemView.EditTrigger.SelectedClicked # this one has a delay!
+        )
+# Note that the <Return> key doesn't cause the editor to be opened ...
+# Event handling may be necessary for that ... but see below!
+
+    def do_activated(self):
+        i = self.currentItem()
+        print("Activated", self.currentRow(), self.currentColumn())
+# Doesn't work ...
+        if self.state() != self.EditingState:
+            print("?????")
+            self.editItem(self.currentItem())
+# Doesn't work ...
+#        if not self.isPersistentEditorOpen(i):
+#            # start editing
+#            self.editItem(i)
+
+# This doesn't work either!!! So what is different in EdiTable?!
+    def keyPressEvent(self, e):
+        key = e.key()
+        i = self.currentItem()
+        if not self.isPersistentEditorOpen(i):
+            if key == Qt.Key_Return:
+                # start editing
+                self.editItem(i)
+                return
+        super().keyPressEvent(e)
 
 
-tw = QTableWidget()
+tw = TableWidget()
 
 cbid = ComboBoxItemDelegate(tw)
 cpid = CompleterItemDelegate(tw)

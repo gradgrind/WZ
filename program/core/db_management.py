@@ -1,7 +1,7 @@
 """
 uutility/db_management.py
 
-Last updated:  2022-04-30
+Last updated:  2022-05-15
 
 Helper functions for accessing the database.
 
@@ -109,12 +109,21 @@ def db_query(query_text):
     return value_list
 
 
-def db_read_table(table, fields, *wheres, sort_field=None, **keys):
+def db_read_table(
+    table,
+    fields,
+    *wheres,
+    distinct=False,
+    sort_field=None,
+    **keys
+):
     """Read a list of table entries.
     <fields> specifies which fields are to be read. It may be
         - null/empty (=> '*'),
         - a list of strings (field names).
-    <wheres> are WHERE conditions (as strings).
+    <wheres> are WHERE conditions (as strings). If there is more than
+    one, they are joined by "AND".
+    If <distinct> is true, the "DISTINCT" keyword is added to the query.
     <sort_field> is an optional field to sort on.
     <keys> are WHERE conditions with "=" (value is str) or "IN" (value
     is list).
@@ -139,8 +148,10 @@ def db_read_table(table, fields, *wheres, sort_field=None, **keys):
         where_clause = ""
     f = ', '.join([f'"{f}"' for f in fields]) if fields else '*'
     o = f' ORDER BY "{sort_field}"' if sort_field else ""
-    #print("§§§", f"SELECT {f} FROM {table}{where_clause}{o}")
-    query = QSqlQuery(f"SELECT {f} FROM {table}{where_clause}{o}")
+    d = " DISTINCT" if distinct else ""
+    qtext = f"SELECT{d} {f} FROM {table}{where_clause}{o}"
+    #print("§§§", qtext)
+    query = QSqlQuery(qtext)
     rec = query.record()
     nfields = rec.count()
     value_list = []
@@ -291,11 +302,13 @@ if __name__ == "__main__":
     table = "LESSONS"
     #print("\nExtent of table {table}:")
     #table_extent(table)
-    fields, values = db_read_full_table(table, 'course > 2')
+#    fields, values = db_read_full_table(table, 'course > 2')
+    fields, values = db_read_full_table(table, 'course IS NULL')
     print(f"\n{table} table: {fields}")
     for row in values[:10]:
         print("  ", row)
 
+# It seems that null entries are read as empty strings ...
 
     #print("\nUNIQUE FIELDS")
     #for table in "CLASSES", "TEACHERS", "COURSES", "LESSONS":

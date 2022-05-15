@@ -94,8 +94,9 @@ ui.modules.course_lessons: {
     MODULE_TITLE:   "Unterrichtskurse und -stunden verwalten"
 
     # Course field editor buttons
-    EDIT_COURSE:    "Kursdaten bearbeiten"
-    DELETE_COURSE:  "Kurs löschen"
+#    EDIT_COURSE:    "Kursdaten bearbeiten"
+    EDIT:           Bearbeiten
+#    DELETE_COURSE:  "Kurs löschen"
     DELETE:         Löschen
     UPDATE:         Übernehmen
     NEW:            Hinzufügen
@@ -124,8 +125,11 @@ ui.modules.course_lessons: {
     PAYROLL:        Deputat
     TAG:            Kennzeichen
     ROOM:           Raum
-    PLACE:          Zeit
+    TIME:           Zeit
+    PLACE:          Ort
     NOTES:          Notizen
+
+#    EDIT_LESSON:    "Bearbeiten"
 }
 
 timetable.constraints_teacher: {
