@@ -50,7 +50,6 @@ from typing import NamedTuple
 from core.db_management import (
     open_database,
     db_read_table,
-    db_read_full_table,
     db_key_value_list,
     db_values
 )
@@ -58,41 +57,20 @@ from core.db_management import (
 #from core.classes import get_class_list
 
 from ui.ui_base import (
+    ### QtWidgets:
     QDialog,
-    QTableWidget,
-    QTableWidgetItem,
     QListWidget,
     QAbstractItemView,
     QComboBox,
-    QCheckBox,
-    QValidator,
     QDialogButtonBox,
     QLayout,
-
-
-
-    HLine,
-    LoseChangesDialog,
-    KeySelector,
-    #RowSelectTable,
-    FormLineEdit,
-    FormComboBox,
-    ForeignKeyItemDelegate,
-    ### QtWidgets:
-    QSplitter,
-    QFrame,
-    QFormLayout,
     QVBoxLayout,
     QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QTableView,
+    ### QtGui:
+    QValidator,
     ### QtCore:
     Qt,
     QSize,
-    ### QtSql:
-    QSqlTableModel,
 )
 
 # Course table fields
@@ -171,7 +149,7 @@ COL_LIST = [
 
 ### -----
 
-#?
+# This can still be useful as an example, even though I am not using it here!
 class BlocknameValidator(QValidator):
     def validate(self, text, pos):
         print("VALIDATE:", pos, text)
@@ -182,6 +160,7 @@ class BlocknameValidator(QValidator):
         return (QValidator.State.Acceptable, text, pos)
 
 
+# This can still be useful, even though I am not using it here!
 class EditableComboBox(QComboBox):
     def __init__(self, parent=None, changed_callback=None, sort=True):
         """<changed_callback> takes a single parameter, the new text.
@@ -276,36 +255,6 @@ class DayPeriodDialog(QDialog):
         self.periodlist.currentRowChanged.connect(self.select_period)
         hbox1.addWidget(self.periodlist)
 
-
-        """
-        hbox0 =QHBoxLayout()
-        vbox0.addLayout(hbox0)
-        self.blockmember = QCheckBox("Blockmitglied")
-        hbox0.addWidget(self.blockmember)
-        hbox0.addStretch(1)
-        hbox0.addWidget(QLabel("Kennzeichen:"))
-# It might be preferable to use a non-editable combobox with a separate
-# button+popup (or whatever) to add a new identifier.
-        self.identifier = EditableComboBox()
-        self.identifier.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        #self.identifier.setInsertPolicy(QComboBox.InsertPolicy.InsertAtTop)
-        # Alphabetical insertion doesn't apply to the items added programmatically
-        self.identifier.setInsertPolicy(QComboBox.InsertPolicy.InsertAlphabetically)
-        self.identifier.addItems(("10Gzwe", "Short", "Extremely_long_identifier"))
-        self.identifier.setItemData(0, "First item", Qt.ToolTipRole)
-        self.identifier.setItemData(1, "A rather longer tooltip,\n very rambly actually ...", Qt.ToolTipRole)
-        bn_validator = BlocknameValidator()
-        self.identifier.setValidator(bn_validator)
-        self.identifier.currentIndexChanged.connect(self.index_changed)
-        self.identifier.currentTextChanged.connect(self.text_changed)
-        self.identifier.activated.connect(self.activated_index)
-        self.identifier.textActivated.connect(self.text_activated)
-
-        hbox0.addWidget(self.identifier)
-        """
-
-
-
         buttonBox = QDialogButtonBox()
         vbox0.addWidget(buttonBox)
         bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
@@ -356,104 +305,6 @@ class DayPeriodDialog(QDialog):
     def select_period(self, period):
         print("SELECT CLASS:", period)
 
-    def index_changed(self, i):
-        # called only after editing, but may be called twice then
-        print("NEW INDEX:", i)
-
-    def activated_index(self, i):
-        # This seems the best for registering changes.
-        # However, incomplete edits can still hang around ...
-        print("ACTIVATED:", i)
-
-    def text_changed(self, text):
-        # called every time a character is edited ...
-        print("NEW TEXT:", text)
-
-    def text_activated(self, text):
-        # Seems just like activated_index, but passes text
-        print("ACTIVATED TEXT:", text)
-
-
-
-
-    def form(self):
-        # Actually only (some of) the lesson fields should be editable,
-        # and there may be special editors ...
-        editor = QFormLayout()
-        self.form_editors = {}
-        for f, t in COURSE_COLS:
-            if f == "course":
-                editwidget = QLineEdit()
-                editwidget.setReadOnly(True)
-            elif f in FOREIGN_FIELDS:
-                editwidget = FormComboBox(f, self.form_modified)
-            else:
-                editwidget = FormLineEdit(f, self.form_modified)
-            self.editors[f] = editwidget
-            self.courseeditor.addRow(t, editwidget)
-
-    def init_classes(self):
-        self.classlist.clear()
-        for klass, kname in get_class_list(skip_null=False):
-            self.classlist.addItem(klass)
-        self.classlist.setCurrentRow(0)
-
-
-    def select_class(self, klass):
-        print("SELECT CLASS:", klass)
-        # Get the (timetable-relevant) "lessons" for the selected class
-        cfields, cvalues = db_read_full_table("COURSES", CLASS=klass)
-        cfmap = {cfields[i]: i for i in range(len(cfields))}
-        print("Course fields:", cfmap)
-
-        coursecol = cfmap["course"]
-        coursemap = {row[coursecol]: row for row in cvalues}
-        courses = list(coursemap)
-        print("Course ids:", courses)
-
-        lfields, lvalues = db_read_full_table("LESSONS", course=courses)
-        lfmap = {lfields[i]: i for i in range(len(lfields))}
-        print("Fields:", lfmap)
-        self.lessontable.setRowCount(len(lvalues))
-        self.lessontable.clearContents()
-        lcoursecol = lfmap["course"]
-        r = 0
-        for row in lvalues:
-            print("LESSONS:", row)
-            c = 0
-            course = row[lcoursecol]
-            crow = coursemap[course]
-            for f in self.lessontable_cols:
-                try:
-                    col = lfmap[f]
-                    val = row[col]
-                except KeyError:
-                    try:
-                        col = cfmap[f]
-                        val = crow[col]
-                    except KeyError:
-                        raise Bug("Unexpected data structure")
-
-                self.lessontable.setItem(r, c, QTableWidgetItem(str(val)))
-                c += 1
-
-            r += 1
-
-        self.lessontable.resizeColumnsToContents()
-        # Toggle the stretch on the last section here because of a
-        # possible bug in Qt, where the stretch can be lost when
-        # repopulating.
-        hh = self.lessontable.horizontalHeader()
-        hh.setStretchLastSection(False)
-        hh.setStretchLastSection(True)
-
-
-        print("Wanted fields:", self.lessontable_cols)
-
-
-# Consider making this dialog the main/only editor for "lessons" – it
-# could be activated by "entering" one of the now read-only entries in
-# the base lesson table.
 
 class ListWidget(QListWidget):
     def sizeHint(self):
@@ -511,8 +362,8 @@ def placements(tag):
     return pl
 
 
-#TODO
 class ParallelsDialog(QDialog):
+#TODO
 # Could enable the save button only when it is different from the initial value
 # Could enable the clear/reset button only when there was an initial value
     def __init__(self):
@@ -524,7 +375,9 @@ class ParallelsDialog(QDialog):
 
         vbox1 = QVBoxLayout()
         hbox1.addLayout(vbox1)
-        self.identifier = EditableComboBox(changed_callback=self.tag_changed)
+        self.identifier = QComboBox(editable=True)
+        self.identifier.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.identifier.currentTextChanged.connect(self.show_courses)
         vbox1.addWidget(self.identifier)
 
         self.identifier.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
@@ -534,69 +387,75 @@ class ParallelsDialog(QDialog):
         self.course_list = ListWidget()
         hbox1.addWidget(self.course_list)
 
-
         buttonBox = QDialogButtonBox()
         buttonBox.setOrientation(Qt.Orientation.Vertical)
         vbox1.addWidget(buttonBox)
         bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
-        #hbox1.addStretch(1)
+        #vbox1.addStretch(1)
 
-#        bt_save.clicked.connect(self.do_accept)
-#        bt_cancel.clicked.connect(self.reject)
-#        bt_clear.clicked.connect(self.do_clear)
+        bt_save.clicked.connect(self.do_accept)
+        bt_cancel.clicked.connect(self.reject)
+        bt_clear.clicked.connect(self.do_clear)
 
+    def do_accept(self):
+        val = self.identifier.currentText()
+#TODO
+# Bear in mind that I still need to deal with the "=" prefixes ...
+        if val != self.value0:
+            self.result = val
+        if self.identifier.findText(val) < 0:
+             self.result = "+" + val
+        self.accept()
 
-    def tag_changed(self, text):
+    def do_clear(self):
+        if self.value0:
+            self.result = "-"
+        self.accept()
+
+    def show_courses(self, text):
         tag = "=" + text
-        print("NEW TEXT:", tag)
+        self.course_list.clear()
+        #print("NEW TEXT:", tag)
         # Populate the list widget with all courses sharing the new tag.
         # Including the currently selected one (which we can't identify here!)?
+#TODO
 #        plist = parallels(tag)
         plist = parallels(text) # just for testing!
-        self.course_list.clear()
+
         dlist = []
         for p in plist:
             if p.course:
                 # Present info about the course
-                dlist.append(str(get_course_info(p.course)))
+                ci = get_course_info(p.course)
+                #dlist.append(str(ci))
+                dlist.append(f"{ci.CLASS}.{ci.GRP}: {ci.SUBJECT} ({ci.TEACHER})")
 
             else:
                 # This is a block lesson
                 dlist.append(f"[BLOCK] {p.PLACE}")
-
-#        self.course_list.addItems([str(p) for p in plist])
         self.course_list.addItems(dlist)
 
-#TODO: Probably needs to be at start of activate, because of dynamic nature of items
-    def init(self):
+    def activate(self, start_value=None):
+        self.value0 = start_value or ""
+        self.result = None
         self.identifier.clear()
-
         taglist = db_values(
             "LESSONS",
             "TIME",
+#TODO
 #            "TIME LIKE '=_%'",   ... actually, this is what I need here
             "TIME NOT LIKE '>%'", # just testing ...
             distinct=True,
             sort_field="TIME"
         )
-
         self.identifier.addItems(taglist)
-
-#TODO
-    def activate(self, start_value=None):
-#        d, p = self.timeslot2index(start_value)
-        self.result = None
-#        if d < 0:
-#            if p == 0:
-#                # error
-#                self.result = "?"
-#            else:
-#                p = 0
-#            d = 0
-#        self.daylist.setCurrentRow(d)
-#        self.periodlist.setCurrentRow(p)
+        if self.value0:
+            self.identifier.setCurrentText(self.value0)
+        else:
+# Actually there shouldn't be any with no tag!
+            self.show_courses(self.value0)
         self.exec()
         return self.result
 
@@ -616,10 +475,9 @@ if __name__ == "__main__":
 #    from ui.ui_base import run
 
     widget = ParallelsDialog()
-    widget.init()
-    print("----->", widget.activate())
+    print("----->", widget.activate("huO"))
 
-    quit(0)
+#    quit(0)
 
     widget = DayPeriodDialog()
     widget.init()
