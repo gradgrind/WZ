@@ -1,7 +1,7 @@
 """
 ui/dialogs.py
 
-Last updated:  2022-05-15
+Last updated:  2022-05-16
 
 Dialogs for various editing purposes
 
@@ -57,6 +57,8 @@ from core.db_management import (
 #from core.classes import get_class_list
 
 from ui.ui_base import (
+    HLine,
+
     ### QtWidgets:
     APP,
     QStyle,
@@ -466,98 +468,10 @@ class ParallelsDialog(QDialog):
         return self.result
 
 
-#TODO
+# Unfortunately this doesn't handle ordering of the room list (except
+# alphabetical). That might be better served by table with add, up, down
+# and delete functions.
 class RoomDialog0(QDialog):
-    def __init__(self):
-        super().__init__()
-        hbox1 = QHBoxLayout(self)
-
-        self.roomlist = ListWidget()
-        hbox1.addWidget(self.roomlist)
-
-        vbox1 = QVBoxLayout()
-        hbox1.addLayout(vbox1)
-        self.roomtext = QLineEdit()
-        vbox1.addWidget(self.roomtext)
-
-#        bn_validator = BlocknameValidator()
-#        self.roomtext.setValidator(bn_validator)
-
-        vbox1.addStretch(1)
-
-        buttonBox = QDialogButtonBox()
-        buttonBox.setOrientation(Qt.Orientation.Vertical)
-        vbox1.addWidget(buttonBox)
-        bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
-        bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-        bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
-
-        bt_save.clicked.connect(self.do_accept)
-        bt_cancel.clicked.connect(self.reject)
-        bt_clear.clicked.connect(self.do_clear)
-
-    def do_accept(self):
-        print("ACCEPT")
-        return
-
-        val = self.identifier.currentText()
-#TODO
-# Bear in mind that I still need to deal with the "=" prefixes ...
-        if val != self.value0:
-            self.result = val
-        if self.identifier.findText(val) < 0:
-             self.result = "+" + val
-        self.accept()
-
-    def do_clear(self):
-        print("CLEAR")
-        return
-        if self.value0:
-            self.result = "-"
-        self.accept()
-
-    def init(self):
-        self.rooms = db_key_value_list(
-            "TT_ROOMS",
-            "RID",
-            "NAME",
-            sort_field="RID"
-        )
-        i = 0
-        for rid, name in self.rooms:
-            self.roomlist.addItem(f"{rid:6}: {name}")
-            item = self.roomlist.item(i)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(Qt.CheckState.Unchecked)
-            i += 1
-
-    def activate(self, start_value=None):
-        self.exec()
-        return
-
-        self.value0 = start_value or ""
-        self.result = None
-        self.roomlist.clear()
-        taglist = db_values(
-            "LESSONS",
-            "TIME",
-#TODO
-#            "TIME LIKE '=_%'",   ... actually, this is what I need here
-            "TIME NOT LIKE '>%'", # just testing ...
-            distinct=True,
-            sort_field="TIME"
-        )
-        self.identifier.addItems(taglist)
-        if self.value0:
-            self.identifier.setCurrentText(self.value0)
-        else:
-# Actually there shouldn't be any with no tag!
-            self.show_courses(self.value0)
-        self.exec()
-        return self.result
-
-
-class RoomDialog(QDialog):
     def __init__(self):
         super().__init__()
         hbox1 = QHBoxLayout(self)
@@ -661,6 +575,134 @@ class RoomDialog(QDialog):
             self.home.hide()
         self.exec()
         return
+
+
+#TODO: Make the list-table left, the all-room table right, the buttons
+# under the list-table.
+class RoomDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        vbox0 = QVBoxLayout(self)
+        hbox1 = QHBoxLayout()
+        vbox0.addLayout(hbox1)
+        vboxl = QVBoxLayout()
+        hbox1.addLayout(vboxl)
+
+        self.roomchoice = QTableWidget()
+        self.roomchoice.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.roomchoice.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.roomchoice.setSelectionBehavior(QAbstractItemView.SelectRows)
+        vboxl.addWidget(self.roomchoice)
+
+
+
+        vboxr = QVBoxLayout()
+        hbox1.addLayout(vboxr)
+
+        self.roomlist = QTableWidget()
+        self.roomlist.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.roomlist.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.roomlist.setSelectionBehavior(QAbstractItemView.SelectRows)
+        #self.roomlist.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        vboxr.addWidget(self.roomlist)
+
+
+        self.roomtext = QLineEdit()
+        self.roomtext.textEdited.connect(self.text_changed)
+        vboxl.addWidget(self.roomtext)
+
+#        bn_validator = BlocknameValidator()
+#        self.roomtext.setValidator(bn_validator)
+
+        self.home = QCheckBox("CLASSROOM")
+        vboxl.addWidget(self.home)
+        self.extra = QCheckBox("OTHERS")
+        vboxl.addWidget(self.extra)
+
+#TODO: Add buttons for: add, remove, up, down
+
+        #vboxl.addSpacing(100)
+        #vboxl.addStretch(1)
+
+        #hbox2 = QHBoxLayout()
+        #vboxl.addLayout(hbox2)
+        #hbox2.addStretch(1)
+
+        vbox0.addWidget(HLine())
+        buttonBox = QDialogButtonBox()
+        #buttonBox.setOrientation(Qt.Orientation.Vertical)
+        vbox0.addWidget(buttonBox)
+        bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
+        bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
+        bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
+
+        bt_save.clicked.connect(self.do_accept)
+        bt_cancel.clicked.connect(self.reject)
+        bt_clear.clicked.connect(self.do_clear)
+
+    def text_changed(self, text):
+        rooms = text.split("/")
+        print("§ -->", rooms)
+
+    def do_accept(self):
+        print("ACCEPT")
+        return
+
+        val = self.identifier.currentText()
+#TODO
+# Bear in mind that I still need to deal with the "=" prefixes ...
+        if val != self.value0:
+            self.result = val
+        if self.identifier.findText(val) < 0:
+             self.result = "+" + val
+        self.accept()
+
+    def do_clear(self):
+        print("CLEAR")
+        return
+        if self.value0:
+            self.result = "-"
+        self.accept()
+
+    def init(self):
+        self.rooms = db_key_value_list(
+            "TT_ROOMS",
+            "RID",
+            "NAME",
+            sort_field="RID"
+        )
+        n = len(self.rooms)
+        self.roomlist.setRowCount(n)
+        self.roomlist.setColumnCount(2)
+        for i in range(n):
+            item = QTableWidgetItem(self.rooms[i][0])
+            self.roomlist.setItem(i, 0, item)
+            #item.setCheckState(Qt.CheckState.Unchecked)
+            item = QTableWidgetItem(self.rooms[i][1])
+            self.roomlist.setItem(i, 1, item)
+        self.roomlist.resizeColumnsToContents()
+        Hhd = self.roomlist.horizontalHeader()
+        Hhd.hide()
+        #Hhd.setMinimumSectionSize(20)
+        # A rather messy attempt to find an appropriate size for the table
+        Vhd = self.roomlist.verticalHeader()
+        Vhd.hide()
+        Hw = Hhd.length()
+        #Vw = Vhd.sizeHint().width()
+        #self.roomlist.setFixedWidth(Hw + Vw + 20)
+        self.roomlist.setFixedWidth(Hw + 20)
+        #Hhd.setStretchLastSection(True)
+
+    def activate(self, start_value=None, classroom=None):
+        self.classroom = classroom
+#?
+        if classroom:
+            self.home.show()
+        else:
+            self.home.hide()
+        self.exec()
+        return
+
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
