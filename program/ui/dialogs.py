@@ -1,7 +1,7 @@
 """
 ui/dialogs.py
 
-Last updated:  2022-05-16
+Last updated:  2022-05-17
 
 Dialogs for various editing purposes
 
@@ -75,6 +75,7 @@ from ui.ui_base import (
     QTableWidgetItem,
     QHeaderView,
     QCheckBox,
+    QToolButton,
     ### QtGui:
     QValidator,
     ### QtCore:
@@ -468,117 +469,8 @@ class ParallelsDialog(QDialog):
         return self.result
 
 
-# Unfortunately this doesn't handle ordering of the room list (except
-# alphabetical). That might be better served by table with add, up, down
-# and delete functions.
-class RoomDialog0(QDialog):
-    def __init__(self):
-        super().__init__()
-        hbox1 = QHBoxLayout(self)
-
-        self.roomlist = QTableWidget()
-        self.roomlist.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self.roomlist.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        hbox1.addWidget(self.roomlist)
-
-        vbox1 = QVBoxLayout()
-        hbox1.addLayout(vbox1)
-        self.roomtext = QLineEdit()
-        self.roomtext.textEdited.connect(self.text_changed)
-        vbox1.addWidget(self.roomtext)
-
-#        bn_validator = BlocknameValidator()
-#        self.roomtext.setValidator(bn_validator)
-
-        self.home = QCheckBox("CLASSROOM")
-        vbox1.addWidget(self.home)
-        self.extra = QCheckBox("OTHERS")
-        vbox1.addWidget(self.extra)
-
-        vbox1.addSpacing(100)
-        vbox1.addStretch(1)
-
-        hbox2 = QHBoxLayout()
-        vbox1.addLayout(hbox2)
-        hbox2.addStretch(1)
-
-        buttonBox = QDialogButtonBox()
-        buttonBox.setOrientation(Qt.Orientation.Vertical)
-        hbox2.addWidget(buttonBox)
-        bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
-        bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-        bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
-
-        bt_save.clicked.connect(self.do_accept)
-        bt_cancel.clicked.connect(self.reject)
-        bt_clear.clicked.connect(self.do_clear)
-
-    def text_changed(self, text):
-        rooms = text.split("/")
-        print("§ -->", rooms)
-
-    def do_accept(self):
-        print("ACCEPT")
-        return
-
-        val = self.identifier.currentText()
-#TODO
-# Bear in mind that I still need to deal with the "=" prefixes ...
-        if val != self.value0:
-            self.result = val
-        if self.identifier.findText(val) < 0:
-             self.result = "+" + val
-        self.accept()
-
-    def do_clear(self):
-        print("CLEAR")
-        return
-        if self.value0:
-            self.result = "-"
-        self.accept()
-
-    def init(self):
-        self.rooms = db_key_value_list(
-            "TT_ROOMS",
-            "RID",
-            "NAME",
-            sort_field="RID"
-        )
-        n = len(self.rooms)
-        self.roomlist.setRowCount(n)
-        self.roomlist.setColumnCount(2)
-        for i in range(n):
-            item = QTableWidgetItem(self.rooms[i][0])
-            self.roomlist.setItem(i, 0, item)
-            item.setCheckState(Qt.CheckState.Unchecked)
-            item = QTableWidgetItem(self.rooms[i][1])
-            self.roomlist.setItem(i, 1, item)
-        self.roomlist.resizeColumnsToContents()
-        Hhd = self.roomlist.horizontalHeader()
-        Hhd.hide()
-        #Hhd.setMinimumSectionSize(20)
-        # A rather messy attempt to find an appropriate size for the table
-        Vhd = self.roomlist.verticalHeader()
-        Vhd.hide()
-        Hw = Hhd.length()
-        #Vw = Vhd.sizeHint().width()
-        #self.roomlist.setFixedWidth(Hw + Vw + 20)
-        self.roomlist.setFixedWidth(Hw + 20)
-        #Hhd.setStretchLastSection(True)
-
-    def activate(self, start_value=None, classroom=None):
-        self.classroom = classroom
-#?
-        if classroom:
-            self.home.show()
-        else:
-            self.home.hide()
-        self.exec()
-        return
-
-
-#TODO: Make the list-table left, the all-room table right, the buttons
-# under the list-table.
+# Possibly completely without display line? If I need to copy/paste
+# an entry, I could suppl copy and paste buttons (or "actions").
 class RoomDialog(QDialog):
     def __init__(self):
         super().__init__()
@@ -594,7 +486,39 @@ class RoomDialog(QDialog):
         self.roomchoice.setSelectionBehavior(QAbstractItemView.SelectRows)
         vboxl.addWidget(self.roomchoice)
 
+#TODO: Add buttons for: up, down, add, remove
+        vboxm = QVBoxLayout()
+        hbox1.addLayout(vboxm)
 
+        bt_up = QToolButton()
+        bt_up.setToolTip("Move up")
+        vboxm.addWidget(bt_up)
+        bt_up.setArrowType(Qt.ArrowType.UpArrow)
+##        bt_up.setAutoRaise(True)
+##        bt_up.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+#        bt_up.clicked.connect(???)
+        bt_down = QToolButton()
+        bt_down.setToolTip("Move down")
+        vboxm.addWidget(bt_down)
+        bt_down.setArrowType(Qt.ArrowType.DownArrow)
+#        bt_down.clicked.connect(???)
+
+        vboxm.addStretch(1)
+        bt_left = QToolButton()
+        vboxm.addWidget(bt_left)
+        bt_left.setArrowType(Qt.ArrowType.LeftArrow)
+#T
+        bt_left.setToolTip("Add to choices")
+        bt_left.clicked.connect(self.add2choices)
+        bt_right = QToolButton()
+        vboxm.addWidget(bt_right)
+        bt_right.setIcon(self.style().standardIcon(
+            QStyle.StandardPixmap.SP_DialogDiscardButton))
+#        bt_right.setArrowType(Qt.ArrowType.RightArrow)
+#T
+        bt_right.setToolTip("Remove from choices")
+        bt_right.clicked.connect(self.discard_choice)
+        vboxm.addStretch(1)
 
         vboxr = QVBoxLayout()
         hbox1.addLayout(vboxr)
@@ -619,8 +543,6 @@ class RoomDialog(QDialog):
         self.extra = QCheckBox("OTHERS")
         vboxl.addWidget(self.extra)
 
-#TODO: Add buttons for: add, remove, up, down
-
         #vboxl.addSpacing(100)
         #vboxl.addStretch(1)
 
@@ -644,13 +566,38 @@ class RoomDialog(QDialog):
         rooms = text.split("/")
         print("§ -->", rooms)
 
+    def add2choices(self):
+        row = self.roomlist.currentRow()
+        riditem = self.roomlist.item(row, 0)
+        rid = riditem.text()
+#?
+        if rid == self.classroom:
+            rid = '$'
+        if rid not in self.choices:
+            ri = len(self.choices)
+            self.roomchoice.insertRow(ri)
+            self.roomchoice.setItem(ri, 0, riditem.clone())
+            self.roomchoice.setItem(ri, 1, self.roomlist.item(row, 1).clone())
+            self.roomchoice.resizeColumnsToContents()
+            self.roomchoice.selectRow(ri)
+            self.choices.append(rid)
+            self.write_choices()
+
+    def discard_choice(self):
+        row = self.roomchoice.currentRow()
+        self.roomchoice.removeRow(row)
+        del(self.choices[row])
+        self.write_choices()
+
+    def write_choices(self):
+        self.roomtext.setText("/".join(self.choices))
+
     def do_accept(self):
         print("ACCEPT")
         return
 
         val = self.identifier.currentText()
 #TODO
-# Bear in mind that I still need to deal with the "=" prefixes ...
         if val != self.value0:
             self.result = val
         if self.identifier.findText(val) < 0:
@@ -665,6 +612,7 @@ class RoomDialog(QDialog):
         self.accept()
 
     def init(self):
+        self.room2line = {}
         self.rooms = db_key_value_list(
             "TT_ROOMS",
             "RID",
@@ -675,9 +623,10 @@ class RoomDialog(QDialog):
         self.roomlist.setRowCount(n)
         self.roomlist.setColumnCount(2)
         for i in range(n):
-            item = QTableWidgetItem(self.rooms[i][0])
+            rid = self.rooms[i][0]
+            self.room2line[rid] = i
+            item = QTableWidgetItem(rid)
             self.roomlist.setItem(i, 0, item)
-            #item.setCheckState(Qt.CheckState.Unchecked)
             item = QTableWidgetItem(self.rooms[i][1])
             self.roomlist.setItem(i, 1, item)
         self.roomlist.resizeColumnsToContents()
@@ -689,17 +638,71 @@ class RoomDialog(QDialog):
         Vhd.hide()
         Hw = Hhd.length()
         #Vw = Vhd.sizeHint().width()
-        #self.roomlist.setFixedWidth(Hw + Vw + 20)
-        self.roomlist.setFixedWidth(Hw + 20)
-        #Hhd.setStretchLastSection(True)
+        fixed_width = Hw + 20   # + Vw, if vertical headers in use
+        self.roomlist.setFixedWidth(fixed_width)
+        self.roomchoice.setFixedWidth(fixed_width)
+        Hhd.setStretchLastSection(True)
+        hh = self.roomchoice.horizontalHeader()
+        hh.hide()
+# Check that this doesn't need toggling after a clear() ...
+        hh.setStretchLastSection(True)
+        self.roomchoice.verticalHeader().hide()
 
-    def activate(self, start_value=None, classroom=None):
+    def activate(self, start_value="", classroom=None):
         self.classroom = classroom
 #?
         if classroom:
             self.home.show()
         else:
             self.home.hide()
+#?
+        if start_value.endswith("+"):
+            self.extra.setCheckState(Qt.CheckState.Checked)
+            start_value = start_value[:-1]
+        else:
+            self.extra.setCheckState(Qt.CheckState.Unchecked)
+
+        rids = start_value.split("/")
+        self.choices = []
+        self.roomchoice.clear()
+        self.roomchoice.setColumnCount(2)
+#?
+        self.home.setCheckState(Qt.CheckState.Unchecked)
+        for rid in rids:
+            if rid == "$":
+                if not self.classroom:
+#T
+                    SHOW_ERROR("No classroom defined")
+                    continue
+                rid = self.classroom
+#?
+                self.home.setCheckState(Qt.CheckState.Checked)
+            try:
+                row = self.room2line[rid]
+            except KeyError:
+#T
+                SHOW_ERROR(f"Unknown room id: '{rid}'")
+                continue
+
+            # see method <add2choices>
+            riditem = self.roomlist.item(row, 0)
+#?
+            if rid in self.choices:
+                SHOW_WARNING("Repeated room id discarded: '{rid}'")
+                continue
+            ri = len(self.choices)
+            self.roomchoice.insertRow(ri)
+            self.roomchoice.setItem(ri, 0, riditem.clone())
+            self.roomchoice.setItem(ri, 1, self.roomlist.item(row, 1).clone())
+            self.roomchoice.resizeColumnsToContents()
+            self.roomchoice.selectRow(ri)
+            self.choices.append(rid)
+        self.write_choices()
+
+        self.roomchoice.selectRow(0)
+        self.roomlist.selectRow(0)
+
+# Focus line edit?
         self.exec()
         return
 
@@ -719,7 +722,7 @@ if __name__ == "__main__":
 
     widget = RoomDialog()
     widget.init()
-    print("----->", widget.activate("huO", classroom="r10G"))
+    print("----->", widget.activate(start_value="$/rPh+", classroom="r10G"))
 
 #    quit(0)
 
