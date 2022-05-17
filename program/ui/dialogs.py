@@ -76,6 +76,7 @@ from ui.ui_base import (
     QHeaderView,
     QCheckBox,
     QToolButton,
+    QPushButton,
     ### QtGui:
     QValidator,
     ### QtCore:
@@ -486,12 +487,13 @@ class RoomDialog(QDialog):
         self.roomchoice.setSelectionBehavior(QAbstractItemView.SelectRows)
         vboxl.addWidget(self.roomchoice)
 
-#TODO: Add buttons for: up, down, add, remove
+#TODO: Add button handlers for: up, down
         vboxm = QVBoxLayout()
         hbox1.addLayout(vboxm)
 
         bt_up = QToolButton()
         bt_up.setToolTip("Move up")
+        bt_up.clicked.connect(self.move_up)
         vboxm.addWidget(bt_up)
         bt_up.setArrowType(Qt.ArrowType.UpArrow)
 ##        bt_up.setAutoRaise(True)
@@ -499,6 +501,7 @@ class RoomDialog(QDialog):
 #        bt_up.clicked.connect(???)
         bt_down = QToolButton()
         bt_down.setToolTip("Move down")
+        bt_down.clicked.connect(self.move_down)
         vboxm.addWidget(bt_down)
         bt_down.setArrowType(Qt.ArrowType.DownArrow)
 #        bt_down.clicked.connect(???)
@@ -530,7 +533,6 @@ class RoomDialog(QDialog):
         #self.roomlist.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         vboxr.addWidget(self.roomlist)
 
-
         self.roomtext = QLineEdit()
         self.roomtext.textEdited.connect(self.text_changed)
         vboxl.addWidget(self.roomtext)
@@ -538,9 +540,11 @@ class RoomDialog(QDialog):
 #        bn_validator = BlocknameValidator()
 #        self.roomtext.setValidator(bn_validator)
 
-        self.home = QCheckBox("CLASSROOM")
+        self.home = QPushButton(f"+ {T['CLASSROOM']}")
+        self.home.clicked.connect(self.add_classroom)
         vboxl.addWidget(self.home)
-        self.extra = QCheckBox("OTHERS")
+        self.extra = QCheckBox(T["OTHER_ROOMS"])
+        self.extra.stateChanged.connect(self.toggle_extra)
         vboxl.addWidget(self.extra)
 
         #vboxl.addSpacing(100)
@@ -562,35 +566,107 @@ class RoomDialog(QDialog):
         bt_cancel.clicked.connect(self.reject)
         bt_clear.clicked.connect(self.do_clear)
 
+#? Maybe read only?
     def text_changed(self, text):
         rooms = text.split("/")
         print("§ -->", rooms)
 
-    def add2choices(self):
-        row = self.roomlist.currentRow()
-        riditem = self.roomlist.item(row, 0)
-        rid = riditem.text()
-#?
-        if rid == self.classroom:
-            rid = '$'
-        if rid not in self.choices:
-            ri = len(self.choices)
-            self.roomchoice.insertRow(ri)
-            self.roomchoice.setItem(ri, 0, riditem.clone())
-            self.roomchoice.setItem(ri, 1, self.roomlist.item(row, 1).clone())
-            self.roomchoice.resizeColumnsToContents()
-            self.roomchoice.selectRow(ri)
-            self.choices.append(rid)
-            self.write_choices()
+    def add2choices(self, roomid=None):
+        is_classroom = False
+        if roomid:
+            if roomid == "$":
+                if self.classroom:
+                    rid = self.classroom
+                    is_classroom = True
+                else:
+                    SHOW_ERROR(T["NO_CLASSROOM_DEFINED"])
+                    return False
+            else:
+                rid = roomid
+                if rid == self.classroom:
+                    is_classroom = True
+            try:
+                row = self.room2line[rid]
+            except KeyError:
+                SHOW_ERROR(f"{T['UNKNOWN_ROOM_ID']}: '{rid}'")
+                return False
+            riditem = self.roomlist.item(row, 0)
+        else:
+            row = self.roomlist.currentRow()
+            riditem = self.roomlist.item(row, 0)
+            rid = riditem.text()
+            roomid = rid
+            if rid == self.classroom:
+                is_classroom = True
+        if rid in self.choices or (is_classroom and "$" in self.choices):
+            if is_classroom:
+                SHOW_WARNING(T["CLASSROOM_ALREADY_CHOSEN"])
+            else:
+                SHOW_WARNING(T["ROOM_ALREADY_CHOSEN"].format(rid=rid))
+            return False
+        ri = len(self.choices)
+        self.roomchoice.insertRow(ri)
+        self.roomchoice.setItem(ri, 0, riditem.clone())
+        self.roomchoice.setItem(ri, 1, self.roomlist.item(row, 1).clone())
+        self.roomchoice.resizeColumnsToContents()
+        self.roomchoice.selectRow(ri)
+        self.choices.append(roomid)
+        self.write_choices()
+        return True
 
     def discard_choice(self):
         row = self.roomchoice.currentRow()
+        rid = self.choices.pop(row)
         self.roomchoice.removeRow(row)
-        del(self.choices[row])
         self.write_choices()
 
+    def add_classroom(self):
+        self.add2choices("$")
+
+    def toggle_extra(self, state):
+        self.write_choices()
+
+    def move_up(self):
+        row = self.roomchoice.currentRow()
+        if row <= 0:
+            return
+        row1 = row - 1
+        item = self.roomchoice.takeItem(row, 0)
+        self.roomchoice.setItem(row, 0, self.roomchoice.takeItem(row1, 0))
+        self.roomchoice.setItem(row1, 0, item)
+        item = self.roomchoice.takeItem(row, 1)
+        self.roomchoice.setItem(row, 1, self.roomchoice.takeItem(row1, 1))
+        self.roomchoice.setItem(row1, 1, item)
+
+        t = self.choices[row]
+        self.choices[row] = self.choices[row1]
+        self.choices[row1] = t
+        self.write_choices()
+        self.roomchoice.selectRow(row1)
+
+    def move_down(self):
+        row = self.roomchoice.currentRow()
+        row1 = row + 1
+        if row1 == len(self.choices):
+            return
+        item = self.roomchoice.takeItem(row, 0)
+        self.roomchoice.setItem(row, 0, self.roomchoice.takeItem(row1, 0))
+        self.roomchoice.setItem(row1, 0, item)
+        item = self.roomchoice.takeItem(row, 1)
+        self.roomchoice.setItem(row, 1, self.roomchoice.takeItem(row1, 1))
+        self.roomchoice.setItem(row1, 1, item)
+
+        t = self.choices[row]
+        self.choices[row] = self.choices[row1]
+        self.choices[row1] = t
+        self.write_choices()
+        self.roomchoice.selectRow(row1)
+
     def write_choices(self):
-        self.roomtext.setText("/".join(self.choices))
+        text = "/".join(self.choices)
+        if self.extra.isChecked():
+            text += "+"
+        self.roomtext.setText(text)
 
     def do_accept(self):
         print("ACCEPT")
@@ -650,55 +726,21 @@ class RoomDialog(QDialog):
 
     def activate(self, start_value="", classroom=None):
         self.classroom = classroom
-#?
         if classroom:
             self.home.show()
         else:
             self.home.hide()
-#?
+        self.choices = []
+        self.roomchoice.clear()
+        self.roomchoice.setColumnCount(2)
         if start_value.endswith("+"):
             self.extra.setCheckState(Qt.CheckState.Checked)
             start_value = start_value[:-1]
         else:
             self.extra.setCheckState(Qt.CheckState.Unchecked)
-
         rids = start_value.split("/")
-        self.choices = []
-        self.roomchoice.clear()
-        self.roomchoice.setColumnCount(2)
-#?
-        self.home.setCheckState(Qt.CheckState.Unchecked)
         for rid in rids:
-            if rid == "$":
-                if not self.classroom:
-#T
-                    SHOW_ERROR("No classroom defined")
-                    continue
-                rid = self.classroom
-#?
-                self.home.setCheckState(Qt.CheckState.Checked)
-            try:
-                row = self.room2line[rid]
-            except KeyError:
-#T
-                SHOW_ERROR(f"Unknown room id: '{rid}'")
-                continue
-
-            # see method <add2choices>
-            riditem = self.roomlist.item(row, 0)
-#?
-            if rid in self.choices:
-                SHOW_WARNING("Repeated room id discarded: '{rid}'")
-                continue
-            ri = len(self.choices)
-            self.roomchoice.insertRow(ri)
-            self.roomchoice.setItem(ri, 0, riditem.clone())
-            self.roomchoice.setItem(ri, 1, self.roomlist.item(row, 1).clone())
-            self.roomchoice.resizeColumnsToContents()
-            self.roomchoice.selectRow(ri)
-            self.choices.append(rid)
-        self.write_choices()
-
+            self.add2choices(rid)
         self.roomchoice.selectRow(0)
         self.roomlist.selectRow(0)
 

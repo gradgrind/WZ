@@ -88,10 +88,15 @@ ui.modules.course_lessons: {
     COURSE_EXISTS:  "Der geänderte „Kurs“ existiert schon"
     REALLY_DELETE:  "Soll dieser „Kurs“ wirklich gelöscht werden?"
     COURSE_ADDED:   "„Kurs“ in Klasse {klass} eingefügt"
+    ROOM_ALREADY_CHOSEN: "Raum '{rid}' schon in Auswahl"
+    CLASSROOM_ALREADY_CHOSEN: "Klassenraum schon in Auswahl"
+    UNKNOWN_ROOM_ID: "Unbekanntes Raumkürzel"
 
     # Labels
     MODULE_NAME:    "Kurse/Stunden"
     MODULE_TITLE:   "Unterrichtskurse und -stunden verwalten"
+    CLASSROOM:      "Klassenraum"
+    OTHER_ROOMS:    "auch andere Räume"
 
     # Course field editor buttons
 #    EDIT_COURSE:    "Kursdaten bearbeiten"
