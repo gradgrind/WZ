@@ -211,6 +211,9 @@ class EditableComboBox(QComboBox):
                 self.__changed(t)
 
 
+class TimeSlotError(Exception):
+    pass
+#+
 class DayPeriodDialog(QDialog):
     def timeslot2index(self, timeslot):
         """Convert a "timeslot" in the tag-form (e.g. "Mo.3") to a pair
@@ -218,11 +221,10 @@ class DayPeriodDialog(QDialog):
         """
         i, j = -1, -1
         if timeslot and timeslot != "?":
-            e = False
             try:
                 d, p = timeslot.split(".")
             except ValueError:
-                e = True
+                raise TimeSlotError
             else:
                 n = 0
                 for day in self.DAYS:
@@ -231,7 +233,7 @@ class DayPeriodDialog(QDialog):
                         break
                     n += 1
                 else:
-                    e = True
+                    raise TimeSlotError
                 n = 0
                 for period in self.PERIODS:
                     if period[0] == p:
@@ -239,10 +241,7 @@ class DayPeriodDialog(QDialog):
                         break
                     n += 1
                 else:
-                    e = True
-            if e:
-                SHOW_ERROR(f"Bug: invalid day.period: {timeslot}")
-                return -1, 0
+                    raise TimeSlotError
         return i, j
 
     def index2timeslot(self, index):
@@ -306,15 +305,15 @@ class DayPeriodDialog(QDialog):
         self.periodlist.addItems([p[1] for p in self.PERIODS])
 
     def activate(self, start_value=None):
-        d, p = self.timeslot2index(start_value)
-        self.result = None
-        if d < 0:
-            if p == 0:
-                # error
-                self.result = "?"
-            else:
-                p = 0
-            d = 0
+        try:
+            d, p = self.timeslot2index(start_value)
+            self.result = None
+            if d < 0:
+                d, p = 0, 0
+        except TimeSlotError:
+            SHOW_ERROR(f"Bug: invalid day.period: '{start_value}'")
+            self.result = "?"
+            d, p = 0, 0
         self.daylist.setCurrentRow(d)
         self.periodlist.setCurrentRow(p)
         self.exec()
@@ -368,7 +367,6 @@ def partners(tag):
         SHOW_ERROR(f"Bug: Spaces in partner tag: '{tag}'")
         return []
     if not tag:
-        SHOW_ERROR("Bug: Empty partner tag")
         return []
     flist, plist = db_read_table(
         "LESSONS",

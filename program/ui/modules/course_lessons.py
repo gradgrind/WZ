@@ -159,7 +159,15 @@ class Courses(Page):
         open_database()
         self.course_editor.init_data()
         SHARED_DATA["RoomDialog"].init()
-        SHARED_DATA["DayPeriodDialog"].init()
+        dayPeriodDialog = SHARED_DATA["DayPeriodDialog"]
+        dayPeriodDialog.init()
+        # Initialize the lesson duration selector
+        editlen = self.course_editor.simple_lesson_dialog.editors["LENGTH"]
+        lengths = [("0", "0")]
+        for p in dayPeriodDialog.PERIODS:
+            istr = str(len(lengths))
+            lengths.append((istr, istr))
+        editlen.setup(lengths)
 
 #    def is_modified(self):
 #        return bool(self.course_editor.form_change_set)
@@ -475,7 +483,7 @@ class CourseEditor(QSplitter):
         row = index.row()
         if row < 0:
 #???
-            print("EMPTY LESSON TABLE:", repr(course))
+            print("EMPTY LESSON TABLE:")#, repr(course))
 # also need new block-lesson ...
 
         else:
@@ -758,7 +766,6 @@ class CourseEditorForm(QDialog):
             self.form_change_set.add(field)
             if field in COURSE_KEY_FIELDS:
                 self.course_add_button.setEnabled(True)
-            self.form_change_set.add(field)
         else:
             self.form_change_set.discard(field)
             if self.form_change_set:
@@ -927,23 +934,16 @@ class LessonEditorForm(QDialog):
     def init(self, model):#, keymaps):
         self.model = model
 #TODO: table_empty probably not needed
-        self.table_empty = None
+#        self.table_empty = None
 #        for f, kv in keymaps.items():
 #            editwidget = self.editors[f]
 #            editwidget.setup(kv)
 
-# Superfluous?
-        self.periods = db_read_fields(
-            "TT_PERIODS",
-            ("N", "TAG", "NAME"),
-            sort_field="N"
-        )
-        print("§§§ PERIODS:", self.periods)
+#        self.block_s.set_items(
+#            [kv for kv in SHARED_DATA["SUBJECTS"] if kv[0] != "--"]
+#        )
 
-        self.block_s.set_items(
-            [kv for kv in SHARED_DATA["SUBJECTS"] if kv[0] != "--"]
-        )
-
+#??? ...
     def block_subject_changed(self, text):
         print("-> BLOCK", text)
         return True
@@ -1281,23 +1281,40 @@ class LessonEditorBase(QDialog):
             form0.addRow(T[f], widget)
         self.vbox1.addWidget(HLine())
 
-    def init(self, model):#, keymaps):
+    def init(self, model):
         self.model = model
-        self.periods = db_read_fields(
-            "TT_PERIODS",
-            ("N", "TAG", "NAME"),
-            sort_field="N"
-        )
-        print("§§§ PERIODS:", self.periods)
+        self.table_empty = None
 
     def form_modified(self, field, changed):
+        """Handle a change in a form editor field.
+        Maintain the set of changed fields (<self.form_change_set>).
+        Enable and disable the pushbuttons appropriately.
+        """
         print("LESSON MODIFIED", field, changed)
+        if self.table_empty:
+            self.lesson_update_button.setEnabled(False)
+#            self.lesson_add_button.setEnabled(True)
+        elif self.table_empty == None:
+            # ignore – not yet set up
+            return
+        elif changed:
+            self.lesson_update_button.setEnabled(True)
+            self.form_change_set.add(field)
+        else:
+            self.form_change_set.discard(field)
+            if not self.form_change_set:
+                self.lesson_update_button.setEnabled(False)
+        # print("FORM CHANGED SET:", self.form_change_set)
+
+
+
 
 #??????????
 
     def closeEvent(self, event):
         """Prevent dialog closure if there are changes.
         """
+        print("??? CLOSING", self.modified())
         if self.modified() and not LoseChangesDialog():
             event.ignore()
         else:
@@ -1305,7 +1322,7 @@ class LessonEditorBase(QDialog):
 
     def modified(self):
 #--
-        return False
+#        return False
         #return self.form_change_set
         return bool(self.form_change_set)
 
@@ -1559,10 +1576,10 @@ class LessonEditor(LessonEditorBase):
         hbox2.addSpacing(100)
         hbox2.addStretch(1)
         self.course_update_button = QPushButton(T["UPDATE"])
-#        self.course_update_button.clicked.connect(self.course_update)
+        self.course_update_button.clicked.connect(self.lesson_update)
         hbox2.addWidget(self.course_update_button)
         self.course_add_button = QPushButton(T["NEW"])
-#        self.course_add_button.clicked.connect(self.course_add)
+        self.course_add_button.clicked.connect(self.lesson_add)
         hbox2.addWidget(self.course_add_button)
 
     def activate(self, course, row):
@@ -1589,19 +1606,11 @@ class LessonEditor(LessonEditorBase):
                 ltime = get_time_entry(tag)
             else:
                 self.editors["Partners"].setText("")
-                # Check validity of time?
-                if tag.startswith("@"):
-                    ltime = tag[1:]
-                    if SHARED_DATA["DayPeriodDialog"].timeslot2index(ltime) == (-1, 0):
-                        return "?"
-                    else:
-                        return ltime
-                else:
-#T
-                    SHOW_ERROR(f"BAD_TIME: {tag}")
-                    ltime = "?"
+                # Check validity of time
+                ltime = check_start_time(tag)
 
             self.editors["Time"].setText(ltime)
+            self.editors["LENGTH"].setText(record.value("LENGTH"))
             self.editors["PAYROLL"].setText(record.value("PAYROLL"))
             self.editors["ROOM"].setText(record.value("ROOM"))
             self.editors["NOTES"].setText(record.value("NOTES"))
@@ -1611,6 +1620,73 @@ class LessonEditor(LessonEditorBase):
         self.__value = -1   # Default return value => don't change row
         self.exec()
         return self.__value
+
+    def lesson_add(self):
+        """Add the data in the form editor as a new course."""
+        print("ADD LESSON")
+        return
+
+        model = self.model
+        row = 0
+        model.insertRow(row)
+        for f, t in COURSE_COLS[1:]:
+            col = model.fieldIndex(f)
+            val = self.editors[f].text()
+            if f == "CLASS":
+                klass = val
+            model.setData(model.index(row, col), val)
+        if model.submitAll():
+            course = model.query().lastInsertId()
+            # print("INSERTED:", course)
+            for r in range(model.rowCount()):
+                if model.data(model.index(r, 0)) == course:
+                    self.return_value(r)            # Select this row
+                    break
+            else:
+                SHOW_INFO(T["COURSE_ADDED"].format(klass=klass))
+                self.return_value(self.current_row) # Reselect current row
+        else:
+            error = model.lastError()
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(T["COURSE_EXISTS"])
+            else:
+                SHOW_ERROR(error.text())
+            model.revertAll()
+
+#TODO
+    def lesson_update(self):
+        """Update the current course with the data in the form editor."""
+        print("UPDATE LESSON")
+        return
+
+        model = self.model
+        row = self.current_row
+        course = model.data(model.index(row, model.fieldIndex("course")))
+        for f in self.form_change_set:
+            col = model.fieldIndex(f)
+            val = self.editors[f].text()
+            model.setData(model.index(row, col), val)
+        if model.submitAll():
+            # The selection is lost – the changed row may even be in a
+            # different place, perhaps not even displayed.
+            # Try to stay with the same id, if it is displayed,
+            # otherwise the same (or else the last) row.
+            # print("UPDATED:", course)
+            for r in range(model.rowCount()):
+                if model.data(model.index(r, 0)) == course:
+                    self.return_value(r)    # Select this row
+                    break
+            else:
+                if row >= model.rowCount():
+                    row = model.rowCount() - 1
+                    self.return_value(row)  # Select this row
+        else:
+            error = model.lastError()
+            if "UNIQUE" in error.databaseText():
+                SHOW_ERROR(T["COURSE_EXISTS"])
+            else:
+                SHOW_ERROR(error.text())
+            model.revertAll()
 
 
 class FormPopupEdit(QLineEdit):
@@ -1704,13 +1780,18 @@ def get_time_entry(tag):
 # TIME="?", PLACE=f"={tag}", everything else empty
         return "?"
     # Check validity
-    if ltime.startswith("@"):
-        ltime = ltime[1:]
-        if SHARED_DATA["DayPeriodDialog"].timeslot2index(ltime) == (-1, 0):
-            return "?"
-        else:
+    return check_start_time(ltime)
+
+
+def check_start_time(tag):
+    try:
+        if tag.startswith("@"):
+            ltime = tag[1:]
+            SHARED_DATA["DayPeriodDialog"].timeslot2index(ltime)
             return ltime
-    SHOW_ERROR(f"Bug: invalid day.period: {ltime}")
+    except TimeSlotError:
+        pass
+    SHOW_ERROR(f"{T['BAD_TIME']}: {tag}")
     return "?"
 
 

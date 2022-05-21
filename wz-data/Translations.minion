@@ -96,6 +96,7 @@ ui.modules.course_lessons: {
     CLASSROOM_ALREADY_CHOSEN: "Klassenraum schon in Auswahl"
     UNKNOWN_ROOM_ID: "Unbekanntes Raumkürzel"
     INVALID_ROOM_IDS: "Ungültige Raumkürzel"
+    BAD_TIME:       "Ungültige Zeitangabe (Tag.Stunde)"
 
     # Labels
     MODULE_NAME:    "Kurse/Stunden"
