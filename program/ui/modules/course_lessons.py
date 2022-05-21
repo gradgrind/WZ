@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-05-15
+Last updated:  2022-05-21
 
 Edit course and lesson data.
 
@@ -50,7 +50,9 @@ T = TRANSLATIONS("ui.modules.course_lessons")
 from core.db_management import (
     open_database,
     db_key_value_list,
-    db_read_fields
+    db_read_fields,
+    db_read_unique_field,
+    NoRecord
 )
 
 from ui.ui_base import (
@@ -94,6 +96,8 @@ from ui.ui_base import (
     ### QtSql:
     QSqlTableModel,
 )
+
+from ui.dialogs import RoomDialog, DayPeriodDialog, PartnersDialog
 
 # Course table fields
 COURSE_COLS = [(f, T[f]) for f in (
@@ -154,6 +158,8 @@ class Courses(Page):
     def enter(self):
         open_database()
         self.course_editor.init_data()
+        SHARED_DATA["RoomDialog"].init()
+        SHARED_DATA["DayPeriodDialog"].init()
 
 #    def is_modified(self):
 #        return bool(self.course_editor.form_change_set)
@@ -249,7 +255,8 @@ class CourseEditor(QSplitter):
 #        bbox2.addWidget(self.lesson_add_button)
         self.lesson_add_button.clicked.connect(self.lesson_add)
 
-        self.lesson_dialog = LessonEditorForm()
+        self.simple_lesson_dialog = LessonEditor()
+        self.block_lesson_dialog = LessonEditorForm()
 #        self.lesson_edit_button = QPushButton(T['EDIT_LESSON'])
         self.lesson_edit_button = QPushButton(T['EDIT'])
         bbox2.addWidget(self.lesson_edit_button)
@@ -257,6 +264,9 @@ class CourseEditor(QSplitter):
 
         self.setStretchFactor(0, 1)  # stretch only left panel
 
+        SHARED_DATA["RoomDialog"] = RoomDialog()
+        SHARED_DATA["DayPeriodDialog"] = DayPeriodDialog()
+        SHARED_DATA["PartnersDialog"] = PartnersDialog()
 
     def course_activate(self, modelindex):
         self.edit_course()
@@ -350,7 +360,8 @@ class CourseEditor(QSplitter):
             self.lessonmodel.setHeaderData(i, Qt.Horizontal, t)
             if f not in LESSONCOLS_SHOW:
                 self.lessontable.hideColumn(i)
-        self.lesson_dialog.init(self.lessonmodel)
+        self.simple_lesson_dialog.init(self.lessonmodel)
+        self.block_lesson_dialog.init(self.lessonmodel)
 
         self.filter_field_select.trigger()
 
@@ -377,11 +388,15 @@ class CourseEditor(QSplitter):
             record = self.coursemodel.record(row)
             self.set_course(record.value(0))
             self.course_delete_button.setEnabled(True)
+            SHARED_DATA["COURSE"] = {
+                f: record.value(f) for f in COURSE_KEY_FIELDS
+            }
         else:
             # e.g. when entering an empty table
             #print("EMPTY TABLE")
             self.set_course(0)
             self.course_delete_button.setEnabled(False)
+            SHARED_DATA["COURSE"] = {}
 
     def course_delete(self):
         """Delete the current course."""
@@ -449,19 +464,35 @@ class CourseEditor(QSplitter):
 #TODO
         print("ACTIVATE LESSON", index.row())
         #LessonEditorForm().exec()
-
-# Need all lesson data and the course data for the header ...
-
-        record = self.coursemodel.record(self.current_row)
-        course_info = [(f, record.value(f)) for f in COURSE_KEY_FIELDS]
-        print("§§§ COURSE INFO:", course_info)
-#TODO
-        self.lesson_dialog.activate(
-            self.this_course,
-            course_info,
-            index.row()
-        )
+#        self.lesson_dialog.activate(
+#            self.this_course,
+#            index.row()
+#        )
 # Need to call lesson_selected(row) afterwards?
+
+#        return
+#TODO
+        row = index.row()
+        if row < 0:
+#???
+            print("EMPTY LESSON TABLE:", repr(course))
+# also need new block-lesson ...
+
+        else:
+            record = self.lessonmodel.record(row)
+            tag = record.value("TIME")
+            if tag.startswith(">"):
+                self.block_lesson_dialog.activate(
+                    self.this_course,
+                    row
+                )
+            else:
+                self.simple_lesson_dialog.activate(
+                    self.this_course,
+                    row
+                )
+
+
 
 
     def lesson_add(self):
@@ -525,6 +556,7 @@ class CourseEditor(QSplitter):
             model.revertAll()
 
 
+# see version in dialogs.py
 class EditableComboBox(QComboBox):
     def __init__(self, parent=None):
         super().__init__(parent=parent, editable=True)
@@ -819,7 +851,10 @@ class LessonEditorForm(QDialog):
         #vbox0.addLayout(form)
         self.editors = {}
         for f in "LENGTH", "PAYROLL", "ROOM", "TIME", "PLACE", "NOTES":
-            editwidget = FormLineEdit(f, self.form_modified)
+            if f == "ROOM":
+                editwidget = FormRoomEdit(f, self.form_modified)
+            else:
+                editwidget = FormLineEdit(f, self.form_modified)
             self.editors[f] = editwidget
             form.addRow(T[f], editwidget)
 #TODO: Now, what about TIME and PLACE???
@@ -897,7 +932,7 @@ class LessonEditorForm(QDialog):
 #            editwidget = self.editors[f]
 #            editwidget.setup(kv)
 
-
+# Superfluous?
         self.periods = db_read_fields(
             "TT_PERIODS",
             ("N", "TAG", "NAME"),
@@ -993,19 +1028,18 @@ class LessonEditorForm(QDialog):
             return LoseChangesDialog()
         return True
 
-    def activate(self, course, course_info, row):
+    def activate(self, course, row):
         """Initialize the dialog with values from the current "lesson"
         and then activate it.
 
         <course> is the course identifier ("course" field).
-        <course_info> provides the data for the header part.
         <row> is the selected row (0 ...) in the lesson list.
         If row < 0 then there is no "lesson", so a new record must be
         set up.
         """
         self.clear_modified()
         self.current_row = row
-        for f, v in course_info:
+        for f, v in SHARED_DATA["COURSE"].items():
             self.coursedata[f].setText(v)
         is_block_member = False
         self.block_tag = ""
@@ -1221,6 +1255,463 @@ class LessonEditorForm(QDialog):
                 self.course_update_button.setEnabled(False)
                 self.course_add_button.setEnabled(False)
         # print("FORM CHANGED SET:", self.form_change_set)
+
+
+class LessonEditorBase(QDialog):
+    """Popup editor for a "normal" lesson.
+    """
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.vbox1 = QVBoxLayout(self)
+        #self.vbox1.setContentsMargins(0, 0, 0, 0)
+        self.coursedata = {}
+        box0 = QFrame()
+        box0.setLineWidth(1)
+        box0.setMidLineWidth(1)
+        box0.setFrameShape(QFrame.Shape.Box)
+        box0.setFrameShadow(QFrame.Shadow.Sunken)
+
+        # The course data
+        self.vbox1.addWidget(box0)
+        form0 = QFormLayout(box0)
+        for f in COURSE_KEY_FIELDS:
+            widget = QLineEdit()
+            widget.setReadOnly(True)
+            self.coursedata[f] = widget
+            form0.addRow(T[f], widget)
+        self.vbox1.addWidget(HLine())
+
+    def init(self, model):#, keymaps):
+        self.model = model
+        self.periods = db_read_fields(
+            "TT_PERIODS",
+            ("N", "TAG", "NAME"),
+            sort_field="N"
+        )
+        print("§§§ PERIODS:", self.periods)
+
+    def form_modified(self, field, changed):
+        print("LESSON MODIFIED", field, changed)
+
+#??????????
+
+    def closeEvent(self, event):
+        """Prevent dialog closure if there are changes.
+        """
+        if self.modified() and not LoseChangesDialog():
+            event.ignore()
+        else:
+            event.accept()
+
+    def modified(self):
+#--
+        return False
+        #return self.form_change_set
+        return bool(self.form_change_set)
+
+    def clear_modified(self):
+        self.form_change_set = set()
+
+    def leave_ok(self):
+        if self.modified():
+            return LoseChangesDialog()
+        return True
+
+    def activate(self, course, row):
+        """Initialize the dialog with values from the current "lesson"
+        and then activate it.
+
+        <course> is the course identifier ("course" field).
+        <row> is the selected row (0 ...) in the lesson list.
+        If row < 0 then there is no "lesson", so a new record must be
+        set up.
+        """
+        self.clear_modified()
+        self.current_row = row
+        for f, v in SHARED_DATA["COURSE"].items():
+            self.coursedata[f].setText(v)
+        return
+
+
+        is_block_member = False
+        self.block_tag = ""
+        self.block_subject = "--"
+        if row < 0:
+            #print("EMPTY LESSON TABLE:", repr(course))
+            # Initialize with a basic, "normal" lesson
+#            "id" is <None>
+#            "course" is parameter <course>
+            self.editors["LENGTH"].setText("1")
+            self.editors["PAYROLL"].setText("*")
+            self.editors["ROOM"].setText("?")    # ?
+            self.editors["TIME"].setText("?")
+            self.editors["PLACE"].setText("?")
+            self.editors["NOTES"].setText("")
+
+        else:
+            record = self.model.record(row)
+            tag = record.value("TIME")
+            if tag.startswith(">"):
+                is_block_member = True
+                try:
+                    bs, btag = tag.split("#", 1)
+                except ValueError:
+                    SHOW_WARNING(f"Invalid block tag: {tag}")
+                    bsid = self.block_s.selected()
+                else:
+                    try:
+                        bsid = bs[1:]
+                        self.block_s.reset(bsid)
+                    except GuiError:
+                        SHOW_WARNING(f"Unknown subject: {bsid}")
+                        bsid = self.block_s.selected()
+
+                print("§§§§§", bsid)
+
+#                e = self.editors["LENGTH"]
+#                e.setText("*")
+#                e.hide()
+#                e = self.editors["PLACE"]
+#                e.setText("")
+#                e.hide()
+#            else:
+#                e = self.editors["LENGTH"]
+#                e.setText(record.value("LENGTH"))
+#                e.show()
+#                e = self.editors["PLACE"]
+#                e.setText(record.value("PLACE"))
+#                e.show()
+            self.editors["PAYROLL"].setText(record.value("PAYROLL"))
+            self.editors["ROOM"].setText(record.value("ROOM"))
+            self.editors["TIME"].setText(tag)
+# The time editor is probably handled differently if block member ...
+            self.editors["NOTES"].setText("")
+
+        if is_block_member:
+            self.blockmember.setCheckState(Qt.CheckState.Checked)
+#            self.blockmember.setChecked(True)
+
+#LENGTH = "*"
+#PAYROLL = payroll-entry
+#ROOM = a single room or "" ... specifies a room to reserve for the block
+#TIME = ""
+#PLACE = ""
+
+#        clear grid!!!
+#        This is not easy! It may be better to replace the whole widget.
+#        Or use a table with custom delegates/editors. As the items are
+#        in the LESSONS table, it might even be sensible to use a
+#        QSqlTableModel ...
+#
+#        for i in range(8):
+#            w_length = QComboBox()
+#            w_length.addItems([p[0] for p in self.periods])
+#            grid.addWidget(w_length, i, 0)
+#            grid.addWidget(QLineEdit(), i, 1)
+#            grid.addWidget(EditableComboBox(), i, 2)
+
+# There seems to be a memory leak here!
+# Probably better to allw adding of rows, but excess rows should just be
+# hidden, and reused when needed.
+# But a table-view might be still better ...
+#            for n in range(1000):
+#                scrolledarea = QWidget()
+#                grid = QGridLayout()
+#                scrolledarea.setLayout(grid)
+#                self.__area.setWidget(scrolledarea)
+#                for i in range(3):
+#                    w_length = QComboBox()
+#                    w_length.addItems([str(p[0]) for p in self.periods])
+#                    grid.addWidget(w_length, i, 0)
+#                    grid.addWidget(QLineEdit(), i, 1)
+#                    grid.addWidget(EditableComboBox(), i, 2)
+        else:
+            self.blockmember.setCheckState(Qt.CheckState.Unchecked)
+#            self.blockmember.setChecked(False)
+#LENGTH = "n"
+#PAYROLL = payroll-entry
+#ROOM = "r..." or "$" (or "?"?) ... list?
+#TIME = "day:period" or "?" ("" if length = "0")
+#PLACE = a single room or "?" ("" if length = "0")
+
+#        for f, e in self.editors.items():
+#            e.setText(str(record.value(f)))
+        self.form_modified("", False)  # initialize form button states
+
+        self.__value = -1   # Default return value => don't change row
+        self.exec()
+        return self.__value
+
+# In addition there are special entries in the lesson table. These have
+# 0 in the "course" field. Their tag field should match a parallel tag
+# or a block tag. Their "TIME" field is used and, in the case of a block
+# tag, also the "LENGTH" field, all others should be empty.
+# Then it would not be possible to be parallel to a block lesson – which
+# might be a good thing. If it should be possible to mark lessons as
+# parallel to block lessons, the parallel tag could be in the "TIME"
+# field. For the special lesson actually determining the time, the tag
+# can be in the "PLACE" field because the "TIME" field is
+# needed for the time.
+
+#----------
+
+
+class LessonEditor(LessonEditorBase):
+    """Popup editor for a "normal" lesson.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+
+        form = QFormLayout()
+        self.vbox1.addLayout(form)
+        self.editors = {}
+        f = "LENGTH"
+        editwidget = FormComboBox(f, self.form_modified)
+        self.editors[f] = editwidget
+        form.addRow(T[f], editwidget)
+        f = "PAYROLL"
+#TODO: FormPayrollEdit
+        editwidget = FormLineEdit(f, self.form_modified)
+        self.editors[f] = editwidget
+        form.addRow(T[f], editwidget)
+        f = "ROOM"
+        editwidget = FormRoomEdit(f, self.form_modified)
+        self.editors[f] = editwidget
+        form.addRow(T[f], editwidget)
+        # TIME: embraces "partners" as well as the actual placement time
+        ft = "Time"
+        timefield = FormTimeEdit(ft, self.form_modified)
+        f = "Partners"
+        editwidget = FormPartnersEdit(f, self.form_modified, timefield)
+        self.editors[f] = editwidget
+        form.addRow(T[f], editwidget)
+        self.editors[ft] = timefield
+        form.addRow(T[ft], timefield)
+        f = "PLACE"
+        editwidget = QLineEdit()
+        editwidget.setReadOnly(True)
+        self.editors[f] = editwidget
+        form.addRow(T[f], editwidget)
+        f = "NOTES"
+        editwidget = FormLineEdit(f, self.form_modified)
+        self.editors[f] = editwidget
+        form.addRow(T[f], editwidget)
+
+
+#TODO: Now, what about TIME and PLACE???
+# TIME is rather difficult, because it can be:
+#   - ?: not yet placed
+#   - @Mi.3  (an actual time ... + fixed flag? – "fixed", "held" or "movable"?))
+#   - >block-tag (sid + identifier)
+#   - =parallel-tag (identifier)
+# (Block tags and parallel tags should probably be kept quite separate by
+# making the prefix significant, i.e. ">Ma-id1" and "=Ma-id1" would be
+# completely distince tags, though a "=" tag wouldn't normally have a
+# subject part anyway.)
+# There may also be entries with 0 length. These are then items that
+# are present in the table for their payroll-relevance, although they
+# don't appear in the timetable. For these TIME and PLACE play no role
+# and should be null. Whether the 0 length or the empty time field is
+# the primary flag for payroll-only, would need to be decided.
+
+# There would also be special lesson table entries with null "course"
+# field to specify the actual times of block members and parallel lessons.
+# For these the tag would be in the PLACE field. Parallel lessons have
+# just one such entry per tag, other fields – except TIME – being null.
+# Block members can have several such entries (a block can consist of
+# more than one lesson a week). These would also need to use the LENGTH
+# field, to specify the duration of each component lesson.
+
+# Note that these special entries also need to be visible, as part of
+# the editor for the entries that reference them ...
+
+
+#        # Fields for "block member"
+#        box2 = QFrame()
+#        self.stack.addWidget(box2)
+##        form = QFormLayout(box2)
+
+## Just testing ...
+#        vbox2 = QVBoxLayout(box2)
+#        vbox2.addWidget(QLabel("Header !"))
+#        area = LessonScrollArea()
+#        vbox2.addWidget(area)
+#        scrolledarea = QWidget()
+#        grid = QGridLayout()
+#        scrolledarea.setLayout(grid)
+#        area.setWidgetResizable(True)
+#        area.setWidget(scrolledarea)
+##--
+#        self.__area = area
+
+#        for i in range(8):
+#            grid.addWidget(QLabel(f"Label {i}"), i, 0)
+#            grid.addWidget(QLineEdit(), i, 1)
+#            grid.addWidget(EditableComboBox(), i, 2)
+
+
+#        self.vbox1.addStretch(1)
+        self.vbox1.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
+
+        # The button-box
+        hbox2 = QHBoxLayout()
+        self.vbox1.addLayout(hbox2)
+        hbox2.addSpacing(100)
+        hbox2.addStretch(1)
+        self.course_update_button = QPushButton(T["UPDATE"])
+#        self.course_update_button.clicked.connect(self.course_update)
+        hbox2.addWidget(self.course_update_button)
+        self.course_add_button = QPushButton(T["NEW"])
+#        self.course_add_button.clicked.connect(self.course_add)
+        hbox2.addWidget(self.course_add_button)
+
+    def activate(self, course, row):
+        super().activate(course, row)
+        if self.current_row < 0:
+            #print("EMPTY LESSON TABLE:", repr(course))
+            # Initialize with a basic, "normal" lesson
+#            "id" is <None>
+#            "course" is parameter <course>
+            self.editors["LENGTH"].setText("1")
+            self.editors["PAYROLL"].setText("*")
+            self.editors["ROOM"].setText("?")    # ?
+            self.editors["Partners"].setText("")
+            self.editors["Time"].setText("?")
+            self.editors["PLACE"].setText("?")
+            self.editors["NOTES"].setText("")
+
+        else:
+            record = self.model.record(self.current_row)
+            tag = record.value("TIME")
+            if tag.startswith("="):
+                tag = tag[1:]
+                self.editors["Partners"].setText(tag)
+                ltime = get_time_entry(tag)
+            else:
+                self.editors["Partners"].setText("")
+                # Check validity of time?
+                if tag.startswith("@"):
+                    ltime = tag[1:]
+                    if SHARED_DATA["DayPeriodDialog"].timeslot2index(ltime) == (-1, 0):
+                        return "?"
+                    else:
+                        return ltime
+                else:
+#T
+                    SHOW_ERROR(f"BAD_TIME: {tag}")
+                    ltime = "?"
+
+            self.editors["Time"].setText(ltime)
+            self.editors["PAYROLL"].setText(record.value("PAYROLL"))
+            self.editors["ROOM"].setText(record.value("ROOM"))
+            self.editors["NOTES"].setText(record.value("NOTES"))
+
+        self.form_modified("", False)  # initialize form button states
+
+        self.__value = -1   # Default return value => don't change row
+        self.exec()
+        return self.__value
+
+
+class FormPopupEdit(QLineEdit):
+    def __init__(self, field, modified, parent=None):
+        super().__init__(parent)
+        self.setReadOnly(True)
+        self.__modified = modified
+        self.__field = field
+        self.text0 = None
+
+    def mousePressEvent(self, event):
+        print("FormPopupEdit.mousePressEvent: Override Me!")
+
+    def setText(self, text):
+        super().setText(text)
+        self.text0 = text
+
+    def text_edited(self, text):
+        super().setText(text)
+        self.__modified(self.__field, text != self.text0)
+
+
+class FormRoomEdit(FormPopupEdit):
+    def __init__(self, field, modified, parent=None):
+        super().__init__(field, modified, parent)
+
+    def mousePressEvent(self, event):
+        classroom = db_read_unique_field(
+            "CLASSES",
+            "CLASSROOM",
+            CLASS=SHARED_DATA["COURSE"]["CLASS"]
+        )
+        result = SHARED_DATA["RoomDialog"].activate(
+            start_value=self.text(),
+            classroom=classroom
+        )
+        if result:
+            if result == "-":
+                self.text_edited("")
+            else:
+                self.text_edited(result)
+
+
+class FormTimeEdit(FormPopupEdit):
+    def set_time(self, ltime):
+        print("§ SET TIME:", ltime)
+        self.text_edited(ltime)
+
+    def mousePressEvent(self, event):
+        result = SHARED_DATA["DayPeriodDialog"].activate(
+            start_value=self.text()
+        )
+        if result:
+            self.text_edited(result)
+
+
+class FormPartnersEdit(FormPopupEdit):
+    def __init__(self, field, modified, timefield, parent=None):
+        super().__init__(field, modified, parent)
+        self.timefield = timefield
+
+    def mousePressEvent(self, event):
+        result = SHARED_DATA["PartnersDialog"].activate(
+            start_value=self.text()
+        )
+        if result:
+            if result == "-":
+                self.text_edited("")
+                # Leave time field untouched, i.e. preserve previous time
+            elif result[0] == "+":
+                # New tag
+                self.text_edited(result[1:])
+                # Leave time field untouched, i.e. preserve previous time
+            else:
+                self.text_edited(result)
+                # Get time from chosen tag
+                self.timefield.set_time(get_time_entry(result))
+
+
+def get_time_entry(tag):
+    try:
+        ltime = db_read_unique_field(
+            "LESSONS",
+            "TIME",
+            PLACE=f"={tag}"
+        )
+    except NoRecord:
+#T
+        SHOW_ERROR(f"NO_TIME_FOR_PARTNERS: {tag}")
+#TODO: add a time entry?
+# TIME="?", PLACE=f"={tag}", everything else empty
+        return "?"
+    # Check validity
+    if ltime.startswith("@"):
+        ltime = ltime[1:]
+        if SHARED_DATA["DayPeriodDialog"].timeslot2index(ltime) == (-1, 0):
+            return "?"
+        else:
+            return ltime
+    SHOW_ERROR(f"Bug: invalid day.period: {ltime}")
+    return "?"
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

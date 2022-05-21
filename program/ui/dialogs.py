@@ -1,7 +1,7 @@
 """
 ui/dialogs.py
 
-Last updated:  2022-05-20
+Last updated:  2022-05-21
 
 Dialogs for various editing purposes
 
@@ -355,29 +355,41 @@ def get_course_info(course):
 # Perhaps not found is an error?
     return CourseKeyFields(*clist[0]) if clist else None
 
-class Parallel(NamedTuple):
+
+class Partner(NamedTuple):
     id: int
     course: int  # When the field is null this gets set to an empy string
     TIME: str
     PLACE: str
-#+
-def parallels(tag):
+
+
+def partners(tag):
+    if tag.replace(' ', '') != tag:
+        SHOW_ERROR(f"Bug: Spaces in partner tag: '{tag}'")
+        return []
+    if not tag:
+        SHOW_ERROR("Bug: Empty partner tag")
+        return []
     flist, plist = db_read_table(
         "LESSONS",
-        Parallel._fields,
-        TIME=tag
+        Partner._fields,
+        TIME=f"={tag}"
     )
-    return [Parallel(*p) for p in plist]
-#+
-def placements(tag):
+    return [Partner(*p) for p in plist]
+
+
+def placements(xtag):
+    """Return a list of <Partner> tuples with the given prefixed (full)
+    tag in the PLACE field.
+    """
     flist, plist = db_read_table(
         "LESSONS",
-        Parallel._fields,
-        PLACE=tag
+        Partner._fields,
+        PLACE=xtag
     )
     pl = []
     for p in plist:
-        pp = Parallel(*p)
+        pp = Partner(*p)
         if pp.course:
             SHOW_ERROR(f"Bug: invalid placement (course={pp.course})")
         else:
@@ -385,7 +397,7 @@ def placements(tag):
     return pl
 
 
-class ParallelsDialog(QDialog):
+class PartnersDialog(QDialog):
 #TODO
 # Could enable the save button only when it is different from the initial value
 # Could enable the clear/reset button only when there was an initial value
@@ -435,15 +447,12 @@ class ParallelsDialog(QDialog):
         self.accept()
 
     def show_courses(self, text):
-        tag = "=" + text
-        self.course_list.clear()
-        #print("NEW TEXT:", tag)
-        # Populate the list widget with all courses sharing the new tag.
+        """Populate the list widget with all courses sharing the given tag
+        (i.e. "partners").
+        """
         # Including the currently selected one (which we can't identify here!)?
-#TODO
-#        plist = parallels(tag)
-        plist = parallels(text) # just for testing!
-
+        self.course_list.clear()
+        plist = partners(text)
         dlist = []
         for p in plist:
             if p.course:
@@ -464,13 +473,12 @@ class ParallelsDialog(QDialog):
         taglist = db_values(
             "LESSONS",
             "TIME",
-#TODO
-#            "TIME LIKE '=_%'",   ... actually, this is what I need here
-            "TIME NOT LIKE '>%'", # just testing ...
+            "TIME LIKE '=_%'",   # "=" + at least one character
             distinct=True,
             sort_field="TIME"
         )
-        self.identifier.addItems(taglist)
+        self.identifier.addItems([t[1:] for t in taglist
+            if t.replace(" ", "") == t])
         if self.value0:
             self.identifier.setCurrentText(self.value0)
         else:
@@ -778,7 +786,7 @@ if __name__ == "__main__":
     for p in placements(">ZwE#09G10G"):
         print("!!!!", p)
 
-    for p in parallels("sp03"):
+    for p in partners("sp03"):
         print("??????", p)
 
 #    quit(0)
@@ -789,7 +797,7 @@ if __name__ == "__main__":
 
 #    quit(0)
 
-    widget = ParallelsDialog()
+    widget = PartnersDialog()
     print("----->", widget.activate("huO"))
 
 #    quit(0)

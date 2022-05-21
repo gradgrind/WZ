@@ -136,6 +136,8 @@ ui.modules.course_lessons: {
     TAG:            Kennzeichen
     ROOM:           Raum
     TIME:           Zeit
+    Time:           Zeit
+    Partners:       Partner-id
     PLACE:          Ort
     NOTES:          Notizen
 

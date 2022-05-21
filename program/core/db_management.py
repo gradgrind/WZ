@@ -1,7 +1,7 @@
 """
 uutility/db_management.py
 
-Last updated:  2022-05-15
+Last updated:  2022-05-21
 
 Helper functions for accessing the database.
 
@@ -50,6 +50,9 @@ from ui.ui_base import (
     QSqlDatabase,
     QSqlQuery,
 )
+
+class NoRecord(Exception):
+    pass
 
 ### -----
 
@@ -163,6 +166,15 @@ def db_read_table(
         return fields, value_list
     else:
         return [rec.fieldName(i) for i in range(nfields)], value_list
+
+
+def db_read_unique_field(table, field, *wheres, **keys):
+    flist, rlist = db_read_table(table, [field], *wheres, **keys)
+    if len(rlist) == 1:
+        return rlist[0][0]
+    if not rlist:
+        raise NoRecord
+    raise Bug("Record not unique")
 
 
 def db_read_full_table(table, *wheres, sort_field=None, **keys):
