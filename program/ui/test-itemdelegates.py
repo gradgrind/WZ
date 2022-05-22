@@ -6,7 +6,8 @@ sys.path[0] = appdir
 from core.base import start
 
 from ui.ui_base import (
-    QStyledItemDelegate, QTableWidget, run, QComboBox, Qt,
+    QStyledItemDelegate, QTableWidget, QTableWidgetItem, run, QComboBox,
+    Qt,
     QLineEdit, QCompleter, QTimer, QDialog,
     QAbstractItemView
 )
@@ -96,7 +97,7 @@ class MyItemDelegate(QStyledItemDelegate):
 class TableWidget(QTableWidget):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.activated.connect(self.do_activated)
+#        self.activated.connect(self.do_activated)
         self.setEditTriggers(
             QAbstractItemView.EditTrigger.DoubleClicked
             | QAbstractItemView.EditTrigger.AnyKeyPressed
@@ -108,25 +109,17 @@ class TableWidget(QTableWidget):
     def do_activated(self):
         i = self.currentItem()
         print("Activated", self.currentRow(), self.currentColumn())
-# Doesn't work ...
+        # Note that there must be a TableWidgetItem installed on the
+        # cell for this to work!
         if self.state() != self.EditingState:
-            print("?????")
             self.editItem(self.currentItem())
-# Doesn't work ...
-#        if not self.isPersistentEditorOpen(i):
-#            # start editing
-#            self.editItem(i)
 
-# This doesn't work either!!! So what is different in EdiTable?!
     def keyPressEvent(self, e):
         key = e.key()
-        i = self.currentItem()
-        if not self.isPersistentEditorOpen(i):
-            if key == Qt.Key_Return:
-                # start editing
-                self.editItem(i)
-                return
-        super().keyPressEvent(e)
+        if key == Qt.Key_Return and self.state() != self.EditingState:
+            self.editItem(self.currentItem())
+        else:
+            super().keyPressEvent(e)
 
 
 tw = TableWidget()
@@ -140,8 +133,13 @@ tw.setItemDelegateForColumn(1, cbid)
 tw.setItemDelegateForColumn(2, cpid)
 # My delegate only in column 4
 tw.setItemDelegateForColumn(3, myid)
-tw.setColumnCount(4)
-tw.setRowCount(10)
+ncols, nrows = 4, 10
+tw.setColumnCount(ncols)
+tw.setRowCount(nrows)
+for r in range(nrows):
+    for c in range(ncols):
+        twi = QTableWidgetItem()
+        tw.setItem(r, c, twi)
 tw.resize(600,400)
 run(tw)
 

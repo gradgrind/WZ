@@ -114,7 +114,8 @@ ui.modules.course_lessons: {
     DELETE:         Löschen
     UPDATE:         Übernehmen
     NEW:            Hinzufügen
-    COPY_NEW:       "Neu (Kopie)"
+    NEW_BLOCK:      "Neues Blockfach"
+    NEW_PLAIN:      "Neuer Eintrag"
 
     # Course table title line
     COURSE_TITLE:   Kurse

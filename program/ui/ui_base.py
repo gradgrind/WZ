@@ -541,8 +541,8 @@ class RowSelectTable(QTableView):
         self.__row = -1
         self.__modified = is_modified
         self.__callback = None
-        self.setSelectionMode(QTableView.SingleSelection)
-        self.setSelectionBehavior(QTableView.SelectRows)
+        self.setSelectionMode(QTableView.SelectionMode.SingleSelection)
+        self.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
 
     def set_callback(self, row_changed):
         self.__callback = row_changed

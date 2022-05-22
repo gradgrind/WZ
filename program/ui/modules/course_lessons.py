@@ -50,7 +50,6 @@ T = TRANSLATIONS("ui.modules.course_lessons")
 from core.db_management import (
     open_database,
     db_key_value_list,
-    db_read_fields,
     db_read_unique_field,
     NoRecord
 )
@@ -74,6 +73,8 @@ from ui.ui_base import (
     QLineEdit,
     QPushButton,
     QDialogButtonBox,
+    QTableWidget,
+    QTableView,
 #?
     QDialog,
     QWidget,
@@ -101,7 +102,8 @@ from ui.dialogs import (
     RoomDialog,
     DayPeriodDialog,
     PartnersDialog,
-    PayrollDialog
+    PayrollDialog,
+    TimeSlotError
 )
 
 # Course table fields
@@ -237,6 +239,7 @@ class CourseEditor(QSplitter):
 
         vbox2.addWidget(QLabel(f"<h4>{T['LESSONS']}</h4>"))
 
+#TODO: What about separate tables for plain and block entries?
         # The lesson table
         self.lessontable = RowSelectTable(name="lessons")
         self.lessontable.setEditTriggers(
@@ -260,20 +263,28 @@ class CourseEditor(QSplitter):
         vbox2.addSpacing(20)
         bbox2 = QHBoxLayout()
         vbox2.addLayout(bbox2)
-        bbox2.addStretch(1)
+#        bbox2.addStretch(1)
 
+        lesson_add_block = QPushButton(T['NEW_BLOCK'])
+        bbox2.addWidget(lesson_add_block)
+        lesson_add_block.clicked.connect(self.lesson_add_block)
+        lesson_add_plain = QPushButton(T['NEW_PLAIN'])
+        bbox2.addWidget(lesson_add_plain)
+
+        vbox2.addWidget(HLine())
+        bbox3 = QHBoxLayout()
+        vbox2.addLayout(bbox3)
+        bbox3.addStretch(1)
+        lesson_add_plain.clicked.connect(self.lesson_add_plain)
         self.lesson_delete_button = QPushButton(T['DELETE'])
-        bbox2.addWidget(self.lesson_delete_button)
+        bbox3.addWidget(self.lesson_delete_button)
         self.lesson_delete_button.clicked.connect(self.lesson_delete)
-        self.lesson_add_button = QPushButton(T['COPY_NEW'])
-#        bbox2.addWidget(self.lesson_add_button)
-        self.lesson_add_button.clicked.connect(self.lesson_add)
 
         self.simple_lesson_dialog = LessonEditor()
         self.block_lesson_dialog = LessonEditorForm()
 #        self.lesson_edit_button = QPushButton(T['EDIT_LESSON'])
         self.lesson_edit_button = QPushButton(T['EDIT'])
-        bbox2.addWidget(self.lesson_edit_button)
+        bbox3.addWidget(self.lesson_edit_button)
         self.lesson_edit_button.clicked.connect(self.lesson_activate)
 
         self.setStretchFactor(0, 1)  # stretch only left panel
@@ -429,7 +440,7 @@ class CourseEditor(QSplitter):
         # Enable or disable lesson butttons
         if not self.lessonmodel.rowCount():
             self.lesson_selected(-1)
-        self.lesson_add_button.setEnabled(course > 0)
+#        self.lesson_add_button.setEnabled(course > 0)
 
         # Toggle the stretch on the last section here because of a
         # possible bug in Qt, where the stretch can be lost when
@@ -485,14 +496,20 @@ class CourseEditor(QSplitter):
                     row
                 )
 
+    def lesson_add_block(self):
+        print("ADD BLOCK MEMBER")
+        widget = BlockLessonEditor()
+        widget.exec()
 
 
-
-    def lesson_add(self):
+    def lesson_add_plain(self):
 #TODO: Did I rather want to do it like the courses? I.e. by popping up
 # a dialog which has the option to modify the current one – if there
 # is a current one – or create a new one.
         """Add a new "lesson", copying the current one if possible."""
+        print("ADD PLAIN LESSON")
+        return
+
         if self.this_course:    # If this is null (0), no lessons can be added
             model = self.lessonmodel
             index = self.lessontable.currentIndex()
@@ -1776,6 +1793,171 @@ def check_start_time(tag):
         pass
     SHOW_ERROR(f"{T['BAD_TIME']}: {tag}")
     return "?"
+
+
+#TODO
+class BlockLessonEditor(LessonEditorBase):
+    """Popup editor for a "block" lesson.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+
+        form = QFormLayout()
+        self.vbox1.addLayout(form)
+        self.editors = {}
+        # LENGTH is always '*' or empty?
+        f = "PAYROLL"
+# Is the original form ok? 0 is probably invalid.
+        editwidget = FormPayrollEdit(f, self.form_modified)
+        self.editors[f] = editwidget
+        form.addRow(T[f], editwidget)
+        f = "ROOM"
+        editwidget = FormRoomEdit(f, self.form_modified)
+        self.editors[f] = editwidget
+        form.addRow(T[f], editwidget)
+        # TIME is the block code: >sid#tag
+# ...
+        # PLACE is empty
+        f = "NOTES"
+        editwidget = FormLineEdit(f, self.form_modified)
+        self.editors[f] = editwidget
+        form.addRow(T[f], editwidget)
+
+        # Then some sort of table with entries for each "lesson unit"
+        # of the block. Each would have LENGTH, Time and Partner fields,
+        # though I wouldn't expect the Partner fields to be used.
+        # A read-only qtablewidget with click-handlers on the fields is
+        # probably fine here.
+
+        frame1 = QFrame()
+        frame1.setLineWidth(2)
+        frame1.setFrameShape(QFrame.Shape.Box)
+        self.vbox1.addWidget(frame1)
+        fbox0 = QVBoxLayout(frame1)
+        fbox0.setContentsMargins(0, 0, 0, 0)
+        self.blocklessons = QTableWidget()
+        fbox0.addWidget(self.blocklessons)
+        self.blocklessons.setSelectionMode(QTableView.SelectionMode.SingleSelection)
+        self.blocklessons.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        self.blocklessons.setColumnCount(3)
+        self.blocklessons.setHorizontalHeaderLabels((
+            T["LENGTH"],
+            T["Time"],
+            T["Partners"]
+        ))
+        hh = self.blocklessons.horizontalHeader()
+        hh.setMinimumSectionSize(60)
+        hh.setStretchLastSection(True)
+        self.blocklessons.resizeColumnsToContents()
+
+#TODO: Now, what about TIME and PLACE???
+# TIME is rather difficult, because it can be:
+#   - ?: not yet placed
+#   - @Mi.3  (an actual time ... + fixed flag? – "fixed", "held" or "movable"?))
+#   - >block-tag (sid + identifier)
+#   - =parallel-tag (identifier)
+# (Block tags and parallel tags should probably be kept quite separate by
+# making the prefix significant, i.e. ">Ma-id1" and "=Ma-id1" would be
+# completely distince tags, though a "=" tag wouldn't normally have a
+# subject part anyway.)
+# There may also be entries with 0 length. These are then items that
+# are present in the table for their payroll-relevance, although they
+# don't appear in the timetable. For these TIME and PLACE play no role
+# and should be null. Whether the 0 length or the empty time field is
+# the primary flag for payroll-only, would need to be decided.
+
+# There would also be special lesson table entries with null "course"
+# field to specify the actual times of block members and parallel lessons.
+# For these the tag would be in the PLACE field. Parallel lessons have
+# just one such entry per tag, other fields – except TIME – being null.
+# Block members can have several such entries (a block can consist of
+# more than one lesson a week). These would also need to use the LENGTH
+# field, to specify the duration of each component lesson.
+
+# Note that these special entries also need to be visible, as part of
+# the editor for the entries that reference them ...
+
+
+#        # Fields for "block member"
+#        box2 = QFrame()
+#        self.stack.addWidget(box2)
+##        form = QFormLayout(box2)
+
+## Just testing ...
+#        vbox2 = QVBoxLayout(box2)
+#        vbox2.addWidget(QLabel("Header !"))
+#        area = LessonScrollArea()
+#        vbox2.addWidget(area)
+#        scrolledarea = QWidget()
+#        grid = QGridLayout()
+#        scrolledarea.setLayout(grid)
+#        area.setWidgetResizable(True)
+#        area.setWidget(scrolledarea)
+##--
+#        self.__area = area
+
+#        for i in range(8):
+#            grid.addWidget(QLabel(f"Label {i}"), i, 0)
+#            grid.addWidget(QLineEdit(), i, 1)
+#            grid.addWidget(EditableComboBox(), i, 2)
+
+
+#        self.vbox1.addStretch(1)
+        self.vbox1.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
+
+        # The button-box
+#        self._add_dialog_buttons()
+
+
+#        hbox2 = QHBoxLayout()
+#        self.vbox1.addLayout(hbox2)
+#        hbox2.addSpacing(100)
+#        hbox2.addStretch(1)
+#        self.course_update_button = QPushButton(T["UPDATE"])
+#        self.course_update_button.clicked.connect(self.lesson_update)
+#        hbox2.addWidget(self.course_update_button)
+#        self.course_add_button = QPushButton(T["NEW"])
+#        self.course_add_button.clicked.connect(self.lesson_add)
+#        hbox2.addWidget(self.course_add_button)
+
+    def activate(self, course, row):
+        super().activate(course, row)
+        if self.current_row < 0:
+            #print("EMPTY LESSON TABLE:", repr(course))
+            # Initialize with a basic, "normal" lesson
+#            "id" is <None>
+#            "course" is parameter <course>
+            self.editors["LENGTH"].setText("1")
+            self.editors["PAYROLL"].setText("*")
+            self.editors["ROOM"].setText("?")    # ?
+            self.editors["Partners"].setText("")
+            self.editors["Time"].setText("?")
+            self.editors["PLACE"].setText("?")
+            self.editors["NOTES"].setText("")
+
+        else:
+            record = self.model.record(self.current_row)
+            tag = record.value("TIME")
+            if tag.startswith("="):
+                tag = tag[1:]
+                self.editors["Partners"].setText(tag)
+                ltime = get_time_entry(tag)
+            else:
+                self.editors["Partners"].setText("")
+                # Check validity of time
+                ltime = check_start_time(tag)
+
+            self.editors["Time"].setText(ltime)
+            self.editors["LENGTH"].setText(record.value("LENGTH"))
+            self.editors["PAYROLL"].setText(record.value("PAYROLL"))
+            self.editors["ROOM"].setText(record.value("ROOM"))
+            self.editors["NOTES"].setText(record.value("NOTES"))
+
+        self.form_modified("", False)  # initialize form button states
+
+        self.__value = -1   # Default return value => don't change row
+        self.exec()
+        return self.__value
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
