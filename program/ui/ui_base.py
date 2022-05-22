@@ -642,11 +642,13 @@ class FormComboBox(QComboBox):
         self.key2i = {}
         self.clear()
         i = 0
+        self.callback_enabled = False
         for k, v in key_value:
             self.key2i[k] = i
             self.keylist.append(k)
             self.addItem(v)
             i += 1
+        self.callback_enabled = True
 
     def text(self):
         """Return the current "key"."""
@@ -668,7 +670,8 @@ class FormComboBox(QComboBox):
             self.setCurrentIndex(0)
 
     def change_index(self, i):
-        self.__modified(self.__field, self.keylist[i] != self.text0)
+        if self.callback_enabled:
+            self.__modified(self.__field, self.keylist[i] != self.text0)
 
 
 class ForeignKeyItemDelegate(QStyledItemDelegate):

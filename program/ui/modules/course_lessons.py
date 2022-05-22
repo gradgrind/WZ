@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-05-21
+Last updated:  2022-05-22
 
 Edit course and lesson data.
 
@@ -73,7 +73,7 @@ from ui.ui_base import (
     QLabel,
     QLineEdit,
     QPushButton,
-
+    QDialogButtonBox,
 #?
     QDialog,
     QWidget,
@@ -97,7 +97,12 @@ from ui.ui_base import (
     QSqlTableModel,
 )
 
-from ui.dialogs import RoomDialog, DayPeriodDialog, PartnersDialog
+from ui.dialogs import (
+    RoomDialog,
+    DayPeriodDialog,
+    PartnersDialog,
+    PayrollDialog
+)
 
 # Course table fields
 COURSE_COLS = [(f, T[f]) for f in (
@@ -158,6 +163,7 @@ class Courses(Page):
     def enter(self):
         open_database()
         self.course_editor.init_data()
+        SHARED_DATA["PayrollDialog"].init()
         SHARED_DATA["RoomDialog"].init()
         dayPeriodDialog = SHARED_DATA["DayPeriodDialog"]
         dayPeriodDialog.init()
@@ -275,6 +281,7 @@ class CourseEditor(QSplitter):
         SHARED_DATA["RoomDialog"] = RoomDialog()
         SHARED_DATA["DayPeriodDialog"] = DayPeriodDialog()
         SHARED_DATA["PartnersDialog"] = PartnersDialog()
+        SHARED_DATA["PayrollDialog"] = PayrollDialog()
 
     def course_activate(self, modelindex):
         self.edit_course()
@@ -287,26 +294,7 @@ class CourseEditor(QSplitter):
         if row >= 0:
             self.coursetable.selectRow(row)
 
-
-
-#    def modified(self):
-#        #return self.form_change_set
-#        return bool(self.form_change_set)
-
-#    def clear_modified(self):
-#        self.form_change_set = set()
-
-    def leave_ok(self):
-#        if self.form_change_set:
-#            return LoseChangesDialog()
-        return True
-
     def set_filter_field(self, field):
-#        if self.modified():
-#            if LoseChangesDialog():
-#                self.clear_modified()
-#            else:
-#                return False
         self.filter_value_select.set_items(self.filter_list[field])
         # print("FILTER FIELD:", field)
         self.filter_field = field
@@ -409,9 +397,6 @@ class CourseEditor(QSplitter):
     def course_delete(self):
         """Delete the current course."""
         model = self.coursemodel
-#        if self.form_change_set:
-#            if not LoseChangesDialog():
-#                return
         if not SHOW_CONFIRM(T["REALLY_DELETE"]):
             return
         # course = self.editors["course"].text()
@@ -454,7 +439,7 @@ class CourseEditor(QSplitter):
         hh.setStretchLastSection(True)
 
     def lesson_selected(self, row):
-        #print("SELECT LESSON", row)
+        print("SELECT LESSON", row)
         if row >= 0:
             self.lesson_delete_button.setEnabled(True)
 #            self.lesson_edit_button.setEnabled(True)
@@ -637,16 +622,10 @@ class CourseEditorForm(QDialog):
             event.accept()
 
     def modified(self):
-        #return self.form_change_set
         return bool(self.form_change_set)
 
     def clear_modified(self):
         self.form_change_set = set()
-
-    def leave_ok(self):
-        if self.modified():
-            return LoseChangesDialog()
-        return True
 
     def init(self, model, keymaps):
         self.model = model
@@ -1023,11 +1002,6 @@ class LessonEditorForm(QDialog):
     def clear_modified(self):
         self.form_change_set = set()
 
-    def leave_ok(self):
-        if self.modified():
-            return LoseChangesDialog()
-        return True
-
     def activate(self, course, row):
         """Initialize the dialog with values from the current "lesson"
         and then activate it.
@@ -1281,9 +1255,17 @@ class LessonEditorBase(QDialog):
             form0.addRow(T[f], widget)
         self.vbox1.addWidget(HLine())
 
+    def _add_dialog_buttons(self):
+        buttonBox = QDialogButtonBox()
+        self.vbox1.addWidget(buttonBox)
+        self.bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
+        buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
+        buttonBox.accepted.connect(self.lesson_update)
+        buttonBox.rejected.connect(self.cancel)
+
     def init(self, model):
         self.model = model
-        self.table_empty = None
+#        self.table_empty = None
 
     def form_modified(self, field, changed):
         """Handle a change in a form editor field.
@@ -1291,48 +1273,36 @@ class LessonEditorBase(QDialog):
         Enable and disable the pushbuttons appropriately.
         """
         print("LESSON MODIFIED", field, changed)
-        if self.table_empty:
-            self.lesson_update_button.setEnabled(False)
-#            self.lesson_add_button.setEnabled(True)
-        elif self.table_empty == None:
-            # ignore – not yet set up
-            return
-        elif changed:
-            self.lesson_update_button.setEnabled(True)
+        if changed:
+            self.bt_save.setEnabled(True)
             self.form_change_set.add(field)
         else:
             self.form_change_set.discard(field)
             if not self.form_change_set:
-                self.lesson_update_button.setEnabled(False)
-        # print("FORM CHANGED SET:", self.form_change_set)
+                self.bt_save.setEnabled(False)
+        print("FORM CHANGED SET:", self.form_change_set)
 
-
-
-
-#??????????
+    def cancel(self):
+        print("$$CANCEL")
+        if (not self.modified()) or LoseChangesDialog():
+            self.reject()
 
     def closeEvent(self, event):
         """Prevent dialog closure if there are changes.
         """
         print("??? CLOSING", self.modified())
-        if self.modified() and not LoseChangesDialog():
-            event.ignore()
-        else:
-            event.accept()
+#        if self.modified() and not LoseChangesDialog():
+#            event.ignore()
+#        else:
+#            event.accept()
+        event.ignore()
+        self.cancel()
 
     def modified(self):
-#--
-#        return False
-        #return self.form_change_set
         return bool(self.form_change_set)
 
     def clear_modified(self):
         self.form_change_set = set()
-
-    def leave_ok(self):
-        if self.modified():
-            return LoseChangesDialog()
-        return True
 
     def activate(self, course, row):
         """Initialize the dialog with values from the current "lesson"
@@ -1347,6 +1317,7 @@ class LessonEditorBase(QDialog):
         self.current_row = row
         for f, v in SHARED_DATA["COURSE"].items():
             self.coursedata[f].setText(v)
+        self.bt_save.setEnabled(False)
         return
 
 
@@ -1487,8 +1458,7 @@ class LessonEditor(LessonEditorBase):
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
         f = "PAYROLL"
-#TODO: FormPayrollEdit
-        editwidget = FormLineEdit(f, self.form_modified)
+        editwidget = FormPayrollEdit(f, self.form_modified)
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
         f = "ROOM"
@@ -1513,7 +1483,6 @@ class LessonEditor(LessonEditorBase):
         editwidget = FormLineEdit(f, self.form_modified)
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
-
 
 #TODO: Now, what about TIME and PLACE???
 # TIME is rather difficult, because it can be:
@@ -1571,16 +1540,19 @@ class LessonEditor(LessonEditorBase):
         self.vbox1.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
 
         # The button-box
-        hbox2 = QHBoxLayout()
-        self.vbox1.addLayout(hbox2)
-        hbox2.addSpacing(100)
-        hbox2.addStretch(1)
-        self.course_update_button = QPushButton(T["UPDATE"])
-        self.course_update_button.clicked.connect(self.lesson_update)
-        hbox2.addWidget(self.course_update_button)
-        self.course_add_button = QPushButton(T["NEW"])
-        self.course_add_button.clicked.connect(self.lesson_add)
-        hbox2.addWidget(self.course_add_button)
+        self._add_dialog_buttons()
+
+
+#        hbox2 = QHBoxLayout()
+#        self.vbox1.addLayout(hbox2)
+#        hbox2.addSpacing(100)
+#        hbox2.addStretch(1)
+#        self.course_update_button = QPushButton(T["UPDATE"])
+#        self.course_update_button.clicked.connect(self.lesson_update)
+#        hbox2.addWidget(self.course_update_button)
+#        self.course_add_button = QPushButton(T["NEW"])
+#        self.course_add_button.clicked.connect(self.lesson_add)
+#        hbox2.addWidget(self.course_add_button)
 
     def activate(self, course, row):
         super().activate(course, row)
@@ -1621,6 +1593,8 @@ class LessonEditor(LessonEditorBase):
         self.exec()
         return self.__value
 
+#TODO: Move to main window, and implement! But perhaps retain some code
+# here if it differs from that for the block members.
     def lesson_add(self):
         """Add the data in the form editor as a new course."""
         print("ADD LESSON")
@@ -1728,6 +1702,15 @@ class FormRoomEdit(FormPopupEdit):
                 self.text_edited("")
             else:
                 self.text_edited(result)
+
+
+class FormPayrollEdit(FormPopupEdit):
+    def mousePressEvent(self, event):
+        result = SHARED_DATA["PayrollDialog"].activate(
+            start_value=self.text()
+        )
+        if result:
+            self.text_edited(result)
 
 
 class FormTimeEdit(FormPopupEdit):

@@ -98,6 +98,9 @@ ui.modules.course_lessons: {
     INVALID_ROOM_IDS: "Ungültige Raumkürzel"
     BAD_TIME:       "Ungültige Zeitangabe (Tag.Stunde)"
 
+    PAYROLL_VALID_ENTRY: "* oder Dezimalzahl"
+    INVALID_PAYROLL: "Ungültiger Wert"
+    
     # Labels
     MODULE_NAME:    "Kurse/Stunden"
     MODULE_TITLE:   "Unterrichtskurse und -stunden verwalten"

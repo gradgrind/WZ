@@ -1,7 +1,7 @@
 """
 ui/dialogs.py
 
-Last updated:  2022-05-21
+Last updated:  2022-05-22
 
 Dialogs for various editing purposes
 
@@ -56,6 +56,7 @@ from core.db_management import (
 
 from ui.ui_base import (
     HLine,
+    KeySelector,
 
     ### QtWidgets:
     APP,
@@ -71,15 +72,16 @@ from ui.ui_base import (
     QLineEdit,
     QTableWidget,
     QTableWidgetItem,
-    QHeaderView,
     QCheckBox,
     QToolButton,
     QPushButton,
     ### QtGui:
     QValidator,
+    QRegularExpressionValidator,
     ### QtCore:
     Qt,
     QSize,
+    QRegularExpression
 )
 
 # Course table fields
@@ -155,6 +157,10 @@ COL_LIST = [
         "PLACE",
         "NOTES",         # ?
 ]
+
+PAYROLL_FORMAT = "[1-9]?[0-9](?:$[0-9]{1,2})?|".replace(
+    "$", CONFIG["DECIMAL_SEP"]
+)
 
 ### -----
 
@@ -608,7 +614,7 @@ class RoomDialog(QDialog):
     def discard_choice(self):
         row = self.roomchoice.currentRow()
         if row >= 0:
-            rid = self.choices.pop(row)
+            self.choices.pop(row)
             self.roomchoice.removeRow(row)
             self.write_choices()
 
@@ -776,6 +782,70 @@ class RoomDialog(QDialog):
         self.roomchoice.resizeColumnsToContents()
 
 
+class PayrollDialog(QDialog):
+#TODO: Probably still needs a bit of work. If LENGTH field is 0, the
+# payroll number may not be empty.
+    def __init__(self):
+        super().__init__()
+        vbox0 = QVBoxLayout(self)
+        vbox0.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
+
+        hbox1 = QHBoxLayout()
+        vbox0.addLayout(hbox1)
+        self.number = QLineEdit()
+        self.number.setToolTip(T["PAYROLL_VALID_ENTRY"])
+        hbox1.addWidget(self.number)
+        regexp = QRegularExpression(PAYROLL_FORMAT)
+        validator = QRegularExpressionValidator(regexp)
+        self.number.setValidator(validator)
+
+        self.factor = KeySelector()
+        hbox1.addWidget(self.factor)
+
+        vbox0.addWidget(HLine())
+        buttonBox = QDialogButtonBox()
+        vbox0.addWidget(buttonBox)
+        bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
+        bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
+        bt_save.clicked.connect(self.do_accept)
+        bt_cancel.clicked.connect(self.reject)
+
+    def do_accept(self):
+        if not self.number.hasAcceptableInput():
+            SHOW_ERROR(T["INVALID_PAYROLL"])
+            return
+        n = self.number.text()
+        f = self.factor.selected()
+        text = n + '*' + f
+        if text != self.text0:
+            self.result = text
+        self.accept()
+
+    def init(self):
+        k_v = db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
+        self.factor2value = {}
+        entries = []
+        for k, v in k_v:
+            entries.append((k, f"{k} ({v})"))
+            self.factor2value[k] = float(v.replace(",", "."))
+        self.factor.set_items([(k, f"{k} ({v})") for k, v in k_v])
+
+    def activate(self, start_value=""):
+        self.result = None
+        self.text0 = start_value
+        try:
+            n, f = start_value.split('*', 1)
+            self.number.setText(n)
+            if not self.number.hasAcceptableInput():
+                self.number.setText("")
+                raise ValueError
+            self.factor.reset(f)
+        except ValueError:
+            SHOW_ERROR(f"{T['INVALID_PAYROLL']}: '{start_value}'")
+        self.exec()
+        return self.result
+
+
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
@@ -786,6 +856,12 @@ if __name__ == "__main__":
 
     for p in partners("sp03"):
         print("??????", p)
+
+#    quit(0)
+
+    widget = PayrollDialog()
+    widget.init()
+    print("----->", widget.activate(start_value="Fred*HuEp"))
 
 #    quit(0)
 
