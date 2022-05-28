@@ -404,6 +404,26 @@ def partners(tag):
     return [Partner(*p) for p in plist]
 
 
+class Sublesson(NamedTuple):
+    id: int
+    LENGTH: str
+    TIME: str
+    PLACE: str
+#+
+def sublessons(tag):
+    if tag.replace(' ', '') != tag:
+        SHOW_ERROR(f"Bug: Spaces in partner tag: '{tag}'")
+        return []
+    if not tag:
+        return []
+    flist, plist = db_read_table(
+        "LESSONS",
+        Sublesson._fields,
+        PLACE=f"{tag}"
+    )
+    return [Sublesson(*p) for p in plist]
+
+
 def placements(xtag):
     """Return a list of <Partner> tuples with the given prefixed (full)
     tag in the PLACE field.

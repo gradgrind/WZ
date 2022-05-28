@@ -55,7 +55,8 @@ from core.db_management import (
     NoRecord,
     db_update_field,
     db_new_row,
-    db_delete_rows
+    db_delete_rows,
+    db_values
 )
 
 from ui.ui_base import (
@@ -96,6 +97,8 @@ from ui.ui_base import (
 
 #    QTableView,
     QAbstractItemView,
+    ### QtGui:
+    QRegularExpressionValidator,
     ### QtCore:
     Qt,
     ### QtSql:
@@ -110,6 +113,8 @@ from ui.dialogs import (
     PayrollSelector,
     RoomSelector,
     partners,
+    sublessons,
+    TAG_FORMAT,
 
     #RoomDialog,
     DayPeriodDialog,
@@ -500,7 +505,7 @@ class CourseEditor(QSplitter):
             if time_field.startswith(">"):
                 # block member
                 self.stack.setCurrentIndex(2)
-#                self.stack.currentWidget().set_data(record)
+                self.stack.currentWidget().set_data(record)
             else:
                 # plain lesson
                 self.stack.setCurrentIndex(1)
@@ -513,7 +518,6 @@ class CourseEditor(QSplitter):
 #        for f, t in LESSON_COLS:
 #            if f not in LESSONCOLS_SHOW:
 #                self.field_lines[f].setText(str(record.value(f)))
-
 
     def notes_changed(self):
         text = self.note_editor.text()
@@ -704,7 +708,7 @@ class PlainLesson(QWidget):
 
     def set_data(self, record):
         self.lesson_id = record.value("id")
-        self.course_id = record.value("course")
+        #self.course_id = record.value("course")
         ltime, tag = parse_time_field(record.value("TIME"))
         self.editors["Partners"].setText(tag)
         self.editors["Time"].setText(ltime)
@@ -810,12 +814,12 @@ class BlockLesson(QWidget):
         f = "Block_tag"
         editwidget = QComboBox(editable=True)
         editwidget.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-#        editwidget.currentTextChanged.connect(self.show_courses)
+        editwidget.currentTextChanged.connect(self.show_sublessons)
         self.editors[f] = editwidget
 
-#        editwidget.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-#        validator = QRegularExpressionValidator(TAG_FORMAT)
-#        editwidget.setValidator(validator)
+#?        editwidget.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        validator = QRegularExpressionValidator(TAG_FORMAT)
+        editwidget.setValidator(validator)
         form.addRow(T[f], editwidget)
 
         self.lesson_table = QTableWidget()
@@ -829,25 +833,73 @@ class BlockLesson(QWidget):
         bt_new.setFixedWidth(30)
         bt_del = bb0.addButton("–", QDialogButtonBox.ButtonRole.ActionRole)
         bt_del.setFixedWidth(30)
-#        bt_new.clicked.connect(self.lesson_add)
-#        bt_del.clicked.connect(self.lesson_del)
+        bt_new.clicked.connect(self.lesson_add)
+        bt_del.clicked.connect(self.lesson_del)
         form.addRow(bb0)
 
         f = "PAYROLL"
-        editwidget = FormPayrollEdit(f, self.form_modified)
+        editwidget = PayrollSelector(modified=self.payroll_changed)
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
 
-    def form_modified(self, field, changed):
-        print("DUMMY: form_modified:", field, changed)
+    def set_data(self, record):
+        self.lesson_id = record.value("id")
+        #self.course_id = record.value("course")
+        fulltag = record.value("TIME")
+        try:
+            sid, tag = fulltag[1:].split("#")
+        except ValueError:
+            SHOW_ERROR(f"{T['INVALID_BLOCK_TAG']}: {fulltag}")
+            sid, tag = "", ""
+        self.editors["PAYROLL"].setText(record.value("PAYROLL"))
+        self.editors["ROOM"].setText(record.value("ROOM"))
+        subject_choice = self.editors["Block_subject"]
+        subject_choice.set_items(SHARED_DATA["SUBJECTS"])
+        try:
+            subject_choice.reset(sid)
+        except GuiError:
+            if sid:
+                SHOW_ERROR(f"{T['UNKNOWN_SUBJECT_TAG']}: {sid}")
+        self.editors["Block_tag"].setCurrentText(tag)
+
+    def show_sublessons(self, text):
+        tag = f'>{self.editors["Block_subject"].selected()}#{text}'
+        print("§§ FULL TAG:", tag)
+        slist = sublessons(tag)
+        print(" ...", slist)
 
     def sid_changed(self, sid):
         print("DUMMY: sid_changed:", sid)
+        taglist = db_values(
+            "LESSONS",
+            "TIME",
+            f"TIME LIKE '>{sid}#%'",
+            distinct=True,
+            sort_field="TIME"
+        )
+        tagid = self.editors["Block_tag"]
+        tagid.clear()
+        tagid.addItems([t.split("#", 1)[1] for t in taglist])
+        tagid.setCurrentIndex(-1)
+        return True # accept
 
     def room_changed(self, text):
-        print("$ UPDATE ROOM:", text)
+        #print("$ UPDATE ROOM:", text)
+        db_update_field("LESSONS", "ROOM", text, id=self.lesson_id)
+        self.main_widget.redisplay()
         return False
 
+    def payroll_changed(self, text):
+        #print("$ UPDATE PAYROLL:", text)
+        db_update_field("LESSONS", "PAYROLL", text, id=self.lesson_id)
+        self.main_widget.redisplay()
+        return False
+
+    def lesson_add(self):
+        pass
+
+    def lesson_del(self):
+        pass
 
 
 # see version in dialogs.py
