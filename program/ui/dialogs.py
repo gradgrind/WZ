@@ -627,6 +627,27 @@ class PartnersSelector(QLineEdit):
         self.setText(text.lstrip("+"))
 
 
+class PayrollSelector(QLineEdit):
+    def __init__(self, modified=None, no_length=False, parent=None):
+        super().__init__(parent)
+        self.setReadOnly(True)
+        self.__callback = modified
+        self.__no_length = no_length
+
+    def mousePressEvent(self, event):
+        result = PayrollDialog.popup(
+            start_value=self.text(),
+            no_length=self.__no_length
+        )
+        if result:
+            self.text_edited(result)
+
+    def text_edited(self, text):
+        if self.__callback and not self.__callback(text):
+            return
+        self.setText(text)
+
+
 class RoomSelector(QLineEdit):
     def __init__(self, modified=None, parent=None):
         super().__init__(parent)
@@ -1233,6 +1254,11 @@ class RoomDialog(QDialog):
 
 
 class PayrollDialog(QDialog):
+    @classmethod
+    def popup(cls, start_value="", no_length=False):
+        d = cls(no_length)
+        return d.activate(start_value)
+
     def __init__(self, no_length=False):
         super().__init__()
         vbox0 = QVBoxLayout(self)

@@ -151,6 +151,7 @@ ui.modules.course_lessons: {
     Block_subject:  Epoche/Block
     Block_tag:      Kennzeichen
     PLACE:          Ort
+    PLACE_NOT_EDITABLE: "Der Ort wird im Stundenplanmodul gesetzt"
     NOTES:          Notizen
 
 #    EDIT_LESSON:    "Bearbeiten"

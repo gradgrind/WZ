@@ -107,6 +107,7 @@ from ui.dialogs import (
     DurationSelector,
     DayPeriodSelector,
     PartnersSelector,
+    PayrollSelector,
     RoomSelector,
     partners,
 
@@ -267,7 +268,7 @@ class CourseEditor(QSplitter):
         self.stack.addWidget(empty_page)
 
         ### Page: Plain lesson entry
-        self.stack.addWidget(PlainLesson())
+        self.stack.addWidget(PlainLesson(self))
 #TODO
 #        for f, t in LESSON_COLS:
 #            if f not in LESSONCOLS_SHOW:
@@ -290,10 +291,8 @@ class CourseEditor(QSplitter):
         extra_form.addRow(T[f], editwidget)
 
         vbox2.addWidget(QLabel(T["NOTES"] + ":"))
-#TODO
         self.note_editor = QLineEdit()
-        self.note_editor.setText("Line 1\nLine 2")
-        print("????", self.note_editor.text())
+        self.note_editor.editingFinished.connect(self.notes_changed)
         vbox2.addWidget(self.note_editor)
 
         vbox2.addSpacing(20)
@@ -476,7 +475,15 @@ class CourseEditor(QSplitter):
         hh.setStretchLastSection(False)
         hh.setStretchLastSection(True)
 
+    def redisplay(self):
+        """Call this after updates to the current lesson data in the
+        database. Redisplay the information.
+        """
+        self.lessonmodel.select()
+        self.lessontable.selectRow(self.current_row)
+
     def lesson_selected(self, row):
+        self.current_row = row
         #print("SELECT LESSON", row)
         self.note_editor.clear()
         if row >= 0:
@@ -486,6 +493,7 @@ class CourseEditor(QSplitter):
             self.lesson_delete_button.setEnabled(False)
             return
         record = self.lessonmodel.record(row)
+        self.lesson_id = record.value("id")
         self.note_editor.setText(record.value("NOTES"))
         time_field = record.value("TIME")
         if time_field:
@@ -496,7 +504,7 @@ class CourseEditor(QSplitter):
             else:
                 # plain lesson
                 self.stack.setCurrentIndex(1)
-                self.stack.currentWidget().set_data(record, self.lessonmodel)
+                self.stack.currentWidget().set_data(record)
         else:
             # "extra"
             self.stack.setCurrentIndex(3)
@@ -505,6 +513,13 @@ class CourseEditor(QSplitter):
 #        for f, t in LESSON_COLS:
 #            if f not in LESSONCOLS_SHOW:
 #                self.field_lines[f].setText(str(record.value(f)))
+
+
+    def notes_changed(self):
+        text = self.note_editor.text()
+        #print("§§§ NOTES CHANGED:", text)
+        db_update_field("LESSONS", "NOTES", text, id=self.lesson_id)
+
 
 #TODO: -> class handler
     def show_extra(self):
@@ -653,7 +668,8 @@ class CourseEditor(QSplitter):
 
 
 class PlainLesson(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, main_widget, parent=None):
+        self.main_widget = main_widget
         super().__init__(parent=parent)
         form = QFormLayout(self)
         form.setContentsMargins(0, 0, 0, 0)
@@ -667,29 +683,26 @@ class PlainLesson(QWidget):
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
         # TIME: embraces "partners" as well as the actual placement time
-        ft = "Time"
-        timefield = DayPeriodSelector(modified=self.time_changed)
         f = "Partners"
         editwidget = PartnersSelector(modified=self.partners_changed)
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
-        self.editors[ft] = timefield
-        form.addRow(T[ft], timefield)
+        f = "Time"
+        timefield = DayPeriodSelector(modified=self.time_changed)
+        self.editors[f] = timefield
+        form.addRow(T[f], timefield)
         f = "PLACE"
         editwidget = QLineEdit()
+        editwidget.setToolTip(T["PLACE_NOT_EDITABLE"])
         editwidget.setReadOnly(True)
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
         f = "PAYROLL"
-        editwidget = FormPayrollEdit(f, self.form_modified)
+        editwidget = PayrollSelector(modified=self.payroll_changed)
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
 
-    def form_modified(self, field, changed):
-        print("DUMMY: form_modified:", field, changed)
-
-    def set_data(self, record, lessonmodel):
-        self.lessonmodel = lessonmodel
+    def set_data(self, record):
         self.lesson_id = record.value("id")
         self.course_id = record.value("course")
         ltime, tag = parse_time_field(record.value("TIME"))
@@ -700,33 +713,31 @@ class PlainLesson(QWidget):
         self.editors["ROOM"].setText(record.value("ROOM"))
         self.editors["PLACE"].setText(record.value("PLACE"))
 
-#TODO: Update lesson list table
     def length_changed(self, text):
         #print("$ UPDATE LENGTH:", text)
         db_update_field("LESSONS", "LENGTH", text, id=self.lesson_id)
-#???
-        self.lessonmodel.select()
-#TODO: This updates the lesson list display, but selection is lost. It could
-# be that a complete redisplay of the PlainLesson will follow when the
-# selection is reapplied (I would need to know the row!). Thus updating
-# of the individual fields is unnecessary!
+        self.main_widget.redisplay()
+        return False
 
     def room_changed(self, text):
         #print("$ UPDATE ROOM:", text)
-        return db_update_field("LESSONS", "ROOM", text, id=self.lesson_id)
+        db_update_field("LESSONS", "ROOM", text, id=self.lesson_id)
+        self.main_widget.redisplay()
+        return False
 
-#TODO: Update lesson list table
     def time_changed(self, text):
-        print("$ UPDATE TIME:", text)
+        #print("$ UPDATE TIME:", text)
         # The action to take depends on whether there is a partner tag.
         ptag = self.editors["Partners"].text()
         if ptag:
-            return db_update_field("LESSONS", "TIME", "@"+text, PLACE=f"={ptag}")
+            db_update_field("LESSONS", "TIME", "@"+text, PLACE=f"={ptag}")
         else:
-            return db_update_field("LESSONS", "TIME", "@"+text, id=self.lesson_id)
+            db_update_field("LESSONS", "TIME", "@"+text, id=self.lesson_id)
+        self.main_widget.redisplay()
+        return False
 
     def partners_changed(self, text):
-        print("$ UPDATE PARTNERS TAG:", text)
+        #print("$ UPDATE PARTNERS TAG:", text)
         oldtime = self.editors["Time"].text()
         oldpartners = self.editors["Partners"].text()
 
@@ -766,10 +777,16 @@ class PlainLesson(QWidget):
         # its lesson-time entry.
         #print("§ ??? PARTNERS:", partners(oldpartners))
         if not partners(oldpartners):
-            print("§ EMPTY TAG:", oldpartners)
+            #print("§ EMPTY TAG:", oldpartners)
             db_delete_rows("LESSONS", PLACE=f"={oldpartners}")
+        self.main_widget.redisplay()
+        return False
 
-        return True
+    def payroll_changed(self, text):
+        #print("$ UPDATE PAYROLL:", text)
+        db_update_field("LESSONS", "PAYROLL", text, id=self.lesson_id)
+        self.main_widget.redisplay()
+        return False
 
 
 
