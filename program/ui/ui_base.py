@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-05-14
+Last updated:  2022-05-28
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -611,7 +611,7 @@ class FormLineEdit(QLineEdit):
         return sh
 
 
-
+#deprecated?
 class FormComboBox(QComboBox):
     """A specialized combobox for use in the editor form for a
     "RowSelectTable" table view. This combobox is used for editing

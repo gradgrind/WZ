@@ -1,7 +1,7 @@
 """
 uutility/db_management.py
 
-Last updated:  2022-05-21
+Last updated:  2022-05-28
 
 Helper functions for accessing the database.
 
@@ -144,7 +144,7 @@ def db_read_table(
             )
             where_cond.append(f'"{k}" IN ( {instring} )')
         else:
-            raise Bug("Unexpected comparison value: '{repr({v})'")
+            raise Bug(f"Unexpected comparison value: '{repr(v)}' for '{f}'")
     if where_cond:
         where_clause = f" WHERE {' AND '.join(where_cond)}"
     else:
@@ -203,6 +203,99 @@ def db_read_fields(table, fields, sort_field=None):
     """
     fields, value_list = db_read_table(table, fields, sort_field=sort_field)
     return value_list
+
+
+def db_update_fields(table, field_values,  *wheres, **keys):
+    where_cond = [w for w in wheres]
+    for k, v in keys.items():
+        if isinstance(v, str):
+            where_cond.append(f'"{k}" = "{v}"')
+        elif isinstance(v, int):
+            where_cond.append(f'"{k}" = {v}')
+        elif isinstance(v, list):
+            instring = ', '.join(
+                [f'"{_v}"' if isinstance(_v, str) else str(_v) for _v in v]
+            )
+            where_cond.append(f'"{k}" IN ( {instring} )')
+        else:
+            raise Bug("Unexpected comparison value: '{repr({v})'")
+    if where_cond:
+        where_clause = f" WHERE {' AND '.join(where_cond)}"
+    else:
+        where_clause = ""
+
+    fields = []
+    for f, v in field_values:
+        if isinstance(v, str):
+            fields.append(f'"{f}" = "{v}"')
+        elif isinstance(v, int):
+            fields.append(f'"{f}" = {v}')
+        else:
+            raise Bug(f"Unexpected field value: '{repr(v)}' for '{f}'")
+
+    f = ', '.join(fields)
+    qtext = f"UPDATE {table} SET {f}{where_clause}"
+    #print("§§§", qtext)
+    query = QSqlQuery()
+    if query.exec(qtext):
+        return True
+    error = query.lastError()
+    SHOW_ERROR(error.text())
+    return False
+
+
+def db_update_field(table, field, value,  *wheres, **keys):
+    return db_update_fields(table, [(field, value)],  *wheres, **keys)
+
+
+def db_new_row(table, **values):
+    flist, vlist = [], []
+    for f, v in values.items():
+        flist.append(f'"{f}"')
+        if isinstance(v, str):
+            vlist.append(f'"{v}"')
+        elif isinstance(v, int):
+            vlist.append(f'{v}')
+        else:
+            raise Bug(f"Unexpected field value: '{repr(v)}' for '{f}'")
+    qtext = f"INSERT INTO {table} ({', '.join(flist)}) VALUES ({', '.join(vlist)})"
+    #print("§§§", qtext)
+    query = QSqlQuery()
+    if query.exec(qtext):
+        newid = query.lastInsertId()
+        print("-->", newid)
+        return newid
+    error = query.lastError()
+    SHOW_ERROR(error.text())
+    return None
+
+
+def db_delete_rows(table, *wheres, **keys):
+    where_cond = [w for w in wheres]
+    for k, v in keys.items():
+        if isinstance(v, str):
+            where_cond.append(f'"{k}" = "{v}"')
+        elif isinstance(v, int):
+            where_cond.append(f'"{k}" = {v}')
+        elif isinstance(v, list):
+            instring = ', '.join(
+                [f'"{_v}"' if isinstance(_v, str) else str(_v) for _v in v]
+            )
+            where_cond.append(f'"{k}" IN ( {instring} )')
+        else:
+            raise Bug("Unexpected comparison value: '{repr({v})'")
+    if where_cond:
+        where_clause = f" WHERE {' AND '.join(where_cond)}"
+    else:
+        where_clause = ""
+    qtext = f"DELETE FROM {table}{where_clause}"
+    print("§§§", qtext)
+    query = QSqlQuery()
+    if query.exec(qtext):
+        return True
+    error = query.lastError()
+    SHOW_ERROR(error.text())
+    return False
 
 
 """

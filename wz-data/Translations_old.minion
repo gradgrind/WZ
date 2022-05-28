@@ -97,9 +97,6 @@ ui.modules.course_lessons: {
     UNKNOWN_ROOM_ID: "Unbekanntes Raumkürzel"
     INVALID_ROOM_IDS: "Ungültige Raumkürzel"
     BAD_TIME:       "Ungültige Zeitangabe (Tag.Stunde)"
-    INVALID_BLOCK_TAG: "Ungültiges Blockkennzeichen"
-    UNKNOWN_SUBJECT_TAG: "Unbekanntes Fachkürzel"
-    EMPTY_PARTNER_TAG: "Leeres „Partner-Kennzeichen“"
 
     PAYROLL_VALID_ENTRY: "* oder Dezimalzahl"
     INVALID_PAYROLL: "Ungültiger Wert"
@@ -117,15 +114,15 @@ ui.modules.course_lessons: {
     DELETE:         Löschen
     UPDATE:         Übernehmen
     NEW:            Hinzufügen
-    NEW_PLAIN:      "Neue Unterrichtsstunde"
-    NEW_BLOCK:      "Neues Blockfach bzw. Epoche"
-    NEW_EXTRA:      "Neuer Deputatseintrag"
+    NEW_BLOCK:      "Neues Blockfach"
+    NEW_PLAIN:      "Neuer Eintrag"
 
     # Course table title line
     COURSE_TITLE:   Kurse
     FILTER:         "Filter:"
 
     # Course table fields
+    id:             ID
     course:         KursNr
     CLASS:          Klasse
     GRP:            Gruppe
@@ -139,17 +136,13 @@ ui.modules.course_lessons: {
     LESSONS:        "Unterrichts- bzw. Deputatsstunden"
     BLOCK_MEMBER:   Blockmitglied
 
-    id:             ID
-    #course:         KursNr
     LENGTH:         Länge
     PAYROLL:        Deputat
     TAG:            Kennzeichen
     ROOM:           Raum
-    TIME:           "Zeit / Block"
+    TIME:           Zeit
     Time:           Zeit
     Partners:       Partner-id
-    Block_subject:  Epoche/Block
-    Block_tag:      Kennzeichen
     PLACE:          Ort
     NOTES:          Notizen
 
