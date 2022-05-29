@@ -118,6 +118,7 @@ from ui.dialogs import (
     sublessons,
     TAG_FORMAT,
     DurationDelegate,
+    DayPeriodDelegate,
 
     #RoomDialog,
     DayPeriodDialog,
@@ -793,7 +794,6 @@ class BlockLesson(QWidget):
         editwidget = KeySelector(changed_callback=self.sid_changed)
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
-
 #?
         f = "Block_tag"
         editwidget = QComboBox(editable=True)
@@ -810,12 +810,7 @@ class BlockLesson(QWidget):
         self.lesson_table.setMinimumHeight(120)
         self.lesson_table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         self.lesson_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-#?
-#        self.lesson_table.cellClicked.connect(self.lesson_activated)
-#        self.lesson_table.cellActivated.connect(self.lesson_activated)
-#        self.lesson_table.setEditTriggers(
-#            QAbstractItemView.NoEditTriggers
-#        )  # non-editable
+        self.lesson_table.cellChanged.connect(self.sublesson_table_changed)
 
         self.lesson_table.setColumnCount(4)
         self.lesson_table.setHorizontalHeaderLabels((
@@ -830,9 +825,12 @@ class BlockLesson(QWidget):
         self.lesson_table.resizeColumnsToContents()
         Hhd.setStretchLastSection(True)
 
+        # Set column editors
         delegate = DurationDelegate(self.lesson_table)
-#        delegate = QComboBox(parent=self.lesson_table)
         self.lesson_table.setItemDelegateForColumn(1, delegate)
+#TODO: Time and Partners
+        delegate = DayPeriodDelegate(self.lesson_table)
+        self.lesson_table.setItemDelegateForColumn(2, delegate)
 
         form.addRow(self.lesson_table)
 
@@ -885,6 +883,7 @@ class BlockLesson(QWidget):
         slist = sublessons(tag)
         print(" ...", slist)
         ltable = self.lesson_table
+        self.__ltable_ready = False
         ltable.clearContents()
         ltable.setRowCount(len(slist))
         r = 0
@@ -895,6 +894,7 @@ class BlockLesson(QWidget):
             ltable.setItem(r, 2, QTableWidgetItem(t))
             ltable.setItem(r, 3, QTableWidgetItem(p))
             r += 1
+        self.__ltable_ready = True
 
     def sid_changed(self, sid):
         taglist = db_values(
@@ -924,10 +924,30 @@ class BlockLesson(QWidget):
         self.main_widget.redisplay()
         return False
 
+    def sublesson_table_changed(self, row, col):
+#TODO
+        if self.__ltable_ready:
+            val = self.lesson_table.item(row, col).text()
+            print("§ SUBLESSON table changed:", row, col, val)
+            lesson_id = int(self.lesson_table.item(row, 0).text())
+            if col == 1:
+                # length
+                db_update_field("LESSONS", "LENGTH", val, id=lesson_id)
+            elif col == 2:
+                # time
+                print("!!! TODO")
+            elif col == 3:
+                # partners
+                print("!!! TODO")
+            else:
+                raise Bug(f"Invalid sublesson table column: {col}")
+
     def lesson_add(self):
+#TODO
         pass
 
     def lesson_del(self):
+#TODO
         pass
 
 

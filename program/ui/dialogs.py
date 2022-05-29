@@ -281,8 +281,8 @@ def index2timeslot(index):
 
 class DayPeriodDialog(QDialog):
     @classmethod
-    def popup(cls, start_value=""):
-        d = cls()
+    def popup(cls, start_value="", parent=None):
+        d = cls(parent)
         d.init()
         return d.activate(start_value)
 
@@ -352,10 +352,12 @@ class DayPeriodDialog(QDialog):
         return self.result
 
     def select_day(self, day):
+#TODO
         print("SELECT DAY:", day)
 
     def select_period(self, period):
-        print("SELECT CLASS:", period)
+#TODO
+        print("SELECT PERIOD:", period)
 
 
 class ListWidget(QListWidget):
@@ -699,27 +701,6 @@ class RoomSelector(QLineEdit):
         self.setText(text)
 
 
-#deprecated
-class DurationDelegate0(QStyledItemDelegate):
-    class Val(QIntValidator):
-        def validate(self, text, pos):
-            if text.startswith("0"):
-                return QValidator.State.Invalid, text, pos
-            return super().validate(text, pos)
-
-    def createEditor(self, parent, option, index):
-        w = QLineEdit(parent)
-        w.setValidator(self.Val(1, len(SHARED_DATA["PERIODS"])))
-        return w
-
-#??? This is getting called on return
-    def setModelData(self, editor, model, index):
-        print("%%", editor)
-        print("%%", model)
-        print("%%", index, index.row(), index.column())
-        super().setModelData(editor, model, index)
-
-
 class DelegatableList(QListWidget):
     """Changes must be registered with mouse-click or return-key.
     """
@@ -783,8 +764,13 @@ class DurationDelegate(QStyledItemDelegate):
         self.__table.setFocus()
 
 
-class DP_Delegate(QStyledItemDelegate):
+class DayPeriodDelegate(QStyledItemDelegate):
+    def __init__(self, table):
+        super().__init__(parent=table)
+        self.__table = table
+
     class Editor(QLineEdit):
+        # The line-edit is not used, but it has the necessary properties ...
         def showEvent(self, event):
             QTimer.singleShot(0, self.clearFocus)
 
@@ -794,21 +780,20 @@ class DP_Delegate(QStyledItemDelegate):
     def setModelData(self, editor, model, index):
         # This gets called on activation (thanks to the <showEvent>
         # method in <Editor>).
-        print("%%DP", editor)
-        print("%%DP", model)
-        print("%%DP", index, index.row(), index.column())
-
-        print("§§§ >>>", editor.text(), model.data(index))
-        result = DayPeriodDialog.popup(editor.text())
+        old_value = model.data(index))  # or editor.text()
+        print("§§§ old:", old_value)
+        result = DayPeriodDialog.popup(old_value)
 #TODO
-        print("§§§RESULT", result)
+        print("§§§ new", result)
         #super().setModelData(editor, model, index)
-        if result:
-            model.setData(index, result)
-
-            index_partners = model.index(index.row(), index.column() + 1)
-
-            model.setData(index_partners, "Y")
+#        if result:
+#            model.setData(index, result)
+#
+#            index_partners = model.index(index.row(), index.column() + 1)
+#
+#            model.setData(index_partners, "Y")
+        #self.__table.set_time(index.row(), index.column(), old_value, result)
+        self.__table.setFocus()
 
 
 class TableWidget(QTableWidget):
@@ -896,7 +881,7 @@ class BlockTagDialog(QDialog):
 
         self.dgt1 = DurationDelegate(self.lesson_table)
         self.lesson_table.setItemDelegateForColumn(1, self.dgt1)
-        self.dgt2 = DP_Delegate()
+        self.dgt2 = DayPeriodDelegate(self.lesson_table)
         self.lesson_table.setItemDelegateForColumn(2, self.dgt2)
 
 
