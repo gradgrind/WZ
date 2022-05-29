@@ -117,6 +117,7 @@ from ui.dialogs import (
     partners,
     sublessons,
     TAG_FORMAT,
+    DurationDelegate,
 
     #RoomDialog,
     DayPeriodDialog,
@@ -124,7 +125,8 @@ from ui.dialogs import (
     PayrollDialog,
     parse_time_field,
     get_time_entry,
-    TimeSlotError
+    TimeSlotError,
+    TableWidget
 )
 
 # Course table fields
@@ -775,7 +777,6 @@ class PlainLesson(QWidget):
         return False
 
 
-
 class BlockLesson(QWidget):
     def __init__(self, main_widget, parent=None):
         self.main_widget = main_widget
@@ -805,29 +806,16 @@ class BlockLesson(QWidget):
         editwidget.setValidator(validator)
         form.addRow(T[f], editwidget)
 
-        self.lesson_table = QTableWidget()
+        self.lesson_table = TableWidget()
         self.lesson_table.setMinimumHeight(120)
         self.lesson_table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         self.lesson_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
 #?
-        self.lesson_table.cellClicked.connect(self.lesson_activated)
-        self.lesson_table.cellActivated.connect(self.lesson_activated)
-        self.lesson_table.setEditTriggers(
-            QAbstractItemView.NoEditTriggers
-        )  # non-editable
-
-        # Change stylesheet to make the selected cell more visible
-        self.lesson_table.setStyleSheet(
-            """QTableView {
-               selection-background-color: #f0e0ff;
-               selection-color: black;
-            }
-            QTableView::item:focus {
-                selection-background-color: #d0ffff;
-            }
-            """
-        )
-
+#        self.lesson_table.cellClicked.connect(self.lesson_activated)
+#        self.lesson_table.cellActivated.connect(self.lesson_activated)
+#        self.lesson_table.setEditTriggers(
+#            QAbstractItemView.NoEditTriggers
+#        )  # non-editable
 
         self.lesson_table.setColumnCount(4)
         self.lesson_table.setHorizontalHeaderLabels((
@@ -841,6 +829,11 @@ class BlockLesson(QWidget):
         Hhd.setMinimumSectionSize(60)
         self.lesson_table.resizeColumnsToContents()
         Hhd.setStretchLastSection(True)
+
+        delegate = DurationDelegate(self.lesson_table)
+#        delegate = QComboBox(parent=self.lesson_table)
+        self.lesson_table.setItemDelegateForColumn(1, delegate)
+
         form.addRow(self.lesson_table)
 
         bb0 = QDialogButtonBox()
@@ -860,6 +853,7 @@ class BlockLesson(QWidget):
     def lesson_activated(self, row, col):
 #TODO
         print("§ ACTIVATED", row, col)
+        self.lesson_table.editItem(self.lesson_table.item(row, col))
 
     def set_data(self, record):
         self.lesson_id = record.value("id")

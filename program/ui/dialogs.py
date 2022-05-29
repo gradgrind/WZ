@@ -81,6 +81,7 @@ from ui.ui_base import (
     QToolButton,
     QPushButton,
     QStyledItemDelegate,
+    QAbstractItemDelegate,
     ### QtGui:
     QValidator,
     QRegularExpressionValidator,
@@ -89,7 +90,8 @@ from ui.ui_base import (
     Qt,
     QSize,
     QRegularExpression,
-    QTimer
+    QTimer,
+    Property
 )
 
 # Course table fields
@@ -697,8 +699,8 @@ class RoomSelector(QLineEdit):
         self.setText(text)
 
 
-#deprecated?
-class DurationDelegate(QStyledItemDelegate):
+#deprecated
+class DurationDelegate0(QStyledItemDelegate):
     class Val(QIntValidator):
         def validate(self, text, pos):
             if text.startswith("0"):
@@ -717,7 +719,70 @@ class DurationDelegate(QStyledItemDelegate):
         print("%%", index, index.row(), index.column())
         super().setModelData(editor, model, index)
 
-#+
+
+class DelegatableList(QListWidget):
+    """Changes must be registered with mouse-click or return-key.
+    """
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        self.result = False     # Flag: no registered result
+        self.itemClicked.connect(self.__done)
+
+    @Property(str, user=True)
+    def text(self):
+        text = self.currentItem().text()
+        #print("§GET:", text)
+        return text
+
+    @text.setter
+    def text(self, text):
+        if self.result:
+            # This method gets called during saving of the result data,
+            # which is not necessary.
+            return
+        #print("$SET", text)
+        self.clear()
+        row = -1
+        items = []
+        for i in range(len(SHARED_DATA["PERIODS"])):
+            item = str(i + 1)
+            if item == text:
+                row = i
+            items.append(item)
+        self.addItems(items)
+        self.setCurrentRow(row)
+
+    def keyPressEvent(self, e):
+        e.accept()
+        key = e.key()
+        if key == Qt.Key_Return:
+            self.__done()
+        else:
+            super().keyPressEvent(e)
+
+    def __done(self):
+        #print("§§§DONE", self.currentItem().text())
+        self.result = True  # Register result as valid
+        #self.hide()
+        self.clearFocus()
+
+
+class DurationDelegate(QStyledItemDelegate):
+    def __init__(self, table):
+        super().__init__(parent=table)
+        self.__table = table
+
+    def createEditor(self, parent, option, index):
+        w = DelegatableList(parent=parent)
+        w.setMinimumHeight(80)
+        return w
+
+    def setModelData(self, editor, model, index):
+        if editor.result:
+            super().setModelData(editor, model, index)
+        self.__table.setFocus()
+
+
 class DP_Delegate(QStyledItemDelegate):
     class Editor(QLineEdit):
         def showEvent(self, event):
@@ -733,9 +798,8 @@ class DP_Delegate(QStyledItemDelegate):
         print("%%DP", model)
         print("%%DP", index, index.row(), index.column())
 
-        popup = SHARED_DATA["DayPeriodDialog"]
         print("§§§ >>>", editor.text(), model.data(index))
-        result = popup.activate(editor.text())
+        result = DayPeriodDialog.popup(editor.text())
 #TODO
         print("§§§RESULT", result)
         #super().setModelData(editor, model, index)
@@ -747,7 +811,39 @@ class DP_Delegate(QStyledItemDelegate):
             model.setData(index_partners, "Y")
 
 
-#+
+class TableWidget(QTableWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked
+            | QAbstractItemView.EditTrigger.AnyKeyPressed
+            | QAbstractItemView.EditTrigger.SelectedClicked # this one has a delay!
+        )
+        # Note that the <Return> key doesn't cause the editor to be opened,
+        # so there is an event handling that ... see method <keyPressEvent>.
+
+        # Change stylesheet to make the selected cell more visible
+        self.setStyleSheet(
+            """QTableView {
+               selection-background-color: #f0e0ff;
+               selection-color: black;
+            }
+            QTableView::item:focus {
+                selection-background-color: #d0ffff;
+            }
+            """
+        )
+
+    def keyPressEvent(self, e):
+        e.accept()
+        key = e.key()
+        if key == Qt.Key_Return:
+            if self.state() != self.EditingState:
+                self.editItem(self.currentItem())
+        else:
+            super().keyPressEvent(e)
+
+
 class BlockTagDialog(QDialog):
 #TODO
 # Could enable the save button only when it is different from the initial value
@@ -791,14 +887,14 @@ class BlockTagDialog(QDialog):
         validator = QRegularExpressionValidator(TAG_FORMAT)
         self.identifier.setValidator(validator)
 
-        self.lesson_table = QTableWidget()
+        self.lesson_table = TableWidget()
         self.lesson_table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         self.lesson_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         vbox1.addWidget(self.lesson_table)
         self.lesson_table.setColumnCount(4)
 
 
-        self.dgt1 = DurationDelegate()
+        self.dgt1 = DurationDelegate(self.lesson_table)
         self.lesson_table.setItemDelegateForColumn(1, self.dgt1)
         self.dgt2 = DP_Delegate()
         self.lesson_table.setItemDelegateForColumn(2, self.dgt2)
@@ -1357,11 +1453,6 @@ if __name__ == "__main__":
 
     for p in partners("sp03"):
         print("??????", p)
-
-    dpd = DayPeriodDialog()
-    dpd.init()
-    SHARED_DATA["DayPeriodDialog"] = dpd
-
 
     widget = BlockTagDialog()
     print("----->", widget.activate(start_value=">ZwE#09G10G"))
