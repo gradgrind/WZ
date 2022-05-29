@@ -1,7 +1,7 @@
 """
 ui/dialogs.py
 
-Last updated:  2022-05-28
+Last updated:  2022-05-29
 
 Dialogs for various editing purposes
 
@@ -174,6 +174,12 @@ TAG_FORMAT = QRegularExpression("^[A-Za-z0-9_.]+$")
 
 SHARED_DATA = {}
 
+def dialogs_init():
+    days = db_key_value_list("TT_DAYS", "TAG", "NAME", "N")
+    SHARED_DATA["DAYS"] = days
+    periods = db_key_value_list("TT_PERIODS", "TAG", "NAME", "N")
+    SHARED_DATA["PERIODS"] = periods
+
 ### -----
 
 # This can still be useful as an example, even if I don't use it!
@@ -323,14 +329,10 @@ class DayPeriodDialog(QDialog):
         self.accept()
 
     def init(self):
-        days = db_key_value_list("TT_DAYS", "TAG", "NAME", "N")
-        SHARED_DATA["DAYS"] = days
         self.daylist.clear()
-        self.daylist.addItems([d[1] for d in days])
-        periods = db_key_value_list("TT_PERIODS", "TAG", "NAME", "N")
-        SHARED_DATA["PERIODS"] = periods
+        self.daylist.addItems([d[1] for d in SHARED_DATA["DAYS"]])
         self.periodlist.clear()
-        self.periodlist.addItems([p[1] for p in periods])
+        self.periodlist.addItems([p[1] for p in SHARED_DATA["PERIODS"]])
 
     def activate(self, start_value=None):
         try:
@@ -361,7 +363,7 @@ class ListWidget(QListWidget):
         scrollbarwidth = APP.style().pixelMetric(QStyle.PM_ScrollBarExtent)
         # The scroll-bar width alone is not quite enough ...
         s.setWidth(self.sizeHintForColumn(0) + scrollbarwidth + 5)
-        print("???", s, scrollbarwidth)
+        #print("???", s, scrollbarwidth)
         return s
 
 
@@ -408,7 +410,6 @@ class Sublesson(NamedTuple):
     id: int
     LENGTH: str
     TIME: str
-    PLACE: str
 #+
 def sublessons(tag):
     if tag.replace(' ', '') != tag:
@@ -1349,6 +1350,7 @@ if __name__ == "__main__":
 #    quit(0)
 
     open_database()
+    dialogs_init()
 
     for p in placements(">ZwE#09G10G"):
         print("!!!!", p)

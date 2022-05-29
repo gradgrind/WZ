@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-05-27
+Last updated:  2022-05-29
 
 Edit course and lesson data.
 
@@ -79,6 +79,7 @@ from ui.ui_base import (
     QPushButton,
     QDialogButtonBox,
     QTableWidget,
+    QTableWidgetItem,
     QTableView,
 #?
     QDialog,
@@ -106,6 +107,7 @@ from ui.ui_base import (
 )
 
 from ui.dialogs import (
+    dialogs_init,
     SHARED_DATA,
     DurationSelector,
     DayPeriodSelector,
@@ -181,17 +183,9 @@ class Courses(Page):
 
     def enter(self):
         open_database()
+        dialogs_init()
         self.course_editor.init_data()
-#???
-#        SHARED_DATA["PayrollDialog"].init()
-#        SHARED_DATA["RoomDialog"].init()
 
-#        dayPeriodDialog = SHARED_DATA["DayPeriodDialog"]
-        dayPeriodDialog = DayPeriodDialog()
-        dayPeriodDialog.init()
-
-#    def is_modified(self):
-#        return bool(self.course_editor.form_change_set)
 
 # ++++++++++++++ The widget implementation ++++++++++++++
 
@@ -274,16 +268,9 @@ class CourseEditor(QSplitter):
 
         ### Page: Plain lesson entry
         self.stack.addWidget(PlainLesson(self))
-#TODO
-#        for f, t in LESSON_COLS:
-#            if f not in LESSONCOLS_SHOW:
-#                widget = QLineEdit()
-#                widget.setReadOnly(True)
-#                self.field_lines[f] = widget
-#                form.addRow(t, widget)
 
         ### Page: Block member entry
-        self.stack.addWidget(BlockLesson())
+        self.stack.addWidget(BlockLesson(self))
 #TODO
 
         ### Page: "Extra" entry (no timetable, but payroll entry)
@@ -318,11 +305,6 @@ class CourseEditor(QSplitter):
         lesson_add_extra.clicked.connect(self.lesson_add_extra)
 
         self.setStretchFactor(0, 1)  # stretch only left panel
-
-#        SHARED_DATA["RoomDialog"] = RoomDialog()
-        SHARED_DATA["DayPeriodDialog"] = DayPeriodDialog()
-#        SHARED_DATA["PartnersDialog"] = PartnersDialog()
-#        SHARED_DATA["PayrollDialog"] = PayrollDialog()
 
     def course_activate(self, modelindex):
         self.edit_course()
@@ -489,7 +471,7 @@ class CourseEditor(QSplitter):
 
     def lesson_selected(self, row):
         self.current_row = row
-        #print("SELECT LESSON", row)
+        print("SELECT LESSON", row)
         self.note_editor.clear()
         if row >= 0:
             self.lesson_delete_button.setEnabled(True)
@@ -795,7 +777,8 @@ class PlainLesson(QWidget):
 
 
 class BlockLesson(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, main_widget, parent=None):
+        self.main_widget = main_widget
         super().__init__(parent=parent)
         form = QFormLayout(self)
         form.setContentsMargins(0, 0, 0, 0)
@@ -826,8 +809,40 @@ class BlockLesson(QWidget):
         self.lesson_table.setMinimumHeight(120)
         self.lesson_table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         self.lesson_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+#?
+        self.lesson_table.cellClicked.connect(self.lesson_activated)
+        self.lesson_table.cellActivated.connect(self.lesson_activated)
+        self.lesson_table.setEditTriggers(
+            QAbstractItemView.NoEditTriggers
+        )  # non-editable
+
+        # Change stylesheet to make the selected cell more visible
+        self.lesson_table.setStyleSheet(
+            """QTableView {
+               selection-background-color: #f0e0ff;
+               selection-color: black;
+            }
+            QTableView::item:focus {
+                selection-background-color: #d0ffff;
+            }
+            """
+        )
+
+
         self.lesson_table.setColumnCount(4)
+        self.lesson_table.setHorizontalHeaderLabels((
+            T["id"],
+            T["LENGTH"],
+            T["Time"],
+            T["Partners"]
+        ))
+        self.lesson_table.hideColumn(0)
+        Hhd = self.lesson_table.horizontalHeader()
+        Hhd.setMinimumSectionSize(60)
+        self.lesson_table.resizeColumnsToContents()
+        Hhd.setStretchLastSection(True)
         form.addRow(self.lesson_table)
+
         bb0 = QDialogButtonBox()
         bt_new = bb0.addButton("+", QDialogButtonBox.ButtonRole.ActionRole)
         bt_new.setFixedWidth(30)
@@ -841,6 +856,10 @@ class BlockLesson(QWidget):
         editwidget = PayrollSelector(modified=self.payroll_changed)
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
+
+    def lesson_activated(self, row, col):
+#TODO
+        print("§ ACTIVATED", row, col)
 
     def set_data(self, record):
         self.lesson_id = record.value("id")
@@ -860,16 +879,30 @@ class BlockLesson(QWidget):
         except GuiError:
             if sid:
                 SHOW_ERROR(f"{T['UNKNOWN_SUBJECT_TAG']}: {sid}")
-        self.editors["Block_tag"].setCurrentText(tag)
+        tagid = self.editors["Block_tag"]
+        tagid.setCurrentText("#")
+        tagid.setCurrentText(tag)
 
     def show_sublessons(self, text):
+        if text == "#":
+            return
         tag = f'>{self.editors["Block_subject"].selected()}#{text}'
-        print("§§ FULL TAG:", tag)
+        #print("§§ FULL TAG:", tag)
         slist = sublessons(tag)
         print(" ...", slist)
+        ltable = self.lesson_table
+        ltable.clearContents()
+        ltable.setRowCount(len(slist))
+        r = 0
+        for s in slist:
+            t, p = parse_time_field(s.TIME)
+            ltable.setItem(r, 0, QTableWidgetItem(str(s.id)))
+            ltable.setItem(r, 1, QTableWidgetItem(s.LENGTH))
+            ltable.setItem(r, 2, QTableWidgetItem(t))
+            ltable.setItem(r, 3, QTableWidgetItem(p))
+            r += 1
 
     def sid_changed(self, sid):
-        print("DUMMY: sid_changed:", sid)
         taglist = db_values(
             "LESSONS",
             "TIME",
@@ -877,9 +910,11 @@ class BlockLesson(QWidget):
             distinct=True,
             sort_field="TIME"
         )
+        print("sid_changed:", sid, taglist)
         tagid = self.editors["Block_tag"]
         tagid.clear()
         tagid.addItems([t.split("#", 1)[1] for t in taglist])
+        tagid.setCurrentText("#")
         tagid.setCurrentIndex(-1)
         return True # accept
 
