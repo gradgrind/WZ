@@ -1,7 +1,7 @@
 """
 ui/dialogs.py
 
-Last updated:  2022-05-29
+Last updated:  2022-05-30
 
 Dialogs for various editing purposes
 
@@ -535,8 +535,6 @@ class PartnersDialog(QDialog):
         if not val:
             SHOW_ERROR(T["EMPTY_PARTNER_TAG"])
             return
-#TODO
-# Bear in mind that I still need to deal with the "=" prefixes ...
         if val != self.value0:
             self.result = val
         if self.identifier.findText(val) < 0:
@@ -780,10 +778,49 @@ class DayPeriodDelegate(QStyledItemDelegate):
     def setModelData(self, editor, model, index):
         # This gets called on activation (thanks to the <showEvent>
         # method in <Editor>).
-        old_value = model.data(index))  # or editor.text()
+        old_value = model.data(index)  # or editor.text()
         print("§§§ old:", old_value)
         result = DayPeriodDialog.popup(old_value)
 #TODO
+        print("§§§ new", result)
+        #super().setModelData(editor, model, index)
+#        if result:
+#            model.setData(index, result)
+#
+#            index_partners = model.index(index.row(), index.column() + 1)
+#
+#            model.setData(index_partners, "Y")
+        #self.__table.set_time(index.row(), index.column(), old_value, result)
+        self.__table.setFocus()
+
+
+class PartnersDelegate(QStyledItemDelegate):
+    def __init__(self, table):
+        super().__init__(parent=table)
+        self.__table = table
+
+    class Editor(QLineEdit):
+        # The line-edit is not used, but it has the necessary properties ...
+        def showEvent(self, event):
+            QTimer.singleShot(0, self.clearFocus)
+
+    def createEditor(self, parent, option, index):
+        return self.Editor(parent)
+
+    def setModelData(self, editor, model, index):
+        # This gets called on activation (thanks to the <showEvent>
+        # method in <Editor>).
+        old_value = model.data(index)  # or editor.text()
+        self.__table.old_partners = old_value
+        print("§§§ old:", old_value)
+        result = PartnersDialog.popup(old_value)
+
+#TODO
+# result can be empty -> no action
+# It can be an existing "partners" entry
+# It can have a +-prefix -> new entry
+# It can be '-' -> clear it
+
         print("§§§ new", result)
         #super().setModelData(editor, model, index)
 #        if result:

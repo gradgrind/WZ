@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-05-29
+Last updated:  2022-05-30
 
 Edit course and lesson data.
 
@@ -23,9 +23,6 @@ Copyright 2022 Michael Towers
 
 =-LICENCE========================================
 """
-
-#TODO: Rework using Dialogs for the form editors, with the lesson forms
-# in the main page
 
 ########################################################################
 
@@ -119,6 +116,7 @@ from ui.dialogs import (
     TAG_FORMAT,
     DurationDelegate,
     DayPeriodDelegate,
+    PartnersDelegate,
 
     #RoomDialog,
     DayPeriodDialog,
@@ -702,6 +700,10 @@ class PlainLesson(QWidget):
         self.editors["ROOM"].setText(record.value("ROOM"))
         self.editors["PLACE"].setText(record.value("PLACE"))
 
+    ### After a redisplay of the main widget it would be inappropriate
+    ### for a callback handler to update its cell, so <False> is returned
+    ### to suppress this update.
+
     def length_changed(self, text):
         #print("$ UPDATE LENGTH:", text)
         db_update_field("LESSONS", "LENGTH", text, id=self.lesson_id)
@@ -718,10 +720,7 @@ class PlainLesson(QWidget):
         #print("$ UPDATE TIME:", text)
         # The action to take depends on whether there is a partner tag.
         ptag = self.editors["Partners"].text()
-        if ptag:
-            db_update_field("LESSONS", "TIME", "@"+text, PLACE=f"={ptag}")
-        else:
-            db_update_field("LESSONS", "TIME", "@"+text, id=self.lesson_id)
+        db_update_time(self.lesson_id, text, ptag)
         self.main_widget.redisplay()
         return False
 
@@ -729,45 +728,47 @@ class PlainLesson(QWidget):
         #print("$ UPDATE PARTNERS TAG:", text)
         oldtime = self.editors["Time"].text()
         oldpartners = self.editors["Partners"].text()
+        db_update_partners(self.lesson_id, text, oldpartners, oldtime)
 
-        if text:
-            if text[0] == "+":
-                # New partner tag, make lesson-time entry
-                text = text[1:]
-                newid = db_new_row("LESSONS",
-                    PLACE=f"={text}",
-                    TIME=f"@{oldtime}"
-                )
-                if not newid:
-                    return False
+#        if text:
+#            if text[0] == "+":
+#                # New partner tag, make lesson-time entry
+#                text = text[1:]
+#                newid = db_new_row("LESSONS",
+#                    PLACE=f"={text}",
+#                    TIME=f"@{oldtime}"
+#                )
+#                if not newid:
+#                    return False
+#
+#            else:
+#                # Get time of new partners
+#                ltime = get_time_entry(text)
+#                self.editors["Time"].setText(ltime)
+#
+#            if not db_update_field("LESSONS",
+#                "TIME",
+#                f"={text}",
+#                id=self.lesson_id
+#            ):
+#                return False
+#
+#        else:
+#            # Remove the partner tag
+#            if not db_update_field("LESSONS",
+#                "TIME",
+#                f"@{oldtime}",
+#                id=self.lesson_id
+#            ):
+#                return False
+#
+#        # If there are no other partners with the original tag, remove
+#        # its lesson-time entry.
+#        #print("§ ??? PARTNERS:", partners(oldpartners))
+#        if not partners(oldpartners):
+#            #print("§ EMPTY TAG:", oldpartners)
+#            db_delete_rows("LESSONS", PLACE=f"={oldpartners}")
 
-            else:
-                # Get time of new partners
-                ltime = get_time_entry(text)
-                self.editors["Time"].setText(ltime)
-
-            if not db_update_field("LESSONS",
-                "TIME",
-                f"={text}",
-                id=self.lesson_id
-            ):
-                return False
-
-        else:
-            # Remove the partner tag
-            if not db_update_field("LESSONS",
-                "TIME",
-                f"@{oldtime}",
-                id=self.lesson_id
-            ):
-                return False
-
-        # If there are no other partners with the original tag, remove
-        # its lesson-time entry.
-        #print("§ ??? PARTNERS:", partners(oldpartners))
-        if not partners(oldpartners):
-            #print("§ EMPTY TAG:", oldpartners)
-            db_delete_rows("LESSONS", PLACE=f"={oldpartners}")
         self.main_widget.redisplay()
         return False
 
@@ -828,9 +829,10 @@ class BlockLesson(QWidget):
         # Set column editors
         delegate = DurationDelegate(self.lesson_table)
         self.lesson_table.setItemDelegateForColumn(1, delegate)
-#TODO: Time and Partners
         delegate = DayPeriodDelegate(self.lesson_table)
         self.lesson_table.setItemDelegateForColumn(2, delegate)
+        delegate = PartnersDelegate(self.lesson_table)
+        self.lesson_table.setItemDelegateForColumn(3, delegate)
 
         form.addRow(self.lesson_table)
 
@@ -912,6 +914,10 @@ class BlockLesson(QWidget):
         tagid.setCurrentIndex(-1)
         return True # accept
 
+    ### After a redisplay of the main widget it would be inappropriate
+    ### for a callback handler to update its cell, so <False> is returned
+    ### to suppress this update.
+
     def room_changed(self, text):
         #print("$ UPDATE ROOM:", text)
         db_update_field("LESSONS", "ROOM", text, id=self.lesson_id)
@@ -935,10 +941,21 @@ class BlockLesson(QWidget):
                 db_update_field("LESSONS", "LENGTH", val, id=lesson_id)
             elif col == 2:
                 # time
-                print("!!! TODO")
+                partners = self.lesson_table.item(row, 3).text()
+                db_update_time(lesson_id, val, partners)
+                # Redisplay table
+                self.show_sublessons(self.editors["Block_tag"])
             elif col == 3:
                 # partners
-                print("!!! TODO")
+                oldtime = self.lesson_table.item(row, 2).text()
+                db_update_partners(
+                    lesson_id,
+                    val,
+                    self.lesson_table.old_partners,
+                    oldtime
+                )
+                # Redisplay table
+                self.show_sublessons(self.editors["Block_tag"])
             else:
                 raise Bug(f"Invalid sublesson table column: {col}")
 
@@ -2271,6 +2288,55 @@ class BlockLessonEditor(LessonEditorBase):
         self.__value = -1   # Default return value => don't change row
         self.exec()
         return self.__value
+
+
+def db_update_time(lesson_id, time, partners):
+    if partners:
+        db_update_field("LESSONS", "TIME", "@"+time, PLACE=f"={partners}")
+    else:
+        db_update_field("LESSONS", "TIME", "@"+time, id=lesson_id)
+
+
+def db_update_partners(lesson_id, partners, oldpartners, oldtime):
+    """Update the "Partners" field.
+    Apart from the new field value it is also necessary to have the
+    previous value and the current value of the "Time" field. The
+    latter is only necessary for transfer to newly created partners,
+    which are indicated by a "+"-prefix.
+
+    After calling this the whole table should be redisplayed, along with
+    any consequences.
+    """
+    if partners:
+        if partners[0] == "+":
+            # New partner tag, make lesson-time entry
+            partners = partners[1:]
+            newid = db_new_row("LESSONS",
+                PLACE=f"={partners}",
+                TIME=f"@{oldtime}"
+            )
+            if not newid:
+                return
+        if not db_update_field("LESSONS",
+            "TIME",
+            f"={partners}",
+            id=lesson_id
+        ):
+            return
+    else:
+        # Remove the partner tag
+        if not db_update_field("LESSONS",
+            "TIME",
+            f"@{oldtime}",
+            id=lesson_id
+        ):
+            return
+    # If there are no other partners with the original tag, remove
+    # its lesson-time entry.
+    #print("§ ??? PARTNERS:", partners(oldpartners))
+    if not partners(oldpartners):
+        #print("§ EMPTY TAG:", oldpartners)
+        db_delete_rows("LESSONS", PLACE=f"={oldpartners}")
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
