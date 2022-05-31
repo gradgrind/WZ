@@ -1,9 +1,9 @@
 """
-ui/dialogs.py
+ui/course_dialogs.py
 
 Last updated:  2022-05-31
 
-Dialogs for various editing purposes
+Supporting "dialogs", etc., for various purposes within the course editor.
 
 
 =+LICENCE=============================
@@ -181,6 +181,8 @@ def dialogs_init():
     SHARED_DATA["DAYS"] = days
     periods = db_key_value_list("TT_PERIODS", "TAG", "NAME", "N")
     SHARED_DATA["PERIODS"] = periods
+    subjects = db_key_value_list("SUBJECTS", "SID", "NAME", "NAME")
+    SHARED_DATA["SUBJECTS"] = subjects
 
 ### -----
 
@@ -868,28 +870,16 @@ class TableWidget(QTableWidget):
 
 
 class BlockTagDialog(QDialog):
-#TODO
-# Could enable the save button only when it is different from the initial value
-# Could enable the clear/reset button only when there was an initial value
+    """Select the block tag (subject + identifier) for a block. The
+    identifier may be empty.
 
-    """A block tag is associated with multiple course-lessons, though
+    A block tag is associated with multiple "course-lessons", though
     each tag should only occur once in any particular course.
-    If a course-lesson releases its association with a block tag, the
-    existence of other references should be checked: if there are none
-    left, the associated sublessons should be deleted (and consider any
-    partner tags they might have).
-    This disassociation can occur by deleting a course-lesson, or by
-    editing it – changing to another block tag.
 
-    It is also possible that the number of sublessons – and their
-    detailed information – may be changed by an edit.
-
-    To keep track of these (at first only pending) changes, the previous
-    state must be remembered. That is, the course-lesson record, the
-    associated sublessons, and then their associated time and partner
-    information.
+    The "sublessons" belonging to the currently shown  block tag are
+    displayed. In addition a list of associated courses is shown. These
+    displays are only for informational purposes, they are not editable.
     """
-# Maybe it would be better to do immediate edits?
     def __init__(self):
         super().__init__()
         vbox0 = QVBoxLayout(self)
@@ -911,38 +901,20 @@ class BlockTagDialog(QDialog):
         self.identifier.setValidator(validator)
 
         self.lesson_table = TableWidget()
-        self.lesson_table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
-        self.lesson_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        self.lesson_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.lesson_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         vbox1.addWidget(self.lesson_table)
-        self.lesson_table.setColumnCount(4)
-
-
-        self.dgt1 = DurationDelegate(self.lesson_table)
-        self.lesson_table.setItemDelegateForColumn(1, self.dgt1)
-        self.dgt2 = DayPeriodDelegate(self.lesson_table)
-        self.lesson_table.setItemDelegateForColumn(2, self.dgt2)
-
-
-
+        self.lesson_table.setColumnCount(3)
 
         self.lesson_table.setHorizontalHeaderLabels((
-            T["id"],
             T["LENGTH"],
             T["Time"],
             T["Partners"]
         ))
-        self.lesson_table.hideColumn(0)
         Hhd = self.lesson_table.horizontalHeader()
         Hhd.setMinimumSectionSize(60)
         self.lesson_table.resizeColumnsToContents()
         Hhd.setStretchLastSection(True)
-
-        bb0 = QDialogButtonBox()
-        vbox1.addWidget(bb0)
-        bt_new = bb0.addButton("+", QDialogButtonBox.ButtonRole.ActionRole)
-        bt_del = bb0.addButton("-", QDialogButtonBox.ButtonRole.ActionRole)
-        bt_new.clicked.connect(self.lesson_add)
-        bt_del.clicked.connect(self.lesson_del)
 
         self.course_list = QListWidget()
         self.course_list.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
@@ -952,39 +924,35 @@ class BlockTagDialog(QDialog):
         buttonBox = QDialogButtonBox()
         #buttonBox.setOrientation(Qt.Orientation.Vertical)
         vbox0.addWidget(buttonBox)
-        bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
+        self.bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-        bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
+#        bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
         #vbox1.addStretch(1)
 
-        bt_save.clicked.connect(self.do_accept)
+        self.bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
-        bt_clear.clicked.connect(self.do_clear)
+#        bt_clear.clicked.connect(self.do_clear)
 
-        sids = db_key_value_list(
-            "SUBJECTS",
-            "SID",
-            "NAME",
-            sort_field="NAME"
-        )
-        self.subject.set_items(sids)
+        self.subject.set_items(SHARED_DATA["SUBJECTS"])
 
     def activate(self, start_value=""):
         self.value0 = start_value
         self.result = None
         try:
-            sid, tag = start_value.split("#", 1)
-            self.subject.reset(sid[1:])
-            if TAG_FORMAT.match(tag).hasMatch():
-                self.identifier.setCurrentText(tag)
-            else:
-                raise ValueError
+            sid, tag = start_value[1:].split("#", 1)
+            self.subject.reset(sid)
+            self.sid_changed(sid)
+            if tag:
+                if TAG_FORMAT.match(tag).hasMatch():
+                    self.identifier.setCurrentText(tag)
+                else:
+                    raise ValueError
         except ValueError:
             SHOW_ERROR(f"{T['INVALID_BLOCK_TAG']}: {start_value}")
-            self.identifier.clear()
+            self.identifier.clearEditText()
         except GuiError:
             SHOW_ERROR(f"{T['UNKNOWN_SUBJECT_TAG']}: {sid[1:]}")
-            self.identifier.clear()
+            self.identifier.clearEditText()
         self.exec()
         return self.result
 
@@ -999,37 +967,41 @@ class BlockTagDialog(QDialog):
         )
         self.identifier.clear()
         self.identifier.addItems([t.split("#", 1)[1] for t in taglist])
-        self.identifier.setCurrentIndex(-1)
+        # Set a dummy tag before clearing the tag editor, to ensure
+        # that there is a call to <show_courses>.
+        self.identifier.setEditText("#")
+        self.identifier.clearEditText()
         return True # accept
 
     def do_accept(self):
         tag = self.identifier.currentText()
-        if TAG_FORMAT.match(tag).hasMatch():
-            sid = self.subject.selected()
-            time_field = f">{sid}#{tag}"
-            print("OK", time_field)
-        else:
-            print("BAD TAG")
-#TODO
-# Bear in mind that I still need to deal with the "=" prefixes ...
-        if val != self.value0:
-            self.result = val
-        if self.identifier.findText(val) < 0:
-             self.result = "+" + val
+        # An invalid tag should not be possible at this stage ...
+        sid = self.subject.selected()
+        time_field = f">{sid}#{tag}"
+        print("OK", time_field)
+        # An unchanged value should not be possible here ...
+        #if time_field != self.value0:
+        #    self.result = time_field
+        if self.identifier.findText(tag) < 0:
+             self.result = "+" + time_field
         self.accept()
 
-    def do_clear(self):
-        if self.value0:
-            self.result = "-"
-        self.accept()
+#    def do_clear(self):
+#        if self.value0:
+#            self.result = "-"
+#        self.accept()
 
-    def show_courses(self, tag):
+    def show_courses(self, identifier):
         """Populate the list widget with all courses having a lesson entry
         in the block.
         """
+        if identifier == "#":
+            return
         # Including the currently selected one (which we can't identify here!)?
         self.course_list.clear()
-        tag = f">{self.subject.selected()}#{self.identifier.currentText()}"
+#        tag = f">{self.subject.selected()}#{self.identifier.currentText()}"
+        tag = f">{self.subject.selected()}#{identifier}"
+        self.bt_save.setEnabled(tag != self.value0)
         courselist = db_values(
             "LESSONS",
             "course",
@@ -1043,10 +1015,6 @@ class BlockTagDialog(QDialog):
             dlist.append(f"{ci.CLASS}.{ci.GRP}: {ci.SUBJECT} ({ci.TEACHER})")
         self.course_list.addItems(dlist)
 
-# I need more info on the sublessons ...
-# Would a QSqlTableModel be better?
-# The real question is where editing of this table should take place.
-# Here is perhaps not ideal, because the tag might not yet exist!
         fields, self.lesson_list = db_read_table(
             "LESSONS",
             ("id", "LENGTH", "TIME"),
@@ -1060,41 +1028,59 @@ class BlockTagDialog(QDialog):
         for r in range(nrows):
             lessonfields = self.lesson_list[r]
             print("???", lessonfields)
-            ltable.setItem(r, 0, QTableWidgetItem(str(lessonfields[0]))) # id
-            ltable.setItem(r, 1, QTableWidgetItem(lessonfields[1])) # LENGTH
+#            ltable.setItem(r, 0, QTableWidgetItem(str(lessonfields[0]))) # id
+            ltable.setItem(r, 0, QTableWidgetItem(lessonfields[1])) # LENGTH
             ltime, ltag = parse_time_field(lessonfields[2])         # TIME
-            ltable.setItem(r, 2, QTableWidgetItem(ltime))
-            ltable.setItem(r, 3, QTableWidgetItem(ltag))
-        ltable.selectRow(0)
-#TODO: add delegates
+            ltable.setItem(r, 1, QTableWidgetItem(ltime))
+            ltable.setItem(r, 2, QTableWidgetItem(ltag))
+#        ltable.selectRow(0)
 
 
-    def lesson_add(self):
-        print("§ADD LESSON")
-        ltable = self.lesson_table
-        r = ltable.rowCount()
-        ltable.insertRow(r)
-        ltable.setItem(r, 0, QTableWidgetItem(""))
-        r0 = ltable.currentRow()
-        if r0 >= 0:
-            l = ltable.item(r0, 1).text()
-        else:
-            l = "1"
-        ltable.setItem(r, 1, QTableWidgetItem(l))
-        ltable.setItem(r, 2, QTableWidgetItem("?"))
-        ltable.setItem(r, 3, QTableWidgetItem(""))
-        ltable.selectRow(r)
+#TODO
+"""
+    If a course-lesson releases its association with a block tag, the
+    existence of other references should be checked: if there are none
+    left, the associated sublessons should be deleted (and consider any
+    partner tags they might have).
+    This disassociation can occur by deleting a course-lesson, or by
+    editing it – changing to another block tag.
 
-    def lesson_del(self):
-        print("§DEL LESSON")
-        ltable = self.lesson_table
-        r0 = ltable.currentRow()
-        if r0 >= 0:
-            ltable.removeRow(r0)
-        if r0 >= ltable.rowCount():
-            ltable.selectRow(r0 - 1)
-        else:
-            ltable.selectRow(r0)
+    It is also possible that the number of sublessons – and their
+    detailed information – may be changed by an edit.
+"""
+
+#TODO
+class BlockTagSelector(QLineEdit):
+#modified?
+    def __init__(self, parent=None, modified=None):
+        super().__init__(parent)
+#        vbox0 = QVBoxLayout(self)
+
+#        self.setReadOnly(True)
+#        self.__callback = modified
+
+    def set_block(self, block_tag):
+        try:
+            sid, tag = block_tag[1:].split("#", 1)
+            subject = SHARED_DATA["SUBJECTS"].map[sid]
+        except:
+            raise Bug(f"Invalid block tag: {block_tag}")
+
+
+
+
+    def mousePressEvent(self, event):
+        result = BlockTagDialog.popup(start_value=self.block.text())
+        if result:
+            if result == "-":
+                self.text_edited("")
+            else:
+                self.text_edited(result)
+
+    def text_edited(self, text):
+        if self.__callback and not self.__callback(text):
+            return
+        self.setText(text)
 
 
 class RoomDialog(QDialog):
@@ -1479,6 +1465,7 @@ if __name__ == "__main__":
 
     widget = BlockTagDialog()
     print("----->", widget.activate(start_value=">ZwE#09G10G"))
+    print("----->", widget.activate(start_value=">Hu#"))
 
 #    quit(0)
 

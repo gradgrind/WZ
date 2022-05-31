@@ -112,6 +112,20 @@ def db_query(query_text):
     return value_list
 
 
+class KeyValueList(list):
+    def __init__(self, iterable=None):
+        super().__init__()
+        self.map = {}
+        for item in iterable:
+            self.append(item)
+
+    def append(self, item):
+        if not len(item) == 2:
+            raise Bug(f"KeyValueList – new item is not a pair: {repr(item)}")
+        super().append(item)
+        self.map[item[0]] = item[1]
+
+
 def db_read_table(
     table,
     fields,
@@ -191,10 +205,12 @@ def db_values(table, value_field, *wheres, **keys):
 
 
 def db_key_value_list(table, key_field, value_field, sort_field=None):
-    """Return a list of (key, value) pairs from the given database table."""
+    """Return a <KeyValueList> of (key, value) pairs from the given
+    database table.
+    """
     fields, value_list = db_read_table(table, [key_field, value_field],
             sort_field=sort_field)
-    return value_list
+    return KeyValueList(value_list)
 
 
 def db_read_fields(table, fields, sort_field=None):
@@ -379,6 +395,11 @@ def enter_classes():
 
 if __name__ == "__main__":
 #    enter_classes()
+
+    l = KeyValueList([("a", 1), ("b", 2), ("c", 3)])
+    l.append(("d", 4))
+    print("KeyValueList:", l)
+    print("   ... map:", l.map)
 
     open_database()
 
