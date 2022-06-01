@@ -998,7 +998,7 @@ class BlockTagDialog(QDialog):
         #print("OK", time_field)
         # An unchanged value should not be possible here ...
         #if time_field != self.value0:
-        #    self.result = time_field
+        self.result = time_field
         if self.identifier.findText(tag) < 0:
              self.result = "+" + time_field
         self.accept()
@@ -1023,21 +1023,17 @@ class BlockTagDialog(QDialog):
             ci = get_course_info(c)
             dlist.append(f"{ci.CLASS}.{ci.GRP}: {ci.SUBJECT} ({ci.TEACHER})")
         self.course_list.addItems(dlist)
-        fields, self.lesson_list = db_read_table(
-            "LESSONS",
-            ("id", "LENGTH", "TIME"),
-            PLACE=tag
-        )
-        #print("§§§ LENGTHS:", self.lesson_list)
+        lesson_list = sublessons(tag)
+        #print("§§§ LENGTHS:", lesson_list)
         ltable = self.lesson_table
         ltable.clearContents()
-        nrows = len(self.lesson_list)
+        nrows = len(lesson_list)
         ltable.setRowCount(nrows)
         for r in range(nrows):
-            lessonfields = self.lesson_list[r]
+            lessonfields = lesson_list[r]
             #print("???", lessonfields)
-            ltable.setItem(r, 0, QTableWidgetItem(lessonfields[1])) # LENGTH
-            ltime, ltag = parse_time_field(lessonfields[2])         # TIME
+            ltable.setItem(r, 0, QTableWidgetItem(lessonfields.LENGTH))
+            ltime, ltag = parse_time_field(lessonfields.TIME)
             ltable.setItem(r, 1, QTableWidgetItem(ltime))
             ltable.setItem(r, 2, QTableWidgetItem(ltag))
 
@@ -1067,8 +1063,12 @@ class BlockTagSelector(QLineEdit):
         self.sid, self.tag, subject = BlockTagDialog.parse_block_tag(block_tag)
         self.setText((subject + f" #{self.tag}") if self.tag else subject)
 
+    def get_block(self):
+        return BlockTagDialog.sidtag2value(self.sid, self.tag)
+
     def mousePressEvent(self, event):
         result = BlockTagDialog.popup(self.sid, self.tag)
+        print("--->", result)
         if not result:
             return
         if self.__callback and not self.__callback(result):

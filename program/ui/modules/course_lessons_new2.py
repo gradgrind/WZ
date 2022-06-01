@@ -796,11 +796,7 @@ class BlockLesson(QWidget):
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
 
-#?        editwidget.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-#        validator = QRegularExpressionValidator(TAG_FORMAT)
-#        editwidget.setValidator(validator)
-#        form.addRow(T[f], editwidget)
-
+        # "Sublesson" table
         self.lesson_table = TableWidget()
         self.lesson_table.setMinimumHeight(120)
         self.lesson_table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
@@ -860,7 +856,10 @@ class BlockLesson(QWidget):
 #            sid, tag = "", ""
         self.editors["PAYROLL"].setText(record.value("PAYROLL"))
         self.editors["ROOM"].setText(record.value("ROOM"))
-        self.editors["Block_subject"].set_block(record.value("TIME"))
+        editor = self.editors["Block_subject"]
+        editor.set_block(record.value("TIME"))
+        self.show_sublessons(editor.get_block())
+
 #        subject_choice = self.editors["Block_subject"]
 #        subject_choice.set_items(SHARED_DATA["SUBJECTS"])
 #        try:
@@ -872,12 +871,10 @@ class BlockLesson(QWidget):
 #        tagid.setCurrentText("#")
 #        tagid.setCurrentText(tag)
 
-    def show_sublessons(self, text):
-        if text == "#":
-            return
-        tag = f'>{self.editors["Block_subject"].selected()}#{text}'
-        #print("§§ FULL TAG:", tag)
-        slist = sublessons(tag)
+    def show_sublessons(self, block_tag):
+#        if text == "#":
+#            return
+        slist = sublessons(block_tag)
         print(" ...", slist)
         ltable = self.lesson_table
         self.__ltable_ready = False
@@ -895,8 +892,10 @@ class BlockLesson(QWidget):
 
     def block_changed(self, block_tag):
         print("§ block changed:", block_tag)
+        db_update_field("LESSONS", "TIME", block_tag, id=self.lesson_id)
 
 
+        self.main_widget.redisplay()
         ### After a redisplay of the main widget it would be superfluous
         ### for a callback handler to update its cell, so <False> is
         ### returned to suppress this update.
