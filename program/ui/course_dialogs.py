@@ -881,13 +881,31 @@ class BlockTagDialog(QDialog):
     displays are only for informational purposes, they are not editable.
     """
     @classmethod
-    def popup(cls, start_value=""):
+    def popup(cls, sid, tag):
         d = cls()
-        return d.activate(start_value)
+        return d.activate(sid, tag)
 
     @staticmethod
     def sidtag2value(sid, tag):
+        """Encode a block tag, given the subject-id and identifier-tag.
+        """
         return f">{sid}#{tag}"
+
+    @staticmethod
+    def parse_block_tag(block_tag):
+        """Decode the given block tag. Return a triple:
+           (subject-id, identifier-tag, subject name).
+        """
+        try:
+            sid, tag = block_tag[1:].split("#", 1)
+            subject = SHARED_DATA["SUBJECTS"].map[sid]
+            if tag and not TAG_FORMAT.match(tag).hasMatch():
+                raise ValueError
+        except:
+            SHOW_ERROR(f"{T['INVALID_BLOCK_TAG']}: {block_tag}")
+            sid, subject = SHARED_DATA["SUBJECTS"][0]
+            tag = ""
+        return sid, tag, subject
 
     def __init__(self):
         super().__init__()
@@ -909,7 +927,8 @@ class BlockTagDialog(QDialog):
         validator = QRegularExpressionValidator(TAG_FORMAT)
         self.identifier.setValidator(validator)
 
-        self.lesson_table = TableWidget()
+        self.lesson_table = TableWidget() # Read-only, no focus, no selection
+        self.lesson_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.lesson_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.lesson_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         vbox1.addWidget(self.lesson_table)
@@ -925,23 +944,17 @@ class BlockTagDialog(QDialog):
         self.lesson_table.resizeColumnsToContents()
         Hhd.setStretchLastSection(True)
 
-        self.course_list = QListWidget()
+        self.course_list = QListWidget() # Read-only, no focus, no selection
         self.course_list.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.course_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         hbox1.addWidget(self.course_list)
 
         buttonBox = QDialogButtonBox()
-        #buttonBox.setOrientation(Qt.Orientation.Vertical)
         vbox0.addWidget(buttonBox)
         self.bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-#        bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
-        #vbox1.addStretch(1)
-
         self.bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
-#        bt_clear.clicked.connect(self.do_clear)
-
         self.subject.set_items(SHARED_DATA["SUBJECTS"])
 
     def activate(self, sid, tag):
@@ -951,12 +964,12 @@ class BlockTagDialog(QDialog):
             self.subject.reset(sid)
         except GuiError:
             SHOW_ERROR(f"{T['UNKNOWN_SUBJECT_TAG']}: {sid[1:]}")
-            self.identifier.clearEditText()
-        self.identifier.setCurrentText(tag)
+            tag = ""
+        self.sid_changed(sid, tag)
         self.exec()
         return self.result
 
-    def sid_changed(self, sid):
+    def sid_changed(self, sid, tag=""):
         print("sid changed:", sid)
         taglist = db_values(
             "LESSONS",
@@ -965,12 +978,16 @@ class BlockTagDialog(QDialog):
             distinct=True,
             sort_field="TIME"
         )
+        # Disable show_courses callbacks here ...
+        self.__block_show = True
         self.identifier.clear()
         self.identifier.addItems([t.split("#", 1)[1] for t in taglist])
-        # Set a dummy tag before clearing the tag editor, to ensure
+        # ... until here, to avoid a spurious call
+        self.__block_show = False
+        # Set a dummy tag before initializing the tag editor, to ensure
         # that there is a call to <show_courses>.
         self.identifier.setEditText("#")
-        self.identifier.clearEditText()
+        self.identifier.setEditText(tag)
         return True # accept
 
     def do_accept(self):
@@ -978,7 +995,7 @@ class BlockTagDialog(QDialog):
         # An invalid tag should not be possible at this stage ...
         sid = self.subject.selected()
         time_field = self.sidtag2value(sid, tag)
-        print("OK", time_field)
+        #print("OK", time_field)
         # An unchanged value should not be possible here ...
         #if time_field != self.value0:
         #    self.result = time_field
@@ -986,20 +1003,13 @@ class BlockTagDialog(QDialog):
              self.result = "+" + time_field
         self.accept()
 
-#    def do_clear(self):
-#        if self.value0:
-#            self.result = "-"
-#        self.accept()
-
     def show_courses(self, identifier):
         """Populate the list widget with all courses having a lesson entry
         in the block.
         """
-        if identifier == "#":
+        if self.__block_show or identifier == "#":
             return
-        # Including the currently selected one (which we can't identify here!)?
         self.course_list.clear()
-#        tag = f">{self.subject.selected()}#{self.identifier.currentText()}"
         tag = f">{self.subject.selected()}#{identifier}"
         self.bt_save.setEnabled(tag != self.value0)
         courselist = db_values(
@@ -1011,29 +1021,25 @@ class BlockTagDialog(QDialog):
         for c in courselist:
             # Present info about the course
             ci = get_course_info(c)
-            #dlist.append(str(ci))
             dlist.append(f"{ci.CLASS}.{ci.GRP}: {ci.SUBJECT} ({ci.TEACHER})")
         self.course_list.addItems(dlist)
-
         fields, self.lesson_list = db_read_table(
             "LESSONS",
             ("id", "LENGTH", "TIME"),
             PLACE=tag
         )
-        print("§§§ LENGTHS:", self.lesson_list)
+        #print("§§§ LENGTHS:", self.lesson_list)
         ltable = self.lesson_table
         ltable.clearContents()
         nrows = len(self.lesson_list)
         ltable.setRowCount(nrows)
         for r in range(nrows):
             lessonfields = self.lesson_list[r]
-            print("???", lessonfields)
-#            ltable.setItem(r, 0, QTableWidgetItem(str(lessonfields[0]))) # id
+            #print("???", lessonfields)
             ltable.setItem(r, 0, QTableWidgetItem(lessonfields[1])) # LENGTH
             ltime, ltag = parse_time_field(lessonfields[2])         # TIME
             ltable.setItem(r, 1, QTableWidgetItem(ltime))
             ltable.setItem(r, 2, QTableWidgetItem(ltag))
-#        ltable.selectRow(0)
 
 
 #TODO
@@ -1049,43 +1055,26 @@ class BlockTagDialog(QDialog):
     detailed information – may be changed by an edit.
 """
 
-#TODO
 class BlockTagSelector(QLineEdit):
-#modified?
     def __init__(self, parent=None, modified=None):
         super().__init__(parent)
-#        vbox0 = QVBoxLayout(self)
-
-#        self.setReadOnly(True)
-#        self.__callback = modified
+        self.setReadOnly(True)
+        self.__callback = modified
 
     def set_block(self, block_tag):
-        print("§ set_block:", block_tag)
-        try:
-            sid, tag = block_tag[1:].split("#", 1)
-            subject = SHARED_DATA["SUBJECTS"].map[sid]
-            if tag and not TAG_FORMAT.match(tag).hasMatch():
-                raise ValueError
-        except:
-            SHOW_ERROR(f"{T['INVALID_BLOCK_TAG']}: {block_tag}")
-            sid, subject = SHARED_DATA["SUBJECTS"][0]
-            tag = ""
-        self.setText((subject + f" #{tag}") if tag else subject)
-
+        """Display the value as subject-name + (optional) identifier-tag.
+        """
+        self.sid, self.tag, subject = BlockTagDialog.parse_block_tag(block_tag)
+        self.setText((subject + f" #{self.tag}") if self.tag else subject)
 
     def mousePressEvent(self, event):
-#TODO
-        result = BlockTagDialog.popup(start_value=self.block.text())
-        if result:
-            if result == "-":
-                self.text_edited("")
-            else:
-                self.text_edited(result)
-
-    def text_edited(self, text):
-        if self.__callback and not self.__callback(text):
+        result = BlockTagDialog.popup(self.sid, self.tag)
+        if not result:
             return
-        self.setText(text)
+        if self.__callback and not self.__callback(result):
+            return
+        #print("§ set:", result)
+        self.set_block(result.lstrip("+"))
 
 
 class RoomDialog(QDialog):

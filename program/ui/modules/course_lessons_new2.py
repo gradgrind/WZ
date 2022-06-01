@@ -792,14 +792,14 @@ class BlockLesson(QWidget):
         form.addRow(T[f], editwidget)
 
         f = "Block_subject"
-        editwidget = BlockTagSelector()#modified=self.block_changed)
+        editwidget = BlockTagSelector(modified=self.block_changed)
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
 
 #?        editwidget.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        validator = QRegularExpressionValidator(TAG_FORMAT)
-        editwidget.setValidator(validator)
-        form.addRow(T[f], editwidget)
+#        validator = QRegularExpressionValidator(TAG_FORMAT)
+#        editwidget.setValidator(validator)
+#        form.addRow(T[f], editwidget)
 
         self.lesson_table = TableWidget()
         self.lesson_table.setMinimumHeight(120)
@@ -893,25 +893,14 @@ class BlockLesson(QWidget):
             r += 1
         self.__ltable_ready = True
 
-    def sid_changed(self, sid):
-        taglist = db_values(
-            "LESSONS",
-            "TIME",
-            f"TIME LIKE '>{sid}#%'",
-            distinct=True,
-            sort_field="TIME"
-        )
-        print("sid_changed:", sid, taglist)
-        tagid = self.editors["Block_tag"]
-        tagid.clear()
-        tagid.addItems([t.split("#", 1)[1] for t in taglist])
-        tagid.setCurrentText("#")
-        tagid.setCurrentIndex(-1)
-        return True # accept
+    def block_changed(self, block_tag):
+        print("§ block changed:", block_tag)
 
-    ### After a redisplay of the main widget it would be inappropriate
-    ### for a callback handler to update its cell, so <False> is returned
-    ### to suppress this update.
+
+        ### After a redisplay of the main widget it would be superfluous
+        ### for a callback handler to update its cell, so <False> is
+        ### returned to suppress this update.
+        return False
 
     def room_changed(self, text):
         #print("$ UPDATE ROOM:", text)
