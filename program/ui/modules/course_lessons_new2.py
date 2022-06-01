@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-05-31
+Last updated:  2022-06-01
 
 Edit course and lesson data.
 
@@ -117,6 +117,7 @@ from ui.course_dialogs import (
     DurationDelegate,
     DayPeriodDelegate,
     PartnersDelegate,
+    BlockTagSelector,
 
     #RoomDialog,
     DayPeriodDialog,
@@ -791,7 +792,7 @@ class BlockLesson(QWidget):
         form.addRow(T[f], editwidget)
 
         f = "Block_subject"
-        editwidget = BlockSelector(modified=self.block_changed)
+        editwidget = BlockTagSelector()#modified=self.block_changed)
         self.editors[f] = editwidget
         form.addRow(T[f], editwidget)
 
@@ -851,24 +852,25 @@ class BlockLesson(QWidget):
     def set_data(self, record):
         self.lesson_id = record.value("id")
         #self.course_id = record.value("course")
-        fulltag = record.value("TIME")
-        try:
-            sid, tag = fulltag[1:].split("#")
-        except ValueError:
-            SHOW_ERROR(f"{T['INVALID_BLOCK_TAG']}: {fulltag}")
-            sid, tag = "", ""
+#        fulltag = record.value("TIME")
+#        try:
+#            sid, tag = fulltag[1:].split("#")
+#        except ValueError:
+#            SHOW_ERROR(f"{T['INVALID_BLOCK_TAG']}: {fulltag}")
+#            sid, tag = "", ""
         self.editors["PAYROLL"].setText(record.value("PAYROLL"))
         self.editors["ROOM"].setText(record.value("ROOM"))
-        subject_choice = self.editors["Block_subject"]
-        subject_choice.set_items(SHARED_DATA["SUBJECTS"])
-        try:
-            subject_choice.reset(sid)
-        except GuiError:
-            if sid:
-                SHOW_ERROR(f"{T['UNKNOWN_SUBJECT_TAG']}: {sid}")
-        tagid = self.editors["Block_tag"]
-        tagid.setCurrentText("#")
-        tagid.setCurrentText(tag)
+        self.editors["Block_subject"].set_block(record.value("TIME"))
+#        subject_choice = self.editors["Block_subject"]
+#        subject_choice.set_items(SHARED_DATA["SUBJECTS"])
+#        try:
+#            subject_choice.reset(sid)
+#        except GuiError:
+#            if sid:
+#                SHOW_ERROR(f"{T['UNKNOWN_SUBJECT_TAG']}: {sid}")
+#        tagid = self.editors["Block_tag"]
+#        tagid.setCurrentText("#")
+#        tagid.setCurrentText(tag)
 
     def show_sublessons(self, text):
         if text == "#":

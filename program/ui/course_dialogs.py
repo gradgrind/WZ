@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-05-31
+Last updated:  2022-06-01
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -880,6 +880,15 @@ class BlockTagDialog(QDialog):
     displayed. In addition a list of associated courses is shown. These
     displays are only for informational purposes, they are not editable.
     """
+    @classmethod
+    def popup(cls, start_value=""):
+        d = cls()
+        return d.activate(start_value)
+
+    @staticmethod
+    def sidtag2value(sid, tag):
+        return f">{sid}#{tag}"
+
     def __init__(self):
         super().__init__()
         vbox0 = QVBoxLayout(self)
@@ -935,24 +944,15 @@ class BlockTagDialog(QDialog):
 
         self.subject.set_items(SHARED_DATA["SUBJECTS"])
 
-    def activate(self, start_value=""):
-        self.value0 = start_value
+    def activate(self, sid, tag):
+        self.value0 = self.sidtag2value(sid, tag)
         self.result = None
         try:
-            sid, tag = start_value[1:].split("#", 1)
             self.subject.reset(sid)
-            self.sid_changed(sid)
-            if tag:
-                if TAG_FORMAT.match(tag).hasMatch():
-                    self.identifier.setCurrentText(tag)
-                else:
-                    raise ValueError
-        except ValueError:
-            SHOW_ERROR(f"{T['INVALID_BLOCK_TAG']}: {start_value}")
-            self.identifier.clearEditText()
         except GuiError:
             SHOW_ERROR(f"{T['UNKNOWN_SUBJECT_TAG']}: {sid[1:]}")
             self.identifier.clearEditText()
+        self.identifier.setCurrentText(tag)
         self.exec()
         return self.result
 
@@ -977,7 +977,7 @@ class BlockTagDialog(QDialog):
         tag = self.identifier.currentText()
         # An invalid tag should not be possible at this stage ...
         sid = self.subject.selected()
-        time_field = f">{sid}#{tag}"
+        time_field = self.sidtag2value(sid, tag)
         print("OK", time_field)
         # An unchanged value should not be possible here ...
         #if time_field != self.value0:
@@ -1060,16 +1060,21 @@ class BlockTagSelector(QLineEdit):
 #        self.__callback = modified
 
     def set_block(self, block_tag):
+        print("§ set_block:", block_tag)
         try:
             sid, tag = block_tag[1:].split("#", 1)
             subject = SHARED_DATA["SUBJECTS"].map[sid]
+            if tag and not TAG_FORMAT.match(tag).hasMatch():
+                raise ValueError
         except:
-            raise Bug(f"Invalid block tag: {block_tag}")
-
-
+            SHOW_ERROR(f"{T['INVALID_BLOCK_TAG']}: {block_tag}")
+            sid, subject = SHARED_DATA["SUBJECTS"][0]
+            tag = ""
+        self.setText((subject + f" #{tag}") if tag else subject)
 
 
     def mousePressEvent(self, event):
+#TODO
         result = BlockTagDialog.popup(start_value=self.block.text())
         if result:
             if result == "-":
@@ -1464,8 +1469,8 @@ if __name__ == "__main__":
         print("??????", p)
 
     widget = BlockTagDialog()
-    print("----->", widget.activate(start_value=">ZwE#09G10G"))
-    print("----->", widget.activate(start_value=">Hu#"))
+    print("----->", widget.activate("ZwE", "09G10G"))
+    print("----->", widget.activate("Hu", ""))
 
 #    quit(0)
 
