@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-06-01
+Last updated:  2022-06-02
 
 Edit course and lesson data.
 
@@ -829,10 +829,13 @@ class BlockLesson(QWidget):
         bb0 = QDialogButtonBox()
         bt_new = bb0.addButton("+", QDialogButtonBox.ButtonRole.ActionRole)
         bt_new.setFixedWidth(30)
+        bt_new.setToolTip(T["SELECT_TO_COPY_LENGTH"])
         bt_del = bb0.addButton("–", QDialogButtonBox.ButtonRole.ActionRole)
         bt_del.setFixedWidth(30)
+        bt_del.setToolTip(T["DELETE_SELECTED"])
         bt_new.clicked.connect(self.lesson_add)
         bt_del.clicked.connect(self.lesson_del)
+        self.bt_del = bt_del
         form.addRow(bb0)
 
         f = "PAYROLL"
@@ -848,32 +851,13 @@ class BlockLesson(QWidget):
     def set_data(self, record):
         self.lesson_id = record.value("id")
         #self.course_id = record.value("course")
-#        fulltag = record.value("TIME")
-#        try:
-#            sid, tag = fulltag[1:].split("#")
-#        except ValueError:
-#            SHOW_ERROR(f"{T['INVALID_BLOCK_TAG']}: {fulltag}")
-#            sid, tag = "", ""
         self.editors["PAYROLL"].setText(record.value("PAYROLL"))
         self.editors["ROOM"].setText(record.value("ROOM"))
         editor = self.editors["Block_subject"]
         editor.set_block(record.value("TIME"))
         self.show_sublessons(editor.get_block())
 
-#        subject_choice = self.editors["Block_subject"]
-#        subject_choice.set_items(SHARED_DATA["SUBJECTS"])
-#        try:
-#            subject_choice.reset(sid)
-#        except GuiError:
-#            if sid:
-#                SHOW_ERROR(f"{T['UNKNOWN_SUBJECT_TAG']}: {sid}")
-#        tagid = self.editors["Block_tag"]
-#        tagid.setCurrentText("#")
-#        tagid.setCurrentText(tag)
-
     def show_sublessons(self, block_tag):
-#        if text == "#":
-#            return
         slist = sublessons(block_tag)
         print(" ...", slist)
         ltable = self.lesson_table
@@ -888,13 +872,12 @@ class BlockLesson(QWidget):
             ltable.setItem(r, 2, QTableWidgetItem(t))
             ltable.setItem(r, 3, QTableWidgetItem(p))
             r += 1
+        self.bt_del.setEnabled(bool(slist))
         self.__ltable_ready = True
 
     def block_changed(self, block_tag):
-        print("§ block changed:", block_tag)
+        #print("§ block changed:", block_tag)
         db_update_field("LESSONS", "TIME", block_tag, id=self.lesson_id)
-
-
         self.main_widget.redisplay()
         ### After a redisplay of the main widget it would be superfluous
         ### for a callback handler to update its cell, so <False> is
@@ -918,21 +901,21 @@ class BlockLesson(QWidget):
         if self.__ltable_ready:
             val = self.lesson_table.item(row, col).text()
             print("§ SUBLESSON table changed:", row, col, val)
-            lesson_id = int(self.lesson_table.item(row, 0).text())
+            sublesson_id = int(self.lesson_table.item(row, 0).text())
             if col == 1:
                 # length
-                db_update_field("LESSONS", "LENGTH", val, id=lesson_id)
+                db_update_field("LESSONS", "LENGTH", val, id=sublesson_id)
             elif col == 2:
                 # time
                 partners = self.lesson_table.item(row, 3).text()
-                db_update_time(lesson_id, val, partners)
+                db_update_time(sublesson_id, val, partners)
                 # Redisplay table
                 self.show_sublessons(self.editors["Block_tag"])
             elif col == 3:
                 # partners
                 oldtime = self.lesson_table.item(row, 2).text()
                 db_update_partners(
-                    lesson_id,
+                    sublesson_id,
                     val,
                     self.lesson_table.old_partners,
                     oldtime
@@ -943,12 +926,27 @@ class BlockLesson(QWidget):
                 raise Bug(f"Invalid sublesson table column: {col}")
 
     def lesson_add(self):
-#TODO
-        pass
+        row = self.lesson_table.currentRow()
+        if row >= 0:
+            length = self.lesson_table.item(row, 1).text()
+        else:
+            length = "1"
+        editor = self.editors["Block_subject"]
+        block_tag = editor.get_block()
+        print("§ NEW SUBLESSON:", length, block_tag)
+        db_new_row("LESSONS", LENGTH=length, TIME="@?", PLACE=block_tag)
+        self.show_sublessons(block_tag)
 
     def lesson_del(self):
-#TODO
-        pass
+        row = self.lesson_table.currentRow()
+        if row >= 0:
+            sublesson_id = int(self.lesson_table.item(row, 0).text())
+            db_delete_rows("LESSONS", id=sublesson_id)
+            editor = self.editors["Block_subject"]
+            block_tag = editor.get_block()
+            self.show_sublessons(block_tag)
+        else:
+            SHOW_WARNING(T["DELETE_SELECTED"])
 
 
 # see version in dialogs.py
