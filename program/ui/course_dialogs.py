@@ -34,11 +34,12 @@ if __name__ == "__main__":
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
+
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-#T = TRANSLATIONS("ui.dialogs")
+# T = TRANSLATIONS("ui.dialogs")
 T = TRANSLATIONS("ui.modules.course_lessons")
 
 ### +++++
@@ -51,16 +52,15 @@ from core.db_management import (
     db_key_value_list,
     db_values,
     db_read_unique_field,
-    NoRecord
+    NoRecord,
 )
 
-#from core.classes import get_class_list
+# from core.classes import get_class_list
 
 from ui.ui_base import (
     GuiError,
     HLine,
     KeySelector,
-
     ### QtWidgets:
     APP,
     QStyle,
@@ -73,100 +73,20 @@ from ui.ui_base import (
     QVBoxLayout,
     QHBoxLayout,
     QLineEdit,
-    QCompleter,
     QTableWidget,
     QTableWidgetItem,
-    QTableView,
     QCheckBox,
     QToolButton,
     QPushButton,
     QStyledItemDelegate,
-    QAbstractItemDelegate,
     ### QtGui:
-    QValidator,
     QRegularExpressionValidator,
-    QIntValidator,
     ### QtCore:
     Qt,
     QSize,
     QRegularExpression,
     QTimer,
-    Property
 )
-
-# Course table fields
-"""COURSE_COLS = [(f, T[f]) for f in (
-        "course",
-        "CLASS",
-        "GRP",
-        "SUBJECT",
-        "TEACHER",
-        "REPORT",
-        "GRADE",
-        "COMPOSITE"
-    )
-]
-"""
-# SUBJECT, CLASS and TEACHER are foreign keys with:
-#  on delete cascade + on update cascade
-FOREIGN_FIELDS = ("CLASS", "TEACHER", "SUBJECT")
-
-#FILTER_FIELDS = [cc for cc in COURSE_COLS if cc[0] in FOREIGN_FIELDS]
-
-# Group of fields which determines a course (the tuple must be unique)
-COURSE_KEY_FIELDS = ("CLASS", "GRP", "SUBJECT", "TEACHER")
-
-"""LESSON_COLS = [(f, T[f]) for f in (
-        "course",
-        "LENGTH",
-        "PAYROLL",
-        "TAG",
-        "ROOM",
-        "NOTES"
-    )
-]
-"""
-
-LESSON_COLS = [
-    "id",
-    "course",
-    "LENGTH",
-    "PAYROLL",
-    "TAG",
-    "ROOM",
-    "NOTES"
-]
-
-COMPONENT_COLS = [ #(f, T[f]) for f in (
-        "id",           # hide
-        "course",       # hide
-        "LENGTH",       # ? hide?
-        "PAYROLL",      # ?
-        "TAG",          # ? hide?
-        "ROOM",         # ?
-        "NOTES",         # ?
-# Then via "course":
-        "CLASS",
-        "GRP",
-        "SUBJECT",
-        "TEACHER",
-    #)
-]
-
-COL_LIST = [
-        "CLASS",
-        "id",
-        "course",
-        "GRP",
-        "SUBJECT",
-        "TEACHER",
-        "LENGTH",       # ? hide?
-        "PAYROLL",      # ?
-#        "TAG",          # ? hide?
-        "ROOM",         # ?
-        "PLACE",
-        "NOTES",         # ?
-]
 
 PAYROLL_FORMAT = "[1-9]?[0-9](?:$[0-9]{1,2})?".replace(
     "$", CONFIG["DECIMAL_SEP"]
@@ -176,6 +96,7 @@ TAG_FORMAT = QRegularExpression("^[A-Za-z0-9_.]+$")
 
 SHARED_DATA = {}
 
+
 def dialogs_init():
     days = db_key_value_list("TT_DAYS", "TAG", "NAME", "N")
     SHARED_DATA["DAYS"] = days
@@ -183,35 +104,18 @@ def dialogs_init():
     SHARED_DATA["PERIODS"] = periods
     subjects = db_key_value_list("SUBJECTS", "SID", "NAME", "NAME")
     SHARED_DATA["SUBJECTS"] = subjects
+    payroll_weights = db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
+    SHARED_DATA["PAYROLL"] = payroll_weights
+
 
 ### -----
-
-# This can still be useful as an example, even if I don't use it!
-class RoomListValidator(QValidator):
-    def init(self, roommap):
-        self.roommap = roommap
-
-    def validate(self, text, pos):
-        #print("VALIDATE:", pos, text)
-        if text.endswith("+"):
-            textv = text[:-1]
-        else:
-            textv = text
-        for rid in textv.split("/"):
-            if not rid:
-                continue
-            if rid in self.roommap or rid == "$":
-                print(f" ... {rid}: ok")
-            else:
-                print(f" ... {rid}: NOT ok")
-                return (QValidator.State.Intermediate, text, pos)
-                #return (QValidator.State.Invalid, text, pos)
-        return (QValidator.State.Acceptable, text, pos)
 
 
 class TimeSlotError(Exception):
     pass
-#+
+
+
+# +
 def timeslot2index(timeslot):
     """Convert a "timeslot" in the tag-form (e.g. "Mo.3") to a pair
     of 0-based indexes.
@@ -240,7 +144,9 @@ def timeslot2index(timeslot):
             else:
                 raise TimeSlotError
     return i, j
-#+
+
+
+# +
 def index2timeslot(index):
     """Convert a pair of 0-based indexes to a "timeslot" in the
     tag-form (e.g. "Mo.3").
@@ -248,7 +154,6 @@ def index2timeslot(index):
     d = SHARED_DATA["DAYS"][index[0]][0]
     p = SHARED_DATA["PERIODS"][index[1]][0]
     return f"{d}.{p}"
-
 
 
 class DayPeriodDialog(QDialog):
@@ -268,7 +173,7 @@ class DayPeriodDialog(QDialog):
         hbox1 = QHBoxLayout()
         vbox0.addLayout(hbox1)
         self.daylist = ListWidget()
-#        self.daylist.setMinimumWidth(30)
+        #        self.daylist.setMinimumWidth(30)
         self.daylist.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
         )
@@ -276,7 +181,7 @@ class DayPeriodDialog(QDialog):
         hbox1.addWidget(self.daylist)
 
         self.periodlist = ListWidget()
-#        self.daylist.setMinimumWidth(30)
+        #        self.daylist.setMinimumWidth(30)
         self.periodlist.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
         )
@@ -288,7 +193,7 @@ class DayPeriodDialog(QDialog):
         bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
-        #hbox1.addStretch(1)
+        # hbox1.addStretch(1)
 
         bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
@@ -326,11 +231,11 @@ class DayPeriodDialog(QDialog):
         return self.result
 
     def select_day(self, day):
-#TODO
+        # TODO
         print("SELECT DAY:", day)
 
     def select_period(self, period):
-#TODO
+        # TODO
         print("SELECT PERIOD:", period)
 
 
@@ -341,7 +246,7 @@ class ListWidget(QListWidget):
         scrollbarwidth = APP.style().pixelMetric(QStyle.PM_ScrollBarExtent)
         # The scroll-bar width alone is not quite enough ...
         s.setWidth(self.sizeHintForColumn(0) + scrollbarwidth + 5)
-        #print("???", s, scrollbarwidth)
+        # print("???", s, scrollbarwidth)
         return s
 
 
@@ -350,16 +255,15 @@ class CourseKeyFields(NamedTuple):
     GRP: str
     SUBJECT: str
     TEACHER: str
-#+
+
+
 def get_course_info(course):
     flist, clist = db_read_table(
-        "COURSES",
-        CourseKeyFields._fields,
-        course=course
+        "COURSES", CourseKeyFields._fields, course=course
     )
     if len(clist) > 1:
         raise Bug(f"COURSE {course}: multiple entries")
-# Perhaps not found is an error?
+    # Perhaps not found is an error?
     return CourseKeyFields(*clist[0]) if clist else None
 
 
@@ -371,43 +275,32 @@ class Partner(NamedTuple):
 
 
 def partners(tag):
-    if tag.replace(' ', '') != tag:
+    if tag.replace(" ", "") != tag:
         SHOW_ERROR(f"Bug: Spaces in partner tag: '{tag}'")
         return []
     if not tag:
         return []
-    flist, plist = db_read_table(
-        "LESSONS",
-        Partner._fields,
-        TIME=f"={tag}"
-    )
+    flist, plist = db_read_table("LESSONS", Partner._fields, TIME=f"={tag}")
     return [Partner(*p) for p in plist]
 
 
 def block_courses(tag):
-    return db_values(
-        "LESSONS",
-        "course",
-        TIME=tag
-    )
+    return db_values("LESSONS", "course", TIME=tag)
 
 
 class Sublesson(NamedTuple):
     id: int
     LENGTH: str
     TIME: str
-#+
+
+
 def sublessons(tag):
-    if tag.replace(' ', '') != tag:
+    if tag.replace(" ", "") != tag:
         SHOW_ERROR(f"Bug: Spaces in partner tag: '{tag}'")
         return []
     if not tag:
         return []
-    flist, plist = db_read_table(
-        "LESSONS",
-        Sublesson._fields,
-        PLACE=f"{tag}"
-    )
+    flist, plist = db_read_table("LESSONS", Sublesson._fields, PLACE=f"{tag}")
     return [Sublesson(*p) for p in plist]
 
 
@@ -415,11 +308,7 @@ def placements(xtag):
     """Return a list of <Partner> tuples with the given prefixed (full)
     tag in the PLACE field.
     """
-    flist, plist = db_read_table(
-        "LESSONS",
-        Partner._fields,
-        PLACE=xtag
-    )
+    flist, plist = db_read_table("LESSONS", Partner._fields, PLACE=xtag)
     pl = []
     for p in plist:
         pp = Partner(*p)
@@ -444,16 +333,12 @@ def parse_time_field(tag):
 
 def get_time_entry(tag):
     try:
-        ltime = db_read_unique_field(
-            "LESSONS",
-            "TIME",
-            PLACE=f"={tag}"
-        )
+        ltime = db_read_unique_field("LESSONS", "TIME", PLACE=f"={tag}")
     except NoRecord:
-#T
+        # T
         SHOW_ERROR(f"NO_TIME_FOR_PARTNERS: {tag}")
-#TODO: add a time entry?
-# TIME="?", PLACE=f"={tag}", everything else empty
+        # TODO: add a time entry?
+        # TIME="?", PLACE=f"={tag}", everything else empty
         return "?"
     # Check validity
     return check_start_time(ltime)
@@ -472,12 +357,14 @@ def check_start_time(tag):
 
 
 class PartnersDialog(QDialog):
-#TODO
-# Could enable the save button only when it is different from the initial value
-# Could enable the clear/reset button only when there was an initial value
+    # TODO
+    # Could enable the save button only when it is different from the initial value
+    # Could enable the clear/reset button only when there was an initial value
     @classmethod
-    def popup(cls, start_value=""):
+    def popup(cls, start_value="", pos=None):
         d = cls()
+        if pos:
+            d.move(pos)
         return d.activate(start_value)
 
     def __init__(self):
@@ -493,9 +380,11 @@ class PartnersDialog(QDialog):
         self.identifier.setValidator(validator)
         vbox1.addWidget(self.identifier)
 
-        self.identifier.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-#        bn_validator = BlocknameValidator()
-#        self.identifier.setValidator(bn_validator)
+        self.identifier.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
+        #        bn_validator = BlocknameValidator()
+        #        self.identifier.setValidator(bn_validator)
 
         self.course_list = QListWidget()
         hbox1.addWidget(self.course_list)
@@ -506,7 +395,7 @@ class PartnersDialog(QDialog):
         bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
-        #vbox1.addStretch(1)
+        # vbox1.addStretch(1)
 
         bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
@@ -520,7 +409,7 @@ class PartnersDialog(QDialog):
         if val != self.value0:
             self.result = val
         if self.identifier.findText(val) < 0:
-             self.result = "+" + val
+            self.result = "+" + val
         self.accept()
 
     def do_clear(self):
@@ -540,8 +429,10 @@ class PartnersDialog(QDialog):
             if p.course:
                 # Present info about the course
                 ci = get_course_info(p.course)
-                #dlist.append(str(ci))
-                dlist.append(f"{ci.CLASS}.{ci.GRP}: {ci.SUBJECT} ({ci.TEACHER})")
+                # dlist.append(str(ci))
+                dlist.append(
+                    f"{ci.CLASS}.{ci.GRP}: {ci.SUBJECT} ({ci.TEACHER})"
+                )
 
             else:
                 # This is a block lesson
@@ -555,20 +446,21 @@ class PartnersDialog(QDialog):
         taglist = db_values(
             "LESSONS",
             "PLACE",
-            "PLACE LIKE '=_%'",   # "=" + at least one character
-            #distinct=True,
-            sort_field="PLACE"
+            "PLACE LIKE '=_%'",  # "=" + at least one character
+            # distinct=True,
+            sort_field="PLACE",
         )
-        self.identifier.addItems([t[1:] for t in taglist
-            if t.replace(" ", "") == t])
+        self.identifier.addItems(
+            [t[1:] for t in taglist if t.replace(" ", "") == t]
+        )
         self.identifier.setCurrentText(self.value0)
         self.exec()
         return self.result
 
 
 class DurationSelector(QComboBox):
-    """A combobox for selecting lesson duration.
-    """
+    """A combobox for selecting lesson duration."""
+
     def __init__(self, modified=None, parent=None):
         super().__init__(parent)
         self.__callback = modified
@@ -576,20 +468,19 @@ class DurationSelector(QComboBox):
         self.currentTextChanged.connect(self.__changed)
 
     def setText(self, number):
-        """Initialize the list of options and select the given one.
-        """
-        print("(DurationSelector.setText)", number)
+        """Initialize the list of options and select the given one."""
+        # print("(DurationSelector.setText)", number)
         self.__report_changes = False
         self.clear()
-        self.addItems([str(i)
-            for i in range(1, len(SHARED_DATA["PERIODS"]) + 1)]
+        self.addItems(
+            [str(i) for i in range(1, len(SHARED_DATA["PERIODS"]) + 1)]
         )
         self.setCurrentText(number)
         if self.__callback:
             self.__report_changes = True
 
     def __changed(self, text):
-        print("(DurationSelector.__changed)", text)
+        # print("(DurationSelector.__changed)", text)
         if self.__report_changes and self.__callback:
             self.__callback(text)
         self.clearFocus()
@@ -638,8 +529,7 @@ class PayrollSelector(QLineEdit):
 
     def mousePressEvent(self, event):
         result = PayrollDialog.popup(
-            start_value=self.text(),
-            no_length=self.__no_length
+            start_value=self.text(), no_length=self.__no_length
         )
         if result:
             self.text_edited(result)
@@ -658,14 +548,9 @@ class RoomSelector(QLineEdit):
 
     def mousePressEvent(self, event):
         classroom = db_read_unique_field(
-            "CLASSES",
-            "CLASSROOM",
-            CLASS=SHARED_DATA["COURSE"]["CLASS"]
+            "CLASSES", "CLASSROOM", CLASS=SHARED_DATA["COURSE"]["CLASS"]
         )
-        result = RoomDialog.popup(
-            start_value=self.text(),
-            classroom=classroom
-        )
+        result = RoomDialog.popup(start_value=self.text(), classroom=classroom)
         if result:
             if result == "-":
                 self.text_edited("")
@@ -689,7 +574,7 @@ class DurationDelegate(QStyledItemDelegate):
             QTimer.singleShot(0, self.showPopup)
 
     def createEditor(self, parent, option, index):
-        e =  self.Editor(parent=parent)
+        e = self.Editor(parent=parent)
         return e
 
     def setEditorData(self, editor, index):
@@ -698,8 +583,8 @@ class DurationDelegate(QStyledItemDelegate):
 
     def setModelData(self, editor, model, index):
         text = editor.currentText()
-#        self.__table.clearFocus()
-        print("?-------", text, text != self.val0)
+        #        self.__table.clearFocus()
+        # print("?-------", text, text != self.val0)
         if text != self.val0:
             if (not self.__modified) or self.__modified(index.row(), text):
                 model.setData(index, text)
@@ -724,7 +609,7 @@ class DayPeriodDelegate(QStyledItemDelegate):
         # This gets called on activation (thanks to the <showEvent>
         # method in <Editor>).
         old_value = model.data(index)  # or editor.text()
-        print("§§§ old:", old_value)
+        # print("§§§ old:", old_value)
         rect = self.__table.visualRect(index)
         pos = self.__table.viewport().mapToGlobal(rect.bottomLeft())
         result = DayPeriodDialog.popup(old_value, pos=pos)
@@ -752,11 +637,11 @@ class PartnersDelegate(QStyledItemDelegate):
         # This gets called on activation (thanks to the <showEvent>
         # method in <Editor>).
         old_value = model.data(index)  # or editor.text()
-        print("§§§ old:", old_value)
+        # print("§§§ old:", old_value)
 
         rect = self.__table.visualRect(index)
         pos = self.__table.viewport().mapToGlobal(rect.bottomLeft())
-        result = PartnersDialog.popup(old_value)
+        result = PartnersDialog.popup(old_value, pos=pos)
         # <result> can be empty -> no action,
         # it can be an existing "partners" entry,
         # it can have a +-prefix -> new entry,
@@ -765,8 +650,7 @@ class PartnersDelegate(QStyledItemDelegate):
             if (not self.__modified) or self.__modified(index.row(), result):
                 model.setData(index, result.lstrip("+-"))
         self.__table.setFocus()
-#TODO
-        print("§§§ new", result)
+        # print("§§§ new", result)
 
 
 class TableWidget(QTableWidget):
@@ -776,7 +660,7 @@ class TableWidget(QTableWidget):
         self.setEditTriggers(
             QAbstractItemView.EditTrigger.DoubleClicked
             | QAbstractItemView.EditTrigger.AnyKeyPressed
-            | QAbstractItemView.EditTrigger.SelectedClicked # this one has a delay!
+            | QAbstractItemView.EditTrigger.SelectedClicked  # this one has a delay!
         )
         # Note that the <Return> key doesn't cause the editor to be opened,
         # so there is an event handling that ... see method <keyPressEvent>.
@@ -814,6 +698,7 @@ class BlockTagDialog(QDialog):
     displayed. In addition a list of associated courses is shown. These
     displays are only for informational purposes, they are not editable.
     """
+
     @classmethod
     def popup(cls, sid, tag):
         d = cls()
@@ -821,14 +706,13 @@ class BlockTagDialog(QDialog):
 
     @staticmethod
     def sidtag2value(sid, tag):
-        """Encode a block tag, given the subject-id and identifier-tag.
-        """
+        """Encode a block tag, given the subject-id and identifier-tag."""
         return f">{sid}#{tag}"
 
     @staticmethod
     def parse_block_tag(block_tag):
         """Decode the given block tag. Return a triple:
-           (subject-id, identifier-tag, subject name).
+        (subject-id, identifier-tag, subject name).
         """
         try:
             sid, tag = block_tag[1:].split("#", 1)
@@ -857,29 +741,35 @@ class BlockTagDialog(QDialog):
         self.identifier.currentTextChanged.connect(self.show_courses)
         vbox1.addWidget(self.identifier)
 
-        self.identifier.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.identifier.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
         validator = QRegularExpressionValidator(TAG_FORMAT)
         self.identifier.setValidator(validator)
 
-        self.lesson_table = TableWidget() # Read-only, no focus, no selection
-        self.lesson_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.lesson_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.lesson_table = TableWidget()  # Read-only, no focus, no selection
+        self.lesson_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.lesson_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.NoSelection
+        )
         self.lesson_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         vbox1.addWidget(self.lesson_table)
         self.lesson_table.setColumnCount(3)
 
-        self.lesson_table.setHorizontalHeaderLabels((
-            T["LENGTH"],
-            T["Time"],
-            T["Partners"]
-        ))
+        self.lesson_table.setHorizontalHeaderLabels(
+            (T["LENGTH"], T["Time"], T["Partners"])
+        )
         Hhd = self.lesson_table.horizontalHeader()
         Hhd.setMinimumSectionSize(60)
         self.lesson_table.resizeColumnsToContents()
         Hhd.setStretchLastSection(True)
 
-        self.course_list = QListWidget() # Read-only, no focus, no selection
-        self.course_list.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.course_list = QListWidget()  # Read-only, no focus, no selection
+        self.course_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.NoSelection
+        )
         self.course_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         hbox1.addWidget(self.course_list)
 
@@ -906,13 +796,13 @@ class BlockTagDialog(QDialog):
         return self.result
 
     def sid_changed(self, sid, tag=""):
-        print("sid changed:", sid)
+        # print("sid changed:", sid)
         taglist = db_values(
             "LESSONS",
             "TIME",
             f"TIME LIKE '>{sid}#%'",
             distinct=True,
-            sort_field="TIME"
+            sort_field="TIME",
         )
         # Disable show_courses callbacks here ...
         self.__block_show = True
@@ -924,19 +814,19 @@ class BlockTagDialog(QDialog):
         # that there is a call to <show_courses>.
         self.identifier.setEditText("#")
         self.identifier.setEditText(tag)
-        return True # accept
+        return True  # accept
 
     def do_accept(self):
         tag = self.identifier.currentText()
         # An invalid tag should not be possible at this stage ...
         sid = self.subject.selected()
         time_field = self.sidtag2value(sid, tag)
-        #print("OK", time_field)
+        # print("OK", time_field)
         # An unchanged value should not be possible here ...
-        #if time_field != self.value0:
+        # if time_field != self.value0:
         self.result = time_field
         if self.identifier.findText(tag) < 0:
-             self.result = "+" + time_field
+            self.result = "+" + time_field
         self.accept()
 
     def show_courses(self, identifier):
@@ -956,14 +846,14 @@ class BlockTagDialog(QDialog):
             dlist.append(f"{ci.CLASS}.{ci.GRP}: {ci.SUBJECT} ({ci.TEACHER})")
         self.course_list.addItems(dlist)
         lesson_list = sublessons(tag)
-        #print("§§§ LENGTHS:", lesson_list)
+        # print("§§§ LENGTHS:", lesson_list)
         ltable = self.lesson_table
         ltable.clearContents()
         nrows = len(lesson_list)
         ltable.setRowCount(nrows)
         for r in range(nrows):
             lessonfields = lesson_list[r]
-            #print("???", lessonfields)
+            # print("???", lessonfields)
             ltable.setItem(r, 0, QTableWidgetItem(lessonfields.LENGTH))
             ltime, ltag = parse_time_field(lessonfields.TIME)
             ltable.setItem(r, 1, QTableWidgetItem(ltime))
@@ -977,8 +867,7 @@ class BlockTagSelector(QLineEdit):
         self.__callback = modified
 
     def set_block(self, block_tag):
-        """Display the value as subject-name + (optional) identifier-tag.
-        """
+        """Display the value as subject-name + (optional) identifier-tag."""
         self.sid, self.tag, subject = BlockTagDialog.parse_block_tag(block_tag)
         self.setText((subject + f" #{self.tag}") if self.tag else subject)
 
@@ -987,12 +876,12 @@ class BlockTagSelector(QLineEdit):
 
     def mousePressEvent(self, event):
         result = BlockTagDialog.popup(self.sid, self.tag)
-        print("--->", result)
+        # print("--->", result)
         if not result:
             return
         if self.__callback and not self.__callback(result):
             return
-        #print("§ set:", result)
+        # print("§ set:", result)
         self.set_block(result.lstrip("+"))
 
 
@@ -1012,8 +901,12 @@ class RoomDialog(QDialog):
         hbox1.addLayout(vboxl)
 
         self.roomchoice = QTableWidget()
-        self.roomchoice.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.roomchoice.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.roomchoice.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.roomchoice.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
         self.roomchoice.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.roomchoice.setColumnCount(2)
         vboxl.addWidget(self.roomchoice)
@@ -1041,8 +934,11 @@ class RoomDialog(QDialog):
         bt_left.clicked.connect(self.add2choices)
         bt_right = QToolButton()
         vboxm.addWidget(bt_right)
-        bt_right.setIcon(self.style().standardIcon(
-            QStyle.StandardPixmap.SP_DialogDiscardButton))
+        bt_right.setIcon(
+            self.style().standardIcon(
+                QStyle.StandardPixmap.SP_DialogDiscardButton
+            )
+        )
         bt_right.setToolTip(T["Remove_from_choices"])
         bt_right.clicked.connect(self.discard_choice)
         vboxm.addStretch(1)
@@ -1051,8 +947,12 @@ class RoomDialog(QDialog):
         hbox1.addLayout(vboxr)
 
         self.roomlist = QTableWidget()
-        self.roomlist.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.roomlist.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.roomlist.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.roomlist.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
         self.roomlist.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.roomlist.setColumnCount(2)
         vboxr.addWidget(self.roomlist)
@@ -1193,10 +1093,7 @@ class RoomDialog(QDialog):
     def init(self):
         self.room2line = {}
         self.rooms = db_key_value_list(
-            "TT_ROOMS",
-            "RID",
-            "NAME",
-            sort_field="RID"
+            "TT_ROOMS", "RID", "NAME", sort_field="RID"
         )
         n = len(self.rooms)
         self.roomlist.setRowCount(n)
@@ -1210,19 +1107,19 @@ class RoomDialog(QDialog):
         self.roomlist.resizeColumnsToContents()
         Hhd = self.roomlist.horizontalHeader()
         Hhd.hide()
-        #Hhd.setMinimumSectionSize(20)
+        # Hhd.setMinimumSectionSize(20)
         # A rather messy attempt to find an appropriate size for the table
         Vhd = self.roomlist.verticalHeader()
         Vhd.hide()
         Hw = Hhd.length()
-        #Vw = Vhd.sizeHint().width()
-        fixed_width = Hw + 20   # + Vw, if vertical headers in use
+        # Vw = Vhd.sizeHint().width()
+        fixed_width = Hw + 20  # + Vw, if vertical headers in use
         self.roomlist.setFixedWidth(fixed_width)
         self.roomchoice.setFixedWidth(fixed_width)
         Hhd.setStretchLastSection(True)
         hh = self.roomchoice.horizontalHeader()
         hh.hide()
-# Check that this doesn't need toggling after a clear() ...
+        # Check that this doesn't need toggling after a clear() ...
         hh.setStretchLastSection(True)
         self.roomchoice.verticalHeader().hide()
 
@@ -1269,8 +1166,8 @@ class RoomDialog(QDialog):
                 for rid in _choices:
                     self.add_valid_room_choice(rid)
                 self.roomchoice.selectRow(0)
-            self.extra.setCheckState(Qt.CheckState.Checked
-                if extra else Qt.CheckState.Unchecked
+            self.extra.setCheckState(
+                Qt.CheckState.Checked if extra else Qt.CheckState.Unchecked
             )
         if errors:
             elist = "\n".join(errors)
@@ -1309,8 +1206,9 @@ class PayrollDialog(QDialog):
         self.number.setToolTip(T["PAYROLL_VALID_ENTRY"])
         hbox1.addWidget(self.number)
         # If <no_length> is true, there must be a number in the expression.
-        regexp = QRegularExpression(PAYROLL_FORMAT if no_length else
-                PAYROLL_FORMAT + "|")
+        regexp = QRegularExpression(
+            PAYROLL_FORMAT if no_length else PAYROLL_FORMAT + "|"
+        )
         validator = QRegularExpressionValidator(regexp)
         self.number.setValidator(validator)
 
@@ -1325,13 +1223,12 @@ class PayrollDialog(QDialog):
         bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
 
-        k_v = db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
         self.factor2value = {}
         entries = []
-        for k, v in k_v:
+        for k, v in SHARED_DATA["PAYROLL"]:
             entries.append((k, f"{k} ({v})"))
             self.factor2value[k] = float(v.replace(",", "."))
-        self.factor.set_items([(k, f"{k} ({v})") for k, v in k_v])
+        self.factor.set_items(entries)
 
     def do_accept(self):
         if not self.number.hasAcceptableInput():
@@ -1339,7 +1236,7 @@ class PayrollDialog(QDialog):
             return
         n = self.number.text()
         f = self.factor.selected()
-        text = n + '*' + f
+        text = n + "*" + f
         if text != self.text0:
             self.result = text
         self.accept()
@@ -1348,13 +1245,13 @@ class PayrollDialog(QDialog):
         self.result = None
         self.text0 = start_value
         try:
-            n, f = start_value.split('*', 1)
+            n, f = start_value.split("*", 1)
             self.number.setText(n)
             if not self.number.hasAcceptableInput():
                 self.number.setText("")
                 raise ValueError
             self.factor.reset(f)
-        except ValueError:
+        except (ValueError, GuiError):
             SHOW_ERROR(f"{T['INVALID_PAYROLL']}: '{start_value}'")
         self.exec()
         return self.result
@@ -1365,7 +1262,7 @@ class PayrollDialog(QDialog):
 if __name__ == "__main__":
     m = TAG_FORMAT.match("")
     print(m.hasMatch(), m.captured(0))
-#    quit(0)
+    #    quit(0)
 
     open_database()
     dialogs_init()
@@ -1380,28 +1277,28 @@ if __name__ == "__main__":
     print("----->", widget.activate("ZwE", "09G10G"))
     print("----->", widget.activate("Hu", ""))
 
-#    quit(0)
+    #    quit(0)
 
     widget = PayrollDialog()
     print("----->", widget.activate(start_value="Fred*HuEp"))
 
-#    quit(0)
+    #    quit(0)
 
     widget = RoomDialog()
     widget.init()
     print("----->", widget.activate(start_value="$/rPh+", classroom="r10G"))
 
-#    quit(0)
+    #    quit(0)
 
     widget = PartnersDialog()
     print("----->", widget.activate("huO"))
 
-#    quit(0)
+    #    quit(0)
 
     widget = DayPeriodDialog()
     widget.init()
-#    widget.resize(1000, 550)
-#    widget.exec()
+    #    widget.resize(1000, 550)
+    #    widget.exec()
 
     print("----->", widget.activate("?"))
     print("----->", widget.activate("Di.4"))

@@ -98,3 +98,25 @@ class EditableComboBox(QComboBox):
             self.__item = t
             if self.__changed:
                 self.__changed(t)
+
+
+class RoomListValidator(QValidator):
+    def init(self, roommap):
+        self.roommap = roommap
+
+    def validate(self, text, pos):
+        #print("VALIDATE:", pos, text)
+        if text.endswith("+"):
+            textv = text[:-1]
+        else:
+            textv = text
+        for rid in textv.split("/"):
+            if not rid:
+                continue
+            if rid in self.roommap or rid == "$":
+                print(f" ... {rid}: ok")
+            else:
+                print(f" ... {rid}: NOT ok")
+                return (QValidator.State.Intermediate, text, pos)
+                #return (QValidator.State.Invalid, text, pos)
+        return (QValidator.State.Acceptable, text, pos)

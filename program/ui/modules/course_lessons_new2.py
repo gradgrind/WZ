@@ -276,9 +276,9 @@ class CourseEditor(QSplitter):
         lesson_add_block = QPushButton(T["NEW_BLOCK"])
         vbox2.addWidget(lesson_add_block)
         lesson_add_block.clicked.connect(self.lesson_add_block)
-        lesson_add_extra = QPushButton(T["NEW_EXTRA"])
-        vbox2.addWidget(lesson_add_extra)
-        lesson_add_extra.clicked.connect(self.lesson_add_extra)
+        lesson_add_payroll = QPushButton(T["NEW_EXTRA"])
+        vbox2.addWidget(lesson_add_payroll)
+        lesson_add_payroll.clicked.connect(self.lesson_add_payroll)
 
         self.setStretchFactor(0, 1)  # stretch only left panel
 
@@ -416,7 +416,7 @@ class CourseEditor(QSplitter):
             model.revertAll()
 
     def set_course(self, course):
-        print("SET COURSE:", course)
+        # print("SET COURSE:", course)
         self.this_course = course
         self.lessonmodel.setFilter(f"course = {course}")
         # print("SELECT:", self.lessonmodel.selectStatement())
@@ -445,13 +445,15 @@ class CourseEditor(QSplitter):
 
     def lesson_selected(self, row):
         self.current_row = row
-        print("SELECT LESSON", row)
+        # print("SELECT LESSON", row)
         self.note_editor.clear()
         if row >= 0:
             self.lesson_delete_button.setEnabled(True)
+            self.note_editor.setEnabled(True)
         else:
             self.stack.setCurrentIndex(0)
             self.lesson_delete_button.setEnabled(False)
+            self.note_editor.setEnabled(False)
             return
         record = self.lessonmodel.record(row)
         self.lesson_id = record.value("id")
@@ -494,7 +496,7 @@ class CourseEditor(QSplitter):
                 int(length)
             except ValueError:
                 record.setValue("LENGTH", "1")
-                record.setValue("PAYROLL", "*")
+                record.setValue("PAYROLL", f"*{SHARED_DATA['PAYROLL'][0][0]}")
                 record.setValue("ROOM", "?")
             record.setValue("id", None)
             n = model.rowCount()
@@ -503,7 +505,7 @@ class CourseEditor(QSplitter):
             record = model.record()
             record.setValue("course", self.this_course)
             record.setValue("LENGTH", "1")
-            record.setValue("PAYROLL", "*")
+            record.setValue("PAYROLL", f"*{SHARED_DATA['PAYROLL'][0][0]}")
             record.setValue("ROOM", "?")
             n = 0
         record.setValue("TIME", "@?")
@@ -518,7 +520,8 @@ class CourseEditor(QSplitter):
             model.revertAll()
 
     def lesson_add_block(self):
-        print("ADD BLOCK MEMBER", self.this_course)
+        """Add a new "block lesson", copying the current one if possible."""
+        # print("ADD BLOCK MEMBER", self.this_course)
         if not self.this_course:
             # No lessons can be added
             SHOW_WARNING(T["NO_COURSE_SO_NO_LESSONS"])
@@ -534,20 +537,20 @@ class CourseEditor(QSplitter):
                 bsid = BlockTagDialog.parse_block_tag(t)[0]
             else:
                 bsid = SHARED_DATA["COURSE"]["SUBJECT"]
-                record.setValue("PAYROLL", "*")
+                record.setValue("PAYROLL", f"*{SHARED_DATA['PAYROLL'][0][0]}")
             record.setValue("id", None)
             n = model.rowCount()
         else:
             record = model.record()
             record.setValue("course", self.this_course)
             record.setValue("ROOM", "?")
-            record.setValue("PAYROLL", "*")
+            record.setValue("PAYROLL", f"*{SHARED_DATA['PAYROLL'][0][0]}")
             bsid = SHARED_DATA["COURSE"]["SUBJECT"]
             n = 0
         tag = BlockTagDialog.popup(bsid, "#")
         if not tag:
             return
-        print("§ block tag:", tag)
+        # print("§ block tag:", tag)
         if tag[0] == "+":
             # new tag
             tag = tag[1:]
@@ -561,18 +564,36 @@ class CourseEditor(QSplitter):
         record.setValue("TIME", tag)
         record.setValue("PLACE", "")
         record.setValue("NOTES", "")
-        print("§ record id:", record.value("id"))
         if model.insertRecord(-1, record) and model.submitAll():
             lid = model.query().lastInsertId()
-            print("INSERTED:", lid, model.rowCount())
+            # print("INSERTED:", lid, model.rowCount())
             self.lessontable.selectRow(n)
         else:
             SHOW_ERROR(f"DB Error: {model.lastError().text()}")
             model.revertAll()
 
-    # TODO
-    def lesson_add_extra(self):
-        print("ADD 'EXTRA' ENTRY", self.this_course)
+    def lesson_add_payroll(self):
+        """Add a new "payroll" entry."""
+        # print("ADD 'EXTRA' ENTRY", self.this_course)
+        if not self.this_course:
+            # No lessons can be added
+            SHOW_WARNING(T["NO_COURSE_SO_NO_LESSONS"])
+            return
+        model = self.lessonmodel
+        # Create a basic "payroll" entry
+        record = model.record()
+        record.setValue("course", self.this_course)
+        record.setValue("LENGTH", "--")
+        record.setValue("PAYROLL", f"1*{SHARED_DATA['PAYROLL'][0][0]}")
+        record.setValue("NOTES", "")
+        n = model.rowCount()
+        if model.insertRecord(-1, record) and model.submitAll():
+            # lid = model.query().lastInsertId()
+            # print("INSERTED:", lid, model.rowCount())
+            self.lessontable.selectRow(n)
+        else:
+            SHOW_ERROR(f"DB Error: {model.lastError().text()}")
+            model.revertAll()
 
     def lesson_delete(self):
         """Delete the current "lesson".
@@ -598,11 +619,11 @@ class CourseEditor(QSplitter):
             SHOW_ERROR(f"DB Error: {model.lastError().text()}")
             model.revertAll()
             return
-        #print("§ timefield:", timefield)
+        # print("§ timefield:", timefield)
         if timefield.startswith("="):
             # If there are no other partners with the original tag, remove
             # its lesson-time entry.
-            #print("§ ...", partners(timefield[1:]))
+            # print("§ ...", partners(timefield[1:]))
             if not partners(timefield[1:]):
                 # print("§ EMPTY TAG:", timefield)
                 db_delete_rows("LESSONS", PLACE=timefield)
@@ -615,9 +636,9 @@ class CourseEditor(QSplitter):
                 for sl in sublessons(timefield):
                     db_delete_rows("LESSONS", id=sl.id)
                     tag = sl.TIME
-                    #print("§§ ...", tag)
+                    # print("§§ ...", tag)
                     if tag.startswith("="):
-                        #print("§§$ ...", partners(tag[1:]))
+                        # print("§§$ ...", partners(tag[1:]))
                         if not partners(tag[1:]):
                             # print("§ EMPTY TAG:", tag)
                             db_delete_rows("LESSONS", PLACE=tag)
@@ -699,7 +720,7 @@ class PlainLesson(QWidget):
         return False
 
     def partners_changed(self, text):
-        print("$ UPDATE PARTNERS TAG:", text)
+        # print("$ UPDATE PARTNERS TAG:", text)
         oldtime = self.editors["Time"].text()
         oldpartners = self.editors["Partners"].text()
         db_update_partners(
@@ -797,7 +818,7 @@ class BlockLesson(QWidget):
 
     def show_sublessons(self, block_tag):
         slist = sublessons(block_tag)
-        print(" ...", slist)
+        # print(" ...", slist)
         ltable = self.lesson_table
         self.__ltable_ready = False
         ltable.clearContents()
@@ -814,11 +835,11 @@ class BlockLesson(QWidget):
         self.__ltable_ready = True
 
     def block_changed(self, block_tag):
-        print("§ block changed:", block_tag)
-        if not check_new_time(self.course_id, block_tag):
+        tag = block_tag.lstrip("+")
+        # print("§ block changed:", tag)
+        if not check_new_time(self.course_id, tag):
             return False
-
-        db_update_field("LESSONS", "TIME", block_tag, id=self.lesson_id)
+        db_update_field("LESSONS", "TIME", tag, id=self.lesson_id)
         self.main_widget.redisplay()
         ### After a redisplay of the main widget it would be superfluous
         ### for a callback handler to update its cell, so <False> is
@@ -896,7 +917,9 @@ class NonLesson(QWidget):
         super().__init__(parent=parent)
         form = QFormLayout(self)
         form.setContentsMargins(0, 0, 0, 0)
-        self.editor = PayrollSelector(modified=self.payroll_changed)
+        self.editor = PayrollSelector(
+            modified=self.payroll_changed, no_length=True
+        )
         form.addRow(T["PAYROLL"], self.editor)
 
     def set_data(self, record):
@@ -1095,12 +1118,14 @@ def check_new_time(course_id, tag):
     level comparison).
     Return true if no conflict.
     """
+
     class TagMatchError(Exception):
         pass
+
     if tag != "@?":
         # get all lesson record with this course
         course_times = db_values("LESSONS", "TIME", course=course_id)
-        print("? course_times:", tag, course_times)
+        # print("? course_times:", tag, course_times)
         try:
             for ctime in course_times:
                 if ctime == "@?":
@@ -1120,7 +1145,7 @@ def check_new_time(course_id, tag):
 
 
 def db_update_time(lesson_id, time, partners, course_id):
-    print("§ db_update_time:", lesson_id, time, partners, course_id)
+    # print("§ db_update_time:", lesson_id, time, partners, course_id)
     ttag = f"@{time}"
     if not check_new_time(course_id, ttag):
         return False
