@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-06-01
+Last updated:  2022-06-04
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -209,36 +209,6 @@ class RoomListValidator(QValidator):
         return (QValidator.State.Acceptable, text, pos)
 
 
-# This can still be useful, even though I am not using it here!
-class EditableComboBox(QComboBox):
-    def __init__(self, parent=None, changed_callback=None, sort=True):
-        """<changed_callback> takes a single parameter, the new text.
-        <sort> selects alphabetical sorting (ascending) of manually
-        added entries (not those added in the program).
-        """
-        self.__changed = changed_callback
-        super().__init__(parent=parent, editable=True)
-        self.__item = None
-        if sort:
-            self.setInsertPolicy(QComboBox.InsertPolicy.InsertAlphabetically)
-        self.currentIndexChanged.connect(self.index_changed)
-
-    def focusOutEvent(self, e):
-        """Close the editor when focus leaves it. This reverts any
-        partially entered text.
-        """
-        self.clearEditText()
-        self.setCurrentIndex(self.currentIndex())
-
-    def index_changed(self, i):
-        # This can be called twice on a change because of sorting
-        t = self.currentText()
-        if t != self.__item:
-            self.__item = t
-            if self.__changed:
-                self.__changed(t)
-
-
 class TimeSlotError(Exception):
     pass
 #+
@@ -283,9 +253,11 @@ def index2timeslot(index):
 
 class DayPeriodDialog(QDialog):
     @classmethod
-    def popup(cls, start_value="", parent=None):
+    def popup(cls, start_value="", parent=None, pos=None):
         d = cls(parent)
         d.init()
+        if pos:
+            d.move(pos)
         return d.activate(start_value)
 
     def __init__(self, parent=None):
@@ -410,6 +382,14 @@ def partners(tag):
         TIME=f"={tag}"
     )
     return [Partner(*p) for p in plist]
+
+
+def block_courses(tag):
+    return db_values(
+        "LESSONS",
+        "course",
+        TIME=tag
+    )
 
 
 class Sublesson(NamedTuple):
@@ -598,6 +578,7 @@ class DurationSelector(QComboBox):
     def setText(self, number):
         """Initialize the list of options and select the given one.
         """
+        print("(DurationSelector.setText)", number)
         self.__report_changes = False
         self.clear()
         self.addItems([str(i)
@@ -608,8 +589,10 @@ class DurationSelector(QComboBox):
             self.__report_changes = True
 
     def __changed(self, text):
-        if self.__report_changes:
+        print("(DurationSelector.__changed)", text)
+        if self.__report_changes and self.__callback:
             self.__callback(text)
+        self.clearFocus()
 
 
 class DayPeriodSelector(QLineEdit):
@@ -641,15 +624,9 @@ class PartnersSelector(QLineEdit):
     def mousePressEvent(self, event):
         result = PartnersDialog.popup(start_value=self.text())
         if result:
-            if result == "-":
-                self.text_edited("")
-            else:
-                self.text_edited(result)
-
-    def text_edited(self, text):
-        if self.__callback and not self.__callback(text):
-            return
-        self.setText(text.lstrip("+"))
+            if self.__callback and not self.__callback(result):
+                return
+            self.setText(result.lstrip("+-"))
 
 
 class PayrollSelector(QLineEdit):
@@ -701,73 +678,39 @@ class RoomSelector(QLineEdit):
         self.setText(text)
 
 
-class DelegatableList(QListWidget):
-    """Changes must be registered with mouse-click or return-key.
-    """
-    def __init__(self, parent):
-        super().__init__(parent=parent)
-        self.result = False     # Flag: no registered result
-        self.itemClicked.connect(self.__done)
-
-    @Property(str, user=True)
-    def text(self):
-        text = self.currentItem().text()
-        #print("§GET:", text)
-        return text
-
-    @text.setter
-    def text(self, text):
-        if self.result:
-            # This method gets called during saving of the result data,
-            # which is not necessary.
-            return
-        #print("$SET", text)
-        self.clear()
-        row = -1
-        items = []
-        for i in range(len(SHARED_DATA["PERIODS"])):
-            item = str(i + 1)
-            if item == text:
-                row = i
-            items.append(item)
-        self.addItems(items)
-        self.setCurrentRow(row)
-
-    def keyPressEvent(self, e):
-        e.accept()
-        key = e.key()
-        if key == Qt.Key_Return:
-            self.__done()
-        else:
-            super().keyPressEvent(e)
-
-    def __done(self):
-        #print("§§§DONE", self.currentItem().text())
-        self.result = True  # Register result as valid
-        #self.hide()
-        self.clearFocus()
-
-
 class DurationDelegate(QStyledItemDelegate):
-    def __init__(self, table):
+    def __init__(self, table, modified=None):
         super().__init__(parent=table)
         self.__table = table
+        self.__modified = modified
+
+    class Editor(DurationSelector):
+        def showEvent(self, event):
+            QTimer.singleShot(0, self.showPopup)
 
     def createEditor(self, parent, option, index):
-        w = DelegatableList(parent=parent)
-        w.setMinimumHeight(80)
-        return w
+        e =  self.Editor(parent=parent)
+        return e
+
+    def setEditorData(self, editor, index):
+        self.val0 = index.data()
+        editor.setText(self.val0)
 
     def setModelData(self, editor, model, index):
-        if editor.result:
-            super().setModelData(editor, model, index)
+        text = editor.currentText()
+#        self.__table.clearFocus()
+        print("?-------", text, text != self.val0)
+        if text != self.val0:
+            if (not self.__modified) or self.__modified(index.row(), text):
+                model.setData(index, text)
         self.__table.setFocus()
 
 
 class DayPeriodDelegate(QStyledItemDelegate):
-    def __init__(self, table):
+    def __init__(self, table, modified=None):
         super().__init__(parent=table)
         self.__table = table
+        self.__modified = modified
 
     class Editor(QLineEdit):
         # The line-edit is not used, but it has the necessary properties ...
@@ -782,24 +725,20 @@ class DayPeriodDelegate(QStyledItemDelegate):
         # method in <Editor>).
         old_value = model.data(index)  # or editor.text()
         print("§§§ old:", old_value)
-        result = DayPeriodDialog.popup(old_value)
-#TODO
-        print("§§§ new", result)
-        #super().setModelData(editor, model, index)
-#        if result:
-#            model.setData(index, result)
-#
-#            index_partners = model.index(index.row(), index.column() + 1)
-#
-#            model.setData(index_partners, "Y")
-        #self.__table.set_time(index.row(), index.column(), old_value, result)
+        rect = self.__table.visualRect(index)
+        pos = self.__table.viewport().mapToGlobal(rect.bottomLeft())
+        result = DayPeriodDialog.popup(old_value, pos=pos)
+        if result:
+            if (not self.__modified) or self.__modified(index.row(), result):
+                model.setData(index, result)
         self.__table.setFocus()
 
 
 class PartnersDelegate(QStyledItemDelegate):
-    def __init__(self, table):
+    def __init__(self, table, modified=None):
         super().__init__(parent=table)
         self.__table = table
+        self.__modified = modified
 
     class Editor(QLineEdit):
         # The line-edit is not used, but it has the necessary properties ...
@@ -813,26 +752,21 @@ class PartnersDelegate(QStyledItemDelegate):
         # This gets called on activation (thanks to the <showEvent>
         # method in <Editor>).
         old_value = model.data(index)  # or editor.text()
-        self.__table.old_partners = old_value
         print("§§§ old:", old_value)
+
+        rect = self.__table.visualRect(index)
+        pos = self.__table.viewport().mapToGlobal(rect.bottomLeft())
         result = PartnersDialog.popup(old_value)
-
-#TODO
-# result can be empty -> no action
-# It can be an existing "partners" entry
-# It can have a +-prefix -> new entry
-# It can be '-' -> clear it
-
-        print("§§§ new", result)
-        #super().setModelData(editor, model, index)
-#        if result:
-#            model.setData(index, result)
-#
-#            index_partners = model.index(index.row(), index.column() + 1)
-#
-#            model.setData(index_partners, "Y")
-        #self.__table.set_time(index.row(), index.column(), old_value, result)
+        # <result> can be empty -> no action,
+        # it can be an existing "partners" entry,
+        # it can have a +-prefix -> new entry,
+        # it can be '-' -> clear it.
+        if result:
+            if (not self.__modified) or self.__modified(index.row(), result):
+                model.setData(index, result.lstrip("+-"))
         self.__table.setFocus()
+#TODO
+        print("§§§ new", result)
 
 
 class TableWidget(QTableWidget):
@@ -962,6 +896,8 @@ class BlockTagDialog(QDialog):
         self.result = None
         try:
             self.subject.reset(sid)
+            if tag == "#":
+                tag = ""
         except GuiError:
             SHOW_ERROR(f"{T['UNKNOWN_SUBJECT_TAG']}: {sid[1:]}")
             tag = ""
@@ -1012,11 +948,7 @@ class BlockTagDialog(QDialog):
         self.course_list.clear()
         tag = f">{self.subject.selected()}#{identifier}"
         self.bt_save.setEnabled(tag != self.value0)
-        courselist = db_values(
-            "LESSONS",
-            "course",
-            TIME=tag
-        )
+        courselist = block_courses(tag)
         dlist = []
         for c in courselist:
             # Present info about the course
@@ -1037,19 +969,6 @@ class BlockTagDialog(QDialog):
             ltable.setItem(r, 1, QTableWidgetItem(ltime))
             ltable.setItem(r, 2, QTableWidgetItem(ltag))
 
-
-#TODO
-"""
-    If a course-lesson releases its association with a block tag, the
-    existence of other references should be checked: if there are none
-    left, the associated sublessons should be deleted (and consider any
-    partner tags they might have).
-    This disassociation can occur by deleting a course-lesson, or by
-    editing it – changing to another block tag.
-
-    It is also possible that the number of sublessons – and their
-    detailed information – may be changed by an edit.
-"""
 
 class BlockTagSelector(QLineEdit):
     def __init__(self, parent=None, modified=None):

@@ -102,6 +102,8 @@ ui.modules.course_lessons: {
     EMPTY_PARTNER_TAG: "Leeres „Partner-Kennzeichen“"
     SELECT_TO_COPY_LENGTH: "Wenn eine Zeile ausgewählt ist, wird deren Länge kopiert, sonst 1"
     DELETE_SELECTED: "Die zu löschende Zeile muss ausgewählt sein"
+    NO_COURSE_SO_NO_LESSONS: "Kein Kurs => Keine Stunden"
+    BLOCK_TAG_TIME_CLASH: "Zeitkonflikt mit anderen Kurs-Stunden:"
 
     PAYROLL_VALID_ENTRY: "* oder Dezimalzahl"
     INVALID_PAYROLL: "Ungültiger Wert"
