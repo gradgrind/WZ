@@ -85,6 +85,8 @@ ui.modules.classes: {
 
 ui.modules.course_lessons: {
     # Messages
+    PAYROLL_ENTRY:  "Dieser Eintrag ist kein „Kurs“, gibt aber Deputatsstunden an, die keinen Unterrichtsstunden direkt entsprechen."
+    NO_LESSONS_FOR_COURSE: "Dieser Kurs hat keine Unterrichtsstunden"
     COURSE_EXISTS:  "Der geänderte „Kurs“ existiert schon"
     REALLY_DELETE:  "Soll dieser „Kurs“ wirklich gelöscht werden?"
     COURSE_ADDED:   "„Kurs“ in Klasse {klass} eingefügt"
@@ -104,6 +106,7 @@ ui.modules.course_lessons: {
     DELETE_SELECTED: "Die zu löschende Zeile muss ausgewählt sein"
     NO_COURSE_SO_NO_LESSONS: "Kein Kurs => Keine Stunden"
     BLOCK_TAG_TIME_CLASH: "Zeitkonflikt mit anderen Kurs-Stunden:"
+    NO_TIME_FOR_PARTNERS: "Zeitangabe für Partner-Kennzeichen fehlt in Datenbank"
 
     PAYROLL_VALID_ENTRY: "* oder Dezimalzahl"
     INVALID_PAYROLL: "Ungültiger Wert"
@@ -122,7 +125,7 @@ ui.modules.course_lessons: {
     UPDATE:         Übernehmen
     NEW:            Hinzufügen
     NEW_PLAIN:      "Neue Unterrichtsstunde"
-    NEW_BLOCK:      "Neues Blockfach bzw. Epoche"
+    NEW_BLOCK:      "Neues Blockfach bzw. Neue Epoche"
     NEW_EXTRA:      "Neuer Deputatseintrag"
 
     # Course table title line

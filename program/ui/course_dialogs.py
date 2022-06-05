@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-06-04
+Last updated:  2022-06-05
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -177,7 +177,6 @@ class DayPeriodDialog(QDialog):
         self.daylist.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
         )
-        self.daylist.currentRowChanged.connect(self.select_day)
         hbox1.addWidget(self.daylist)
 
         self.periodlist = ListWidget()
@@ -185,7 +184,6 @@ class DayPeriodDialog(QDialog):
         self.periodlist.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
         )
-        self.periodlist.currentRowChanged.connect(self.select_period)
         hbox1.addWidget(self.periodlist)
 
         buttonBox = QDialogButtonBox()
@@ -193,7 +191,6 @@ class DayPeriodDialog(QDialog):
         bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
-        # hbox1.addStretch(1)
 
         bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
@@ -229,14 +226,6 @@ class DayPeriodDialog(QDialog):
         self.periodlist.setCurrentRow(p)
         self.exec()
         return self.result
-
-    def select_day(self, day):
-        # TODO
-        print("SELECT DAY:", day)
-
-    def select_period(self, period):
-        # TODO
-        print("SELECT PERIOD:", period)
 
 
 class ListWidget(QListWidget):
@@ -335,8 +324,7 @@ def get_time_entry(tag):
     try:
         ltime = db_read_unique_field("LESSONS", "TIME", PLACE=f"={tag}")
     except NoRecord:
-        # T
-        SHOW_ERROR(f"NO_TIME_FOR_PARTNERS: {tag}")
+        SHOW_ERROR(f'{T["NO_TIME_FOR_PARTNERS"]}: {tag}')
         # TODO: add a time entry?
         # TIME="?", PLACE=f"={tag}", everything else empty
         return "?"
@@ -357,9 +345,6 @@ def check_start_time(tag):
 
 
 class PartnersDialog(QDialog):
-    # TODO
-    # Could enable the save button only when it is different from the initial value
-    # Could enable the clear/reset button only when there was an initial value
     @classmethod
     def popup(cls, start_value="", pos=None):
         d = cls()
@@ -392,14 +377,14 @@ class PartnersDialog(QDialog):
         buttonBox = QDialogButtonBox()
         buttonBox.setOrientation(Qt.Orientation.Vertical)
         vbox1.addWidget(buttonBox)
-        bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
+        self.bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-        bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
+        self.bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
         # vbox1.addStretch(1)
 
-        bt_save.clicked.connect(self.do_accept)
+        self.bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
-        bt_clear.clicked.connect(self.do_clear)
+        self.bt_clear.clicked.connect(self.do_clear)
 
     def do_accept(self):
         val = self.identifier.currentText()
@@ -421,6 +406,7 @@ class PartnersDialog(QDialog):
         """Populate the list widget with all courses sharing the given tag
         (i.e. "partners").
         """
+        self.bt_save.setEnabled(text != self.value0)
         # Including the currently selected one (which we can't identify here!)?
         self.course_list.clear()
         plist = partners(text)
@@ -440,6 +426,7 @@ class PartnersDialog(QDialog):
         self.course_list.addItems(dlist)
 
     def activate(self, start_value=""):
+        self.bt_clear.setEnabled(bool(start_value))
         self.value0 = start_value
         self.result = None
         self.identifier.clear()

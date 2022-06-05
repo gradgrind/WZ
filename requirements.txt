@@ -14,4 +14,7 @@
 pikepdf
 xmltodict
 openpyxl
+# It should work with pyside2, pyside6, pyqt5 and pyqt6.
+# At present only pyqt5 has been tested.
 pyside6
+qtpy
