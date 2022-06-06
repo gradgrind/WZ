@@ -1,7 +1,7 @@
 """
-uutility/db_management.py
+core/db_management.py
 
-Last updated:  2022-05-28
+Last updated:  2022-06-06
 
 Helper functions for accessing the database.
 
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-T = TRANSLATIONS("utility.db_management")
+T = TRANSLATIONS("core.db_management")
 
 ### +++++
 
@@ -115,15 +115,21 @@ def db_query(query_text):
 class KeyValueList(list):
     def __init__(self, iterable=None):
         super().__init__()
-        self.map = {}
+        self.__map = {}
         for item in iterable:
             self.append(item)
 
     def append(self, item):
         if not len(item) == 2:
             raise Bug(f"KeyValueList – new item is not a pair: {repr(item)}")
+        self.__map[item[0]] = len(self)
         super().append(item)
-        self.map[item[0]] = item[1]
+
+    def index(self, key):
+        return self.__map[key]
+
+    def map(self, key):
+        return self[self.__map[key]][1]
 
 
 def db_read_table(
@@ -345,6 +351,12 @@ def read_pairs(data):
     return pairs
 
 
+def db_days_periods():
+    days = db_key_value_list("TT_DAYS", "TAG", "NAME", "N")
+    periods = db_key_value_list("TT_PERIODS", "TAG", "NAME", "N")
+    return days, periods
+
+
 # -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
 
 # An example of code to create and populate the CLASSES table
@@ -399,7 +411,7 @@ if __name__ == "__main__":
     l = KeyValueList([("a", 1), ("b", 2), ("c", 3)])
     l.append(("d", 4))
     print("KeyValueList:", l)
-    print("   ... map:", l.map)
+    print("   ... map('b'):", l.map('b'))
 
     open_database()
 

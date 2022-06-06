@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-04-27
+core/classes.py - last updated 2022-06-06
 
 Manage class data.
 
@@ -33,23 +33,67 @@ if __name__ == "__main__":
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-#T = TRANSLATIONS("core.classes")
+T = TRANSLATIONS("core.classes")
 
 ### +++++
 
-from core.db_management import open_database, db_key_value_list, db_values
+from typing import NamedTuple
+
+from core.db_management import (
+    open_database,
+    db_read_fields,
+    db_key_value_list,
+    db_values
+)
 
 ### -----
 
+class ClassData(NamedTuple):
+    klass: str
+    name: str
+    divisions: list[list[str]]
+    classroom: str
+    tt_data: str
+
+
+def get_classes_data():
+    classes = []
+    for klass, name, divisions, classroom, tt_data in db_read_fields(
+        "CLASSES",
+        ("CLASS", "NAME", "DIVISIONS", "CLASSROOM", "TT_DATA")
+    ):
+        # Parse groups
+        divlist = []
+        if divisions:
+            for div in divisions.split("|"):
+                #print("???", klass, repr(div))
+                groups = div.split()
+                if groups:
+                    divlist.append(groups)
+                else:
+                    SHOW_ERROR(T["INVALID_GROUP_FIELD"].format(klass=klass))
+        classes.append(
+            (klass, ClassData(
+                    klass=klass,
+                    name=name,
+                    divisions=divlist,
+                    classroom=classroom,
+                    tt_data=tt_data
+                )
+            )
+        )
+    return dict(sorted(classes))
+
+
 def get_class_list(skip_null=True):
 #?    open_database()
-
     classes = []
     for k, v in db_key_value_list("CLASSES", "CLASS", "NAME", "CLASS"):
         if k == '--' and skip_null:
             continue
         classes.append((k, v))
     return classes
+
 
 def get_classroom(klass):
     vlist = db_values("CLASSES", "CLASSROOM", CLASS=klass)
@@ -62,6 +106,12 @@ def get_classroom(klass):
 
 if __name__ == "__main__":
     open_database()
+    _classes = get_classes_data()
+    for cdata in _classes.values():
+        print("\n", cdata)
+
+    print("\n -------------------------------\n")
+
     for k, v in get_class_list(False):
         print(f" ::: {k:6}: {v} // {get_classroom(k)}")
 

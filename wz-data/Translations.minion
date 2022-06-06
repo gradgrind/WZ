@@ -1,8 +1,12 @@
 ### Translations
 
-utility.db_management: {
+core.db_management: {
     # Messages
     BAD_KEY_VALUE_LIST: "Ungültige Schlüssel-Wert-Liste,\nein Paar pro Zeile, Trennung durch ':':\n{text}"
+}
+
+core.classes: {
+    INVALID_GROUP_FIELD: "Die Gruppenangabe (Feld DIVISIONS) für Klasse {klass} ist fehlerhaft"
 }
 
 ui.ui_base: {
@@ -162,6 +166,11 @@ ui.modules.course_lessons: {
     NOTES:          Notizen
 
 #    EDIT_LESSON:    "Bearbeiten"
+}
+
+timetable.courses: {
+    INVALID_NON_LESSON_RECORD: "Fehlerhafte Zeile in LESSONS-Tabelle, TIME-Feld leer, aber LENGTH nicht '--'.\n  id: "
+    NO_CLASSROOM:           "Diese Klasse hat keinen Klassenraum ($): "
 }
 
 timetable.constraints_teacher: {

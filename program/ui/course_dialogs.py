@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-06-05
+Last updated:  2022-06-06
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -48,6 +48,7 @@ from typing import NamedTuple
 
 from core.db_management import (
     open_database,
+    db_days_periods,
     db_read_table,
     db_key_value_list,
     db_values,
@@ -98,6 +99,7 @@ SHARED_DATA = {}
 
 
 def dialogs_init():
+    SHARED_DATA["DAYS"], SHARED_DATA["PERIODS"] = db_days_periods()
     days = db_key_value_list("TT_DAYS", "TAG", "NAME", "N")
     SHARED_DATA["DAYS"] = days
     periods = db_key_value_list("TT_PERIODS", "TAG", "NAME", "N")
@@ -703,7 +705,7 @@ class BlockTagDialog(QDialog):
         """
         try:
             sid, tag = block_tag[1:].split("#", 1)
-            subject = SHARED_DATA["SUBJECTS"].map[sid]
+            subject = SHARED_DATA["SUBJECTS"].map(sid)
             if tag and not TAG_FORMAT.match(tag).hasMatch():
                 raise ValueError
         except:
