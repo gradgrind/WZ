@@ -111,10 +111,11 @@ class TimetableData:
         self.CLASSES = get_classes_data()
 #TODO: Read other tables?
 
-
+        self.class2groups = {}
+        self.class2atoms = {}
         for klass, data in self.CLASSES.items():
             print("\n %%", klass)
-            build_group_data(data.divisions)
+            self.class2groups, self.class2atoms = build_group_data(data.divisions)
 
     #TODO
     def get_timetable_data(self):
@@ -157,14 +158,13 @@ class TimetableData:
                     unit_id = len(unit_times)
                     u = self.timeslot_index(time)
                     unit_times.append(u)
-                    if u:
-                        print(" ...", units[-1])
+                    coursedata = course2data[course] if course else None
                     unit_data.append(
-                        self.get_unit_data(course, length, room, place)
+                        self.get_unit_data(coursedata, length, room, place)
                     )
                 continue
 
-
+#??
                 coursedata = course2data[course] if course else None
                 lessondata = LessonData(
                     id=id,
@@ -212,8 +212,9 @@ class TimetableData:
             roomlist = get_rooms(room, classroom)
             tidlist = [] if course.tid == "--" else [course.tid]
 # Check tid validity?
-            group = get_group(course.klass, course.grp)
+            group = get_group(course.klass, course.group)
             return (link, tidlist, group, roomlist)
+# ...else:
 
     def get_classroom(self, klass):
         return self.CLASSES[klass].classroom
@@ -239,34 +240,75 @@ def get_group(klass:str, group:str):
 
 
 def build_group_data(divisions):
+    """Process a class's group (GRP) field to get a list of groups and
+    minimal subgroups.
+    Return (groups, minimal subgroups)
+    """
     groups = set()
-    impossible_pairs = {}
-    cross_terms = [[]]
+    impossible_partners = {}
+    # Collect groups and build map giving all groups which are
+    # incompatible with each group
+    for div in divisions:
+        for g in div:
+            groups.add(g)
+            snew = set(div) - {g}
+            try:
+                impossible_partners[g] |= snew
+            except KeyError:
+                impossible_partners[g] = snew
+    # Collect minimal subgroups
+    cross_terms = [set()]
     for div in divisions:
         __cross_terms = []
         for g in div:
-            groups.add(g)
-            try:
-                nopair = impossible_pairs[g]
-            except KeyError:
-                nopair = set()
-            impossible_pairs[g] = nopair | set(div)
-            if g in nopair:
-                continue
             for ct in cross_terms:
-                __cross_terms.append(ct + g.split("."))
+                if g in ct:
+                    __cross_terms.append(ct)
+                elif not (ct & impossible_partners[g]):
+                    gg = set(g.split("."))
+                    if len(gg) > 1:
+                        for gx in gg:
+                            try:
+                                nopairx = impossible_partners[gx]
+                            except KeyError:
+                                continue
+                            if (ct & nopairx):
+                                break
+                        else:
+                            __cross_terms.append(ct | gg)
+                    else:
+                        __cross_terms.append(ct | gg)
         cross_terms = __cross_terms
-
-#TODO: Not quite working yet ...
-
-    print("\n§GROUPS:", groups)
-    print("\n§XTERMS:", cross_terms)
-
+        #print("\n???", cross_terms)
+    #print("\nXXX", impossible_partners)
+    #print("\n§GROUPS:", sorted(groups))
+    #print("\n§XTERMS:", cross_terms)
+    return sorted(groups), [frozenset(ct) for ct in cross_terms]
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
+
+    """
+    build_group_data([("A", "B"), ("G", "R"), ("A", "X", "Y")])
+    print("\n  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    build_group_data([("A", "B"), ("G", "R"), ("A", "B.G", "B.R")])
+    print("\n  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    build_group_data([("A", "B.G", "B.R"), ("G", "R"), ("A", "B")])
+    print("\n  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    """
+    #_divs = [("A", "B"), ("G", "R"), ("A", "X", "Y")]
+    #_divs = [("A", "B"), ("G", "R"), ("A", "B.G", "B.R")]
+    #_divs = [("A", "B.G", "B.R"), ("G", "R"), ("A", "B")]
+    _divs = [("G", "R"), ("A", "B.G", "B.R"), ("A", "B"), ("I", "II", "III")]
+    print("\nGROUP DIVISIONS:", _divs, "->")
+    groups, minsubgroups = build_group_data(_divs)
+    print("\n ... Groups:", groups)
+    print("\n ... Atoms:", minsubgroups)
+
+    #quit(0)
+
     open_database()
 
     ttdata = TimetableData()
