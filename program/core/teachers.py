@@ -1,6 +1,5 @@
-#DEPRECATED: moving to sqlite
 """
-core/teachers.py - last updated 2022-04-19
+core/teachers.py - last updated 2022-06-07
 
 Manage teacher data.
 
@@ -46,134 +45,78 @@ if __name__ == "__main__":
     #start.setup(os.path.join(basedir, "NEXT"))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
+#T = TRANSLATIONS("core.teachers")
+
 ### +++++
 
-from tables.spreadsheet import (
-    read_DataTable,
-    filter_DataTable,
-    TableError,
+from typing import NamedTuple
+
+from core.db_management import (
+    open_database,
+    db_read_fields,
 )
 
+#?
 class TeacherError(Exception):
     pass
 
 ### -----
 
+class TeacherData(NamedTuple):
+    tid: str
+    name: str
+    signed: str
+    sortname: str
+    tt_data: str
 
-def Teachers():
-    return __TeachersCache._instance()
 
-
-class __TeachersCache(dict):
-    """Handler for teacher data.
-    The internal teacher data should be read and written only through this
-    interface.
+class Teachers(dict):
+    """Reader for teacher data.
     An instance of this class is a <dict> holding the teacher data as a
-    mapping: {tid -> {field: value, ...}}.
-    The fields defined for a teacher are read from the configuration file
-    CONFIG/TEACHER_FIELDS.
-    This is a "singleton" class, i.e. there should be only one instance,
-    which is accessible via the <_instance> method.
+    mapping: {tid -> <TeacherData> instance}.
+    The dictionary is ordered by SORTNAME.
     """
-    __instance = None
-
-    @classmethod
-    def _clear_cache(cls):
-        cls.__instance = None
-
-    @classmethod
-    def _instance(cls):
-        """Fetch the cached instance of this class.
-        If the school-year has changed, reinitialize the instance.
-        """
-        try:
-            if cls.__instance.__schoolyear == SCHOOLYEAR:
-                return cls.__instance
-        except:
-            pass
-        cls.__instance = cls()
-        cls.__instance.__schoolyear = SCHOOLYEAR
-        return cls.__instance
-
     def __init__(self):
         super().__init__()
-        folder = DATAPATH("TEACHERS")
-        self.fields = MINION(DATAPATH("CONFIG/TEACHER_FIELDS"))
-        for f in os.listdir(folder):
-            fpath = os.path.join(folder, f)
-            try:
-                ttable = read_DataTable(fpath)
-                ttable = filter_DataTable(ttable, self.fields, matrix=True)
-            except TableError as e:
-                raise TeacherError(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
-            info = ttable["__INFO__"]
-            tid = info.pop("TID")
-            if not tid.isalnum():
-                raise Teacher(_TEACHER_INVALID.format(tid=tid, path=fpath))
-            available = {}
-            info["AVAILABLE"] = available
-            for row in ttable["__ROWS__"]:
-                day = row.pop("DAY")
-                del(row["FULL_DAY"])
-                available[day] = row
-            if tid in self:
-                raise TeacherError(_DOUBLE_TID.format(tid=tid))
-            self[tid] = info
+#?        open_database()
+        teachers = []
+        for tid, name, signed, sortname, tt_data in db_read_fields(
+            "TEACHERS",
+            ("TID", "NAME", "SIGNED", "SORTNAME", "TT_DATA")
+        ):
+            teachers.append(
+                TeacherData(
+                    tid=tid,
+                    name=name,
+                    signed=signed,
+                    sortname=sortname,
+                    tt_data=tt_data
+                )
+            )
+        for tdata in sorted(teachers, key=lambda x: x.sortname):
+            self[tdata.tid] = tdata
 
     def name(self, tid):
-        return self[tid]["NAME"].replace("|", "")
+        return self[tid].name
 
+    #deprecated?
     def list_teachers(self):
-        """Return a sorted list of teacher ids.
-        """
-        return sorted(self, key=lambda x:self[x]["SORTNAME"])
+        return list(self)
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    from utility.db_management import open_database, QSqlQuery, db_key_value_list
+    from core.db_management import db_days_periods, read_pairs
     open_database()
-    tt_periods = db_key_value_list("TT_PERIODS", "N", "TAG", "N")
+
+    tt_days, tt_periods = db_days_periods()
+    print("\nDAYS:", tt_days)
     print("\nPERIODS:", tt_periods)
 
     teachers = Teachers()
-    for tid in teachers.list_teachers():
-        #print(f"  {tid}: {teachers.name(tid)} // {teachers[tid]}")
-        data = []
-        tdata = teachers[tid]
-        for k in ('MINPERDAY', 'MAXGAPSPERDAY', 'MAXGAPSPERWEEK', 'MAXBLOCK'):
-            v = tdata[k]
+    for tid, tiddata in teachers.items():
+        print(f"\n  {tid}: {teachers.name(tid)} // {tiddata}")
+        for k, v in read_pairs(tiddata.tt_data):
             if v:
-                data.append(f"{k}:{v}")
-        days = []
-        for d, v in tdata['AVAILABLE'].items():
-            xv = []
-            for p, q in tt_periods:
-                try:
-                    x = v[q]
-                except KeyError:
-                    x = '+'
-                else:
-                    if x == 'X':
-                        x = '+'
-                    elif x == '+':
-                        x = '*'
-                    elif not x:
-                        x = '-'
-                    else:
-                        print("BAD VALUE:", repr(x))
-                        quit(1)
-                xv.append(x)
-            xvt = "".join(xv)
-            days.append(xvt)
-        data.append(f"AVAILABLE:{'_'.join(days)}")
-        tdtext = '\n'.join(data)
-        #print(f"{tid}:\n{tdtext}")
-        query = QSqlQuery()
-        query.prepare("UPDATE TEACHERS SET TT_DATA = ? WHERE TID = ?")
-        query.addBindValue(tdtext)
-        query.addBindValue(tid)
-        if not query.exec():
-            raise Bug(f"Failed: {query.lastError()}\n *****\n{query.lastQuery()}")
-        #quit(0)
+                print(f"{k}: {v}")

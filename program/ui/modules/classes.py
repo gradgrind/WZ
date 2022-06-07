@@ -1,7 +1,7 @@
 """
 ui/modules/classes.py
 
-Last updated:  2022-04-30
+Last updated:  2022-06-07
 
 Edit classes' data.
 
@@ -24,12 +24,10 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
-#TODO ...
-
 ########################################################################
 
 if __name__ == "__main__":
-    import sys, os, builtins
+    import sys, os
 
     this = sys.path[0]
     appdir = os.path.dirname(os.path.dirname(this))
@@ -37,6 +35,7 @@ if __name__ == "__main__":
     basedir = os.path.dirname(appdir)
     from core.base import start
     from ui.ui_base import StandalonePage as Page
+
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
@@ -74,9 +73,7 @@ from ui.ui_base import (
 from ui.editable import EdiTableWidget
 
 # Class table fields
-CLASS_COLS = [
-    (f, T[f]) for f in ("CLASS", "NAME", "CLASSROOM", "TT_DATA")
-]
+CLASS_COLS = [(f, T[f]) for f in ("CLASS", "NAME", "CLASSROOM", "TT_DATA")]
 
 from timetable.constraints_class import CONSTRAINT_FIELDS, period_validator
 
@@ -103,7 +100,7 @@ class Classes(Page):
         self.class_editor.init_data()
 
     def is_modified(self):
-        return bool(self.class_editor.form_change_set)
+        return self.class_editor.modified()
 
 
 # ++++++++++++++ The widget implementation ++++++++++++++
@@ -174,6 +171,7 @@ class ClassEditor(QSplitter):
         self.setStretchFactor(0, 1)  # stretch only left panel
 
     def modified(self):
+        # print("???", self.form_change_set)
         return bool(self.form_change_set)
 
     def clear_modified(self):
@@ -324,6 +322,7 @@ class ClassEditor(QSplitter):
                 val = self.editors[f].text()
                 model.setData(model.index(row, col), val)
         if model.submitAll():
+            self.clear_modified()
             # The selection is lost – the changed row may even be in a
             # different place, perhaps not even displayed.
             # Try to stay with the same id, if it is displayed,

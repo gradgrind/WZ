@@ -171,6 +171,7 @@ ui.modules.course_lessons: {
 timetable.courses: {
     INVALID_NON_LESSON_RECORD: "Fehlerhafte Zeile in LESSONS-Tabelle, TIME-Feld leer, aber LENGTH nicht '--'.\n  id: "
     NO_CLASSROOM:           "Diese Klasse hat keinen Klassenraum ($): "
+    BAD_TIME_FIELD: "Ungültiges Zeit-Feld (TIME) in LESSONS-Tabelle, id={id}: {time}"
 }
 
 timetable.constraints_teacher: {

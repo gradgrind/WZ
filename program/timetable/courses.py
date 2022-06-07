@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-06-06
+Last updated:  2022-06-07
 
 Access course/subject/lesson data for timetable.
 
@@ -153,19 +153,29 @@ class TimetableData:
 
                 print(" ++", id, course, length, room, time)
 
+                coursedata = course2data[course] if course else None
+
                 if time[0] == "@":
                     # This is something to be placed in the timetable
                     unit_id = len(unit_times)
                     u = self.timeslot_index(time)
                     unit_times.append(u)
-                    coursedata = course2data[course] if course else None
                     unit_data.append(
                         self.get_unit_data(coursedata, length, room, place)
                     )
-                continue
 
+                elif time[0] == ">":
+                    pass
+#TODO
+                elif time[0] == "=":
+                    pass
+#TODO
+                else:
+                    SHOW_ERROR(T["BAD_TIME_FIELD"].format(id=id, time=f"'{time}'"))
+                    continue
+
+#                continue
 #??
-                coursedata = course2data[course] if course else None
                 lessondata = LessonData(
                     id=id,
                     course=coursedata,
@@ -176,10 +186,11 @@ class TimetableData:
                     notes=notes
                 )
                 lessons.append(lessondata)
-                try:
-                    class2lessons[coursedata.klass].append(id)
-                except KeyError:
-                    class2lessons[coursedata.klass] = [id]
+                if coursedata:
+                    try:
+                        class2lessons[coursedata.klass].append(id)
+                    except KeyError:
+                        class2lessons[coursedata.klass] = [id]
 
             else:
                 print(" --", id, course, length, room, time)
@@ -214,6 +225,7 @@ class TimetableData:
 # Check tid validity?
             group = get_group(course.klass, course.group)
             return (link, tidlist, group, roomlist)
+#TODO
 # ...else:
 
     def get_classroom(self, klass):

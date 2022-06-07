@@ -1,7 +1,7 @@
 """
 ui/modules/teachers.py
 
-Last updated:  2022-04-24
+Last updated:  2022-06-07
 
 Edit teachers' data.
 
@@ -101,7 +101,7 @@ class Teachers(Page):
         self.teacher_editor.init_data()
 
     def is_modified(self):
-        return bool(self.teacher_editor.form_change_set)
+        return self.teacher_editor.modified()
 
 
 # ++++++++++++++ The widget implementation ++++++++++++++
@@ -172,7 +172,7 @@ class TeacherEditor(QSplitter):
         self.setStretchFactor(0, 1)  # stretch only left panel
 
     def modified(self):
-        #return self.form_change_set
+        #print("???", self.form_change_set)
         return bool(self.form_change_set)
 
     def clear_modified(self):
@@ -325,6 +325,7 @@ class TeacherEditor(QSplitter):
                 val = self.editors[f].text()
                 model.setData(model.index(row, col), val)
         if model.submitAll():
+            self.clear_modified()
             # The selection is lost – the changed row may even be in a
             # different place, perhaps not even displayed.
             # Try to stay with the same id, if it is displayed,
