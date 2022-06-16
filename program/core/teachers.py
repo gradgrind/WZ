@@ -1,5 +1,5 @@
 """
-core/teachers.py - last updated 2022-06-07
+core/teachers.py - last updated 2022-06-16
 
 Manage teacher data.
 
@@ -64,7 +64,8 @@ class TeacherError(Exception):
 
 class TeacherData(NamedTuple):
     tid: str
-    name: str
+    firstname: str
+    lastname: str
     signed: str
     sortname: str
     tt_data: str
@@ -79,25 +80,23 @@ class Teachers(dict):
     def __init__(self):
         super().__init__()
 #?        open_database()
-        teachers = []
-        for tid, name, signed, sortname, tt_data in db_read_fields(
+        for tid, firstname, lastname, signed, sortname, tt_data in db_read_fields(
             "TEACHERS",
-            ("TID", "NAME", "SIGNED", "SORTNAME", "TT_DATA")
+            ("TID", "FIRSTNAMES", "LASTNAMES", "SIGNED", "SORTNAME", "TT_DATA"),
+            sort_field="SORTNAME"
         ):
-            teachers.append(
-                TeacherData(
-                    tid=tid,
-                    name=name,
-                    signed=signed,
-                    sortname=sortname,
-                    tt_data=tt_data
-                )
+            self[tid] = TeacherData(
+                tid=tid,
+                firstname=firstname,
+                lastname=lastname,
+                signed=signed,
+                sortname=sortname,
+                tt_data=tt_data
             )
-        for tdata in sorted(teachers, key=lambda x: x.sortname):
-            self[tdata.tid] = tdata
 
     def name(self, tid):
-        return self[tid].name
+        data = self[tid]
+        return f"{data.firstname} {data.lastname}"
 
     #deprecated?
     def list_teachers(self):

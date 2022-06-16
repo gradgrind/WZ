@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-06-05
+Last updated:  2022-06-16
 
 Edit course and lesson data.
 
@@ -54,6 +54,8 @@ from core.db_management import (
     db_delete_rows,
     db_values,
 )
+from core.teachers import Teachers
+from core.classes import Classes
 
 from ui.ui_base import (
     HLine,
@@ -324,7 +326,7 @@ class CourseEditor(QSplitter):
         for f, t in COURSE_COLS:
             i = self.coursemodel.fieldIndex(f)
             if f == "CLASS":
-                kv = db_key_value_list("CLASSES", "CLASS", "NAME", "CLASS")
+                kv = Classes().get_class_list(skip_null=False)
                 self.filter_list[f] = kv
                 # delegate = ForeignKeyItemDelegate(kv, parent=self.coursemodel)
                 # self.coursetable.setItemDelegateForColumn(i, delegate)
@@ -334,7 +336,8 @@ class CourseEditor(QSplitter):
                 delegate = ForeignKeyItemDelegate(kv, parent=self.coursemodel)
                 self.coursetable.setItemDelegateForColumn(i, delegate)
             elif f == "TEACHER":
-                kv = db_key_value_list("TEACHERS", "TID", "NAME", "SORTNAME")
+                teachers = Teachers()
+                kv = [(tid, teachers.name(tid)) for tid, tiddata in teachers.items()]
                 self.filter_list[f] = kv
                 delegate = ForeignKeyItemDelegate(kv, parent=self.coursemodel)
                 self.coursetable.setItemDelegateForColumn(i, delegate)

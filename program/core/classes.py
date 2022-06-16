@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-06-07
+core/classes.py - last updated 2022-06-16
 
 Manage class data.
 
@@ -59,64 +59,54 @@ class ClassData(NamedTuple):
     tt_data: str
 
 
-def get_classes_data():
-    # ?    open_database()
-    classes = []
-    for klass, name, divisions, classroom, tt_data in db_read_fields(
-        "CLASSES", ("CLASS", "NAME", "DIVISIONS", "CLASSROOM", "TT_DATA")
-    ):
-        # Parse groups
-        divlist = []
-        if divisions:
-            for div in divisions.split("|"):
-                # print("???", klass, repr(div))
-                groups = div.split()
-                if groups:
-                    divlist.append(groups)
-                else:
-                    SHOW_ERROR(T["INVALID_GROUP_FIELD"].format(klass=klass))
-        classes.append(
-            (
-                klass,
-                ClassData(
-                    klass=klass,
-                    name=name,
-                    divisions=divlist,
-                    classroom=classroom,
-                    tt_data=tt_data,
-                ),
+class Classes(dict):
+    def __init__(self):
+        super().__init__()
+        # ?    open_database()
+        for klass, name, divisions, classroom, tt_data in db_read_fields(
+            "CLASSES",
+            ("CLASS", "NAME", "DIVISIONS", "CLASSROOM", "TT_DATA"),
+            sort_field="CLASS"
+        ):
+            # Parse groups
+            divlist = []
+            if divisions:
+                for div in divisions.split("|"):
+                    # print("???", klass, repr(div))
+                    groups = div.split()
+                    if groups:
+                        divlist.append(groups)
+                    else:
+                        SHOW_ERROR(T["INVALID_GROUP_FIELD"].format(klass=klass))
+            self[klass] = ClassData(
+                klass=klass,
+                name=name,
+                divisions=divlist,
+                classroom=classroom,
+                tt_data=tt_data,
             )
-        )
-    return dict(sorted(classes))
 
+    def get_class_list(self, skip_null=True):
+        classes = []
+        for k, data in self.items():
+            if k == "--" and skip_null:
+                continue
+            classes.append((k, data.name))
+        return classes
 
-def get_class_list(skip_null=True):
-    # ?    open_database()
-    classes = []
-    for k, v in db_key_value_list("CLASSES", "CLASS", "NAME", "CLASS"):
-        if k == "--" and skip_null:
-            continue
-        classes.append((k, v))
-    return classes
-
-
-def get_classroom(klass):
-    # ?    open_database()
-    vlist = db_values("CLASSES", "CLASSROOM", CLASS=klass)
-    if len(vlist) != 1:
-        raise Bug(f"Single entry expected, not {repr(vlist)}")
-    return vlist[0]
+    def get_classroom(self, klass):
+        return self[klass].classroom
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
     open_database()
-    _classes = get_classes_data()
+    _classes = Classes()
     for cdata in _classes.values():
         print("\n", cdata)
 
     print("\n -------------------------------\n")
 
-    for k, v in get_class_list(False):
-        print(f" ::: {k:6}: {v} // {get_classroom(k)}")
+    for k, v in _classes.get_class_list(False):
+        print(f" ::: {k:6}: {v} // {_classes.get_classroom(k)}")
