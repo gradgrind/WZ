@@ -1,7 +1,7 @@
 """
-timetable/asc_data.py - last updated 2022-06-16
+timetable/asc_data.py - last updated 2022-06-17
 
-*** Largely old code from February ... it should be adapted to use the sqlite db data.
+*** Largely old code from February ... adapting to use the sqlite db data.
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -41,8 +41,6 @@ _NO_JOINT_ROOMS = (
 _LESSON_NO_GROUP = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Gruppe"
 _LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Lehrer"
 
-WHOLE_CLASS = "alle"  # name for a "group" comprising the whole class
-
 ########################################################################
 
 import sys, os, re, json
@@ -68,10 +66,13 @@ if __name__ == "__main__":
 # for a subject. If there is more than one entry for this subject and
 # varying durations, the placement could be affected.
 
+T = TRANSLATIONS("timetable.asc_data")
+
 ### +++++
 
 import xmltodict
-from core.db_management import open_database, db_read_fields
+
+from core.db_management import open_database, db_read_fields, db_key_value_list
 from core.classes import Classes
 from core.teachers import Teachers
 
@@ -95,17 +96,55 @@ def idsub(tag):
     """
     return re.sub("[^-_A-Za-z0-9]", "_", tag)
 
+SHARED_DATA = {}
+
 ### -----
 
 
-def get_periods():
-    """Return an ordered list of aSc elements for the periods."""
+def get_days_aSc() -> list[dict]:
+    """Return an ordered list of aSc elements for the days.
+    This data is cached, so subsequent calls get the same data.
+    """
+    try:
+        return SHARED_DATA["DAYS"]
+    except KeyError:
+        pass
+    vlist = db_read_fields(
+        "TT_DAYS",
+        ("N", "TAG", "NAME"),
+        sort_field="N"
+    )
+    nd = len(vlist)
+    i = int(10**nd)
+    dlist = []
+    for n, tag, name in vlist:
+        i //= 10
+        dlist.append(
+            {
+                "@id": str(n),
+                "@name": name,
+                "@short": tag,
+                "@days": f"{i:0{nd}d}"
+            }
+        )
+    SHARED_DATA["DAYS"] = dlist
+    return dlist
+
+
+def get_periods_aSc() -> list[dict]:
+    """Return an ordered list of aSc elements for the periods.
+    This data is cached, so subsequent calls get the same data.
+    """
+    try:
+        return SHARED_DATA["PERIODS"]
+    except KeyError:
+        pass
     vlist = db_read_fields(
         "TT_PERIODS",
         ("N", "TAG", "NAME", "START_TIME", "END_TIME"),
         sort_field="N"
     )
-    return [
+    plist = [
         {
             "@short": tag,
             "@name": name,
@@ -115,29 +154,203 @@ def get_periods():
         }
         for n, tag, name, stime, etime in vlist
     ]
+    SHARED_DATA["PERIODS"] = plist
+    return plist
 
 
-#
-#    def get_id(self, key):
-#        return self[key]['period']
+def get_classes() -> Classes:
+    """Return the data for all classes as a <Classes> instance (dict).
+    This data is cached, so subsequent calls get the same instance.
+    """
+    try:
+        return SHARED_DATA["CLASSES"]
+    except KeyError:
+        pass
+    classes = Classes()
+    SHARED_DATA["CLASSES"] = classes
+    return classes
 
-###
+
+def get_teachers() -> Teachers:
+    """Return the data for all teachers as a <Teachers> instance (dict).
+    This data is cached, so subsequent calls get the same instance.
+    """
+    try:
+        return SHARED_DATA["TEACHERS"]
+    except KeyError:
+        pass
+    teachers = Teachers()
+    SHARED_DATA["TEACHERS"] = teachers
+    return teachers
+
+
+def class_days_aSc(klass: str) -> str:
+    """Return a "timeoff" entry for the given class."""
+    cdata = get_classes()[klass]
+    try:
+        day_periods = cdata.tt_data["AVAILABLE"].split("_")
+    except KeyError:
+        day_periods = ""
+    weektags = []
+    nperiods = len(get_periods_aSc())
+    for d in range(len(get_days_aSc())):
+        default = "1"
+        try:
+            ddata = day_periods[d]
+        except IndexError:
+            ddata = ""
+        daytags = []
+        for p in range(nperiods):
+            try:
+                px = "0" if ddata[p] == "-" else "1"
+                default = px
+            except IndexError:
+                px = default
+            daytags.append(px)
+        weektags.append("." + "".join(daytags))
+    return ",".join(weektags)
+
+
+def teacher_days_aSc(tid: str) -> str:
+    """Return a "timeoff" entry for the given teacher."""
+    tdata = get_teachers()[tid]
+    try:
+        day_periods = tdata.tt_data["AVAILABLE"].split("_")
+    except KeyError:
+        day_periods = ""
+    weektags = []
+    nperiods = len(get_periods_aSc())
+    for d in range(len(get_days_aSc())):
+        default = "1"
+        try:
+            ddata = day_periods[d]
+        except IndexError:
+            ddata = ""
+        daytags = []
+        for p in range(nperiods):
+            try:
+                px = "0" if ddata[p] == "-" else "1"
+                default = px
+            except IndexError:
+                px = default
+            daytags.append(px)
+        weektags.append("." + "".join(daytags))
+    return ",".join(weektags)
+
+
+def get_rooms():
+    """Return an ordered mapping of rooms: {rid -> name}.
+    This data is cached, so subsequent calls get the same instance.
+    """
+    try:
+        return SHARED_DATA["ROOMS"]
+    except KeyError:
+        pass
+    rooms = dict(db_key_value_list(
+            "TT_ROOMS",
+            "RID",
+            "NAME",
+            sort_field="RID"
+        )
+    )
+    SHARED_DATA["ROOMS"] = rooms
+    return rooms
+
+
+def get_rooms_aSc() -> list[dict]:
+    """Return an ordered list of aSc elements for the rooms."""
+    return [
+        {"@id": idsub(rid), "@short": rid, "@name": name}
+        for rid, name in get_rooms().items()
+    ]
+
+
+def get_subjects():
+    """Return an ordered mapping of subjects: {sid -> name}.
+    This data is cached, so subsequent calls get the same instance.
+    """
+    try:
+        return SHARED_DATA["SUBJECTS"]
+    except KeyError:
+        pass
+    subjects = dict(db_key_value_list(
+            "SUBJECTS",
+            "SID",
+            "NAME",
+            sort_field="NAME"
+        )
+    )
+    SHARED_DATA["SUBJECTS"] = subjects
+    return subjects
+
+
+def get_subjects_aSc() -> list[dict]:
+    """Return an ordered list of aSc elements for the subjects."""
+    return [
+        {"@id": idsub(sid), "@short": sid, "@name": name}
+        for sid, name in get_subjects().items()
+    ]
+
+
+def get_classes_aSc():
+    """Return an ordered list of aSc elements for the classes."""
+    classes = []
+    for klass, cdata in get_classes().items():
+        if klass.startswith("XX"):
+            continue
+        classes.append(
+            {
+                "@id": idsub(klass),
+                "@short": klass,
+                "@name": cdata.name,
+                "@classroomids": cdata.classroom,
+                "@timeoff": class_days_aSc(klass)
+            }
+        )
+    return classes
+
+
+def get_groups_aSc():
+    """Return an ordered list of aSc elements for the groups within the classes."""
+    def parse_groups(divisions: list[list[str]]):
+        groups = [T["WHOLE_CLASS"]]
+
+    group_list = []
+    for klass, cdata in get_classes().items():
+        if klass.startswith("XX"):
+            continue
+        g = T["WHOLE_CLASS"]
+        group_list.append(
+            {
+                "@id": idsub(f"{klass}-{g}"),
+                "@classid": klass,
+                "@name": g,
+                "@entireclass": "1",
+                "@divisiontag": "0",
+            }
+        )
+#TODO: sort out the divisions ...
+
+    return group_list
+
+
+    classes = []
+    groups = []
+    for klass in c_list:
+        if klass.startswith("XX"):
+            continue
+        classes.append(_classes.class_data(klass))
+        groups += _classes.groups(klass)
+    if __TEST:
+        print("\n ********** aSc DATA **********")
+        print("\n  aSc-CLASSES:", classes)
+        print("\n  aSc-GROUPS:", groups)
+
+
+
 
 
 class Classes_aSc(Classes):
-    def class_days(self, klass):
-        """Return a "timeoff" entry for the given class."""
-        daymap = self.class_days_periods[klass]
-        weektags = []
-        for day in self.days:
-            dayperiods = daymap[day]
-            daytags = []
-            for p in self.periods:
-                daytags.append("1" if dayperiods[p] else "0")
-            weektags.append("." + "".join(daytags))
-        return ",".join(weektags)
-
-    #
     def groups(self, klass):
         """Return a list of aSc group definitions for the given class."""
         group_list = []
@@ -159,15 +372,6 @@ class Classes_aSc(Classes):
         return group_list
 
     #
-    def class_data(self, klass):
-        """Return the aSc record for the given class."""
-        return {
-            "@id": klass,
-            "@short": klass,
-            "@name": self.class_name[klass],
-            "@classroomids": ",".join(self.classrooms[klass]),
-            "@timeoff": self.class_days(klass),
-        }
 
     #
     def get_lessons(self, rooms):
@@ -286,73 +490,6 @@ class Classes_aSc(Classes):
                     lesson_list.append(lesson)
         return lesson_list
 
-
-##########
-
-
-class Teachers_aSc(Teachers):
-    def get_blocked_periods(self, tid):
-        """Return the blocked periods in the form needed by aSc."""
-        dlist = self.blocked_periods.get(tid)
-        if not dlist:
-            return ""
-        week_list = []
-        for pblist in dlist:
-            blist = ["."] + [self.NO if b else self.YES for b in pblist]
-            week_list.append("".join(blist))
-        return ",".join(week_list)
-
-    #
-    def get_teachers(self, timetable_teachers):
-        return [
-            {
-                "@id": tid,
-                "@short": tid,
-                "@name": name,
-                "@timeoff": self.get_blocked_periods(tid),
-            }
-            for tid, name in self.items()
-            if tid in timetable_teachers
-        ]
-
-
-###
-
-"""
-class Rooms_aSc(Rooms):
-    def get_rooms(self):
-        return [
-            {"@id": rid, "@short": rid, "@name": name}
-            for rid, name in self.items()
-        ]
-
-
-###
-
-
-class Subjects_aSc(TT_Subjects):
-    def get_subjects(self):
-        sbj_list = []
-        sbj_tag = {}
-        for sid, name in self.items():
-            _sid = idsub(sid)
-            try:
-                sid0 = sbj_tag[_sid]
-            except:
-                sbj_tag[_sid] = sid
-                sbj_list.append({"@id": _sid, "@short": sid, "@name": name})
-            else:
-                raise TT_Error(
-                    _DUPLICATE_TAG.format(
-                        tag=_sid,
-                        key=self.tfield["SID"],
-                        source1=sid0,
-                        source2=sid,
-                    )
-                )
-        return sbj_list
-
-"""
 
 ########################################################################
 
@@ -559,12 +696,58 @@ if __name__ == "__main__":
             return files[0]
         return None
 
-    periods = get_periods()
+    days = get_days_aSc()
+    if __TEST:
+        print("\n*** DAYS ***")
+        for d in days:
+            print(f"   {d}")
+        print("\n  ==================================================")
+
+    periods = get_periods_aSc()
     if __TEST:
         print("\n*** PERIODS ***")
         for p in periods:
             print(f"   {p}")
         print("\n  ==================================================")
+
+    if __TEST:
+        _class = "10G"
+        class_timeout = class_days_aSc(_class)
+        print(f"\n*** CLASS AVAILABILITY: {_class} ***")
+        print(f"   {class_timeout}")
+        print("\n  ==================================================")
+
+    if __TEST:
+        _tid = "VT"
+        teacher_timeout = teacher_days_aSc(_tid)
+        print(f"\n*** TEACHER AVAILABILITY: {_tid} ***")
+        print(f"   {teacher_timeout}")
+        print("\n  ==================================================")
+
+    allrooms = get_rooms()
+    if __TEST:
+        print("\n*** ROOMS ***")
+        for rdata in get_rooms_aSc():
+            print("   ", rdata)
+        print("\n  ==================================================")
+
+    allsubjects = get_subjects()
+    if __TEST:
+        print("\n*** SUBJECTS ***")
+        for sdata in get_subjects_aSc():
+            print("   ", sdata)
+
+    if __TEST:
+        print("\n*** CLASSES ***")
+        for cdata in get_classes_aSc():
+            print("   ", cdata)
+
+    groups = get_groups_aSc()
+    if __TEST:
+        print("\n*** CLASS-GROUPS ***")
+        for gdata in groups:
+            print("   ", gdata)
+
 
     quit(0)
 

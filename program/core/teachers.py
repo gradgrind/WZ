@@ -1,5 +1,5 @@
 """
-core/teachers.py - last updated 2022-06-16
+core/teachers.py - last updated 2022-06-17
 
 Manage teacher data.
 
@@ -18,15 +18,7 @@ Copyright 2022 Michael Towers
    See the License for the specific language governing permissions and
    limitations under the License.
 =-LICENCE=================================
-
-The teachers' data is supplied in individual "DataTables".
-In this module there is support for reading these tables.
 """
-
-### Messages
-_FILTER_ERROR = "Lehrerdaten-Fehler: {msg}"
-_DOUBLE_TID = "Lehrerdaten-Fehler: Kürzel {tid} doppelt vorhanden"
-_TEACHER_INVALID = "Lehrerkürzel „{tid}“ ist ungültig, in\n  {path}"
 
 ###############################################################
 
@@ -54,6 +46,7 @@ from typing import NamedTuple
 from core.db_management import (
     open_database,
     db_read_fields,
+    read_pairs
 )
 
 #?
@@ -91,7 +84,7 @@ class Teachers(dict):
                 lastname=lastname,
                 signed=signed,
                 sortname=sortname,
-                tt_data=tt_data
+                tt_data=dict(read_pairs(tt_data))
             )
 
     def name(self, tid):
@@ -106,7 +99,7 @@ class Teachers(dict):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    from core.db_management import db_days_periods, read_pairs
+    from core.db_management import db_days_periods
     open_database()
 
     tt_days, tt_periods = db_days_periods()
@@ -116,6 +109,3 @@ if __name__ == "__main__":
     teachers = Teachers()
     for tid, tiddata in teachers.items():
         print(f"\n  {tid}: {teachers.name(tid)} // {tiddata}")
-        for k, v in read_pairs(tiddata.tt_data):
-            if v:
-                print(f"{k}: {v}")

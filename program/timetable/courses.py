@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-06-07
+Last updated:  2022-06-17
 
 Access course/subject/lesson data for timetable.
 
@@ -43,7 +43,7 @@ T = TRANSLATIONS("timetable.courses")
 from typing import NamedTuple, Optional
 
 from core.db_management import open_database, db_days_periods, db_read_fields
-from core.classes import get_classes_data
+from core.classes import Classes, build_group_data
 
 ### -----
 
@@ -108,13 +108,13 @@ class TimetableData:
 
     def __init__(self):
         self.DAYS, self.PERIODS = db_days_periods()
-        self.CLASSES = get_classes_data()
+        self.CLASSES = Classes()
 #TODO: Read other tables?
 
         self.class2groups = {}
         self.class2atoms = {}
         for klass, data in self.CLASSES.items():
-            print("\n %%", klass)
+            #print("\n %%", klass)
             self.class2groups, self.class2atoms = build_group_data(data.divisions)
 
     #TODO
@@ -246,81 +246,15 @@ def get_rooms(roomlist:str, classroom: str) -> list[str]:
             rlist.append(r)
     return rlist
 
+
 def get_group(klass:str, group:str):
-# check validity?
+#TODO: check validity?
     return (klass, group)
-
-
-def build_group_data(divisions):
-    """Process a class's group (GRP) field to get a list of groups and
-    minimal subgroups.
-    Return (groups, minimal subgroups)
-    """
-    groups = set()
-    impossible_partners = {}
-    # Collect groups and build map giving all groups which are
-    # incompatible with each group
-    for div in divisions:
-        for g in div:
-            groups.add(g)
-            snew = set(div) - {g}
-            try:
-                impossible_partners[g] |= snew
-            except KeyError:
-                impossible_partners[g] = snew
-    # Collect minimal subgroups
-    cross_terms = [set()]
-    for div in divisions:
-        __cross_terms = []
-        for g in div:
-            for ct in cross_terms:
-                if g in ct:
-                    __cross_terms.append(ct)
-                elif not (ct & impossible_partners[g]):
-                    gg = set(g.split("."))
-                    if len(gg) > 1:
-                        for gx in gg:
-                            try:
-                                nopairx = impossible_partners[gx]
-                            except KeyError:
-                                continue
-                            if (ct & nopairx):
-                                break
-                        else:
-                            __cross_terms.append(ct | gg)
-                    else:
-                        __cross_terms.append(ct | gg)
-        cross_terms = __cross_terms
-        #print("\n???", cross_terms)
-    #print("\nXXX", impossible_partners)
-    #print("\n§GROUPS:", sorted(groups))
-    #print("\n§XTERMS:", cross_terms)
-    return sorted(groups), [frozenset(ct) for ct in cross_terms]
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-
-    """
-    build_group_data([("A", "B"), ("G", "R"), ("A", "X", "Y")])
-    print("\n  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    build_group_data([("A", "B"), ("G", "R"), ("A", "B.G", "B.R")])
-    print("\n  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    build_group_data([("A", "B.G", "B.R"), ("G", "R"), ("A", "B")])
-    print("\n  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    """
-    #_divs = [("A", "B"), ("G", "R"), ("A", "X", "Y")]
-    #_divs = [("A", "B"), ("G", "R"), ("A", "B.G", "B.R")]
-    #_divs = [("A", "B.G", "B.R"), ("G", "R"), ("A", "B")]
-    _divs = [("G", "R"), ("A", "B.G", "B.R"), ("A", "B"), ("I", "II", "III")]
-    print("\nGROUP DIVISIONS:", _divs, "->")
-    groups, minsubgroups = build_group_data(_divs)
-    print("\n ... Groups:", groups)
-    print("\n ... Atoms:", minsubgroups)
-
-    #quit(0)
-
     open_database()
 
     ttdata = TimetableData()
