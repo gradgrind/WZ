@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-06-17
+timetable/asc_data.py - last updated 2022-06-18
 
 *** Largely old code from February ... adapting to use the sqlite db data.
 
@@ -73,7 +73,7 @@ T = TRANSLATIONS("timetable.asc_data")
 import xmltodict
 
 from core.db_management import open_database, db_read_fields, db_key_value_list
-from core.classes import Classes
+from core.classes import Classes, build_group_data
 from core.teachers import Teachers
 
 
@@ -316,6 +316,8 @@ def get_groups_aSc():
         groups = [T["WHOLE_CLASS"]]
 
     group_list = []
+    group_info = {}
+    SHARED_DATA["GROUP_INFO"] = group_info
     for klass, cdata in get_classes().items():
         if klass.startswith("XX"):
             continue
@@ -329,8 +331,23 @@ def get_groups_aSc():
                 "@divisiontag": "0",
             }
         )
-#TODO: sort out the divisions ...
-
+        # Sort out the divisions ...
+        __group_info = build_group_data(cdata.divisions)
+        group_info[klass] = __group_info
+        divisions = __group_info["INDEPENDENT_DIVISIONS"]
+        dix = 0
+        for div in divisions:
+            dix += 1
+            for grp in div:
+                group_list.append(
+                    {
+                        "@id": idsub(f"{klass}-{grp}"),
+                        "@classid": klass,
+                        "@name": grp,
+                        "@entireclass": "0",
+                        "@divisiontag": str(dix),
+                    }
+                )
     return group_list
 
 

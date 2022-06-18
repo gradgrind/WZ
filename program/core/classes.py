@@ -98,95 +98,19 @@ class Classes(dict):
 
 
 def build_group_data(divisions):
-    """Process a class's group (GRP) field to get a list of groups and
-    minimal subgroups.
-    Return (groups, minimal subgroups)
-    """
-    groups = set()
-    impossible_partners = {}    # {group -> {incompatible groups}}
-    # Collect groups and build map (<impossible_partners>) giving all
-    # other groups which are incompatible with each group in a "dot-join".
-    for div in divisions:
-        for g in div:
-            groups.add(g)
-            snew = set(div) - {g}
-            try:
-                impossible_partners[g] |= snew
-            except KeyError:
-                impossible_partners[g] = snew
-    # Collect minimal subgroups
-    cross_terms = [set()]
-    for div in divisions:
-        __cross_terms = []
-        for g in div:
-            for ct in cross_terms:
-                if g in ct:
-                    __cross_terms.append(ct)
-                elif not (ct & impossible_partners[g]):
-                    gg = set(g.split("."))
-                    if len(gg) > 1:
-                        for gx in gg:
-                            try:
-                                nopairx = impossible_partners[gx]
-                            except KeyError:
-                                continue
-                            if (ct & nopairx):
-                                break
-                        else:
-                            __cross_terms.append(ct | gg)
-                    else:
-                        __cross_terms.append(ct | gg)
-        cross_terms = __cross_terms
-        #print("\n???", cross_terms)
-    print("\nXXX", impossible_partners)
-    print("\n§GROUPS:", sorted(groups))
-    print("\n§XTERMS:", cross_terms)
-
-    print("§§§§§§§§§§§§§§§§§§§§§§§§§")
-    all_groups = {}
-    ndiv = 0
-    divsets = []
-    for div in divisions:
-
-        divset = set(div)
-        for si in divsets:
-            isect = si & divset
-            if isect:
-                print("???", si, divset)
-
-        for g in div:
-            try:
-                all_groups[g].append(ndiv)
-            except KeyError:
-                all_groups[g] = [ndiv]
-                continue
-
-
-        divsets.append(divset)
-        ndiv += 1
-    print("§§§§§§§§§§§§§§§§§§§§§§§§§")
-
-    return sorted(groups), [frozenset(ct) for ct in cross_terms]
-
-# It looks like the following might work:
-# Handle divisions pairwise. produce the cross-terms as above. If fewer
-# than the "expected" number (n*m if the first division has n elements
-# the second m elements) of cross-terms are produced, the groups must
-# be combined. Otherwise they are independent.
-# Each additional division is compared thus with all previous ones
-# (independent or combined).
-# Q: What happens if there are two independent divisions, then comes a
-# third which has common elements with both?
-# A: It seems that impossible combinations are eliminated, so the result
-# is useable ...
-
-def build_group_data(divisions):
     """Process the class divisions to get a list of groups,
     minimal subgroups, independent divisions, group mapping appropriate
     to the independent divisions.
     Return the results as a <dict>.
-    All groups are handled as <frozensets>.
+    Internally groups are handled as <frozensets>, but the results use
+    dotted strings.
     """
+    def group2string(group):
+        return ".".join(sorted(group))
+
+    def groups2stringlist(groups):
+        return sorted([group2string(g) for g in groups])
+
     results = {}
     groups = set()
     impossible_partners = {}    # {group -> {incompatible groups}}
@@ -296,13 +220,22 @@ def build_group_data(divisions):
                 gmap[g] = ll
         __independent_divs.append([gmod.get(g) or g for g in d])
         #print(" +++", __independent_divs)
+    idivs = [
+        groups2stringlist(groups)
+        for groups in __independent_divs
+    ]
+    idivs.sort()
+    gmapl = [
+        (group2string(g), groups2stringlist(groups))
+        for g, groups in gmap.items()
+    ]
+    gmapl.sort()
     return {
-        "INDEPENDET_DIVISIONS": __independent_divs,
-        "GROUP_MAP": gmap,
+        "INDEPENDENT_DIVISIONS": idivs,
+        "GROUP_MAP": dict(gmapl),
         "GROUPS": groups,
         "MINIMAL_SUBGROUPS": cross_terms
     }
-
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -338,15 +271,15 @@ if __name__ == "__main__":
     print("\nGROUP DIVISIONS:", _divs, "->")
     res = build_group_data(_divs)
     print("\n ... Independent divisions:")
-    for d in res["INDEPENDET_DIVISIONS"]:
-        print("   ...", print_grouplist(d))
+    for d in res["INDEPENDENT_DIVISIONS"]:
+        print("  ", d)
     print("\n ... Group-map:")
     for g, l in res["GROUP_MAP"].items():
         print(f'  {str(g):20}: {l}')
     print("\n ... Groups:", print_grouplist(res["GROUPS"]))
     print("\n ... Atoms:", print_grouplist(res["MINIMAL_SUBGROUPS"]))
 
-    #quit(0)
+    quit(0)
 
     print("\n -------------------------------\n")
     print("CLASS DATA:")
