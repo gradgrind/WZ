@@ -180,10 +180,14 @@ def build_group_data(divisions):
 # A: It seems that impossible combinations are eliminated, so the result
 # is useable ...
 
-def build_group_data2(divisions):
-    """Process the class divisions to get a list of minimal subgroups.
-    Return (groups, minimal subgroups)
+def build_group_data(divisions):
+    """Process the class divisions to get a list of groups,
+    minimal subgroups, independent divisions, group mapping appropriate
+    to the independent divisions.
+    Return the results as a <dict>.
+    All groups are handled as <frozensets>.
     """
+    results = {}
     groups = set()
     impossible_partners = {}    # {group -> {incompatible groups}}
     # Collect groups and build map (<impossible_partners>) giving all
@@ -213,7 +217,6 @@ def build_group_data2(divisions):
     while divsets:
         this_div = divsets.pop()
         independent = True
-        __divsets = []      # for rebuilding division list
         for i in range(len(divsets)):
             idiv = divsets[i]
             cross_set = set()
@@ -260,18 +263,46 @@ def build_group_data2(divisions):
                 __cross_terms.append(ct | g)
         cross_terms = __cross_terms
         #print("\n???", cross_terms)
-    print("\nXXX", impossible_partners)
+    #print("\nXXX", impossible_partners)
 
-    print("\n§§ independent_divs:")
+    # Simplify the division elements ...
+    #print("\n§§ independent_divs:")
+    __independent_divs = []
+    gmap = {}
     for d in independent_divs:
-        print("  ...", print_grouplist(d))
+        #print("  ...", print_grouplist(d))
+        __gmap = {}
+        gmod = {}
+        for g in groups:
+            glist = []
+            for gd in d:
+                if g == gd:
+                    #print("?????==", ".".join(sorted(g)))
+                    __gmap[g] = [g]
+                    glist.clear()
+                    break
+                elif g < gd:
+                    glist.append(gd)
+            if glist:
+                if len(glist) == 1:
+                    #print("????!!", g, glist)
+                    gmod[glist[0]] = g
+                __gmap[g] = glist
+        if __gmap:
+            #print("?????", d, "-->", __gmap)
+            for g, l in __gmap.items():
+                ll = [gmod.get(gx) or gx for gx in l]
+                #print("????XX", g, "->", ll, "<<", l, ">>")
+                gmap[g] = ll
+        __independent_divs.append([gmod.get(g) or g for g in d])
+        #print(" +++", __independent_divs)
+    return {
+        "INDEPENDET_DIVISIONS": __independent_divs,
+        "GROUP_MAP": gmap,
+        "GROUPS": groups,
+        "MINIMAL_SUBGROUPS": cross_terms
+    }
 
-    return groups, cross_terms
-
-
-def print_grouplist(groups):
-    glist = [".".join(sorted(g)) for g in groups]
-    return "[" + ", ".join(sorted(glist)) + "]"
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -299,19 +330,23 @@ if __name__ == "__main__":
     #_divs = [("A", "B", "C"), ("A", "X", "Y", "Z")]
     #_divs = [("G", "R"), ("A", "B.G", "B.R"), ("A", "B"), ("I", "II", "III")]
     _divs = [("G", "R"), ("A", "B.G", "R"), ("A", "B"), ("I", "II", "III")]
-    # What about specifying subgroups? e.g. B.G and B.R ... perhaps A.G, A.R
-    # G -> A+B.G, B -> B.G+B.R
+
+    def print_grouplist(groups):
+        glist = [".".join(sorted(g)) for g in groups]
+        return "[" + ", ".join(sorted(glist)) + "]"
 
     print("\nGROUP DIVISIONS:", _divs, "->")
-    groups, minsubgroups = build_group_data2(_divs)
-    print("\n ... Groups:", print_grouplist(groups))
-    print("\n ... Atoms:", print_grouplist(minsubgroups))
-    print("   ****************************************")
-    groups, minsubgroups = build_group_data(_divs)
-    print("\n ... Groups:", print_grouplist(groups))
-    print("\n ... Atoms:", print_grouplist(minsubgroups))
+    res = build_group_data(_divs)
+    print("\n ... Independent divisions:")
+    for d in res["INDEPENDET_DIVISIONS"]:
+        print("   ...", print_grouplist(d))
+    print("\n ... Group-map:")
+    for g, l in res["GROUP_MAP"].items():
+        print(f'  {str(g):20}: {l}')
+    print("\n ... Groups:", print_grouplist(res["GROUPS"]))
+    print("\n ... Atoms:", print_grouplist(res["MINIMAL_SUBGROUPS"]))
 
-    quit(0)
+    #quit(0)
 
     print("\n -------------------------------\n")
     print("CLASS DATA:")
