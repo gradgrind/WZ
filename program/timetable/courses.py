@@ -66,7 +66,7 @@ class LessonData(NamedTuple):
     notes: str
 
 
-class TimetableData:
+def get_timetable_data(class2groups):
     """There are four different types of line in the LESSONS table which
     are relevant for the timetable:
 
@@ -108,6 +108,140 @@ class TimetableData:
     subject. Each "partner" has its own tile, showing its own subject.
     """
 
+    course2data = {}
+    class2courses = {}
+    for course, klass, group, sid, tid in db_read_fields(
+        "COURSES", ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
+    ):
+        # CLASS, SUBJECT and TEACHER are foreign keys and should be
+        # automatically bound to appropriate entries in the database.
+        # GRP should be checked here ...
+        if group and group not in class2groups[klass]:
+            if klass != "--" and group != "*":
+                SHOW_ERROR(T["UNKNOWN_GROUP"].format(
+                    klass=klass, group=group, sid=sid, tid=tid)
+                )
+                continue
+        course2data[course] = CourseData(
+            klass=klass, group=group, sid=sid, tid=tid
+        )
+        try:
+            class2courses[klass].append(course)
+        except KeyError:
+            class2courses[klass] = [course]
+
+    lessons = []
+    idmax = 0
+    class2lessons = {}
+
+    block_members = {}
+    block_sublessons = {}
+    partners = {}
+    partners_time = {}
+    timetable_cells = []
+
+    for id, course, length, room, time, place, notes in db_read_fields(
+        "LESSONS",
+        ("id", "course", "LENGTH", "ROOM", "TIME", "PLACE", "NOTES"),
+    ):
+        if id > idmax:
+            idmax = id
+        if time:
+            # Only "non-lessons" (payroll) entries should have an empty
+            # TIME field.
+            coursedata = course2data[course] if course else None
+            if coursedata:
+                try:
+                    class2lessons[coursedata.klass].append(id)
+                except KeyError:
+                    class2lessons[coursedata.klass] = [id]
+
+
+            if time[0] == "@":
+                # This is something to be placed in the timetable.
+                timetable_cells.append(id)
+
+                if place.startswith(">"):
+                    ## block sublesson with direct time
+                    try:
+                        block_sublessons[place].append(id)
+                    except KeyError:
+                        block_sublessons[place] = [id]
+
+                elif place.startswith("="):
+                    ## partner time
+                    if place in partners_time:
+                        SHOW_ERROR()
+                    else:
+                        partners_time[place] = id
+
+                ## else: plain lesson with direct time
+
+            elif time[0] == ">":
+                ## block member
+                try:
+                    block_members[time].append(id)
+                except KeyError:
+                    block_members[time] = [id]
+
+            elif time[0] == "=":
+                ## plain lesson or block sublesson with shared time
+                # A block sublesson has the block tag in the PLACE field.
+                if place.startswith(">"):
+                    try:
+                        block_sublessons[place].append(id)
+                    except KeyError:
+                        block_sublessons[place] = [id]
+                try:
+                    partners[time].append(id)
+                except KeyError:
+                    partners[time] = [id]
+
+            else:
+                SHOW_ERROR(
+                    T["BAD_TIME_FIELD"].format(id=id, time=time)
+                )
+                continue
+
+            lessons.append(
+                LessonData(
+                    id=id,
+                    course=coursedata,
+                    length=length,
+                    room=room,
+                    time=time,
+                    place=place,
+                    notes=notes,
+                )
+            )
+        else:
+            print(" --", id, course, length, room, time)
+            if length != "--":
+                SHOW_ERROR(T["INVALID_NON_LESSON_RECORD"] + str(id))
+
+    __usage = len(lessons) / idmax
+    if __usage < 0.5:
+        SHOW_WARNING(f"Sparse lesson table: usage {__usage:4.2f}%")
+
+    lessonlist = [None] * (idmax + 1)
+    for lessondata in lessons:
+        lessonlist[lessondata.id] = lessondata
+
+    return {
+        "LESSONLIST": lessonlist,
+        "CLASS2LESSONS": class2lessons,
+        "BLOCK_MEMBERS": block_members,
+        "BLOCK_SUBLESSONS": block_sublessons,
+        "PARTNERS": partners,
+        "PARTNERS_TIME": partners_time,
+        "TIMETABLE_CELLS": timetable_cells
+    }
+
+
+
+
+class TimetableData:
+
     def __init__(self):
         self.DAYS, self.PERIODS = db_days_periods()
         self.CLASSES = Classes()
@@ -121,110 +255,14 @@ class TimetableData:
             self.class2groups[klass] = res["GROUPS"]
             self.class2atoms[klass] = res["MINIMAL_SUBGROUPS"]
 
-    def get_timetable_data(self):
-        course2data = {}
-        class2courses = {}
-        for course, klass, group, sid, tid in db_read_fields(
-            "COURSES", ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
-        ):
-            # CLASS, SUBJECT and TEACHER are foreign keys and should be
-            # automatically bound to appropriate entries in the database.
-            # GRP should be checked here ...
-            if group and group not in self.class2groups[klass]:
-                if klass != "--" and group != "*":
-                    SHOW_ERROR(T["UNKNOWN_GROUP"].format(
-                        klass=klass, group=group, sid=sid, tid=tid)
-                    )
-                    continue
-            course2data[course] = CourseData(
-                klass=klass, group=group, sid=sid, tid=tid
-            )
-            try:
-                class2courses[klass].append(course)
-            except KeyError:
-                class2courses[klass] = [course]
-
-        lessons = []
-        idmax = 0
-        class2lessons = {}
-        for id, course, length, room, time, place, notes in db_read_fields(
-            "LESSONS",
-            ("id", "course", "LENGTH", "ROOM", "TIME", "PLACE", "NOTES"),
-        ):
-            unit_times = []
-            unit_data = []
-            if id > idmax:
-                idmax = id
-            if time:
-                # Only "non-lessons" (payroll) entries should have an empty
-                # TIME field.
-
-#TODO:
-                print(" ++", id, course, length, room, time)
-
-                coursedata = course2data[course] if course else None
-
-                if time[0] == "@":
-                    # This is something to be placed in the timetable
-                    unit_id = len(unit_times)
-                    u = self.timeslot_index(time)
-                    unit_times.append(u)
-                    unit_data.append(
-                        self.get_unit_data(coursedata, length, room, place)
-                    )
-
-                elif time[0] == ">":
-                    pass
-                # TODO
-                elif time[0] == "=":
-                    pass
-                # TODO
-                else:
-                    SHOW_ERROR(
-                        T["BAD_TIME_FIELD"].format(id=id, time=f"'{time}'")
-                    )
-                    continue
-
-                #                continue
-                # ??
-                lessondata = LessonData(
-                    id=id,
-                    course=coursedata,
-                    length=length,
-                    room=room,
-                    time=time,
-                    place=place,
-                    notes=notes,
-                )
-                lessons.append(lessondata)
-                if coursedata:
-                    try:
-                        class2lessons[coursedata.klass].append(id)
-                    except KeyError:
-                        class2lessons[coursedata.klass] = [id]
-
-            else:
-                print(" --", id, course, length, room, time)
-                if length != "--":
-                    SHOW_ERROR(T["INVALID_NON_LESSON_RECORD"] + str(id))
-
-        return
-
-        lessonlist = [None] * (idmax + 1)
-        print("idmax =", idmax)
-        for id, lessondata in lessons:
-            lessonlist[id] = lessondata
-
-        print("???", sys.getsizeof(lessons), sys.getsizeof(lessonlist))
-
-        return lessonlist, class2lessons
-
+#???
     def timeslot_index(self, time: str) -> Optional[tuple[int, int]]:
         if time == "@?":
             return None
         d, p = time[1:].split(".", 1)
         return (self.DAYS.index(d), self.PERIODS.index(p))
 
+#???
     def get_unit_data(self, course, length, room, place):
         if course:
             # a "plain" lesson with no partners
@@ -265,7 +303,9 @@ if __name__ == "__main__":
     ttdata = TimetableData()
 
     # testing
-    ttdata.get_timetable_data()
+    tt_data = get_timetable_data(ttdata.class2groups)
+    for l in tt_data["LESSONLIST"]:
+        print(f"  {l}")
     quit(0)
 
     # For the timetable

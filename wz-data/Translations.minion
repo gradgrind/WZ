@@ -121,7 +121,7 @@ ui.modules.course_lessons: {
     MODULE_TITLE:   "Unterrichtskurse und -stunden verwalten"
     CLASSROOM:      "Klassenraum"
     OTHER_ROOMS:    "auch andere Räume"
-    TIME_FIXED:     "Fester Startzeit"
+    TIME_FIXED:     "Feste Startzeit"
 
     # Course field editor buttons
 #    EDIT_COURSE:    "Kursdaten bearbeiten"
@@ -173,7 +173,7 @@ ui.modules.course_lessons: {
 timetable.courses: {
     INVALID_NON_LESSON_RECORD: "Fehlerhafte Zeile in LESSONS-Tabelle, TIME-Feld leer, aber LENGTH nicht '--'.\n  id: "
     NO_CLASSROOM:           "Diese Klasse hat keinen Klassenraum ($): "
-    BAD_TIME_FIELD: "Ungültiges Zeit-Feld (TIME) in LESSONS-Tabelle, id={id}: {time}"
+    BAD_TIME_FIELD: "Ungültiges Zeit-Feld (TIME) in LESSONS-Tabelle, id={id}: '{time}'"
     UNKNOWN_GROUP:  "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
 }
 
