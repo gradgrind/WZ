@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-06-06
+Last updated:  2022-06-19
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -117,13 +117,15 @@ class TimeSlotError(Exception):
     pass
 
 
-# +
 def timeslot2index(timeslot):
     """Convert a "timeslot" in the tag-form (e.g. "Mo.3") to a pair
     of 0-based indexes.
     """
     i, j = -1, -1
     if timeslot and timeslot != "?":
+        if timeslot[0] == "?":
+            # Remove "unfixed" flag
+            timeslot = timeslot[1:]
         try:
             d, p = timeslot.split(".")
         except ValueError:
@@ -148,7 +150,6 @@ def timeslot2index(timeslot):
     return i, j
 
 
-# +
 def index2timeslot(index):
     """Convert a pair of 0-based indexes to a "timeslot" in the
     tag-form (e.g. "Mo.3").
@@ -188,6 +189,9 @@ class DayPeriodDialog(QDialog):
         )
         hbox1.addWidget(self.periodlist)
 
+        self.fixed_time = QCheckBox(T["TIME_FIXED"])
+        vbox0.addWidget(self.fixed_time)
+
         buttonBox = QDialogButtonBox()
         vbox0.addWidget(buttonBox)
         bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
@@ -202,6 +206,8 @@ class DayPeriodDialog(QDialog):
         d = self.daylist.currentRow()
         p = self.periodlist.currentRow()
         self.result = index2timeslot((d, p))
+        if not self.fixed_time.isChecked():
+            self.result = "?" + self.result
         self.accept()
 
     def do_clear(self):
@@ -216,6 +222,8 @@ class DayPeriodDialog(QDialog):
 
     def activate(self, start_value=None):
         try:
+            if start_value:
+                fixed = (start_value == "?" or start_value[0] != "?")
             d, p = timeslot2index(start_value)
             self.result = None
             if d < 0:
@@ -223,9 +231,10 @@ class DayPeriodDialog(QDialog):
         except TimeSlotError:
             SHOW_ERROR(f"Bug: invalid day.period: '{start_value}'")
             self.result = "?"
-            d, p = 0, 0
+            d, p, fixed = 0, 0, True
         self.daylist.setCurrentRow(d)
         self.periodlist.setCurrentRow(p)
+        self.fixed_time.setChecked(fixed)
         self.exec()
         return self.result
 
