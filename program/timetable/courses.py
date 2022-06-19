@@ -27,13 +27,14 @@ Copyright 2022 Michael Towers
 if __name__ == "__main__":
     # Enable package import if running as module
     import sys, os
+
     this = sys.path[0]
     appdir = os.path.dirname(this)
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
 
-    #start.setup(os.path.join(basedir, "TESTDATA"))
+    # start.setup(os.path.join(basedir, "TESTDATA"))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
 T = TRANSLATIONS("timetable.courses")
@@ -46,6 +47,7 @@ from core.db_management import open_database, db_days_periods, db_read_fields
 from core.classes import Classes, build_group_data
 
 ### -----
+
 
 class CourseData(NamedTuple):
     klass: str
@@ -109,27 +111,33 @@ class TimetableData:
     def __init__(self):
         self.DAYS, self.PERIODS = db_days_periods()
         self.CLASSES = Classes()
-#TODO: Read other tables?
+        # TODO: Read other tables?
 
         self.class2groups = {}
         self.class2atoms = {}
         for klass, data in self.CLASSES.items():
-            #print("\n %%", klass)
-            self.class2groups, self.class2atoms = build_group_data(data.divisions)
+            # print("\n %%", klass)
+            res = build_group_data(data.divisions)
+            self.class2groups[klass] = res["GROUPS"]
+            self.class2atoms[klass] = res["MINIMAL_SUBGROUPS"]
 
-    #TODO
     def get_timetable_data(self):
         course2data = {}
         class2courses = {}
         for course, klass, group, sid, tid in db_read_fields(
-            "COURSES",
-            ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
+            "COURSES", ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
         ):
+            # CLASS, SUBJECT and TEACHER are foreign keys and should be
+            # automatically bound to appropriate entries in the database.
+            # GRP should be checked here ...
+            if group and group not in self.class2groups[klass]:
+                if klass != "--" and group != "*":
+                    SHOW_ERROR(T["UNKNOWN_GROUP"].format(
+                        klass=klass, group=group, sid=sid, tid=tid)
+                    )
+                    continue
             course2data[course] = CourseData(
-                klass=klass,
-                group=group,
-                sid=sid,
-                tid=tid
+                klass=klass, group=group, sid=sid, tid=tid
             )
             try:
                 class2courses[klass].append(course)
@@ -141,7 +149,7 @@ class TimetableData:
         class2lessons = {}
         for id, course, length, room, time, place, notes in db_read_fields(
             "LESSONS",
-            ("id", "course", "LENGTH", "ROOM", "TIME", "PLACE", "NOTES")
+            ("id", "course", "LENGTH", "ROOM", "TIME", "PLACE", "NOTES"),
         ):
             unit_times = []
             unit_data = []
@@ -151,6 +159,7 @@ class TimetableData:
                 # Only "non-lessons" (payroll) entries should have an empty
                 # TIME field.
 
+#TODO:
                 print(" ++", id, course, length, room, time)
 
                 coursedata = course2data[course] if course else None
@@ -166,16 +175,18 @@ class TimetableData:
 
                 elif time[0] == ">":
                     pass
-#TODO
+                # TODO
                 elif time[0] == "=":
                     pass
-#TODO
+                # TODO
                 else:
-                    SHOW_ERROR(T["BAD_TIME_FIELD"].format(id=id, time=f"'{time}'"))
+                    SHOW_ERROR(
+                        T["BAD_TIME_FIELD"].format(id=id, time=f"'{time}'")
+                    )
                     continue
 
-#                continue
-#??
+                #                continue
+                # ??
                 lessondata = LessonData(
                     id=id,
                     course=coursedata,
@@ -183,7 +194,7 @@ class TimetableData:
                     room=room,
                     time=time,
                     place=place,
-                    notes=notes
+                    notes=notes,
                 )
                 lessons.append(lessondata)
                 if coursedata:
@@ -199,7 +210,6 @@ class TimetableData:
 
         return
 
-
         lessonlist = [None] * (idmax + 1)
         print("idmax =", idmax)
         for id, lessondata in lessons:
@@ -209,7 +219,7 @@ class TimetableData:
 
         return lessonlist, class2lessons
 
-    def timeslot_index(self, time: str) -> Optional[tuple[int,int]]:
+    def timeslot_index(self, time: str) -> Optional[tuple[int, int]]:
         if time == "@?":
             return None
         d, p = time[1:].split(".", 1)
@@ -222,18 +232,18 @@ class TimetableData:
             classroom = self.CLASSES[course.klass].classroom
             roomlist = get_rooms(room, classroom)
             tidlist = [] if course.tid == "--" else [course.tid]
-# Check tid validity?
-            group = get_group(course.klass, course.group)
+            group = (course.klass, course.group)
             return (link, tidlist, group, roomlist)
-#TODO
-# ...else:
+
+    # TODO
+    # ...else:
 
     def get_classroom(self, klass):
         return self.CLASSES[klass].classroom
 
 
-def get_rooms(roomlist:str, classroom: str) -> list[str]:
-# check validity?
+def get_rooms(roomlist: str, classroom: str) -> list[str]:
+    # check validity?
     rlist = []
     if not roomlist:
         return rlist
@@ -247,11 +257,6 @@ def get_rooms(roomlist:str, classroom: str) -> list[str]:
     return rlist
 
 
-def get_group(klass:str, group:str):
-#TODO: check validity?
-    return (klass, group)
-
-
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
@@ -259,7 +264,7 @@ if __name__ == "__main__":
 
     ttdata = TimetableData()
 
-    #testing
+    # testing
     ttdata.get_timetable_data()
     quit(0)
 

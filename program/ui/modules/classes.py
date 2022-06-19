@@ -1,7 +1,7 @@
 """
 ui/modules/classes.py
 
-Last updated:  2022-06-07
+Last updated:  2022-06-19
 
 Edit classes' data.
 
@@ -73,7 +73,7 @@ from ui.ui_base import (
 from ui.editable import EdiTableWidget
 
 # Class table fields
-CLASS_COLS = [(f, T[f]) for f in ("CLASS", "NAME", "CLASSROOM", "TT_DATA")]
+CLASS_COLS = [(f, T[f]) for f in ("CLASS", "NAME", "DIVISIONS", "CLASSROOM", "TT_DATA")]
 
 from timetable.constraints_class import CONSTRAINT_FIELDS, period_validator
 

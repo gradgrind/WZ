@@ -194,7 +194,6 @@ def build_group_data(divisions):
     __independent_divs = []
     gmap = {}
     for d in independent_divs:
-        #print("  ...", print_grouplist(d))
         __gmap = {}
         gmod = {}
         for g in groups:
@@ -233,8 +232,8 @@ def build_group_data(divisions):
     return {
         "INDEPENDENT_DIVISIONS": idivs,
         "GROUP_MAP": dict(gmapl),
-        "GROUPS": groups,
-        "MINIMAL_SUBGROUPS": cross_terms
+        "GROUPS": groups2stringlist(groups),
+        "MINIMAL_SUBGROUPS": groups2stringlist(cross_terms)
     }
 
 
@@ -264,10 +263,6 @@ if __name__ == "__main__":
     #_divs = [("G", "R"), ("A", "B.G", "B.R"), ("A", "B"), ("I", "II", "III")]
     _divs = [("G", "R"), ("A", "B.G", "R"), ("A", "B"), ("I", "II", "III")]
 
-    def print_grouplist(groups):
-        glist = [".".join(sorted(g)) for g in groups]
-        return "[" + ", ".join(sorted(glist)) + "]"
-
     print("\nGROUP DIVISIONS:", _divs, "->")
     res = build_group_data(_divs)
     print("\n ... Independent divisions:")
@@ -276,8 +271,8 @@ if __name__ == "__main__":
     print("\n ... Group-map:")
     for g, l in res["GROUP_MAP"].items():
         print(f'  {str(g):20}: {l}')
-    print("\n ... Groups:", print_grouplist(res["GROUPS"]))
-    print("\n ... Atoms:", print_grouplist(res["MINIMAL_SUBGROUPS"]))
+    print("\n ... Groups:", res["GROUPS"])
+    print("\n ... Atoms:", res["MINIMAL_SUBGROUPS"])
 
     quit(0)
 

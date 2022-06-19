@@ -1,12 +1,12 @@
 """
-timetable/asc_data.py - last updated 2022-06-18
+timetable/asc_data.py - last updated 2022-06-19
 
-*** Largely old code from February ... adapting to use the sqlite db data.
+*** TODO ... adapting to use the sqlite db data.
 
 Prepare aSc-timetables input from the various sources ...
 
 ==============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -43,8 +43,6 @@ _LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Lehrer"
 
 ########################################################################
 
-import sys, os, re, json
-
 if __name__ == "__main__":
     # Enable package import if running as module
     import sys, os
@@ -70,6 +68,8 @@ T = TRANSLATIONS("timetable.asc_data")
 
 ### +++++
 
+import re, json
+
 import xmltodict
 
 from core.db_management import open_database, db_read_fields, db_key_value_list
@@ -77,8 +77,8 @@ from core.classes import Classes, build_group_data
 from core.teachers import Teachers
 
 
-#TODO
-#from timetable.basic_data import (
+# TODO
+# from timetable.basic_data import (
 #    Classes,
 #    Days,
 #    Periods,
@@ -88,13 +88,15 @@ from core.teachers import Teachers
 #    TT_Teachers,
 #    TT_Error,
 #    class_group_split,
-#)
+# )
+
 
 def idsub(tag):
     """In aSc, "id" fields may only contain ASCII alphanumeric characters,
     '-' and '_'. Substitute anything else by '_'.
     """
     return re.sub("[^-_A-Za-z0-9]", "_", tag)
+
 
 SHARED_DATA = {}
 
@@ -109,13 +111,9 @@ def get_days_aSc() -> list[dict]:
         return SHARED_DATA["DAYS"]
     except KeyError:
         pass
-    vlist = db_read_fields(
-        "TT_DAYS",
-        ("N", "TAG", "NAME"),
-        sort_field="N"
-    )
+    vlist = db_read_fields("TT_DAYS", ("N", "TAG", "NAME"), sort_field="N")
     nd = len(vlist)
-    i = int(10**nd)
+    i = int(10 ** nd)
     dlist = []
     for n, tag, name in vlist:
         i //= 10
@@ -124,7 +122,7 @@ def get_days_aSc() -> list[dict]:
                 "@id": str(n),
                 "@name": name,
                 "@short": tag,
-                "@days": f"{i:0{nd}d}"
+                "@days": f"{i:0{nd}d}",
             }
         )
     SHARED_DATA["DAYS"] = dlist
@@ -142,7 +140,7 @@ def get_periods_aSc() -> list[dict]:
     vlist = db_read_fields(
         "TT_PERIODS",
         ("N", "TAG", "NAME", "START_TIME", "END_TIME"),
-        sort_field="N"
+        sort_field="N",
     )
     plist = [
         {
@@ -150,7 +148,7 @@ def get_periods_aSc() -> list[dict]:
             "@name": name,
             "@starttime": stime,
             "@endtime": etime,
-            "@period": str(n)
+            "@period": str(n),
         }
         for n, tag, name, stime, etime in vlist
     ]
@@ -246,13 +244,7 @@ def get_rooms():
         return SHARED_DATA["ROOMS"]
     except KeyError:
         pass
-    rooms = dict(db_key_value_list(
-            "TT_ROOMS",
-            "RID",
-            "NAME",
-            sort_field="RID"
-        )
-    )
+    rooms = dict(db_key_value_list("TT_ROOMS", "RID", "NAME", sort_field="RID"))
     SHARED_DATA["ROOMS"] = rooms
     return rooms
 
@@ -273,12 +265,8 @@ def get_subjects():
         return SHARED_DATA["SUBJECTS"]
     except KeyError:
         pass
-    subjects = dict(db_key_value_list(
-            "SUBJECTS",
-            "SID",
-            "NAME",
-            sort_field="NAME"
-        )
+    subjects = dict(
+        db_key_value_list("SUBJECTS", "SID", "NAME", sort_field="NAME")
     )
     SHARED_DATA["SUBJECTS"] = subjects
     return subjects
@@ -304,7 +292,7 @@ def get_classes_aSc():
                 "@short": klass,
                 "@name": cdata.name,
                 "@classroomids": cdata.classroom,
-                "@timeoff": class_days_aSc(klass)
+                "@timeoff": class_days_aSc(klass),
             }
         )
     return classes
@@ -312,9 +300,6 @@ def get_classes_aSc():
 
 def get_groups_aSc():
     """Return an ordered list of aSc elements for the groups within the classes."""
-    def parse_groups(divisions: list[list[str]]):
-        groups = [T["WHOLE_CLASS"]]
-
     group_list = []
     group_info = {}
     SHARED_DATA["GROUP_INFO"] = group_info
@@ -351,44 +336,10 @@ def get_groups_aSc():
     return group_list
 
 
-    classes = []
-    groups = []
-    for klass in c_list:
-        if klass.startswith("XX"):
-            continue
-        classes.append(_classes.class_data(klass))
-        groups += _classes.groups(klass)
-    if __TEST:
-        print("\n ********** aSc DATA **********")
-        print("\n  aSc-CLASSES:", classes)
-        print("\n  aSc-GROUPS:", groups)
-
-
-
+# TODO ...
 
 
 class Classes_aSc(Classes):
-    def groups(self, klass):
-        """Return a list of aSc group definitions for the given class."""
-        group_list = []
-        gi = 0  # "division" number (a list of mutually exclusive sub-groups)
-        for division in self.class_divisions[klass]:
-            for g in division:
-                if g == "*":
-                    g = WHOLE_CLASS
-                group_list.append(
-                    {
-                        "@id": idsub(f"{klass}-{g}"),
-                        "@classid": klass,
-                        "@name": g,
-                        "@entireclass": "1" if len(division) == 1 else "0",
-                        "@divisiontag": str(gi),
-                    }
-                )
-            gi += 1
-        return group_list
-
-    #
 
     #
     def get_lessons(self, rooms):
@@ -585,7 +536,7 @@ def build_dict(
 ###
 
 
-#class Placements_aSc(Placements):
+# class Placements_aSc(Placements):
 class Placements_aSc:
     def get_presets(self):
         plist = []
@@ -764,7 +715,6 @@ if __name__ == "__main__":
         print("\n*** CLASS-GROUPS ***")
         for gdata in groups:
             print("   ", gdata)
-
 
     quit(0)
 
