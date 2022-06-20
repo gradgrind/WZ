@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-06-19
+timetable/asc_data.py - last updated 2022-06-20
 
 *** TODO ... adapting to use the sqlite db data.
 
@@ -73,22 +73,12 @@ import re, json
 import xmltodict
 
 from core.db_management import open_database, db_read_fields, db_key_value_list
-from core.classes import Classes, build_group_data
-from core.teachers import Teachers
-
-
-# TODO
-# from timetable.basic_data import (
-#    Classes,
-#    Days,
-#    Periods,
-#    Placements,
-#    Rooms,
-#    TT_Subjects,
-#    TT_Teachers,
-#    TT_Error,
-#    class_group_split,
-# )
+from core.basic_data import (
+    get_classes,
+    get_teachers,
+    get_subjects,
+    get_rooms
+)
 
 
 def idsub(tag):
@@ -98,19 +88,12 @@ def idsub(tag):
     return re.sub("[^-_A-Za-z0-9]", "_", tag)
 
 
-SHARED_DATA = {}
-
 ### -----
 
 
 def get_days_aSc() -> list[dict]:
     """Return an ordered list of aSc elements for the days.
-    This data is cached, so subsequent calls get the same data.
     """
-    try:
-        return SHARED_DATA["DAYS"]
-    except KeyError:
-        pass
     vlist = db_read_fields("TT_DAYS", ("N", "TAG", "NAME"), sort_field="N")
     nd = len(vlist)
     i = int(10 ** nd)
@@ -125,18 +108,12 @@ def get_days_aSc() -> list[dict]:
                 "@days": f"{i:0{nd}d}",
             }
         )
-    SHARED_DATA["DAYS"] = dlist
     return dlist
 
 
 def get_periods_aSc() -> list[dict]:
     """Return an ordered list of aSc elements for the periods.
-    This data is cached, so subsequent calls get the same data.
     """
-    try:
-        return SHARED_DATA["PERIODS"]
-    except KeyError:
-        pass
     vlist = db_read_fields(
         "TT_PERIODS",
         ("N", "TAG", "NAME", "START_TIME", "END_TIME"),
@@ -152,34 +129,7 @@ def get_periods_aSc() -> list[dict]:
         }
         for n, tag, name, stime, etime in vlist
     ]
-    SHARED_DATA["PERIODS"] = plist
     return plist
-
-
-def get_classes() -> Classes:
-    """Return the data for all classes as a <Classes> instance (dict).
-    This data is cached, so subsequent calls get the same instance.
-    """
-    try:
-        return SHARED_DATA["CLASSES"]
-    except KeyError:
-        pass
-    classes = Classes()
-    SHARED_DATA["CLASSES"] = classes
-    return classes
-
-
-def get_teachers() -> Teachers:
-    """Return the data for all teachers as a <Teachers> instance (dict).
-    This data is cached, so subsequent calls get the same instance.
-    """
-    try:
-        return SHARED_DATA["TEACHERS"]
-    except KeyError:
-        pass
-    teachers = Teachers()
-    SHARED_DATA["TEACHERS"] = teachers
-    return teachers
 
 
 def class_days_aSc(klass: str) -> str:
@@ -236,40 +186,12 @@ def teacher_days_aSc(tid: str) -> str:
     return ",".join(weektags)
 
 
-def get_rooms():
-    """Return an ordered mapping of rooms: {rid -> name}.
-    This data is cached, so subsequent calls get the same instance.
-    """
-    try:
-        return SHARED_DATA["ROOMS"]
-    except KeyError:
-        pass
-    rooms = dict(db_key_value_list("TT_ROOMS", "RID", "NAME", sort_field="RID"))
-    SHARED_DATA["ROOMS"] = rooms
-    return rooms
-
-
 def get_rooms_aSc() -> list[dict]:
     """Return an ordered list of aSc elements for the rooms."""
     return [
         {"@id": idsub(rid), "@short": rid, "@name": name}
         for rid, name in get_rooms().items()
     ]
-
-
-def get_subjects():
-    """Return an ordered mapping of subjects: {sid -> name}.
-    This data is cached, so subsequent calls get the same instance.
-    """
-    try:
-        return SHARED_DATA["SUBJECTS"]
-    except KeyError:
-        pass
-    subjects = dict(
-        db_key_value_list("SUBJECTS", "SID", "NAME", sort_field="NAME")
-    )
-    SHARED_DATA["SUBJECTS"] = subjects
-    return subjects
 
 
 def get_subjects_aSc() -> list[dict]:
@@ -283,15 +205,14 @@ def get_subjects_aSc() -> list[dict]:
 def get_classes_aSc():
     """Return an ordered list of aSc elements for the classes."""
     classes = []
-    for klass, cdata in get_classes().items():
-        if klass.startswith("XX"):
-            continue
+    __classes = get_classes()
+    for klass, name in __classes.get_class_list():
         classes.append(
             {
                 "@id": idsub(klass),
                 "@short": klass,
-                "@name": cdata.name,
-                "@classroomids": cdata.classroom,
+                "@name": name,
+                "@classroomids": __classes.get_classroom(klass),
                 "@timeoff": class_days_aSc(klass),
             }
         )
@@ -301,11 +222,8 @@ def get_classes_aSc():
 def get_groups_aSc():
     """Return an ordered list of aSc elements for the groups within the classes."""
     group_list = []
-    group_info = {}
-    SHARED_DATA["GROUP_INFO"] = group_info
-    for klass, cdata in get_classes().items():
-        if klass.startswith("XX"):
-            continue
+    classes = get_classes()
+    for klass, _ in classes.get_class_list():
         g = T["WHOLE_CLASS"]
         group_list.append(
             {
@@ -317,9 +235,7 @@ def get_groups_aSc():
             }
         )
         # Sort out the divisions ...
-        __group_info = build_group_data(cdata.divisions)
-        group_info[klass] = __group_info
-        divisions = __group_info["INDEPENDENT_DIVISIONS"]
+        divisions = classes.group_info(klass)["INDEPENDENT_DIVISIONS"]
         dix = 0
         for div in divisions:
             dix += 1
@@ -339,7 +255,7 @@ def get_groups_aSc():
 # TODO ...
 
 
-class Classes_aSc(Classes):
+class Classes_aSc:#(Classes):
 
     #
     def get_lessons(self, rooms):

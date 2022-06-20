@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-06-18
+core/classes.py - last updated 2022-06-20
 
 Manage class data.
 
@@ -41,11 +41,7 @@ T = TRANSLATIONS("core.classes")
 
 from typing import NamedTuple, Optional
 
-from core.db_management import (
-    open_database,
-    db_read_fields,
-    read_pairs
-)
+from core.db_management import open_database, db_read_fields, read_pairs
 
 ### -----
 
@@ -61,11 +57,12 @@ class ClassData(NamedTuple):
 class Classes(dict):
     def __init__(self):
         super().__init__()
+        self.__group_info = {}
         # ?    open_database()
         for klass, name, divisions, classroom, tt_data in db_read_fields(
             "CLASSES",
             ("CLASS", "NAME", "DIVISIONS", "CLASSROOM", "TT_DATA"),
-            sort_field="CLASS"
+            sort_field="CLASS",
         ):
             # Parse groups
             divlist = []
@@ -94,7 +91,20 @@ class Classes(dict):
         return classes
 
     def get_classroom(self, klass):
+        if klass == "--":
+            raise Bug("Empty class has no classroom")
         return self[klass].classroom
+
+    def group_info(self, klass):
+        if klass == "--":
+            raise Bug("Empty class has no groups")
+        try:
+            return self.__group_info[klass]
+        except KeyError:
+            pass
+        info = build_group_data(self[klass].divisions)
+        self.__group_info[klass] = info
+        return info
 
 
 def build_group_data(divisions):
@@ -105,6 +115,7 @@ def build_group_data(divisions):
     Internally groups are handled as <frozensets>, but the results use
     dotted strings.
     """
+
     def group2string(group):
         return ".".join(sorted(group))
 
@@ -113,7 +124,7 @@ def build_group_data(divisions):
 
     results = {}
     groups = set()
-    impossible_partners = {}    # {group -> {incompatible groups}}
+    impossible_partners = {}  # {group -> {incompatible groups}}
     # Collect groups and build map (<impossible_partners>) giving all
     # other groups which are incompatible with each group in a "dot-join"
     # (an intersection).
@@ -145,10 +156,10 @@ def build_group_data(divisions):
             idiv = divsets[i]
             cross_set = set()
             for gset1 in this_div:
-                #print("§§ -1-", gset1)
+                # print("§§ -1-", gset1)
                 forbidden1 = impossible_partners.get(gset1) or set()
                 for gset2 in idiv:
-                    #print("§§ -2-", gset2)
+                    # print("§§ -2-", gset2)
                     addgroup = True
                     # If partner is subset of forbidden group, not independent
                     for f in forbidden1:
@@ -159,14 +170,14 @@ def build_group_data(divisions):
                             addgroup = False
                             break
                     if addgroup:
-                        for f in (impossible_partners.get(gset2) or set()):
+                        for f in impossible_partners.get(gset2) or set():
                             if gset1 >= f:
                                 # ">=" is correct: see above.
                                 independent = False
                                 addgroup = False
                                 break
                         if addgroup:
-                            #print("§§ -3-", gset1 | gset2)
+                            # print("§§ -3-", gset1 | gset2)
                             cross_set.add(gset1 | gset2)
             if not independent:
                 break
@@ -177,7 +188,7 @@ def build_group_data(divisions):
             del divsets[i]
             divsets.append(cross_set)
             # Start again ...
-            #print("§§++ divsets:", divsets)
+            # print("§§++ divsets:", divsets)
     # Collect minimal subgroups
     cross_terms = [set()]
     for div in independent_divs:
@@ -186,11 +197,11 @@ def build_group_data(divisions):
             for ct in cross_terms:
                 __cross_terms.append(ct | g)
         cross_terms = __cross_terms
-        #print("\n???", cross_terms)
-    #print("\nXXX", impossible_partners)
+        # print("\n???", cross_terms)
+    # print("\nXXX", impossible_partners)
 
     # Simplify the division elements ...
-    #print("\n§§ independent_divs:")
+    # print("\n§§ independent_divs:")
     __independent_divs = []
     gmap = {}
     for d in independent_divs:
@@ -200,7 +211,7 @@ def build_group_data(divisions):
             glist = []
             for gd in d:
                 if g == gd:
-                    #print("?????==", ".".join(sorted(g)))
+                    # print("?????==", ".".join(sorted(g)))
                     __gmap[g] = [g]
                     glist.clear()
                     break
@@ -208,21 +219,18 @@ def build_group_data(divisions):
                     glist.append(gd)
             if glist:
                 if len(glist) == 1:
-                    #print("????!!", g, glist)
+                    # print("????!!", g, glist)
                     gmod[glist[0]] = g
                 __gmap[g] = glist
         if __gmap:
-            #print("?????", d, "-->", __gmap)
+            # print("?????", d, "-->", __gmap)
             for g, l in __gmap.items():
                 ll = [gmod.get(gx) or gx for gx in l]
-                #print("????XX", g, "->", ll, "<<", l, ">>")
+                # print("????XX", g, "->", ll, "<<", l, ">>")
                 gmap[g] = ll
         __independent_divs.append([gmod.get(g) or g for g in d])
-        #print(" +++", __independent_divs)
-    idivs = [
-        groups2stringlist(groups)
-        for groups in __independent_divs
-    ]
+        # print(" +++", __independent_divs)
+    idivs = [groups2stringlist(groups) for groups in __independent_divs]
     idivs.sort()
     gmapl = [
         (group2string(g), groups2stringlist(groups))
@@ -233,34 +241,34 @@ def build_group_data(divisions):
         "INDEPENDENT_DIVISIONS": idivs,
         "GROUP_MAP": dict(gmapl),
         "GROUPS": groups2stringlist(groups),
-        "MINIMAL_SUBGROUPS": groups2stringlist(cross_terms)
+        "MINIMAL_SUBGROUPS": groups2stringlist(cross_terms),
     }
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    #_divs = [("A", "B"), ("G", "R"), ("A", "X", "Y")]
-    #_divs = [("A", "B"), ("G", "R"), ("A", "G")]
-    #_divs = [("A", "B", "C"), ("A", "R"), ("B", "S")]
-    #_divs = [("A", "B"), ("A", "X", "Y"), ("B", "P", "Q")]
-    #_divs = [("A", "B"), ("A", "I", "J"), ("A", "X", "Y"), ("B", "P", "Q")]
-    #_divs = [("A", "B"), ("A", "I", "J"), ("C", "D"), ("C", "P", "Q")]
-    #_divs = [("A", "B"), ("G", "R"), ("A", "B.G", "B.R")]
-    #_divs = [("A", "B.G", "B.R"), ("G", "R"), ("A", "B")]
-    #_divs = [("A", "B.G", "R"), ("G", "R")]
-    #_divs = [("A", "B.G", "R"), ("X", "Y")]
-    #_divs = [("A", "B.G", "R"), ("G", "R"), ("A", "B")]
-    #_divs = [("A.G", "A.R", "B.G", "B.R"), ("G", "R")]
-    #_divs = [("A.G", "A.R", "B.G", "B.R"), ("A", "B")]
-    #_divs = [("A.G", "A.R", "B.G", "B.R"), ("A", "B"), ("G", "R")]
-    #_divs = [("A", "B"), ("A", "B.G", "B.R")]
-    #_divs = [("A", "B"), ("G", "R"), ("A.X", "A.Y", "G.P", "G.Q")]
-    #_divs = [("A", "M"), ("A.X", "N")]
-    #_divs = [("A", "M"), ("A.X", "N"), ("G", "R")]
-    #_divs = [("A", "B.X"), ("P", "B.Y")]
-    #_divs = [("A", "B", "C"), ("A", "X", "Y", "Z")]
-    #_divs = [("G", "R"), ("A", "B.G", "B.R"), ("A", "B"), ("I", "II", "III")]
+    # _divs = [("A", "B"), ("G", "R"), ("A", "X", "Y")]
+    # _divs = [("A", "B"), ("G", "R"), ("A", "G")]
+    # _divs = [("A", "B", "C"), ("A", "R"), ("B", "S")]
+    # _divs = [("A", "B"), ("A", "X", "Y"), ("B", "P", "Q")]
+    # _divs = [("A", "B"), ("A", "I", "J"), ("A", "X", "Y"), ("B", "P", "Q")]
+    # _divs = [("A", "B"), ("A", "I", "J"), ("C", "D"), ("C", "P", "Q")]
+    # _divs = [("A", "B"), ("G", "R"), ("A", "B.G", "B.R")]
+    # _divs = [("A", "B.G", "B.R"), ("G", "R"), ("A", "B")]
+    # _divs = [("A", "B.G", "R"), ("G", "R")]
+    # _divs = [("A", "B.G", "R"), ("X", "Y")]
+    # _divs = [("A", "B.G", "R"), ("G", "R"), ("A", "B")]
+    # _divs = [("A.G", "A.R", "B.G", "B.R"), ("G", "R")]
+    # _divs = [("A.G", "A.R", "B.G", "B.R"), ("A", "B")]
+    # _divs = [("A.G", "A.R", "B.G", "B.R"), ("A", "B"), ("G", "R")]
+    # _divs = [("A", "B"), ("A", "B.G", "B.R")]
+    # _divs = [("A", "B"), ("G", "R"), ("A.X", "A.Y", "G.P", "G.Q")]
+    # _divs = [("A", "M"), ("A.X", "N")]
+    # _divs = [("A", "M"), ("A.X", "N"), ("G", "R")]
+    # _divs = [("A", "B.X"), ("P", "B.Y")]
+    # _divs = [("A", "B", "C"), ("A", "X", "Y", "Z")]
+    # _divs = [("G", "R"), ("A", "B.G", "B.R"), ("A", "B"), ("I", "II", "III")]
     _divs = [("G", "R"), ("A", "B.G", "R"), ("A", "B"), ("I", "II", "III")]
 
     print("\nGROUP DIVISIONS:", _divs, "->")
@@ -270,14 +278,12 @@ if __name__ == "__main__":
         print("  ", d)
     print("\n ... Group-map:")
     for g, l in res["GROUP_MAP"].items():
-        print(f'  {str(g):20}: {l}')
+        print(f"  {str(g):20}: {l}")
     print("\n ... Groups:", res["GROUPS"])
     print("\n ... Atoms:", res["MINIMAL_SUBGROUPS"])
 
-    quit(0)
-
     print("\n -------------------------------\n")
-    print("CLASS DATA:")
+    print("\nCLASS DATA:")
 
     open_database()
     _classes = Classes()
@@ -287,4 +293,19 @@ if __name__ == "__main__":
     print("\n -------------------------------\n")
 
     for k, v in _classes.get_class_list(False):
-        print(f" ::: {k:6}: {v} // {_classes.get_classroom(k)}")
+        try:
+            print(f" ::: {k:6}: {v} // {_classes.get_classroom(k)}")
+        except Bug as e:
+            print(f" ::: {k:6}: {v} // {e}")
+
+    _klass = "10G"
+    print("\n -------------------------------\nGROUP INFO for class", _klass)
+    res = _classes.group_info(_klass)
+    print("\n ... Independent divisions:")
+    for d in res["INDEPENDENT_DIVISIONS"]:
+        print("  ", d)
+    print("\n ... Group-map:")
+    for g, l in res["GROUP_MAP"].items():
+        print(f"  {str(g):20}: {l}")
+    print("\n ... Groups:", res["GROUPS"])
+    print("\n ... Atoms:", res["MINIMAL_SUBGROUPS"])

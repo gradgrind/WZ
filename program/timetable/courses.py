@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-06-17
+Last updated:  2022-06-20
 
 Access course/subject/lesson data for timetable.
 
@@ -45,6 +45,7 @@ from typing import NamedTuple, Optional
 
 from core.db_management import open_database, db_days_periods, db_read_fields
 from core.classes import Classes, build_group_data
+from core.basic_data import get_classes
 
 ### -----
 
@@ -66,7 +67,7 @@ class LessonData(NamedTuple):
     notes: str
 
 
-def get_timetable_data(class2groups):
+def get_timetable_data():
     """There are four different types of line in the LESSONS table which
     are relevant for the timetable:
 
@@ -107,6 +108,12 @@ def get_timetable_data(class2groups):
     classes, but that is an additional complication), showing the block
     subject. Each "partner" has its own tile, showing its own subject.
     """
+    # Get group info for checking groups
+    __classes = get_classes()
+    class2groups = {
+        klass: __classes.group_info(klass)["GROUPS"]
+        for klass, _ in __classes.get_class_list()
+    }
 
     course2data = {}
     class2courses = {}
@@ -118,8 +125,10 @@ def get_timetable_data(class2groups):
         # GRP should be checked here ...
         if group and group not in class2groups[klass]:
             if klass != "--" and group != "*":
-                SHOW_ERROR(T["UNKNOWN_GROUP"].format(
-                    klass=klass, group=group, sid=sid, tid=tid)
+                SHOW_ERROR(
+                    T["UNKNOWN_GROUP"].format(
+                        klass=klass, group=group, sid=sid, tid=tid
+                    )
                 )
                 continue
         course2data[course] = CourseData(
@@ -155,7 +164,6 @@ def get_timetable_data(class2groups):
                     class2lessons[coursedata.klass].append(id)
                 except KeyError:
                     class2lessons[coursedata.klass] = [id]
-
 
             if time[0] == "@":
                 # This is something to be placed in the timetable.
@@ -198,9 +206,7 @@ def get_timetable_data(class2groups):
                     partners[time] = [id]
 
             else:
-                SHOW_ERROR(
-                    T["BAD_TIME_FIELD"].format(id=id, time=time)
-                )
+                SHOW_ERROR(T["BAD_TIME_FIELD"].format(id=id, time=time))
                 continue
 
             lessons.append(
@@ -234,14 +240,14 @@ def get_timetable_data(class2groups):
         "BLOCK_SUBLESSONS": block_sublessons,
         "PARTNERS": partners,
         "PARTNERS_TIME": partners_time,
-        "TIMETABLE_CELLS": timetable_cells
+        "TIMETABLE_CELLS": timetable_cells,
     }
 
 
+############################### ??? ###############################
 
 
 class TimetableData:
-
     def __init__(self):
         self.DAYS, self.PERIODS = db_days_periods()
         self.CLASSES = Classes()
@@ -255,14 +261,14 @@ class TimetableData:
             self.class2groups[klass] = res["GROUPS"]
             self.class2atoms[klass] = res["MINIMAL_SUBGROUPS"]
 
-#???
+    # ???
     def timeslot_index(self, time: str) -> Optional[tuple[int, int]]:
         if time == "@?":
             return None
         d, p = time[1:].split(".", 1)
         return (self.DAYS.index(d), self.PERIODS.index(p))
 
-#???
+    # ???
     def get_unit_data(self, course, length, room, place):
         if course:
             # a "plain" lesson with no partners
@@ -300,13 +306,12 @@ def get_rooms(roomlist: str, classroom: str) -> list[str]:
 if __name__ == "__main__":
     open_database()
 
-    ttdata = TimetableData()
-
-    # testing
-    tt_data = get_timetable_data(ttdata.class2groups)
+    tt_data = get_timetable_data()
     for l in tt_data["LESSONLIST"]:
         print(f"  {l}")
     quit(0)
+
+    ttdata = TimetableData()
 
     # For the timetable
     lessons, class2lessons = get_timetable_data()

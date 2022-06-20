@@ -1,5 +1,5 @@
 """
-core/teachers.py - last updated 2022-06-17
+core/teachers.py - last updated 2022-06-20
 
 Manage teacher data.
 
@@ -33,27 +33,20 @@ if __name__ == "__main__":
     from core.base import start
 
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
-    #start.setup(os.path.join(basedir, "DATA"))
-    #start.setup(os.path.join(basedir, "NEXT"))
+    # start.setup(os.path.join(basedir, "DATA"))
+    # start.setup(os.path.join(basedir, "NEXT"))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-#T = TRANSLATIONS("core.teachers")
+# T = TRANSLATIONS("core.teachers")
 
 ### +++++
 
 from typing import NamedTuple
 
-from core.db_management import (
-    open_database,
-    db_read_fields,
-    read_pairs
-)
-
-#?
-class TeacherError(Exception):
-    pass
+from core.db_management import open_database, db_read_fields, read_pairs
 
 ### -----
+
 
 class TeacherData(NamedTuple):
     tid: str
@@ -70,13 +63,21 @@ class Teachers(dict):
     mapping: {tid -> <TeacherData> instance}.
     The dictionary is ordered by SORTNAME.
     """
+
     def __init__(self):
         super().__init__()
-#?        open_database()
-        for tid, firstname, lastname, signed, sortname, tt_data in db_read_fields(
+        # ?        open_database()
+        for (
+            tid,
+            firstname,
+            lastname,
+            signed,
+            sortname,
+            tt_data,
+        ) in db_read_fields(
             "TEACHERS",
             ("TID", "FIRSTNAMES", "LASTNAMES", "SIGNED", "SORTNAME", "TT_DATA"),
-            sort_field="SORTNAME"
+            sort_field="SORTNAME",
         ):
             self[tid] = TeacherData(
                 tid=tid,
@@ -84,14 +85,14 @@ class Teachers(dict):
                 lastname=lastname,
                 signed=signed,
                 sortname=sortname,
-                tt_data=dict(read_pairs(tt_data))
+                tt_data=dict(read_pairs(tt_data)),
             )
 
     def name(self, tid):
         data = self[tid]
         return f"{data.firstname} {data.lastname}"
 
-    #deprecated?
+    # deprecated?
     def list_teachers(self):
         return list(self)
 
@@ -100,6 +101,7 @@ class Teachers(dict):
 
 if __name__ == "__main__":
     from core.db_management import db_days_periods
+
     open_database()
 
     tt_days, tt_periods = db_days_periods()
