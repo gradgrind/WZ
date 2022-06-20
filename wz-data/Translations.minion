@@ -172,7 +172,8 @@ ui.modules.course_lessons: {
 
 timetable.courses: {
     INVALID_NON_LESSON_RECORD: "Fehlerhafte Zeile in LESSONS-Tabelle, TIME-Feld leer, aber LENGTH nicht '--'.\n  id: "
-    NO_CLASSROOM:           "Diese Klasse hat keinen Klassenraum ($): "
+    NO_CLASSROOM:   "Diese Klasse hat keinen Klassenraum ($): {klass}"
+    INVALID_ROOM:   "Im Kurs (Gruppe {klass}.{group}, Fach-id {sid}, Lehrer {tid}), unbekannter Raum: '{rid}'"
     BAD_TIME_FIELD: "Ungültiges Zeit-Feld (TIME) in LESSONS-Tabelle, id={id}: '{time}'"
     UNKNOWN_GROUP:  "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
 }

@@ -45,7 +45,7 @@ from typing import NamedTuple, Optional
 
 from core.db_management import open_database, db_days_periods, db_read_fields
 from core.classes import Classes, build_group_data
-from core.basic_data import get_classes
+from core.basic_data import get_classes, get_rooms
 
 ### -----
 
@@ -290,19 +290,39 @@ class TimetableData:
         return self.CLASSES[klass].classroom
 
 
-#?
-def get_rooms(roomlist: str, classroom: str) -> list[str]:
-    # check validity?
+def lesson_rooms(lessondata: LessonData) -> list[str]:
+    """Read a list of possible rooms for the give lesson.
+    Check the components.
+    """
     rlist = []
-    if not roomlist:
+    room_map = get_rooms()
+    if not lessondata.room:
         return rlist
-    for r in roomlist.rstrip("+").split("/"):
-        if r == "$":
-            if not classroom:
-                raise RoomError(T["NO_CLASSROOM"])
-            rlist.append(classroom)
-        else:
-            rlist.append(r)
+    rooms = lessondata.room.rstrip("+")
+    if rooms:
+        for r in rooms.rstrip("+").split("/"):
+            if r == "$":
+                # Get classroom
+                classroom = get_classes().get_classroom(
+                    lessondata.course.klass
+                )
+                if not classroom:
+                    SHOW_ERROR(T["NO_CLASSROOM"].format(klass=klass))
+                    continue
+                rlist.append(classroom)
+            elif r in room_map:
+                rlist.append(r)
+            else:
+                SHOW_ERROR(T["INVALID_ROOM"].format(
+                        rid=r,
+                        klass=lessondata.course.klass,
+                        group=lessondata.course.group,
+                        sid=lessondata.course.sid,
+                        tid=lessondata.course.tid
+                    )
+                )
+    if lessondata.room[-1] == "+":
+        rlist.append("+")
     return rlist
 
 
@@ -313,7 +333,9 @@ if __name__ == "__main__":
 
     tt_data = get_timetable_data()
     for l in tt_data["LESSONLIST"]:
-        print(f"  {l}")
+        if l:
+            print(f"  {l}")
+            print(f"  -->", lesson_rooms(l))
     quit(0)
 
     ttdata = TimetableData()
