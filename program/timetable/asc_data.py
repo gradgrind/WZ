@@ -79,6 +79,7 @@ from core.basic_data import (
     get_subjects,
     get_rooms
 )
+from timetable.courses import get_timetable_data, blocktag2blocksid
 
 
 def idsub(tag):
@@ -87,6 +88,7 @@ def idsub(tag):
     """
     return re.sub("[^-_A-Za-z0-9]", "_", tag)
 
+WHOLE_CLASS = T["WHOLE_CLASS"]
 
 ### -----
 
@@ -224,7 +226,7 @@ def get_groups_aSc():
     group_list = []
     classes = get_classes()
     for klass, _ in classes.get_class_list():
-        g = T["WHOLE_CLASS"]
+        g = WHOLE_CLASS
         group_list.append(
             {
                 "@id": idsub(f"{klass}-{g}"),
@@ -252,7 +254,144 @@ def get_groups_aSc():
     return group_list
 
 
+LESSON_LIST = []    # list of aSc lessons
+def aSc_lesson(classes, sid, groups, tids, duration, rooms):
+#TODO: How are lessons with no class dealt with???
+    if not classes:
+        raise Bug(f"LESSON WITH NO CLASSES: {[sid, groups, tids, duration, rooms]}")
+    __classes = sorted(classes)
+    id = lesson_id("XX" if len(__classes) > 1 else __classes[0])
+    LESSON_LIST.append(
+        {
+            "@id": id,
+            "@classids": ",".join(__classes),
+            "@subjectid": sid,
+            "@groupids": ",".join(sorted(groups)),
+            "@teacherids": ",".join(sorted(tids)),
+            "@durationperiods": duration,
+            # Note that in aSc the number of periods means the
+            # number of _single_ periods, so it is the same as
+            # the previous field – lessons are added singly, not
+            # as multiples.
+            "@periodsperweek": duration,
+            "@classroomids": ",".join(sorted(rooms))
+        }
+    )
+
+
+CLASS_COUNTER = {}  # for indexing lessons on a class-by-class basis
+def lesson_id(klass):
+    i = CLASS_COUNTER.get(klass) or 0
+    i += 1
+    CLASS_COUNTER[klass] = i
+    # It is not likely that there will be >99 lessons for a class:
+    return f"{idsub(klass)}_{i:02}"
+
+
 # TODO ...
+# What about presorting on classes and subjects?
+def get_lessons():
+    """Build list of lessons for aSc-timetables."""
+    LESSON_LIST.clear()
+    CLASS_COUNTER.clear()
+    class_counter = {}  # for indexing lessons on a class-by-class basis
+    tt_data = get_timetable_data()
+    """
+    {
+        "LESSONLIST": lessonlist,
+        "CLASS2LESSONS": class2lessons,
+        "BLOCK_MEMBERS": block_members,
+        "BLOCK_SUBLESSONS": block_sublessons,
+        "PARTNERS": partners,
+        "PARTNERS_TIME": partners_time,
+        "TIMETABLE_CELLS": timetable_cells,
+    }
+    """
+    presorted = {}
+    lessons = tt_data["LESSONLIST"]     # id-indexed LessonData items
+    block_members = tt_data["BLOCK_MEMBERS"]
+    for tt_cell in tt_data["TIMETABLE_CELLS"]:
+        lessondata = lessons[tt_cell]
+        coursedata = lessondata.course
+        if lessondata.place.startswith(">"):
+            ## block sublesson with direct time
+            blocksid = blocktag2blocksid(lessondata.place)
+            # Get block members
+#TODO
+            print(f"  §§§ BLOCK {lessondata.place}: ({blocksid})",
+                block_members[lessondata.place]
+            )
+# Accumulate the tids, groups and rooms ...
+            btids = set()
+            bgroups = set()
+            brooms = set()
+            bclasses = set()
+            for id in block_members[lessondata.place]:
+                bldata = lessons[id]
+                bcdata = bldata.course
+                bclasses.add(bcdata.klass)
+# Null teacher possible?
+                btids.add(bcdata.tid)
+                bgroups.add(full_group(bcdata.klass, bcdata.group))
+#TODO: The rooms need processing
+# What to do with multiple rooms??!!!
+                if bldata.room:
+                    brooms.add(bldata.room)
+
+#TODO: Actually the lesson should be added later, after sorting into
+# class and subject ...
+            aSc_lesson(bclasses, blocksid, bgroups, btids, lessondata.length, brooms)
+            print(" +++", LESSON_LIST[-1])
+
+#            try:
+#                block_sublessons[place].append(id)
+#            except KeyError:
+#                block_sublessons[place] = [id]
+
+        elif lessondata.place.startswith("="):
+            ## partner time
+            pass
+#            if place in partners_time:
+#                SHOW_ERROR()
+#            else:
+#                partners_time[place] = id
+
+        else:
+            ## plain lesson with direct time
+            try:
+                classmap = presorted[coursedata.klass]
+            except KeyError:
+                classmap = {}
+                presorted[coursedata.klass] = classmap
+            try:
+                classmap[coursedata.sid].append(lessondata)
+            except KeyError:
+                classmap[coursedata.sid] = [lessondata]
+
+
+
+    for klass in sorted(presorted):
+        kpmap = presorted[klass]
+        for sid in sorted(kpmap):
+            for lessondata in kpmap[sid]:
+                coursedata = lessondata.course
+#TODO: Need to select type again here ... ???
+# Or use new data structures
+                aSc_lesson(
+                    {coursedata.klass},
+                    coursedata.sid,
+                    {full_group(coursedata.klass, coursedata.group)},
+                    {coursedata.tid},
+                    lessondata.length,
+#TODO: room needs processing
+                    [lessondata.room]   # ordered, so a set can't be used
+                )
+#                print(" +++", LESSON_LIST[-1])
+
+
+def full_group(klass, group):
+    __group = WHOLE_CLASS if group == "*" else group
+    return f'{klass}-{__group}'
 
 
 class Classes_aSc:#(Classes):
@@ -631,6 +770,8 @@ if __name__ == "__main__":
         print("\n*** CLASS-GROUPS ***")
         for gdata in groups:
             print("   ", gdata)
+
+    get_lessons()
 
     quit(0)
 

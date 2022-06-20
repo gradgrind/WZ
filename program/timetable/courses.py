@@ -244,6 +244,10 @@ def get_timetable_data():
     }
 
 
+def blocktag2blocksid(tag: str) -> str:
+    return tag.split("#", 1)[0].lstrip(">")
+
+
 ############################### ??? ###############################
 
 
@@ -286,6 +290,7 @@ class TimetableData:
         return self.CLASSES[klass].classroom
 
 
+#?
 def get_rooms(roomlist: str, classroom: str) -> list[str]:
     # check validity?
     rlist = []
