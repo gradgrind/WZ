@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-06-16
+Last updated:  2022-06-21
 
 Edit course and lesson data.
 
@@ -499,7 +499,7 @@ class CourseEditor(QSplitter):
             except ValueError:
                 record.setValue("LENGTH", "1")
                 record.setValue("PAYROLL", f"*{SHARED_DATA['PAYROLL'][0][0]}")
-                record.setValue("ROOM", "?")
+                record.setValue("ROOM", "+")
             record.setValue("id", None)
             n = model.rowCount()
         else:
@@ -545,7 +545,7 @@ class CourseEditor(QSplitter):
         else:
             record = model.record()
             record.setValue("course", self.this_course)
-            record.setValue("ROOM", "?")
+            record.setValue("ROOM", "+")
             record.setValue("PAYROLL", f"*{SHARED_DATA['PAYROLL'][0][0]}")
             bsid = SHARED_DATA["COURSE"]["SUBJECT"]
             n = 0

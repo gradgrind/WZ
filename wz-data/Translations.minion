@@ -180,6 +180,7 @@ timetable.courses: {
 
 timetable.asc_data: {
     WHOLE_CLASS:    alle  # name for a "group" comprising the whole class
+    ROOM_TODO:      "Raum muss noch festgelegt werden"
 }
 
 timetable.constraints_teacher: {

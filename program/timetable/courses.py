@@ -291,7 +291,7 @@ class TimetableData:
 
 
 def lesson_rooms(lessondata: LessonData) -> list[str]:
-    """Read a list of possible rooms for the give lesson.
+    """Read a list of possible rooms for the given lesson.
     Check the components.
     """
     rlist = []
