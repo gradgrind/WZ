@@ -1,7 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-06-21
-
-*** TODO ... adapting to use the sqlite db data.
+timetable/asc_data.py - last updated 2022-06-22
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -262,16 +260,20 @@ def get_groups_aSc():
     return group_list
 
 
-LESSON_LIST = []    # list of aSc lessons
 def aSc_lesson(classes, sid, groups, tids, duration, rooms):
+    """Given the data for an aSc lesson item, return the school class
+    ("XX" if there are multiple classes) and the lesson item prototype –
+    the id is added later.
+    """
 #TODO: How are lessons with no class dealt with???
     if not classes:
         raise Bug(f"LESSON WITH NO CLASSES: {[sid, groups, tids, duration, rooms]}")
     __classes = sorted(classes)
-    id = lesson_id("XX" if len(__classes) > 1 else __classes[0])
-    LESSON_LIST.append(
+    # <id> is initially empty, it is added later
+    return (
+        "XX" if len(__classes) > 1 else idsub(__classes[0]),    # class
         {
-            "@id": id,
+            "@id": None,
             "@classids": ",".join(__classes),
             "@subjectid": sid,
             "@groupids": ",".join(sorted(groups)),
@@ -289,43 +291,39 @@ def aSc_lesson(classes, sid, groups, tids, duration, rooms):
 
 def aSc_block_lesson(lesson, length):
     """Build an aSc lesson record for a block sublesson based on an
-    earlier record (cached)
+    earlier record (cached).
     """
     l2 = lesson.copy()
-    l2["@id"] = lesson_id(lesson["@id"].split("_", 1)[0])
     l2["@durationperiods"] = length
     l2["@periodsperweek"] = length
-    LESSON_LIST.append(l2)
+    return l2
 
 
-CLASS_COUNTER = {}  # for indexing lessons on a class-by-class basis
-def lesson_id(klass):
-    i = CLASS_COUNTER.get(klass) or 0
-    i += 1
-    CLASS_COUNTER[klass] = i
-    # It is not likely that there will be >99 lessons for a class:
-    return f"{idsub(klass)}_{i:02}"
-
-
-# TODO ...
-# What about presorting on classes and subjects?
 def get_lessons():
     """Build list of lessons for aSc-timetables."""
-    LESSON_LIST.clear()
-    CLASS_COUNTER.clear()
-    class_counter = {}  # for indexing lessons on a class-by-class basis
+
+    def new_lesson(__klass, __sid, __lesson):
+        """Add lesson item to <presorted> mapping."""
+        try:
+            classmap = presorted[__klass]
+        except KeyError:
+            classmap = {}
+            presorted[__klass] = classmap
+        try:
+            classmap[__sid].append(__lesson)
+        except KeyError:
+            classmap[__sid] = [__lesson]
+
     tt_data = get_timetable_data()
-    """
-    {
-        "LESSONLIST": lessonlist,
-        "CLASS2LESSONS": class2lessons,
-        "BLOCK_MEMBERS": block_members,
-        "BLOCK_SUBLESSONS": block_sublessons,
-        "PARTNERS": partners,
-        "PARTNERS_TIME": partners_time,
-        "TIMETABLE_CELLS": timetable_cells,
-    }
-    """
+    # Fields:
+    #   LESSONLIST
+    #   CLASS2LESSONS
+    #   BLOCK_MEMBERS
+    #   BLOCK_SUBLESSONS
+    #   PARTNERS
+    #   PARTNERS_TIME
+    #   TIMETABLE_CELLS
+
     presorted = {}
     block_cache = {}    # cache for block lessons: {tag -> lesson dict}
     lessons = tt_data["LESSONLIST"]     # id-indexed LessonData items
@@ -342,14 +340,14 @@ def get_lessons():
                 block_members[lessondata.place]
             )
             try:
-                blesson = block_cache[lessondata.place]
+                klass, blesson = block_cache[lessondata.place]
             except KeyError:
                 pass
             else:
-# Actually, generate later, after sorting ...
-                aSc_block_lesson(blesson, lessondata.length)
+                # Use the cached lesson item as a basis for the new one
+                lesson = aSc_block_lesson(blesson, lessondata.length)
+                new_lesson(klass, blocksid, lesson)
                 continue
-
 
 # Accumulate the tids, groups and rooms ...
             btids = set()
@@ -379,15 +377,12 @@ def get_lessons():
                     if llt not in broomlist:
                         brooms.update(ll)
                         broomlist.add(llt)
-
-#TODO: Actually the lesson should be added later, after sorting into
-# class and subject ...
-# The lesson data can be cached for repeated instances of the same block tag
-# (change id and length).
+            # The lesson data is cached for repeated instances of the
+            # same block tag (change length).
             if "+" in brooms:
                 brooms.discard("+")
                 brooms.add("rXXX")
-            aSc_lesson(
+            klass, lesson = aSc_lesson(
                 bclasses,
                 blocksid,
                 bgroups,
@@ -395,8 +390,8 @@ def get_lessons():
                 lessondata.length,
                 sorted(brooms)
             )
-            print(" +++", LESSON_LIST[-1])
-            block_cache[lessondata.place] = LESSON_LIST[-1]
+            block_cache[lessondata.place] = (klass, lesson)
+            new_lesson(klass, blocksid, lesson)
 
 #            try:
 #                block_sublessons[place].append(id)
@@ -404,6 +399,8 @@ def get_lessons():
 #                block_sublessons[place] = [id]
 
         elif lessondata.place.startswith("="):
+#TODO ...
+
             ## partner time
             pass
 #            if place in partners_time:
@@ -413,36 +410,31 @@ def get_lessons():
 
         else:
             ## plain lesson with direct time
-            try:
-                classmap = presorted[coursedata.klass]
-            except KeyError:
-                classmap = {}
-                presorted[coursedata.klass] = classmap
-            try:
-                classmap[coursedata.sid].append(lessondata)
-            except KeyError:
-                classmap[coursedata.sid] = [lessondata]
+            klass, lesson = aSc_lesson(
+                {coursedata.klass},
+                coursedata.sid,
+                {full_group(coursedata.klass, coursedata.group)},
+                {coursedata.tid},
+                lessondata.length,
+#TODO: room needs processing
+                [lessondata.room]   # ordered, so a set can't be used
+            )
+            new_lesson(klass, coursedata.sid, lesson)
 
-# I could generate the lesson records EXCEPT for the id!, then collect
-# these on a class and subject basis for sorting, e.g. (class, sid, lesson).
-
+    lesson_list = []    # final lesson list
+    class_counter = {}  # for indexing lessons on a class-by-class basis
     for klass in sorted(presorted):
         kpmap = presorted[klass]
         for sid in sorted(kpmap):
-            for lessondata in kpmap[sid]:
-                coursedata = lessondata.course
-#TODO: Need to select type again here ... ???
-# Or use new data structures
-                aSc_lesson(
-                    {coursedata.klass},
-                    coursedata.sid,
-                    {full_group(coursedata.klass, coursedata.group)},
-                    {coursedata.tid},
-                    lessondata.length,
-#TODO: room needs processing
-                    [lessondata.room]   # ordered, so a set can't be used
-                )
-#                print(" +++", LESSON_LIST[-1])
+            for lesson in kpmap[sid]:
+                # Add id and move lesson to <lesson_list>
+                i = class_counter.get(klass) or 0
+                i += 1
+                class_counter[klass] = i
+                # It is not likely that there will be >99 lessons for a class:
+                lesson["@id"] = f"{klass}_{i:02}"
+                lesson_list.append(lesson)
+    return lesson_list
 
 
 def full_group(klass, group):
@@ -827,7 +819,11 @@ if __name__ == "__main__":
         for gdata in groups:
             print("   ", gdata)
 
-    get_lessons()
+    lessons = get_lessons()
+    if __TEST:
+        print("\n*** LESSON ITEMS ***")
+        for l in lessons:
+            print("  +++", l)
 
     quit(0)
 
