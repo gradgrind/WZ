@@ -446,7 +446,7 @@ class CourseEditor(QSplitter):
         self.lessontable.selectRow(self.current_row)
 
     def lesson_selected(self, row):
-        self.current_row = row
+        # self.current_lesson = row
         # print("SELECT LESSON", row)
         self.note_editor.clear()
         if row >= 0:
