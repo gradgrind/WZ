@@ -443,10 +443,10 @@ class CourseEditor(QSplitter):
         database. Redisplay the information.
         """
         self.lessonmodel.select()
-        self.lessontable.selectRow(self.current_row)
+        self.lessontable.selectRow(self.current_lesson)
 
     def lesson_selected(self, row):
-        # self.current_lesson = row
+        self.current_lesson = row
         # print("SELECT LESSON", row)
         self.note_editor.clear()
         if row >= 0:
