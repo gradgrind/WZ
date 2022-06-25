@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-06-20
+Last updated:  2022-06-25
 
 Access course/subject/lesson data for timetable.
 
@@ -43,8 +43,7 @@ T = TRANSLATIONS("timetable.courses")
 
 from typing import NamedTuple, Optional
 
-from core.db_management import open_database, db_days_periods, db_read_fields
-from core.classes import Classes, build_group_data
+from core.db_management import open_database, db_read_fields
 from core.basic_data import get_classes, get_rooms
 
 ### -----
@@ -248,48 +247,6 @@ def blocktag2blocksid(tag: str) -> str:
     return tag.split("#", 1)[0].lstrip(">")
 
 
-############################### ??? ###############################
-
-
-class TimetableData:
-    def __init__(self):
-        self.DAYS, self.PERIODS = db_days_periods()
-        self.CLASSES = Classes()
-        # TODO: Read other tables?
-
-        self.class2groups = {}
-        self.class2atoms = {}
-        for klass, data in self.CLASSES.items():
-            # print("\n %%", klass)
-            res = build_group_data(data.divisions)
-            self.class2groups[klass] = res["GROUPS"]
-            self.class2atoms[klass] = res["MINIMAL_SUBGROUPS"]
-
-    # ???
-    def timeslot_index(self, time: str) -> Optional[tuple[int, int]]:
-        if time == "@?":
-            return None
-        d, p = time[1:].split(".", 1)
-        return (self.DAYS.index(d), self.PERIODS.index(p))
-
-    # ???
-    def get_unit_data(self, course, length, room, place):
-        if course:
-            # a "plain" lesson with no partners
-            link = None
-            classroom = self.CLASSES[course.klass].classroom
-            roomlist = get_rooms(room, classroom)
-            tidlist = [] if course.tid == "--" else [course.tid]
-            group = (course.klass, course.group)
-            return (link, tidlist, group, roomlist)
-
-    # TODO
-    # ...else:
-
-    def get_classroom(self, klass):
-        return self.CLASSES[klass].classroom
-
-
 def lesson_rooms(lessondata: LessonData) -> list[str]:
     """Read a list of possible rooms for the given lesson.
     Check the components.
@@ -300,25 +257,26 @@ def lesson_rooms(lessondata: LessonData) -> list[str]:
         return rlist
     rooms = lessondata.room.rstrip("+")
     if rooms:
-        for r in rooms.rstrip("+").split("/"):
+        for r in rooms.split("/"):
             if r == "$":
                 # Get classroom
-                classroom = get_classes().get_classroom(
-                    lessondata.course.klass
-                )
+                classroom = get_classes().get_classroom(lessondata.course.klass)
                 if not classroom:
-                    SHOW_ERROR(T["NO_CLASSROOM"].format(klass=klass))
+                    SHOW_ERROR(
+                        T["NO_CLASSROOM"].format(klass=lessondata.course.klass)
+                    )
                     continue
                 rlist.append(classroom)
             elif r in room_map:
                 rlist.append(r)
             else:
-                SHOW_ERROR(T["INVALID_ROOM"].format(
+                SHOW_ERROR(
+                    T["INVALID_ROOM"].format(
                         rid=r,
                         klass=lessondata.course.klass,
                         group=lessondata.course.group,
                         sid=lessondata.course.sid,
-                        tid=lessondata.course.tid
+                        tid=lessondata.course.tid,
                     )
                 )
     if lessondata.room[-1] == "+":
@@ -335,15 +293,4 @@ if __name__ == "__main__":
     for l in tt_data["LESSONLIST"]:
         if l:
             print(f"  {l}")
-            print(f"  -->", lesson_rooms(l))
-    quit(0)
-
-    ttdata = TimetableData()
-
-    # For the timetable
-    lessons, class2lessons = get_timetable_data()
-    klass = "10G"
-    print(f"CLASS {klass}:")
-    lids = class2lessons[klass]
-    for lid in lids:
-        print(f"  {lessons[lid]}")
+            print("  -->", lesson_rooms(l))

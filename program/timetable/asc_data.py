@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-06-22
+timetable/asc_data.py - last updated 2022-06-25
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -19,6 +19,8 @@ Copyright 2022 Michael Towers
    limitations under the License.
 """
 
+#TODO: handle caching of day and period data ...
+
 __TEST = False
 __TEST = True
 
@@ -29,10 +31,6 @@ __TEST = True
 
 ### Messages
 
-_DUPLICATE_TAG = (
-    "Fachtabelle, im Feld {key}: Werte „{source1}“ und"
-    " „{source2}“ sind intern nicht unterscheidbar."
-)
 _NO_JOINT_ROOMS = (
     "Fach {sid} ({tag}), Klassen {classes}:" " Keine verfügbare Räume (zu '?')"
 )
@@ -58,9 +56,7 @@ if __name__ == "__main__":
 
 # IMPORTANT: Note that some uses of Python dicts here may assume ordered
 # entries. If the implementation is altered, this should be taken into
-# account. One place is the definition of pre-placed lessons
-# for a subject. If there is more than one entry for this subject and
-# varying durations, the placement could be affected.
+# account.
 
 T = TRANSLATIONS("timetable.asc_data")
 
@@ -70,18 +66,14 @@ import re, json
 
 import xmltodict
 
-from core.db_management import open_database, db_read_fields, db_key_value_list
-from core.basic_data import (
-    get_classes,
-    get_teachers,
-    get_subjects,
-    get_rooms
-)
+from core.db_management import open_database, db_read_fields
+from core.basic_data import get_classes, get_teachers, get_subjects, get_rooms
 from timetable.courses import (
     get_timetable_data,
     blocktag2blocksid,
-    lesson_rooms
+    lesson_rooms,
 )
+from ui.course_dialogs import timeslot2index, TimeSlotError
 
 
 def idsub(tag):
@@ -90,14 +82,14 @@ def idsub(tag):
     """
     return re.sub("[^-_A-Za-z0-9]", "_", tag)
 
+
 WHOLE_CLASS = T["WHOLE_CLASS"]
 
 ### -----
 
 
 def get_days_aSc() -> list[dict]:
-    """Return an ordered list of aSc elements for the days.
-    """
+    """Return an ordered list of aSc elements for the days."""
     vlist = db_read_fields("TT_DAYS", ("N", "TAG", "NAME"), sort_field="N")
     nd = len(vlist)
     i = int(10 ** nd)
@@ -116,8 +108,7 @@ def get_days_aSc() -> list[dict]:
 
 
 def get_periods_aSc() -> list[dict]:
-    """Return an ordered list of aSc elements for the periods.
-    """
+    """Return an ordered list of aSc elements for the periods."""
     vlist = db_read_fields(
         "TT_PERIODS",
         ("N", "TAG", "NAME", "START_TIME", "END_TIME"),
@@ -163,42 +154,13 @@ def class_days_aSc(klass: str) -> str:
     return ",".join(weektags)
 
 
-def teacher_days_aSc(tid: str) -> str:
-    """Return a "timeoff" entry for the given teacher."""
-    tdata = get_teachers()[tid]
-    try:
-        day_periods = tdata.tt_data["AVAILABLE"].split("_")
-    except KeyError:
-        day_periods = ""
-    weektags = []
-    nperiods = len(get_periods_aSc())
-    for d in range(len(get_days_aSc())):
-        default = "1"
-        try:
-            ddata = day_periods[d]
-        except IndexError:
-            ddata = ""
-        daytags = []
-        for p in range(nperiods):
-            try:
-                px = "0" if ddata[p] == "-" else "1"
-                default = px
-            except IndexError:
-                px = default
-            daytags.append(px)
-        weektags.append("." + "".join(daytags))
-    return ",".join(weektags)
-
-
 def get_rooms_aSc() -> list[dict]:
     """Return an ordered list of aSc elements for the rooms."""
     rooms = [
         {"@id": idsub(rid), "@short": rid, "@name": name}
         for rid, name in get_rooms().items()
     ]
-    rooms.append(
-        {"@id": "rXXX", "@short": "rXXX", "@name": T["ROOM_TODO"]}
-    )
+    rooms.append({"@id": "rXXX", "@short": "rXXX", "@name": T["ROOM_TODO"]})
     return rooms
 
 
@@ -260,18 +222,55 @@ def get_groups_aSc():
     return group_list
 
 
+#TODO?
+def teacher_days_aSc(tt_data: dict) -> str:
+    """Return a "timeoff" entry for the given teacher's <tt_data>."""
+    try:
+        day_periods = tt_data["AVAILABLE"].split("_")
+    except KeyError:
+        day_periods = ""
+    weektags = []
+    nperiods = len(get_periods_aSc())
+    for d in range(len(get_days_aSc())):
+        default = "1"
+        try:
+            ddata = day_periods[d]
+        except IndexError:
+            ddata = ""
+        daytags = []
+        for p in range(nperiods):
+            try:
+                px = "0" if ddata[p] == "-" else "1"
+                default = px
+            except IndexError:
+                px = default
+            daytags.append(px)
+        weektags.append("." + "".join(daytags))
+    return ",".join(weektags)
+
+
+def get_teachers_aSc():
+#TODO
+    print("\nTODO: teachers ...")
+    for tdata in get_teachers().values():
+        print("  ...", tdata)
+    return []
+
+
 def aSc_lesson(classes, sid, groups, tids, duration, rooms):
     """Given the data for an aSc lesson item, return the school class
     ("XX" if there are multiple classes) and the lesson item prototype –
     the id is added later.
     """
-#TODO: How are lessons with no class dealt with???
+    # TODO: How are lessons with no class dealt with???
     if not classes:
-        raise Bug(f"LESSON WITH NO CLASSES: {[sid, groups, tids, duration, rooms]}")
+        raise Bug(
+            f"LESSON WITH NO CLASSES: {[sid, groups, tids, duration, rooms]}"
+        )
     __classes = sorted(classes)
     # <id> is initially empty, it is added later
     return (
-        "XX" if len(__classes) > 1 else idsub(__classes[0]),    # class
+        "XX" if len(__classes) > 1 else idsub(__classes[0]),  # class
         {
             "@id": None,
             "@classids": ",".join(__classes),
@@ -284,8 +283,8 @@ def aSc_lesson(classes, sid, groups, tids, duration, rooms):
             # the previous field – lessons are added singly, not
             # as multiples.
             "@periodsperweek": duration,
-            "@classroomids": ",".join(sorted(rooms))
-        }
+            "@classroomids": ",".join(rooms),
+        },
     )
 
 
@@ -302,7 +301,7 @@ def aSc_block_lesson(lesson, length):
 def get_lessons():
     """Build list of lessons for aSc-timetables."""
 
-    def new_lesson(__klass, __sid, __lesson):
+    def new_lesson(__klass, __sid, __lesson, __place):
         """Add lesson item to <presorted> mapping."""
         try:
             classmap = presorted[__klass]
@@ -313,6 +312,108 @@ def get_lessons():
             classmap[__sid].append(__lesson)
         except KeyError:
             classmap[__sid] = [__lesson]
+        # TODO: If time set, add lessondata.time as card. Would it make sense to
+        # include lessondata.id? Rooms are supplied as __place
+        if lessondata.time != "@?":
+            if lessondata.time.startswith("@"):
+                # Get 0-based indexes for day and period
+                try:
+                    d, p = timeslot2index(lessondata.time[1:])
+                except TimeSlotError:
+                    pass
+                else:
+                    place = __place or __lesson["@classroomids"]
+                    # print("$$$ CARDLIST +", __lesson, "\n ...", d+1, p+1, place)
+                    cardlist.append(
+                        (
+                            __lesson,
+                            d + 1,
+                            p + 1,
+                            place,
+                            "0" if lessondata.time[1] == "?" else "1",
+                        )
+                    )
+                    return
+            SHOW_ERROR(
+                T["BAD_TIME"].format(time=lessondata.time, id=lessondata.id)
+            )
+
+    def parse_rooms(lessondata):
+        rooms = lesson_rooms(lessondata)
+        if rooms and rooms[-1] == "+":
+            rooms[-1] = "rXXX"
+        return rooms
+
+    def block_lesson(ldata):
+        blocksid = blocktag2blocksid(ldata.place)
+        try:
+            klass, blesson, place = block_cache[ldata.place]
+        except KeyError:
+            pass
+        else:
+            # Use the cached lesson item as a basis for the new one
+            lesson = aSc_block_lesson(blesson, ldata.length)
+            new_lesson(klass, blocksid, lesson, place)
+            return
+
+        # Accumulate the tids, groups and rooms ...
+        btids = set()
+        bgroups = set()
+        broomlist = set()  # Collect distinct room lists (text form)
+        brooms = set()  # Collect distinct rooms
+        bplaces = set()  # Collect used rooms
+        bclasses = set()
+        for id in block_members[ldata.place]:
+            bldata = lessons[id]
+            bcdata = bldata.course
+            bclasses.add(bcdata.klass)
+            # TODO: Null teacher possible?
+            btids.add(bcdata.tid)
+            bgroups.add(full_group(bcdata.klass, bcdata.group))
+            # As aSc doesn't support XML input of multiple rooms,
+            # the multiple rooms are collected independently – for
+            # manual intervention!
+            # For aSc all rooms and teachers can be lumped together
+            # as there are no features for handling the involved
+            # classes separately.
+            # TODO: It might in some cases be better to suppress the teachers and rooms?
+            # These could be taken out of circulation by some other means?
+            if bldata.room:
+                # Check rooms, replace "$"
+                ll = lesson_rooms(bldata)
+                llt = "/".join(ll)
+                if llt not in broomlist:
+                    brooms.update(ll)
+                    broomlist.add(llt)
+            if bldata.place:
+                # TODO: room_map
+                if bldata.place in room_map:
+                    bplaces.add(bldata.place)
+                else:
+                    SHOW_ERROR(
+                        T["INVALID_PLACE"].format(
+                            rid=bldata.place,
+                            klass=bldata.course.klass,
+                            group=bldata.course.group,
+                            sid=bldata.course.sid,
+                            tid=bldata.course.tid,
+                        )
+                    )
+
+        # The lesson data is cached for repeated instances of the
+        # same block tag (change length).
+        if "+" in brooms:
+            brooms.discard("+")
+            brooms.add("rXXX")
+        klass, lesson = aSc_lesson(
+            bclasses, blocksid, bgroups, btids, ldata.length, sorted(brooms)
+        )
+        place = ",".join(sorted(bplaces))
+        block_cache[ldata.place] = (klass, lesson, place)
+        new_lesson(klass, blocksid, lesson, place)
+
+    # TODO: aSc can't cope with multiple rooms, so it might be best to make a
+    # list and emit this for the user ...
 
     tt_data = get_timetable_data()
     # Fields:
@@ -325,88 +426,46 @@ def get_lessons():
     #   TIMETABLE_CELLS
 
     presorted = {}
-    block_cache = {}    # cache for block lessons: {tag -> lesson dict}
-    lessons = tt_data["LESSONLIST"]     # id-indexed LessonData items
+    block_cache = {}  # cache for block lessons: {tag -> lesson dict}
+    lessons = tt_data["LESSONLIST"]  # id-indexed LessonData items
     block_members = tt_data["BLOCK_MEMBERS"]
+    cardlist = []  # for collecting placements
     for tt_cell in tt_data["TIMETABLE_CELLS"]:
         lessondata = lessons[tt_cell]
         coursedata = lessondata.course
         if lessondata.place.startswith(">"):
             ## block sublesson with direct time
-            blocksid = blocktag2blocksid(lessondata.place)
-            # Get block members
-#TODO
-            print(f"  §§§ BLOCK {lessondata.place}: ({blocksid})",
-                block_members[lessondata.place]
-            )
-            try:
-                klass, blesson = block_cache[lessondata.place]
-            except KeyError:
-                pass
-            else:
-                # Use the cached lesson item as a basis for the new one
-                lesson = aSc_block_lesson(blesson, lessondata.length)
-                new_lesson(klass, blocksid, lesson)
-                continue
-
-# Accumulate the tids, groups and rooms ...
-            btids = set()
-            bgroups = set()
-            broomlist = set()   # Collect distinct room lists (text form)
-            brooms = set()      # Collect distinct rooms
-            bclasses = set()
-            for id in block_members[lessondata.place]:
-                bldata = lessons[id]
-                bcdata = bldata.course
-                bclasses.add(bcdata.klass)
-# Null teacher possible?
-                btids.add(bcdata.tid)
-                bgroups.add(full_group(bcdata.klass, bcdata.group))
-                # As aSc doesn't support XML input of multiple rooms,
-                # the multiple rooms are collected independently – for
-                # manual intervention!
-                # For aSc all rooms and teachers can be lumped together
-                # as there are no features for handling the involved
-                # classes separately.
-#TODO: It might in some cases be better to suppress the teachers and rooms?
-# These could be taken out of circulation by some other means?
-                if bldata.room:
-                    # Check rooms, replace "$"
-                    ll = lesson_rooms(bldata)
-                    llt = "/".join(ll)
-                    if llt not in broomlist:
-                        brooms.update(ll)
-                        broomlist.add(llt)
-            # The lesson data is cached for repeated instances of the
-            # same block tag (change length).
-            if "+" in brooms:
-                brooms.discard("+")
-                brooms.add("rXXX")
-            klass, lesson = aSc_lesson(
-                bclasses,
-                blocksid,
-                bgroups,
-                btids,
-                lessondata.length,
-                sorted(brooms)
-            )
-            block_cache[lessondata.place] = (klass, lesson)
-            new_lesson(klass, blocksid, lesson)
-
-#            try:
-#                block_sublessons[place].append(id)
-#            except KeyError:
-#                block_sublessons[place] = [id]
+            block_lesson(lessondata)
 
         elif lessondata.place.startswith("="):
-#TODO ...
-
             ## partner time
-            pass
-#            if place in partners_time:
-#                SHOW_ERROR()
-#            else:
-#                partners_time[place] = id
+            # As far as I can tell, it is not possible in aSc to specify
+            # that a group of lessons must start at the same time.
+            # Thus I just add normal lessons, setting the time if it is
+            # specified, and emit a list of parallel lessons for the
+            # user.
+            for id in tt_data["PARTNERS"][lessondata.place]:
+                # print("***********", lessons[id])
+                plesson = lessons[id]
+                if plesson.place.startswith(">"):
+                    ## block sublesson with indirect time
+                    # TODO: Not supported in aSc generator?
+                    SHOW_WARNING(f"Partner tag in block sublesson: {plesson}")
+                    # ?
+                    block_lesson(plesson)
+
+                else:
+                    ## plain lesson with indirect time
+                    pcdata = plesson.course
+                    klass, lesson = aSc_lesson(
+                        {pcdata.klass},
+                        pcdata.sid,
+                        {full_group(pcdata.klass, pcdata.group)},
+                        {pcdata.tid},
+                        plesson.length,
+                        parse_rooms(plesson),  # ordered, so a set can't be used
+                    )
+                    new_lesson(klass, pcdata.sid, lesson, plesson.place)
 
         else:
             ## plain lesson with direct time
@@ -416,12 +475,11 @@ def get_lessons():
                 {full_group(coursedata.klass, coursedata.group)},
                 {coursedata.tid},
                 lessondata.length,
-#TODO: room needs processing
-                [lessondata.room]   # ordered, so a set can't be used
+                parse_rooms(lessondata),  # ordered, so a set can't be used
             )
-            new_lesson(klass, coursedata.sid, lesson)
+            new_lesson(klass, coursedata.sid, lesson, lessondata.place)
 
-    lesson_list = []    # final lesson list
+    lesson_list = []  # final lesson list
     class_counter = {}  # for indexing lessons on a class-by-class basis
     for klass in sorted(presorted):
         kpmap = presorted[klass]
@@ -434,132 +492,25 @@ def get_lessons():
                 # It is not likely that there will be >99 lessons for a class:
                 lesson["@id"] = f"{klass}_{i:02}"
                 lesson_list.append(lesson)
-    return lesson_list
+
+    cards = []
+    for l, d, p, r, locked in sorted(cardlist, key=lambda x: x[0]["@id"]):
+        # print("CARD:", l, "\n  ...", d, p, r, locked)
+        cards.append(
+            {
+                "@lessonid": l["@id"],
+                "@period": str(p),
+                "@day": str(d),
+                "@classroomids": r,
+                "@locked": locked,
+            }
+        )
+    return lesson_list, cards
 
 
 def full_group(klass, group):
     __group = WHOLE_CLASS if group == "*" else group
-    return f'{klass}-{__group}'
-
-
-class Classes_aSc:#(Classes):
-
-    #
-    def get_lessons(self, rooms):
-        """Build list of lessons for aSc-timetables."""
-        lesson_list = []
-
-        # new
-        valid_groups = {}  # used for "simplifying" groups
-
-        for tag, data in self.lessons.items():
-            block = data["block"]
-            if block and block != "++":
-                continue  # not a timetabled lesson
-            sid = idsub(data["SID"])
-            klass = data["CLASS"]
-            _classes = set()
-            groups0 = data["GROUPS"]
-            gids = sorted(groups0)
-            if gids:
-                _classes_groups = {}
-                for g in gids:
-                    k, gg = class_group_split(g)
-                    _classes.add(k)
-                    try:
-                        _classes_groups[k].append(g)
-                    except KeyError:
-                        _classes_groups[k] = [g]
-                # "Simplify" groups. If a combination of groups can be
-                # expressed as the whole class or one of the declared
-                # groups, do it.
-                _gids = []
-                for k, gl in _classes_groups.items():
-                    try:
-                        gx = self.groupsets_class[k][frozenset(gl)]
-                        try:
-                            _gset = valid_groups[k]
-                        except KeyError:
-                            # Initialize with whole class
-                            _gset = {k: idsub(f"{k}-{WHOLE_CLASS}")}
-                            valid_groups[k] = _gset
-                            for d in self.class_divisions[k]:
-                                if len(d) > 1:
-                                    for g in d:
-                                        _gset[g] = idsub(f"{k}-{g}")
-                        try:
-                            _gx = _gset[gx]
-                            _gids.append(_gx)
-                            # print("+++", k, gl, _gx)
-                        except KeyError:
-                            for kg in gl:
-                                _gids.append(idsub(kg.replace(".", "-", 1)))
-                            # print("---", k, gl)
-                    except KeyError:
-                        _gids += gl
-                groups = ",".join(_gids)
-                # print("???", tag, gids, "-->", groups)
-            else:
-                REPORT("WARN", _LESSON_NO_GROUP.format(klass=klass, sid=sid))
-                groups = ""
-            classes = ",".join(sorted(_classes))
-            # print("???", tag, sid, "-->", groups)
-
-            _tids = sorted(data["TIDS"])
-            if (not _tids) and (not data["REALTIDS"]):
-                REPORT("WARN", _LESSON_NO_TEACHER.format(klass=klass, sid=sid))
-                continue
-            tids = ",".join(sorted(_tids))
-
-            # TODO: Multiple rooms are not (presently) supported in the aSc-XML files.
-            # Make a simple list of all permissible rooms as options.
-            _rset = set()
-            for r in data["ROOMS"]:
-                for _r0 in r.split("+"):
-                    for _r in _r0.split("/"):
-                        _rset.add(_r)
-            try:
-                _rset.remove("?")
-            except KeyError:
-                pass
-            else:
-                xrooms = set.intersection(
-                    *[set(rooms.rooms_for_class[k]) for k in _classes]
-                )
-                if not xrooms:
-                    raise TT_Error(
-                        _NO_JOINT_ROOMS.format(
-                            classes=classes, sid=sid, tag=tag
-                        )
-                    )
-                _rset.update(xrooms)
-            myrooms = ",".join(sorted(_rset))
-            #            print("*** ROOMS:", myrooms)
-
-            dmap = data["lengths"]
-            if dmap:
-                tags = []
-                for d in sorted(dmap):
-                    t = f"{tag}__{d}" if len(dmap) > 1 else tag
-                    tags.append((t, d, dmap[d]))
-                # TODO: check use of tags for placement, etc.!
-                if len(tags) > 1:
-                    print("&&& multitags:", tags)
-                for tag, d, n in tags:
-                    lesson = {
-                        "@id": tag,
-                        "@classids": classes,
-                        "@subjectid": sid,
-                        "@groupids": groups,
-                        "@teacherids": tids,
-                        "@durationperiods": str(d),
-                        # Note that the number of periods in aSc means the
-                        # number of _single_ periods:
-                        "@periodsperweek": str(n * d),
-                        "@classroomids": myrooms,
-                    }
-                    lesson_list.append(lesson)
-        return lesson_list
+    return f"{klass}-{__group}"
 
 
 ########################################################################
@@ -636,108 +587,6 @@ def build_dict(
     return BASE
 
 
-###
-
-
-# class Placements_aSc(Placements):
-class Placements_aSc:
-    def get_presets(self):
-        plist = []
-        for tag, places_list in self.predef:
-            ptags = self.classes_data.parallel_tags[tag]
-            # print(f"??? {tag} X {len(ptags)}")
-            for t in ptags:
-                plist.append((t, places_list))
-                # print("       :::", t, places_list)
-        return plist
-
-    #
-    def placements(self):
-        plist = self.get_presets()
-        cards = []
-        for tag, places_list in plist:
-            l = self.classes_data.lessons[tag]
-            roomset = set()
-            for r in l["ROOMS"]:
-                roomset.update(r.replace("+", "/").split("/"))
-            rooms = ",".join(sorted(roomset))
-            # print("?!?!", tag, rooms)
-            for d, p in places_list:
-                cards.append(
-                    {
-                        "@lessonid": tag,
-                        "@period": p,
-                        "@day": d,
-                        "@classroomids": rooms,
-                        "@locked": "1",
-                    }
-                )
-        return cards
-
-    #
-    def placements_extern(self, working_folder, a_file, days, periods):
-        """Get the preset placements from a fet "activities" file (<a_file>)
-        which is generated by a successful run of fet.
-        These activities should be "locked".
-        To associate lesson "tags" with "lids" (and "xlids"), the file
-        "tag-lids.json" – generated by fet_data.py – is needed.
-        """
-        tag_places = {}
-        for tag, places_list in self.get_presets():
-            tag_places[tag] = frozenset(places_list)  # {(d, p), ... }
-            # print("???", tag, tag_places[tag])
-        # Get the external placements
-        with open(a_file, "rb") as fh:
-            xml = fh.read()
-        pos_data = xmltodict.parse(xml)
-        pos_list = pos_data["Activities_Timetable"]["Activity"]
-        lid_data = {}
-        for p in pos_list:
-            lid = p["Id"]
-            # print(f"  ++ {lid:4}: {p['Day']}.{p['Hour']} @ {p['Room']}")
-            lid_data[lid] = dict(p)
-        # Get tag_lids from working_folder('tag-lids.json')
-        with open(os.path.join(working_folder, "tag-lids.json"), "rb") as fh:
-            tag_lid_data = json.load(fh)
-        tag_lids = tag_lid_data["tag-lids"]
-        lid_xlids = tag_lid_data["lid-xlids"]
-        # Compile the necessary associations and construct the aSc entries
-        cards = []
-        tag_data = {}
-        for tag, lids in tag_lids.items():
-            presets = tag_places.get(tag) or set()
-            data = []
-            for lid in lids:
-                item = lid_data[lid]
-                data.append(item)
-                d = days.get_id(item["Day"])
-                p = periods.get_id(item["Hour"])
-                # if (d, p) in presets:
-                #    print("$$$", tag, d, p)
-                cards.append(
-                    {
-                        "@lessonid": tag,
-                        "@period": p,
-                        "@day": d,
-                        "@classroomids": item["Room"] or "",
-                        "@locked": "1" if (d, p) in presets else "0",
-                    }
-                )
-                try:
-                    xlids = lid_xlids[lid]
-                except KeyError:
-                    pass
-                else:
-                    item["xrooms"] = [lid_data[xlid]["Room"] for xlid in xlids]
-            tag_data[tag] = data
-        # Save the associations in a general format
-        outpath = os.path.join(working_folder, "tag-placements.json")
-        with open(outpath, "w", encoding="utf-8") as fh:
-            json.dump(tag_data, fh, indent=4)
-        print("\nLesson tag placements ->", outpath)
-        return cards
-
-
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
@@ -788,13 +637,6 @@ if __name__ == "__main__":
         print(f"   {class_timeout}")
         print("\n  ==================================================")
 
-    if __TEST:
-        _tid = "VT"
-        teacher_timeout = teacher_days_aSc(_tid)
-        print(f"\n*** TEACHER AVAILABILITY: {_tid} ***")
-        print(f"   {teacher_timeout}")
-        print("\n  ==================================================")
-
     allrooms = get_rooms()
     if __TEST:
         print("\n*** ROOMS ***")
@@ -808,9 +650,10 @@ if __name__ == "__main__":
         for sdata in get_subjects_aSc():
             print("   ", sdata)
 
+    classes = get_classes_aSc()
     if __TEST:
         print("\n*** CLASSES ***")
-        for cdata in get_classes_aSc():
+        for cdata in classes:
             print("   ", cdata)
 
     groups = get_groups_aSc()
@@ -819,126 +662,52 @@ if __name__ == "__main__":
         for gdata in groups:
             print("   ", gdata)
 
-    lessons = get_lessons()
+    teachers = get_teachers_aSc()
+    if __TEST:
+        print("\n*** TEACHERS ***")
+        for tdata in teachers:
+            print("   ", tdata)
+
+    lessons, cards = get_lessons()
+
+    quit(0)
+
     if __TEST:
         print("\n*** LESSON ITEMS ***")
         for l in lessons:
             print("  +++", l)
 
-    quit(0)
-
-    _classes = Classes_aSc(periods)
-    #    if _classes.days != list(_days):
-    #        print("\nDAYS MISMATCH:", _classes.days)
-    #        quit(1)
     if __TEST:
-        print("\n*** CLASS-DAYS ***")
-        for klass in _classes.class_days_periods:
-            _class_periods = _classes.class_days(klass)
-            print(f"   class {klass}:", _class_periods)
-        print("\n  ==================================================")
+        print("\n*** CARDS ***")
+        for c in cards:
+            print("  !!!", c)
 
-    _rooms = Rooms_aSc()
-    allrooms = _rooms.get_rooms()
-    if __TEST:
-        print("\nROOMS:")
-        for rdata in allrooms:
-            print("   ", rdata)
+#    quit(0)
 
-    _subjects = Subjects_aSc()
-    subjects = _subjects.get_subjects()
-    if __TEST:
-        print("\nSUBJECTS:")
-        for sdata in subjects:
-            print("   ", sdata)
-
-    _teachers = Teachers_aSc(_classes.days, _periods)
-
-    if __TEST:
-        print("\n ********** READ LESSON DATA **********\n")
-    c_list = _classes.all_lessons(
-        SUBJECTS=_subjects, ROOMS=_rooms, TEACHERS=_teachers
-    )
-    print("\n ... read data for:", c_list)
-
-    if __TEST:
-        print("\n  CLASSROOMS:", _classes.classrooms)
-        _klass = "12G"
-        print("\nCLASS", _klass)
-        print("\n  DIVISIONS:", _classes.class_divisions[_klass])
-        print("\n  GROUPS:", _classes.class_groups[_klass])
-
-    teachers = _teachers.get_teachers(_classes.timetable_teachers)
-    if __TEST:
-        print("\nTEACHERS:")
-        # for tid, tname in _teachers.items():
-        #    blocked = _teachers.blocked_periods.get(tid) or '–––'
-        #    print("  ", tid, tname, blocked)
-        for tdata in teachers:
-            print("   ", tdata)
-        print("\nLONG TAGS:\n", _teachers.longtag.values())
-
-    from timetable.basic_data import TT_CONFIG
-
-    outdir = DATAPATH(TT_CONFIG["OUTPUT_FOLDER"])
+    outdir = DATAPATH("TIMETABLE/out")
     os.makedirs(outdir, exist_ok=True)
 
-    # Check-lists for teachers
-    outpath = os.path.join(outdir, "teacher_check.txt")
-    with open(outpath, "w", encoding="utf-8") as fh:
-        fh.write(
-            "STUNDENPLAN 2021/22: Lehrer-Stunden\n"
-            "===================================\n"
-        )
-        fh.write(_classes.teacher_check_list())
-    print("\nTEACHER CHECK-LIST ->", outpath)
-
-    classes = []
-    groups = []
-    for klass in c_list:
-        if klass.startswith("XX"):
-            continue
-        classes.append(_classes.class_data(klass))
-        groups += _classes.groups(klass)
-    if __TEST:
-        print("\n ********** aSc DATA **********")
-        print("\n  aSc-CLASSES:", classes)
-        print("\n  aSc-GROUPS:", groups)
-
-    lessons = _classes.get_lessons(_rooms)
-    if __TEST:
-        print("\n ********* aSc LESSONS *********\n")
-        # for l, data in _classes.lessons.items():
-        #    print(f"   {l}:", data)
-        for l in lessons:
-            print("   ", l)
-        print("\n  ======================================================\n")
-
-    cards = Placements_aSc(_classes)
-    activities_path = getActivities(outdir)
-    if activities_path:
-        cardlist = cards.placements_extern(
-            outdir, activities_path, _days, _periods
-        )
-    else:
-        cardlist = cards.placements()
-    if __TEST:
-        print("\n ********* FIXED LESSONS *********\n")
-        # for l, data in _classes.lessons.items():
-        #    print(f"   {l}:", data)
-        for card in cardlist:
-            print("   ", card)
+#TODO:
+#    # Check-lists for teachers
+#    outpath = os.path.join(outdir, "teacher_check.txt")
+#    with open(outpath, "w", encoding="utf-8") as fh:
+#        fh.write(
+#            "STUNDENPLAN 2022/23: Lehrer-Stunden\n"
+#            "===================================\n"
+#        )
+#        fh.write(_classes.teacher_check_list())
+#    print("\nTEACHER CHECK-LIST ->", outpath)
 
     xml_aSc = xmltodict.unparse(
         build_dict(
             ROOMS=allrooms,
             PERIODS=periods,
             TEACHERS=teachers,
-            SUBJECTS=subjects,
+            SUBJECTS=allsubjects,
             CLASSES=classes,
             GROUPS=groups,
             LESSONS=lessons,
-            CARDS=cardlist,
+            CARDS=cards,
             #            CARDS = [],
         ),
         pretty=True,

@@ -1,7 +1,7 @@
 """
 ui/modules/teachers.py
 
-Last updated:  2022-06-07
+Last updated:  2022-06-24
 
 Edit teachers' data.
 
@@ -73,7 +73,7 @@ from ui.editable import EdiTableWidget
 
 # Teacher table fields
 TEACHER_COLS = [
-    (f, T[f]) for f in ("TID", "NAME", "SIGNED", "SORTNAME", "TT_DATA")
+    (f, T[f]) for f in ("TID", "FIRSTNAMES", "LASTNAMES", "SIGNED", "SORTNAME", "TT_DATA")
 ]
 
 from timetable.constraints_teacher import CONSTRAINT_FIELDS, period_validator

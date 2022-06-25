@@ -54,7 +54,8 @@ ui.modules.teachers: {
 
     # Teacher table fields
     TID:            Kürzel
-    NAME:           Name
+    FIRSTNAMES:     Vornamen
+    LASTNAMES:      Nachnamen
     SIGNED:         gezeichnet
     SORTNAME:       Sortiername
     TT_DATA:        Stundenplandaten
@@ -181,6 +182,8 @@ timetable.courses: {
 timetable.asc_data: {
     WHOLE_CLASS:    alle  # name for a "group" comprising the whole class
     ROOM_TODO:      "Raum muss noch festgelegt werden"
+    INVALID_PLACE:  "Im Kurs (Gruppe {klass}.{group}, Fach-id {sid}, Lehrer {tid}), unbekannter Raum (Ort): '{rid}'"
+    BAD_TIME:       "Ungültige Zeitangabe: '{time}' (lesson-id {id})"
 }
 
 timetable.constraints_teacher: {

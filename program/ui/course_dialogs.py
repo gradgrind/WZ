@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-06-19
+Last updated:  2022-06-24
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -48,7 +48,6 @@ from typing import NamedTuple
 
 from core.db_management import (
     open_database,
-    db_days_periods,
     db_read_table,
     db_key_value_list,
     db_values,
@@ -98,16 +97,52 @@ TAG_FORMAT = QRegularExpression("^[A-Za-z0-9_.]+$")
 SHARED_DATA = {}
 
 
-def dialogs_init():
-    SHARED_DATA["DAYS"], SHARED_DATA["PERIODS"] = db_days_periods()
+def get_days():
+    try:
+        return SHARED_DATA["DAYS"]
+    except KeyError:
+        pass
     days = db_key_value_list("TT_DAYS", "TAG", "NAME", "N")
     SHARED_DATA["DAYS"] = days
+    return days
+
+
+def get_periods():
+    try:
+        return SHARED_DATA["PERIODS"]
+    except KeyError:
+        pass
     periods = db_key_value_list("TT_PERIODS", "TAG", "NAME", "N")
     SHARED_DATA["PERIODS"] = periods
+    return periods
+
+
+def get_subjects():
+    try:
+        return SHARED_DATA["SUBJECTS"]
+    except KeyError:
+        pass
     subjects = db_key_value_list("SUBJECTS", "SID", "NAME", "NAME")
     SHARED_DATA["SUBJECTS"] = subjects
+    return subjects
+
+
+def get_payroll_weights():
+    try:
+        return SHARED_DATA["PAYROLL"]
+    except KeyError:
+        pass
     payroll_weights = db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
     SHARED_DATA["PAYROLL"] = payroll_weights
+    return payroll_weights
+
+
+def set_coursedata(coursedata: dict):
+    SHARED_DATA["COURSE"] = coursedata
+
+
+def get_coursedata():
+    return SHARED_DATA["COURSE"]
 
 
 ### -----
@@ -132,7 +167,7 @@ def timeslot2index(timeslot):
             raise TimeSlotError
         else:
             n = 0
-            for day in SHARED_DATA["DAYS"]:
+            for day in get_days():
                 if day[0] == d:
                     i = n
                     break
@@ -140,7 +175,7 @@ def timeslot2index(timeslot):
             else:
                 raise TimeSlotError
             n = 0
-            for period in SHARED_DATA["PERIODS"]:
+            for period in get_periods():
                 if period[0] == p:
                     j = n
                     break
@@ -154,8 +189,8 @@ def index2timeslot(index):
     """Convert a pair of 0-based indexes to a "timeslot" in the
     tag-form (e.g. "Mo.3").
     """
-    d = SHARED_DATA["DAYS"][index[0]][0]
-    p = SHARED_DATA["PERIODS"][index[1]][0]
+    d = get_days()[index[0]][0]
+    p = get_periods()[index[1]][0]
     return f"{d}.{p}"
 
 
@@ -216,9 +251,9 @@ class DayPeriodDialog(QDialog):
 
     def init(self):
         self.daylist.clear()
-        self.daylist.addItems([d[1] for d in SHARED_DATA["DAYS"]])
+        self.daylist.addItems([d[1] for d in get_days()])
         self.periodlist.clear()
-        self.periodlist.addItems([p[1] for p in SHARED_DATA["PERIODS"]])
+        self.periodlist.addItems([p[1] for p in get_periods()])
 
     def activate(self, start_value=None):
         try:
@@ -471,7 +506,7 @@ class DurationSelector(QComboBox):
         self.__report_changes = False
         self.clear()
         self.addItems(
-            [str(i) for i in range(1, len(SHARED_DATA["PERIODS"]) + 1)]
+            [str(i) for i in range(1, len(get_periods()) + 1)]
         )
         self.setCurrentText(number)
         if self.__callback:
@@ -546,7 +581,7 @@ class RoomSelector(QLineEdit):
 
     def mousePressEvent(self, event):
         classroom = db_read_unique_field(
-            "CLASSES", "CLASSROOM", CLASS=SHARED_DATA["COURSE"]["CLASS"]
+            "CLASSES", "CLASSROOM", CLASS=get_coursedata()["CLASS"]
         )
         result = RoomDialog.popup(start_value=self.text(), classroom=classroom)
         if result:
@@ -714,12 +749,12 @@ class BlockTagDialog(QDialog):
         """
         try:
             sid, tag = block_tag[1:].split("#", 1)
-            subject = SHARED_DATA["SUBJECTS"].map(sid)
+            subject = get_subjects().map(sid)
             if tag and not TAG_FORMAT.match(tag).hasMatch():
                 raise ValueError
         except:
             SHOW_ERROR(f"{T['INVALID_BLOCK_TAG']}: {block_tag}")
-            sid, subject = SHARED_DATA["SUBJECTS"][0]
+            sid, subject = get_subjects()[0]
             tag = ""
         return sid, tag, subject
 
@@ -777,7 +812,7 @@ class BlockTagDialog(QDialog):
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         self.bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
-        self.subject.set_items(SHARED_DATA["SUBJECTS"])
+        self.subject.set_items(get_subjects())
 
     def activate(self, sid, tag):
         self.value0 = self.sidtag2value(sid, tag)
@@ -1223,7 +1258,7 @@ class PayrollDialog(QDialog):
 
         self.factor2value = {}
         entries = []
-        for k, v in SHARED_DATA["PAYROLL"]:
+        for k, v in get_payroll_weights():
             entries.append((k, f"{k} ({v})"))
             self.factor2value[k] = float(v.replace(",", "."))
         self.factor.set_items(entries)
@@ -1263,7 +1298,6 @@ if __name__ == "__main__":
     #    quit(0)
 
     open_database()
-    dialogs_init()
 
     for p in placements(">ZwE#09G10G"):
         print("!!!!", p)

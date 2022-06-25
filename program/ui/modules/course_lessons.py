@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-06-21
+Last updated:  2022-06-25
 
 Edit course and lesson data.
 
@@ -90,7 +90,10 @@ from ui.ui_base import (
 
 from ui.course_dialogs import (
     dialogs_init,
-    SHARED_DATA,
+    get_payroll_weights,
+    get_subjects,
+    set_coursedata,
+    get_coursedata,
     DurationSelector,
     DayPeriodSelector,
     PartnersSelector,
@@ -331,7 +334,7 @@ class CourseEditor(QSplitter):
                 # delegate = ForeignKeyItemDelegate(kv, parent=self.coursemodel)
                 # self.coursetable.setItemDelegateForColumn(i, delegate)
             if f == "SUBJECT":
-                kv = SHARED_DATA["SUBJECTS"]
+                kv = get_subjects()
                 self.filter_list[f] = kv
                 delegate = ForeignKeyItemDelegate(kv, parent=self.coursemodel)
                 self.coursetable.setItemDelegateForColumn(i, delegate)
@@ -383,15 +386,13 @@ class CourseEditor(QSplitter):
             record = self.coursemodel.record(row)
             self.set_course(record.value(0))
             self.course_delete_button.setEnabled(True)
-            SHARED_DATA["COURSE"] = {
-                f: record.value(f) for f in COURSE_KEY_FIELDS
-            }
+            set_coursedata({f: record.value(f) for f in COURSE_KEY_FIELDS})
         else:
             # e.g. when entering an empty table
             # print("EMPTY TABLE")
             self.set_course(0)
             self.course_delete_button.setEnabled(False)
-            SHARED_DATA["COURSE"] = {}
+            set_coursedata({})
 
     def course_delete(self):
         """Delete the current course."""
@@ -498,7 +499,7 @@ class CourseEditor(QSplitter):
                 int(length)
             except ValueError:
                 record.setValue("LENGTH", "1")
-                record.setValue("PAYROLL", f"*{SHARED_DATA['PAYROLL'][0][0]}")
+                record.setValue("PAYROLL", f"*{get_payroll_weights()[0][0]}")
                 record.setValue("ROOM", "+")
             record.setValue("id", None)
             n = model.rowCount()
@@ -507,7 +508,7 @@ class CourseEditor(QSplitter):
             record = model.record()
             record.setValue("course", self.this_course)
             record.setValue("LENGTH", "1")
-            record.setValue("PAYROLL", f"*{SHARED_DATA['PAYROLL'][0][0]}")
+            record.setValue("PAYROLL", f"*{get_payroll_weights()[0][0]}")
             record.setValue("ROOM", "?")
             n = 0
         record.setValue("TIME", "@?")
@@ -538,16 +539,16 @@ class CourseEditor(QSplitter):
             if t.startswith(">"):
                 bsid = BlockTagDialog.parse_block_tag(t)[0]
             else:
-                bsid = SHARED_DATA["COURSE"]["SUBJECT"]
-                record.setValue("PAYROLL", f"*{SHARED_DATA['PAYROLL'][0][0]}")
+                bsid = get_coursedata()["SUBJECT"]
+                record.setValue("PAYROLL", f"*{get_payroll_weights()[0][0]}")
             record.setValue("id", None)
             n = model.rowCount()
         else:
             record = model.record()
             record.setValue("course", self.this_course)
             record.setValue("ROOM", "+")
-            record.setValue("PAYROLL", f"*{SHARED_DATA['PAYROLL'][0][0]}")
-            bsid = SHARED_DATA["COURSE"]["SUBJECT"]
+            record.setValue("PAYROLL", f"*{get_payroll_weights()[0][0]}")
+            bsid = get_coursedata()["SUBJECT"]
             n = 0
         tag = BlockTagDialog.popup(bsid, "#")
         if not tag:
@@ -586,7 +587,7 @@ class CourseEditor(QSplitter):
         record = model.record()
         record.setValue("course", self.this_course)
         record.setValue("LENGTH", "--")
-        record.setValue("PAYROLL", f"1*{SHARED_DATA['PAYROLL'][0][0]}")
+        record.setValue("PAYROLL", f"1*{get_payroll_weights()[0][0]}")
         record.setValue("NOTES", "")
         n = model.rowCount()
         if model.insertRecord(-1, record) and model.submitAll():
