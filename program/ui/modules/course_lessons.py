@@ -89,7 +89,6 @@ from ui.ui_base import (
 )
 
 from ui.course_dialogs import (
-    dialogs_init,
     get_payroll_weights,
     get_subjects,
     set_coursedata,
@@ -171,7 +170,6 @@ class Courses(Page):
 
     def enter(self):
         open_database()
-        dialogs_init()
         self.course_editor.init_data()
 
 
