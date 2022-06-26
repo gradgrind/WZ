@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-06-24
+Last updated:  2022-06-26
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -49,14 +49,18 @@ from typing import NamedTuple
 from core.db_management import (
     open_database,
     db_read_table,
-    db_key_value_list,
     db_values,
     db_read_unique_field,
     NoRecord,
 )
-
-# from core.classes import get_class_list
-
+from core.basic_data import (
+    get_days,
+    get_periods,
+    get_subjects,
+    get_rooms,
+    get_payroll_weights,
+    SHARED_DATA,
+)
 from ui.ui_base import (
     GuiError,
     HLine,
@@ -93,48 +97,6 @@ PAYROLL_FORMAT = "[1-9]?[0-9](?:$[0-9]{1,2})?".replace(
 )
 
 TAG_FORMAT = QRegularExpression("^[A-Za-z0-9_.]+$")
-
-SHARED_DATA = {}
-
-
-def get_days():
-    try:
-        return SHARED_DATA["DAYS"]
-    except KeyError:
-        pass
-    days = db_key_value_list("TT_DAYS", "TAG", "NAME", "N")
-    SHARED_DATA["DAYS"] = days
-    return days
-
-
-def get_periods():
-    try:
-        return SHARED_DATA["PERIODS"]
-    except KeyError:
-        pass
-    periods = db_key_value_list("TT_PERIODS", "TAG", "NAME", "N")
-    SHARED_DATA["PERIODS"] = periods
-    return periods
-
-
-def get_subjects():
-    try:
-        return SHARED_DATA["SUBJECTS"]
-    except KeyError:
-        pass
-    subjects = db_key_value_list("SUBJECTS", "SID", "NAME", "NAME")
-    SHARED_DATA["SUBJECTS"] = subjects
-    return subjects
-
-
-def get_payroll_weights():
-    try:
-        return SHARED_DATA["PAYROLL"]
-    except KeyError:
-        pass
-    payroll_weights = db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
-    SHARED_DATA["PAYROLL"] = payroll_weights
-    return payroll_weights
 
 
 def set_coursedata(coursedata: dict):
@@ -258,7 +220,7 @@ class DayPeriodDialog(QDialog):
     def activate(self, start_value=None):
         try:
             if start_value:
-                fixed = (start_value == "?" or start_value[0] != "?")
+                fixed = start_value == "?" or start_value[0] != "?"
             d, p = timeslot2index(start_value)
             self.result = None
             if d < 0:
@@ -425,7 +387,9 @@ class PartnersDialog(QDialog):
         vbox1.addWidget(buttonBox)
         self.bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-        self.bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
+        self.bt_clear = buttonBox.addButton(
+            QDialogButtonBox.StandardButton.Discard
+        )
         # vbox1.addStretch(1)
 
         self.bt_save.clicked.connect(self.do_accept)
@@ -505,9 +469,7 @@ class DurationSelector(QComboBox):
         # print("(DurationSelector.setText)", number)
         self.__report_changes = False
         self.clear()
-        self.addItems(
-            [str(i) for i in range(1, len(get_periods()) + 1)]
-        )
+        self.addItems([str(i) for i in range(1, len(get_periods()) + 1)])
         self.setCurrentText(number)
         if self.__callback:
             self.__report_changes = True
@@ -1125,17 +1087,15 @@ class RoomDialog(QDialog):
 
     def init(self):
         self.room2line = {}
-        self.rooms = db_key_value_list(
-            "TT_ROOMS", "RID", "NAME", sort_field="RID"
-        )
-        n = len(self.rooms)
+        rooms = get_rooms()
+        n = len(rooms)
         self.roomlist.setRowCount(n)
         for i in range(n):
-            rid = self.rooms[i][0]
+            rid = rooms[i][0]
             self.room2line[rid] = i
             item = QTableWidgetItem(rid)
             self.roomlist.setItem(i, 0, item)
-            item = QTableWidgetItem(self.rooms[i][1])
+            item = QTableWidgetItem(rooms[i][1])
             self.roomlist.setItem(i, 1, item)
         self.roomlist.resizeColumnsToContents()
         Hhd = self.roomlist.horizontalHeader()

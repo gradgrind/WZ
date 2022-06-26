@@ -1,5 +1,5 @@
 """
-core/teachers.py - last updated 2022-06-20
+core/teachers.py - last updated 2022-06-26
 
 Manage teacher data.
 
@@ -100,13 +100,7 @@ class Teachers(dict):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    from core.db_management import db_days_periods
-
     open_database()
-
-    tt_days, tt_periods = db_days_periods()
-    print("\nDAYS:", tt_days)
-    print("\nPERIODS:", tt_periods)
 
     teachers = Teachers()
     for tid, tiddata in teachers.items():

@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-06-25
+timetable/asc_data.py - last updated 2022-06-26
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -19,10 +19,11 @@ Copyright 2022 Michael Towers
    limitations under the License.
 """
 
-#TODO: handle caching of day and period data ...
-
 __TEST = False
-__TEST = True
+#__TEST = True
+__TESTX = False
+__TESTY = False
+
 
 # IMPORTANT: Before importing the data generated here, some setting up of
 # the school data is required, especially the setting of the total number
@@ -67,7 +68,14 @@ import re, json
 import xmltodict
 
 from core.db_management import open_database, db_read_fields
-from core.basic_data import get_classes, get_teachers, get_subjects, get_rooms
+from core.basic_data import (
+    get_days,
+    get_periods,
+    get_classes,
+    get_teachers,
+    get_subjects,
+    get_rooms
+)
 from timetable.courses import (
     get_timetable_data,
     blocktag2blocksid,
@@ -85,16 +93,21 @@ def idsub(tag):
 
 WHOLE_CLASS = T["WHOLE_CLASS"]
 
+TIMETABLE_TEACHERS = set()
+TIMETABLE_SUBJECTS = set()
+
 ### -----
 
 
 def get_days_aSc() -> list[dict]:
     """Return an ordered list of aSc elements for the days."""
-    vlist = db_read_fields("TT_DAYS", ("N", "TAG", "NAME"), sort_field="N")
-    nd = len(vlist)
+    days = get_days()
+    nd = len(days)
     i = int(10 ** nd)
     dlist = []
-    for n, tag, name in vlist:
+    n = 0
+    for tag, name in days:
+        n += 1
         i //= 10
         dlist.append(
             {
@@ -127,38 +140,11 @@ def get_periods_aSc() -> list[dict]:
     return plist
 
 
-def class_days_aSc(klass: str) -> str:
-    """Return a "timeoff" entry for the given class."""
-    cdata = get_classes()[klass]
-    try:
-        day_periods = cdata.tt_data["AVAILABLE"].split("_")
-    except KeyError:
-        day_periods = ""
-    weektags = []
-    nperiods = len(get_periods_aSc())
-    for d in range(len(get_days_aSc())):
-        default = "1"
-        try:
-            ddata = day_periods[d]
-        except IndexError:
-            ddata = ""
-        daytags = []
-        for p in range(nperiods):
-            try:
-                px = "0" if ddata[p] == "-" else "1"
-                default = px
-            except IndexError:
-                px = default
-            daytags.append(px)
-        weektags.append("." + "".join(daytags))
-    return ",".join(weektags)
-
-
 def get_rooms_aSc() -> list[dict]:
     """Return an ordered list of aSc elements for the rooms."""
     rooms = [
         {"@id": idsub(rid), "@short": rid, "@name": name}
-        for rid, name in get_rooms().items()
+        for rid, name in get_rooms()
     ]
     rooms.append({"@id": "rXXX", "@short": "rXXX", "@name": T["ROOM_TODO"]})
     return rooms
@@ -168,25 +154,24 @@ def get_subjects_aSc() -> list[dict]:
     """Return an ordered list of aSc elements for the subjects."""
     return [
         {"@id": idsub(sid), "@short": sid, "@name": name}
-        for sid, name in get_subjects().items()
+        for sid, name in get_subjects()
+        if sid in TIMETABLE_SUBJECTS
     ]
 
 
 def get_classes_aSc():
     """Return an ordered list of aSc elements for the classes."""
-    classes = []
     __classes = get_classes()
-    for klass, name in __classes.get_class_list():
-        classes.append(
-            {
-                "@id": idsub(klass),
-                "@short": klass,
-                "@name": name,
-                "@classroomids": __classes.get_classroom(klass),
-                "@timeoff": class_days_aSc(klass),
-            }
-        )
-    return classes
+    return [
+        {
+            "@id": idsub(klass),
+            "@short": klass,
+            "@name": name,
+            "@classroomids": __classes.get_classroom(klass),
+            "@timeoff": timeoff_aSc(__classes[klass].tt_data)
+        }
+        for klass, name in __classes.get_class_list()
+    ]
 
 
 def get_groups_aSc():
@@ -222,16 +207,15 @@ def get_groups_aSc():
     return group_list
 
 
-#TODO?
-def teacher_days_aSc(tt_data: dict) -> str:
-    """Return a "timeoff" entry for the given teacher's <tt_data>."""
+def timeoff_aSc(tt_data: dict) -> str:
+    """Return a "timeoff" entry for the given <tt_data> field."""
     try:
         day_periods = tt_data["AVAILABLE"].split("_")
     except KeyError:
         day_periods = ""
     weektags = []
-    nperiods = len(get_periods_aSc())
-    for d in range(len(get_days_aSc())):
+    nperiods = len(get_periods())
+    for d in range(len(get_days())):
         default = "1"
         try:
             ddata = day_periods[d]
@@ -250,11 +234,20 @@ def teacher_days_aSc(tt_data: dict) -> str:
 
 
 def get_teachers_aSc():
-#TODO
-    print("\nTODO: teachers ...")
-    for tdata in get_teachers().values():
-        print("  ...", tdata)
-    return []
+    """Return an ordered list of aSc elements for the teachers."""
+    return [
+        {
+            "@id": idsub(tdata.tid),
+            "@short": tdata.tid,
+            "@name": tdata.signed,
+#TODO: "@gender": "M" or "F"?
+            "@firstname": tdata.firstname,
+            "@lastname": tdata.lastname,
+            "@timeoff": timeoff_aSc(tdata.tt_data)
+        }
+        for tdata in get_teachers().values()
+        if tdata.tid in TIMETABLE_TEACHERS
+    ]
 
 
 def aSc_lesson(classes, sid, groups, tids, duration, rooms):
@@ -262,15 +255,20 @@ def aSc_lesson(classes, sid, groups, tids, duration, rooms):
     ("XX" if there are multiple classes) and the lesson item prototype –
     the id is added later.
     """
-    # TODO: How are lessons with no class dealt with???
-    if not classes:
-        raise Bug(
-            f"LESSON WITH NO CLASSES: {[sid, groups, tids, duration, rooms]}"
-        )
+    if tids:
+        tids.discard("--")
+        TIMETABLE_TEACHERS.update(tids)
+    if classes:
+        classes.discard("--")
     __classes = sorted(classes)
+    if sid:
+        if sid == "--":
+            raise Bug("sid = '--'")
+        TIMETABLE_SUBJECTS.add(sid)
+
     # <id> is initially empty, it is added later
     return (
-        "XX" if len(__classes) > 1 else idsub(__classes[0]),  # class
+        "XX" if len(__classes) != 1 else idsub(__classes[0]),  # class
         {
             "@id": None,
             "@classids": ",".join(__classes),
@@ -312,8 +310,9 @@ def get_lessons():
             classmap[__sid].append(__lesson)
         except KeyError:
             classmap[__sid] = [__lesson]
-        # TODO: If time set, add lessondata.time as card. Would it make sense to
-        # include lessondata.id? Rooms are supplied as __place
+        # If time set, add lessondata.time as card.
+        # TODO: Would it make sense to include lessondata.id?
+        # Rooms are supplied as __place
         if lessondata.time != "@?":
             if lessondata.time.startswith("@"):
                 # Get 0-based indexes for day and period
@@ -369,7 +368,9 @@ def get_lessons():
             bclasses.add(bcdata.klass)
             # TODO: Null teacher possible?
             btids.add(bcdata.tid)
-            bgroups.add(full_group(bcdata.klass, bcdata.group))
+            __fg = full_group(bcdata.klass, bcdata.group)
+            if __fg:
+                bgroups.add(__fg)
             # As aSc doesn't support XML input of multiple rooms,
             # the multiple rooms are collected independently – for
             # manual intervention!
@@ -386,19 +387,9 @@ def get_lessons():
                     brooms.update(ll)
                     broomlist.add(llt)
             if bldata.place:
-                # TODO: room_map
-                if bldata.place in room_map:
-                    bplaces.add(bldata.place)
-                else:
-                    SHOW_ERROR(
-                        T["INVALID_PLACE"].format(
-                            rid=bldata.place,
-                            klass=bldata.course.klass,
-                            group=bldata.course.group,
-                            sid=bldata.course.sid,
-                            tid=bldata.course.tid,
-                        )
-                    )
+                __place = check_place(bldata)
+                if _place:
+                    bplaces.add(__place)
 
         # The lesson data is cached for repeated instances of the
         # same block tag (change length).
@@ -415,6 +406,8 @@ def get_lessons():
     # TODO: aSc can't cope with multiple rooms, so it might be best to make a
     # list and emit this for the user ...
 
+    TIMETABLE_TEACHERS.clear()
+    TIMETABLE_SUBJECTS.clear()
     tt_data = get_timetable_data()
     # Fields:
     #   LESSONLIST
@@ -457,27 +450,33 @@ def get_lessons():
                 else:
                     ## plain lesson with indirect time
                     pcdata = plesson.course
+                    __fg = full_group(pcdata.klass, pcdata.group)
                     klass, lesson = aSc_lesson(
                         {pcdata.klass},
                         pcdata.sid,
-                        {full_group(pcdata.klass, pcdata.group)},
+                        {__fg} if __fg else set(),
                         {pcdata.tid},
                         plesson.length,
                         parse_rooms(plesson),  # ordered, so a set can't be used
                     )
-                    new_lesson(klass, pcdata.sid, lesson, plesson.place)
+                    new_lesson(klass, pcdata.sid, lesson,
+                        check_place(plesson)
+                    )
 
         else:
             ## plain lesson with direct time
+            __fg = full_group(coursedata.klass, coursedata.group)
             klass, lesson = aSc_lesson(
                 {coursedata.klass},
                 coursedata.sid,
-                {full_group(coursedata.klass, coursedata.group)},
+                {__fg} if __fg else set(),
                 {coursedata.tid},
                 lessondata.length,
                 parse_rooms(lessondata),  # ordered, so a set can't be used
             )
-            new_lesson(klass, coursedata.sid, lesson, lessondata.place)
+            new_lesson(klass, coursedata.sid, lesson,
+                check_place(lessondata)
+            )
 
     lesson_list = []  # final lesson list
     class_counter = {}  # for indexing lessons on a class-by-class basis
@@ -509,8 +508,29 @@ def get_lessons():
 
 
 def full_group(klass, group):
-    __group = WHOLE_CLASS if group == "*" else group
-    return f"{klass}-{__group}"
+    if klass and klass != "--":
+        __group = WHOLE_CLASS if group == "*" else group
+        return f"{klass}-{__group}"
+    return None
+
+
+def check_place(lessondata):
+    __place = lessondata.place
+    if __place:
+        try:
+            get_rooms().index(__place)
+            return __place
+        except KeyError:
+            SHOW_ERROR(
+                T["INVALID_PLACE"].format(
+                    rid=__place,
+                    klass=lessondata.course.klass,
+                    group=lessondata.course.group,
+                    sid=lessondata.course.sid,
+                    tid=lessondata.course.tid,
+                )
+            )
+    return ""
 
 
 ########################################################################
@@ -544,7 +564,7 @@ def build_dict(
             },
             "teachers": {
                 "@options": "canadd,canremove,canupdate,silent",
-                "@columns": "id,short,name,timeoff",
+                "@columns": "id,short,name,firstname,lastname,timeoff",
                 "teacher": TEACHERS,
             },
             "classes": {
@@ -630,25 +650,12 @@ if __name__ == "__main__":
             print(f"   {p}")
         print("\n  ==================================================")
 
-    if __TEST:
-        _class = "10G"
-        class_timeout = class_days_aSc(_class)
-        print(f"\n*** CLASS AVAILABILITY: {_class} ***")
-        print(f"   {class_timeout}")
-        print("\n  ==================================================")
-
-    allrooms = get_rooms()
+    allrooms = get_rooms_aSc()
     if __TEST:
         print("\n*** ROOMS ***")
-        for rdata in get_rooms_aSc():
+        for rdata in allrooms:
             print("   ", rdata)
         print("\n  ==================================================")
-
-    allsubjects = get_subjects()
-    if __TEST:
-        print("\n*** SUBJECTS ***")
-        for sdata in get_subjects_aSc():
-            print("   ", sdata)
 
     classes = get_classes_aSc()
     if __TEST:
@@ -662,22 +669,28 @@ if __name__ == "__main__":
         for gdata in groups:
             print("   ", gdata)
 
-    teachers = get_teachers_aSc()
+    lessons, cards = get_lessons()
+
+    allsubjects = get_subjects_aSc() # must be after call to <get_lessons>
+    if __TEST:
+        print("\n*** SUBJECTS ***")
+        for sdata in allsubjects:
+            print("   ", sdata)
+
+    teachers = get_teachers_aSc() # must be after call to <get_lessons>
     if __TEST:
         print("\n*** TEACHERS ***")
         for tdata in teachers:
             print("   ", tdata)
 
-    lessons, cards = get_lessons()
+#    quit(0)
 
-    quit(0)
-
-    if __TEST:
+    if __TESTX:
         print("\n*** LESSON ITEMS ***")
         for l in lessons:
             print("  +++", l)
 
-    if __TEST:
+    if __TESTY:
         print("\n*** CARDS ***")
         for c in cards:
             print("  !!!", c)

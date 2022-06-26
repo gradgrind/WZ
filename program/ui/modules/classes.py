@@ -1,7 +1,7 @@
 """
 ui/modules/classes.py
 
-Last updated:  2022-06-19
+Last updated:  2022-06-26
 
 Edit classes' data.
 
@@ -46,8 +46,8 @@ T = TRANSLATIONS("ui.modules.classes")
 
 ### +++++
 
-from core.db_management import open_database, db_key_value_list, read_pairs
-
+from core.db_management import open_database, read_pairs
+from core.basic_data import get_days, get_periods
 from ui.ui_base import (
     HLine,
     LoseChangesDialog,
@@ -372,10 +372,10 @@ class WeekTable(QFrame):
         self.__field = field
 
     def setup(self):
-        tt_days = db_key_value_list("TT_DAYS", "N", "NAME", "N")
-        tt_periods = db_key_value_list("TT_PERIODS", "N", "TAG", "N")
+        tt_days = get_days()
+        tt_periods = get_periods()
         self.__table.setup(
-            colheaders=[p[1] for p in tt_periods],
+            colheaders=[p[0] for p in tt_periods],
             rowheaders=[d[1] for d in tt_days],
             undo_redo=False,
             cut=False,

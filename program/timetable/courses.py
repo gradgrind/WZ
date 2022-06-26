@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-06-25
+Last updated:  2022-06-26
 
 Access course/subject/lesson data for timetable.
 
@@ -220,7 +220,7 @@ def get_timetable_data():
                 )
             )
         else:
-            print(" --", id, course, length, room, time)
+            #print(" --", id, course, length, room, time)
             if length != "--":
                 SHOW_ERROR(T["INVALID_NON_LESSON_RECORD"] + str(id))
 
@@ -252,7 +252,7 @@ def lesson_rooms(lessondata: LessonData) -> list[str]:
     Check the components.
     """
     rlist = []
-    room_map = get_rooms()
+    room_list = get_rooms()
     if not lessondata.room:
         return rlist
     rooms = lessondata.room.rstrip("+")
@@ -267,18 +267,21 @@ def lesson_rooms(lessondata: LessonData) -> list[str]:
                     )
                     continue
                 rlist.append(classroom)
-            elif r in room_map:
-                rlist.append(r)
             else:
-                SHOW_ERROR(
-                    T["INVALID_ROOM"].format(
-                        rid=r,
-                        klass=lessondata.course.klass,
-                        group=lessondata.course.group,
-                        sid=lessondata.course.sid,
-                        tid=lessondata.course.tid,
+                try:
+                    room_list.index(r)
+                except KeyError:
+                    SHOW_ERROR(
+                        T["INVALID_ROOM"].format(
+                            rid=r,
+                            klass=lessondata.course.klass,
+                            group=lessondata.course.group,
+                            sid=lessondata.course.sid,
+                            tid=lessondata.course.tid,
+                        )
                     )
-                )
+                else:
+                    rlist.append(r)
     if lessondata.room[-1] == "+":
         rlist.append("+")
     return rlist

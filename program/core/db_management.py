@@ -1,7 +1,7 @@
 """
 core/db_management.py
 
-Last updated:  2022-06-06
+Last updated:  2022-06-26
 
 Helper functions for accessing the database.
 
@@ -24,9 +24,7 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
-#TODO
 DATABASE = "db1.sqlite"
-DATABASE = "db1-test.sqlite"
 
 ########################################################################
 
@@ -349,12 +347,6 @@ def read_pairs(data):
         except ValueError:
             SHOW_ERROR(T["BAD_KEY_VALUE_LIST"].format(text=data))
     return pairs
-
-
-def db_days_periods():
-    days = db_key_value_list("TT_DAYS", "TAG", "NAME", "N")
-    periods = db_key_value_list("TT_PERIODS", "TAG", "NAME", "N")
-    return days, periods
 
 
 # -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-

@@ -1,7 +1,7 @@
 """
 ui/modules/course_lessons.py
 
-Last updated:  2022-06-25
+Last updated:  2022-06-26
 
 Edit course and lesson data.
 
@@ -48,7 +48,6 @@ T = TRANSLATIONS("ui.modules.course_lessons")
 
 from core.db_management import (
     open_database,
-    db_key_value_list,
     db_update_field,
     db_new_row,
     db_delete_rows,

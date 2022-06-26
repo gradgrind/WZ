@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-06-20
+core/basic_data.py - last updated 2022-06-26
 
 Handle caching of the basic data sources
 
@@ -19,7 +19,7 @@ Copyright 2022 Michael Towers
    limitations under the License.
 """
 
-from core.db_management import db_key_value_list
+from core.db_management import db_key_value_list, KeyValueList
 from core.classes import Classes
 from core.teachers import Teachers
 
@@ -30,6 +30,32 @@ SHARED_DATA = {}
 
 def clear_cache():
     SHARED_DATA.clear()
+
+
+def get_days() -> KeyValueList:
+    """Return the timetable days as a KeyValueList of (tag, name) pairs.
+    This data is cached, so subsequent calls get the same instance.
+    """
+    try:
+        return SHARED_DATA["DAYS"]
+    except KeyError:
+        pass
+    days = db_key_value_list("TT_DAYS", "TAG", "NAME", "N")
+    SHARED_DATA["DAYS"] = days
+    return days
+
+
+def get_periods() -> KeyValueList:
+    """Return the timetable "periods" as a KeyValueList of (tag, name) pairs.
+    This data is cached, so subsequent calls get the same instance.
+    """
+    try:
+        return SHARED_DATA["PERIODS"]
+    except KeyError:
+        pass
+    periods = db_key_value_list("TT_PERIODS", "TAG", "NAME", "N")
+    SHARED_DATA["PERIODS"] = periods
+    return periods
 
 
 def get_classes() -> Classes:
@@ -58,29 +84,41 @@ def get_teachers() -> Teachers:
     return teachers
 
 
-def get_subjects():
-    """Return an ordered mapping of subjects: {sid -> name}.
+def get_subjects() -> KeyValueList:
+    """Return the subjects as a KeyValueList of (sid, name) pairs.
     This data is cached, so subsequent calls get the same instance.
     """
     try:
         return SHARED_DATA["SUBJECTS"]
     except KeyError:
         pass
-    subjects = dict(
-        db_key_value_list("SUBJECTS", "SID", "NAME", sort_field="NAME")
-    )
+    subjects = db_key_value_list("SUBJECTS", "SID", "NAME", sort_field="NAME")
     SHARED_DATA["SUBJECTS"] = subjects
     return subjects
 
 
-def get_rooms() -> dict[str, str]:
-    """Return an ordered mapping of rooms: {rid -> name}.
+def get_rooms() -> KeyValueList:
+    """Return the rooms as a KeyValueList of (rid, name) pairs.
     This data is cached, so subsequent calls get the same instance.
     """
     try:
         return SHARED_DATA["ROOMS"]
     except KeyError:
         pass
-    rooms = dict(db_key_value_list("TT_ROOMS", "RID", "NAME", sort_field="RID"))
+    rooms = db_key_value_list("TT_ROOMS", "RID", "NAME", sort_field="RID")
     SHARED_DATA["ROOMS"] = rooms
     return rooms
+
+
+def get_payroll_weights() -> KeyValueList:
+    """Return the "payroll lesson weightings" as a KeyValueList of
+    (tag, weight) pairs.
+    This data is cached, so subsequent calls get the same instance.
+    """
+    try:
+        return SHARED_DATA["PAYROLL"]
+    except KeyError:
+        pass
+    payroll_weights = db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
+    SHARED_DATA["PAYROLL"] = payroll_weights
+    return payroll_weights
