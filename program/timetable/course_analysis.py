@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-06-26
+Last updated:  2022-06-27
 
 Collect information on activities for teachers and classes/groups.
 
@@ -24,6 +24,7 @@ Copyright 2022 Michael Towers
 
 #TODO: Move to translations:
 _SUPPRESSED = "Lehrkraft ausgeschlossen: {tname}"
+_TOO_MUCH_PAY = "COURSE {course}: Blockunterricht hat zu viele Stunden"
 
 ###############################################################
 
@@ -166,10 +167,90 @@ def get_course_info():
     }
 
 
+"""
+
+    def teacher_check_list(self):
+        ### Return a "check-list" of the lessons for each teacher.
+
+        lines = []
+        tmap = self.lessons_teacher_lists()
+        for tid, lessons in tmap.items():
+            class_lessons = {}
+            for tag, block, klass, sid, groups, dmap, rooms in lessons:
+                try:
+                    class_list, class_blocks = class_lessons[klass]
+                except KeyError:
+                    class_list = []
+                    class_blocks = []
+                    class_lessons[klass] = [class_list, class_blocks]
+                n = len(rooms)
+                _rooms = f" [{n}: {', '.join(sorted(rooms))}]" if n else ""
+                sname = self.SUBJECTS[sid]
+                if block == '--':
+                    d = list(dmap)[0] if dmap else 0
+                    entry = f"    // {sname} [{','.join(groups)}]: EXTRA x {d}"
+                    class_blocks.append(entry)
+                elif block == '++':
+                    ll = ", ".join(lesson_lengths(dmap))
+                    entry = f"    // {sname} [{','.join(groups)}]: BLOCK: {ll}{_rooms}"
+                    class_blocks.append(entry)
+                elif block:
+                    # Component
+                    blesson = self.lessons[block]
+                    bname = self.SUBJECTS[blesson['SID']]
+                    if dmap:
+                        entry = f"    {sname} [{','.join(groups)}]: EPOCHE ({bname}) x {list(dmap)[0]}"
+                    else:
+                        entry = f"    {sname} [{','.join(groups)}]: ({bname})"
+                    class_list.append(entry)
+                else:
+                    ll = ", ".join(lesson_lengths(dmap))
+                    entry = f"    {sname} [{','.join(groups)}]: {ll}{_rooms}"
+                    class_list.append(entry)
+
+            if class_lessons:
+                lines.append("")
+                lines.append("")
+                lines.append(f"$$$ {tid} ({self.TEACHERS[tid]})")
+                for klass, clb in class_lessons.items():
+                    class_list, class_blocks = clb
+                    clines = []
+                    clines += class_blocks
+                    if class_blocks:
+                        clines.append("")
+                    clines += class_list
+                    if clines:
+                        lines.append("")
+                        lines.append(f"  Klasse {klass}:")
+                        lines += clines
+        return "\n".join(lines)
+
+"""
+
+
+
 def blockdata(course_info, course):
     for blocktag, payroll in course_info["COURSE2BLOCK"]:
-        blocksid = blocktag2blocksid(blocktag)
         sublessons = course_info["BLOCK_SUBLESSONS"][blocktag]
+        coursedata = course_info["COURSE2DATA"][blocktag]
+        # Need header ("Block", etc.), group, subject sublessons, payroll (+ room?)
+        group = coursedata.group or "--"
+        subjects = get_subjects()
+        subject = subjects.map(coursedata.sid)
+        block = subjects.map(blocktag2blocksid(blocktag))
+        # If payroll has a number and this is not the same as the number
+        # of lessons, this is continuous, not an EPOCHE.
+        n, f = payroll.split("*", 1)
+#TODO: error handling
+
+        ltotal = sum(sublessons)
+        if n:
+            if n > ltotal:
+                SHOW_ERROR(_TOO_MUCH_PAY.format(course=course))
+            btype = _EPOCHE
+        else:
+            n = ltotal
+        pay = f"{n * get_payroll_weights().map(f):.2f}".replace(".", DECIMAL_SEP)
 #TODO ...
 
 

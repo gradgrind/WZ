@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-06-26
+timetable/asc_data.py - last updated 2022-06-27
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -258,9 +258,11 @@ def aSc_lesson(classes, sid, groups, tids, duration, rooms):
     if tids:
         tids.discard("--")
         TIMETABLE_TEACHERS.update(tids)
-    if classes:
-        classes.discard("--")
-    __classes = sorted(classes)
+    classes.discard("--")
+    if groups and classes:
+        __classes = sorted(classes)
+    else:
+        __classes = []
     if sid:
         if sid == "--":
             raise Bug("sid = '--'")
@@ -368,9 +370,7 @@ def get_lessons():
             bclasses.add(bcdata.klass)
             # TODO: Null teacher possible?
             btids.add(bcdata.tid)
-            __fg = full_group(bcdata.klass, bcdata.group)
-            if __fg:
-                bgroups.add(__fg)
+            bgroups.update(full_group(bcdata.klass, bcdata.group))
             # As aSc doesn't support XML input of multiple rooms,
             # the multiple rooms are collected independently – for
             # manual intervention!
@@ -450,11 +450,10 @@ def get_lessons():
                 else:
                     ## plain lesson with indirect time
                     pcdata = plesson.course
-                    __fg = full_group(pcdata.klass, pcdata.group)
                     klass, lesson = aSc_lesson(
                         {pcdata.klass},
                         pcdata.sid,
-                        {__fg} if __fg else set(),
+                        full_group(pcdata.klass, pcdata.group),
                         {pcdata.tid},
                         plesson.length,
                         parse_rooms(plesson),  # ordered, so a set can't be used
@@ -465,11 +464,10 @@ def get_lessons():
 
         else:
             ## plain lesson with direct time
-            __fg = full_group(coursedata.klass, coursedata.group)
             klass, lesson = aSc_lesson(
                 {coursedata.klass},
                 coursedata.sid,
-                {__fg} if __fg else set(),
+                full_group(coursedata.klass, coursedata.group),
                 {coursedata.tid},
                 lessondata.length,
                 parse_rooms(lessondata),  # ordered, so a set can't be used
@@ -508,10 +506,17 @@ def get_lessons():
 
 
 def full_group(klass, group):
+    """Return the group as a "full group" – also containing the class.
+    The result is a set.
+    """
     if klass and klass != "--":
-        __group = WHOLE_CLASS if group == "*" else group
-        return f"{klass}-{__group}"
-    return None
+        if group:
+            if group == "*":
+                return {f"{klass}-{WHOLE_CLASS}"}
+            # Some groups are compounds – I need to get the components!
+            groups = get_classes().group_info(klass)["GROUP_MAP"][group]
+            return {f"{klass}-{g}" for g in groups}
+    return set()
 
 
 def check_place(lessondata):

@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-06-26
+core/basic_data.py - last updated 2022-06-27
 
 Handle caching of the basic data sources
 
@@ -24,6 +24,11 @@ from core.classes import Classes
 from core.teachers import Teachers
 
 SHARED_DATA = {}
+
+DECIMAL_SEP = CONFIG["DECIMAL_SEP"]
+PAYROLL_FORMAT = "[1-9]?[0-9](?:$[0-9]{1,2})?".replace(
+    "$", DECIMAL_SEP
+)
 
 ### -----
 
@@ -112,13 +117,16 @@ def get_rooms() -> KeyValueList:
 
 def get_payroll_weights() -> KeyValueList:
     """Return the "payroll lesson weightings" as a KeyValueList of
-    (tag, weight) pairs.
+    (tag: str, weight:float) pairs.
     This data is cached, so subsequent calls get the same instance.
     """
     try:
         return SHARED_DATA["PAYROLL"]
     except KeyError:
         pass
-    payroll_weights = db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
+    payroll_weights = [
+        (k, float(v.replace(",", ".")))
+        for k, v in db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
+    ]
     SHARED_DATA["PAYROLL"] = payroll_weights
     return payroll_weights

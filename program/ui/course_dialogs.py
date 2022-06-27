@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-06-26
+Last updated:  2022-06-27
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -60,6 +60,7 @@ from core.basic_data import (
     get_rooms,
     get_payroll_weights,
     SHARED_DATA,
+    PAYROLL_FORMAT
 )
 from ui.ui_base import (
     GuiError,
@@ -90,10 +91,6 @@ from ui.ui_base import (
     QSize,
     QRegularExpression,
     QTimer,
-)
-
-PAYROLL_FORMAT = "[1-9]?[0-9](?:$[0-9]{1,2})?".replace(
-    "$", CONFIG["DECIMAL_SEP"]
 )
 
 TAG_FORMAT = QRegularExpression("^[A-Za-z0-9_.]+$")
@@ -1216,11 +1213,10 @@ class PayrollDialog(QDialog):
         bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
 
-        self.factor2value = {}
         entries = []
         for k, v in get_payroll_weights():
-            entries.append((k, f"{k} ({v})"))
-            self.factor2value[k] = float(v.replace(",", "."))
+            val = f"{v:.2f})".replace('.', CONFIG["DECIMAL_SEP"])
+            entries.append((k, f"{k} ({val})"))
         self.factor.set_items(entries)
 
     def do_accept(self):
