@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-06-27
+Last updated:  2022-06-28
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -83,6 +83,8 @@ from ui.ui_base import (
     QCheckBox,
     QToolButton,
     QPushButton,
+    QRadioButton,
+    QButtonGroup,
     QStyledItemDelegate,
     ### QtGui:
     QRegularExpressionValidator,
@@ -1179,6 +1181,137 @@ class RoomDialog(QDialog):
         self.roomchoice.resizeColumnsToContents()
 
 
+class SingleRoomDialog(QDialog):
+    @classmethod
+    def popup(cls, start_value="", classroom=""):
+        d = cls()
+        d.init()
+        return d.activate(start_value, classroom)
+
+    def __init__(self):
+        super().__init__()
+        vbox0 = QVBoxLayout(self)
+
+        self.roomlist = QTableWidget()
+        self.roomlist.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.roomlist.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        self.roomlist.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.roomlist.setColumnCount(2)
+        self.roomlist.itemSelectionChanged.connect(self.selection_changed)
+        vbox0.addWidget(self.roomlist)
+
+        self.button_group = QButtonGroup(self)
+        self.button_group.buttonClicked.connect(self.set_special)
+        self.home = QRadioButton(T["CLASSROOM"])
+        self.button_group.addButton(self.home)
+        self.home.setFocusPolicy(Qt.NoFocus)
+        vbox0.addWidget(self.home)
+        self.extra = QRadioButton(T["SOME_ROOM"])
+        self.button_group.addButton(self.extra)
+        self.extra.setFocusPolicy(Qt.NoFocus)
+        vbox0.addWidget(self.extra)
+        self.noroom = QRadioButton(T["NO_ROOM"])
+        self.button_group.addButton(self.noroom)
+        self.noroom.setFocusPolicy(Qt.NoFocus)
+        vbox0.addWidget(self.noroom)
+
+        vbox0.addWidget(HLine())
+        buttonBox = QDialogButtonBox()
+        vbox0.addWidget(buttonBox)
+        bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
+        bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
+        bt_save.clicked.connect(self.do_accept)
+        bt_cancel.clicked.connect(self.reject)
+
+    def selection_changed(self):
+        if self.roomlist.selectedItems():
+            bt = self.button_group.checkedButton()
+            if bt:
+                self.button_group.setExclusive(False)
+                bt.setChecked(False)
+                self.button_group.setExclusive(True)
+
+    def set_special(self, button):
+        self.roomlist.clearSelection()
+        self.roomlist.clearFocus()
+
+    def do_accept(self):
+        if self.home.isChecked():
+            val = "$"
+        elif self.extra.isChecked():
+            val = "+"
+        elif self.noroom.isChecked():
+            val = "-"
+        else:
+            row = self.roomlist.currentItem().row()
+            val = self.roomlist.item(row, 0).text()
+        if val != self.value0:
+            if val:
+                self.result = val
+            else:
+                self.result = "-"
+        self.accept()
+
+    def init(self):
+        self.room2line = {}
+        rooms = get_rooms()
+        n = len(rooms)
+        self.roomlist.setRowCount(n)
+        for i in range(n):
+            rid = rooms[i][0]
+            self.room2line[rid] = i
+            item = QTableWidgetItem(rid)
+            self.roomlist.setItem(i, 0, item)
+            item = QTableWidgetItem(rooms[i][1])
+            self.roomlist.setItem(i, 1, item)
+        self.roomlist.resizeColumnsToContents()
+        Hhd = self.roomlist.horizontalHeader()
+        Hhd.hide()
+        # Hhd.setMinimumSectionSize(20)
+        # A rather messy attempt to find an appropriate size for the table
+        Vhd = self.roomlist.verticalHeader()
+        Vhd.hide()
+        Hw = Hhd.length()
+        # Vw = Vhd.sizeHint().width()
+        fixed_width = Hw + 20  # + Vw, if vertical headers in use
+        self.roomlist.setFixedWidth(fixed_width)
+        Hhd.setStretchLastSection(True)
+
+    def activate(self, start_value="", classroom=None):
+        self.value0 = start_value
+        self.result = None
+        self.classroom = classroom
+        self.home.setVisible(bool(classroom))
+        self.home.setChecked(False)
+        self.extra.setChecked(False)
+        self.noroom.setChecked(False)
+        self.roomlist.clearSelection()
+        self.roomlist.clearFocus()
+        if start_value == "$":
+            if classroom:
+                self.home.setChecked(True)
+            else:
+                SHOW_ERROR(T["NO_CLASSROOM"])
+                self.noroom.setChecked(True)
+        elif start_value == "+":
+            self.extra.setChecked(True)
+        elif start_value:
+            try:
+                row = self.room2line[start_value]
+                self.roomlist.selectRow(row)
+            except KeyError:
+                SHOW_ERROR(f"{T['UNKNOWN_ROOM_ID']}: '{start_value}'")
+                self.noroom.setChecked(True)
+        else:
+            self.noroom.setChecked(True)
+        self.exec()
+        return self.result
+
+
 class PayrollDialog(QDialog):
     @classmethod
     def popup(cls, start_value="", no_length=False):
@@ -1249,11 +1382,16 @@ class PayrollDialog(QDialog):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    m = TAG_FORMAT.match("")
-    print(m.hasMatch(), m.captured(0))
-    #    quit(0)
-
     open_database()
+
+    widget = SingleRoomDialog()
+    widget.init()
+    print("----->", widget.activate(start_value="rPh", classroom="r10G"))
+    print("----->", widget.activate(start_value="rCh", classroom="r10G"))
+    print("----->", widget.activate(start_value="+", classroom="r10G"))
+    print("----->", widget.activate(start_value="$"))
+    print("----->", widget.activate(start_value="r11G", classroom="r10G"))
+    quit(0)
 
     for p in placements(">ZwE#09G10G"):
         print("!!!!", p)

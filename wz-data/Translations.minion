@@ -113,7 +113,8 @@ ui.modules.course_lessons: {
     NO_COURSE_SO_NO_LESSONS: "Kein Kurs => Keine Stunden"
     BLOCK_TAG_TIME_CLASH: "Zeitkonflikt mit anderen Kurs-Stunden:"
     NO_TIME_FOR_PARTNERS: "Zeitangabe für Partner-Kennzeichen fehlt in Datenbank"
-
+    NO_CLASSROOM:   "„Klassenraum“ ($) ist hier nicht zulässig, da die aktuelle Klasse keinen Klassenraum hat"
+    
     PAYROLL_VALID_ENTRY: "* oder Dezimalzahl"
     INVALID_PAYROLL: "Ungültiger Wert"
     
@@ -121,6 +122,8 @@ ui.modules.course_lessons: {
     MODULE_NAME:    "Kurse/Stunden"
     MODULE_TITLE:   "Unterrichtskurse und -stunden verwalten"
     CLASSROOM:      "Klassenraum"
+    NO_ROOM:        "kein Raum"
+    SOME_ROOM:      "irgendein Raum"
     OTHER_ROOMS:    "auch andere Räume"
     TIME_FIXED:     "Feste Startzeit"
 
