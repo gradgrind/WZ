@@ -177,6 +177,14 @@ timetable.courses: {
     INVALID_ROOM:   "Im Kurs (Gruppe {klass}.{group}, Fach-id {sid}, Lehrer {tid}), unbekannter Raum: '{rid}'"
     BAD_TIME_FIELD: "Ungültiges Zeit-Feld (TIME) in LESSONS-Tabelle, id={id}: '{time}'"
     UNKNOWN_GROUP:  "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
+
+    # new module: course_analysis
+    INVALID_NON_LESSON: "LESSONS-Tabelle: fehlerhafte Zeile für Einheit ohne Unterrichtseinheit (nur für Deputat).\n  id: {id}"
+    INVALID_BLOCK:  "LESSONS-Tabelle: fehlerhafte Zeile für Block-Unterricht (Epoche, usw.).\n  id: {id}"
+    LENGTH_NOT_NUMBER: "Stundendauer für 'LESSON' {id} ist keine Zahl: '{length}'"
+    INVALID_PLAIN_LESSON: "LESSONS-Tabelle: fehlerhafte Zeile für Unterrichtsstunde ...\n  id={id}: Dauer='{length}', Zeit='{time}'"
+    INVALID_LESSON: "LESSONS-Tabelle: fehlerhafte Zeile, id={id}"
+    DOUBLE_PARTNER_TIME: "LESSONS-Tabelle: >1 Zeile, die die Zeit für Partnerkennzeichen {tag} angibt"
 }
 
 timetable.asc_data: {

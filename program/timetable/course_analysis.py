@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-06-27
+Last updated:  2022-06-28
 
 Collect information on activities for teachers and classes/groups.
 
@@ -24,7 +24,6 @@ Copyright 2022 Michael Towers
 
 #TODO: Move to translations:
 _SUPPRESSED = "Lehrkraft ausgeschlossen: {tname}"
-_TOO_MUCH_PAY = "COURSE {course}: Blockunterricht hat zu viele Stunden"
 
 ###############################################################
 
@@ -58,6 +57,162 @@ from core.basic_data import get_classes, get_teachers
 from timetable.courses import CourseData, blocktag2blocksid
 
 ### -----
+
+
+class CourseData(NamedTuple):
+    klass: str
+    group: str
+    sid: str
+    tid: str
+
+
+class LessonData(NamedTuple):
+    id: int
+    course: Optional[int]
+    #course: Optional[CourseData]
+    length: str
+    payroll: str
+    room: str
+    time: str
+    place: str
+
+
+class Courses:
+    """Collect and collate information relating to the courses and lessons.
+    The following data structures are available as attributes:
+        course2data:        {course-id -> <CourseData>}
+        class2courses:      {class -> {course-id, ... ]}
+        teacher2courses:    {tid -> {course-id, ... ]}
+        lesson2data:        {lesson-id -> <LessonData>}
+        course2payroll:     {course-id -> [lesson-id, ... ]}
+        course2block:       {course-id -> [lesson-id, ... ]}
+        course2plain:       {course-id -> [lesson-id, ... ]}
+        block_sublessons:   {block-tag -> [lesson-id, ... ]}
+        partners_time:      {partner-tag -> lesson-id}
+    """
+    def __init__(self):
+        ### First read the COURSES table
+        classes = get_classes()
+        class2groups = {
+            klass: classes.group_info(klass)["GROUPS"]
+            for klass, _ in classes.get_class_list()
+        }
+        self.course2data = {}
+        self.class2courses = {}
+        self.teacher2courses = {}
+        for course, klass, group, sid, tid in db_read_fields(
+            "COURSES", ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
+        ):
+            # CLASS, SUBJECT and TEACHER are foreign keys and should be
+            # automatically bound to appropriate entries in the database.
+            # GRP should be checked here ...
+            if group and group not in class2groups[klass]:
+                if klass != "--" and group != "*":
+                    SHOW_ERROR(
+                        T["UNKNOWN_GROUP"].format(
+                            klass=klass, group=group, sid=sid, tid=tid
+                        )
+                    )
+                    continue
+            self.course2data[course] = CourseData(
+                klass=klass, group=group, sid=sid, tid=tid
+            )
+            try:
+                self.class2courses[klass].append(course)
+            except KeyError:
+                self.class2courses[klass] = [course]
+            if tid and tid != "--":
+                try:
+                    self.teacher2courses[tid].append(course)
+                except KeyError:
+                    self.teacher2courses[tid] = [course]
+        ### Now read the LESSONS table
+        self.lesson2data = {}       # {lesson-id -> <LessonData>}
+        self.partners_time = {}     # {partner-tag -> lesson-id}
+        self.course2payroll = {}    # {course-id -> [lesson-id, ... ]}
+        self.course2block = {}      # {course-id -> [lesson-id, ... ]}
+        self.course2plain = {}      # {course-id -> [lesson-id, ... ]}
+        self.block_sublessons = {}  # {block-tag -> [lesson-id, ... ]}
+        for id, course, length, payroll, room, time, place in db_read_fields(
+            "LESSONS",
+            ("id", "course", "LENGTH", "PAYROLL", "ROOM", "TIME", "PLACE"),
+        ):
+            if course:
+                if length == "--":
+                    ## non-lesson
+                    if time or place or room:
+                        REPORT("ERROR", T["INVALID_NON_LESSON"].format(id=id))
+                        continue
+                    try:
+                        self.course2payroll[course].append(id)
+                    except KeyError:
+                        self.course2payroll[course] = [id]
+#TODO: Is it at all sensible to support multiple such entries for a course?
+
+                elif length == "*":
+                    if not time.startswith(">"):
+                        REPORT("ERROR", T["INVALID_BLOCK"].format(id=id))
+                        continue
+                    ## block-member
+                    try:
+                        self.course2block[course].append(id)
+                    except KeyError:
+                        self.course2block[course] = [id]
+
+                else:
+                    if not length.isnumeric():
+                        REPORT("ERROR", T["LENGTH_NOT_NUMBER"].format(
+                            id=id, length=length)
+                        )
+                        continue
+                    if time and time[0] in "@=":
+                        ## plain lesson
+                        try:
+                            self.course2plain[course].append(id)
+                        except KeyError:
+                            self.course2plain[course] = [id]
+                    else:
+                        REPORT("ERROR", T["INVALID_PLAIN_LESSON"].format(
+                            id=id, length=length, time=time)
+                        )
+                        continue
+
+            elif place.startswith(">"):
+                ## block-sublesson: add the length to the list for this block-tag
+                if not length.isnumeric():
+                    REPORT("ERROR", T["LENGTH_NOT_NUMBER"].format(
+                        id=id, length=length)
+                    )
+                    continue
+                try:
+                    self.block_sublessons[place].append(id)
+                except KeyError:
+                    self.block_sublessons[place] = [id]
+
+            elif place.startswith("="):
+                ## partner-time
+                if place in self.partners_time:
+                    REPORT("ERROR", T["DOUBLE_PARTNER_TIME"].format(tag=place))
+                    continue
+                else:
+                    self.partners_time[place] = id
+
+            else:
+                ## anything else is a bug
+                REPORT("ERROR", T["INVALID_LESSON"].format(id=id))
+                continue
+
+            self.lesson2data[id] = LessonData(
+                id=id,
+                course=course,
+                length=length,
+                payroll=payroll,
+                room=room,
+                time=time,
+                place=place,
+            )
+
+
 
 
 def get_course_info():
@@ -131,7 +286,10 @@ def get_course_info():
                 try:
                     l = int(length)
                 except ValueError:
-                    raise Bug(f"LESSON id={id}, LENGTH field is not a number: {length}")
+                    REPORT("ERROR", T["LENGTH_NOT_NUMBER"].format(
+                        id=id, length=length)
+                    )
+                    continue
                 if time and time[0] in "@=":
                     ## plain lesson
                     val = (l, payroll)
@@ -140,7 +298,10 @@ def get_course_info():
                     except KeyError:
                         course2plain[course] = [val]
                 else:
-                    raise Bug(f"Invalid LESSON, id={id}: LENGTH={length}, TIME={time}")
+                    REPORT("ERROR", T["INVALID_LESSON"].format(
+                        id=id, length=length, time=time)
+                    )
+                    continue
 
         elif place.startswith(">"):
             ## block-sublesson: add the length to the list for this block-tag
@@ -245,8 +406,9 @@ def blockdata(course_info, course):
 
         ltotal = sum(sublessons)
         if n:
+#???
             if n > ltotal:
-                SHOW_ERROR(_TOO_MUCH_PAY.format(course=course))
+                REPORT("ERROR", T["TOO_MUCH_PAY"].format(course=course))
             btype = _EPOCHE
         else:
             n = ltotal
@@ -358,6 +520,10 @@ class PdfCreator:
 if __name__ == "__main__":
     from core.db_management import open_database
     open_database()
+
+    courses = Courses()
+
+    quit(0)
 
     course_info = get_course_info()
     class2courses = course_info["CLASS2COURSES"]
