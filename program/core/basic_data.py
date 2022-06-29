@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-06-27
+core/basic_data.py - last updated 2022-06-29
 
 Handle caching of the basic data sources
 
@@ -117,16 +117,13 @@ def get_rooms() -> KeyValueList:
 
 def get_payroll_weights() -> KeyValueList:
     """Return the "payroll lesson weightings" as a KeyValueList of
-    (tag: str, weight:float) pairs.
+    (tag, weight) pairs.
     This data is cached, so subsequent calls get the same instance.
     """
     try:
         return SHARED_DATA["PAYROLL"]
     except KeyError:
         pass
-    payroll_weights = [
-        (k, float(v.replace(",", ".")))
-        for k, v in db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
-    ]
+    payroll_weights = db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
     SHARED_DATA["PAYROLL"] = payroll_weights
     return payroll_weights

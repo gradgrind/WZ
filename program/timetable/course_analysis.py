@@ -53,8 +53,13 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 
 from core.db_management import db_read_fields
-from core.basic_data import get_classes, get_teachers
-from timetable.courses import CourseData, blocktag2blocksid
+from core.basic_data import (
+    get_classes,
+    get_teachers,
+    get_rooms,
+    get_payroll_weights
+)
+#from timetable.courses import blocktag2blocksid
 
 ### -----
 
@@ -69,10 +74,9 @@ class CourseData(NamedTuple):
 class LessonData(NamedTuple):
     id: int
     course: Optional[int]
-    #course: Optional[CourseData]
     length: str
-    payroll: str
-    room: str
+    payroll: Optional[tuple[Optional[float],float]]
+    room: Optional[list[str]]
     time: str
     place: str
 
@@ -100,6 +104,7 @@ class Courses:
         self.course2data = {}
         self.class2courses = {}
         self.teacher2courses = {}
+        payroll_weights = get_payroll_weights()
         for course, klass, group, sid, tid in db_read_fields(
             "COURSES", ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
         ):
@@ -138,11 +143,31 @@ class Courses:
             ("id", "course", "LENGTH", "PAYROLL", "ROOM", "TIME", "PLACE"),
         ):
             if course:
+                if payroll:
+                    try:
+                        n, f = payroll.split("*", 1)
+                        payroll_val = (
+                            float(payroll_weights.map(f).replace(",", ".")),
+                            float(n.replace(",", ".")) if n else None
+                        )
+                    except (ValueError, KeyError):
+                        REPORT("ERROR", T["INVALID_PAYROLL"].format(
+                            id=id, payroll=payroll)
+                        )
+                        continue
+                else:
+                    REPORT("WARNING", T["NO_PAYROLL"].format(id=id))
+                    payroll_val = None
+
                 if length == "--":
                     ## non-lesson
                     if time or place or room:
                         REPORT("ERROR", T["INVALID_NON_LESSON"].format(id=id))
                         continue
+                    if payroll_val and payroll_val[0] is None:
+                        REPORT("ERROR", T["PAYROLL_NO_NUMBER"].format(
+                            id=id, payroll=payroll)
+                        )
                     try:
                         self.course2payroll[course].append(id)
                     except KeyError:
@@ -176,44 +201,101 @@ class Courses:
                             id=id, length=length, time=time)
                         )
                         continue
-
-            elif place.startswith(">"):
-                ## block-sublesson: add the length to the list for this block-tag
-                if not length.isnumeric():
-                    REPORT("ERROR", T["LENGTH_NOT_NUMBER"].format(
-                        id=id, length=length)
-                    )
-                    continue
-                try:
-                    self.block_sublessons[place].append(id)
-                except KeyError:
-                    self.block_sublessons[place] = [id]
-
-            elif place.startswith("="):
-                ## partner-time
-                if place in self.partners_time:
-                    REPORT("ERROR", T["DOUBLE_PARTNER_TIME"].format(tag=place))
-                    continue
-                else:
-                    self.partners_time[place] = id
+                roomlist = lesson_rooms(room, self.course2data[course], id)
 
             else:
-                ## anything else is a bug
-                REPORT("ERROR", T["INVALID_LESSON"].format(id=id))
-                continue
+                if payroll:
+                    REPORT("ERROR", T["PAYROLL_UNEXPECTED"].format(
+                            id=id, payroll=payroll)
+                        )
+                if place.startswith(">"):
+                    ## block-sublesson: add the length to the list for this block-tag
+                    if not length.isnumeric():
+                        REPORT("ERROR", T["LENGTH_NOT_NUMBER"].format(
+                            id=id, length=length)
+                        )
+                        continue
+                    try:
+                        self.block_sublessons[place].append(id)
+                    except KeyError:
+                        self.block_sublessons[place] = [id]
+                    roomlist = room.split("/") if room else None
+
+                elif place.startswith("="):
+                    ## partner-time
+                    if place in self.partners_time:
+                        REPORT("ERROR", T["DOUBLE_PARTNER_TIME"].format(tag=place))
+                        continue
+                    else:
+                        self.partners_time[place] = id
+                    if room:
+                        REPORT("ERROR", T["ROOM_NOT_EXPECTED"].format(
+                            id=id, room=room)
+                        )
+                        continue
+                    roomlist = None
+
+                else:
+                    ## anything else is a bug
+                    REPORT("ERROR", T["INVALID_LESSON"].format(id=id))
+                    continue
 
             self.lesson2data[id] = LessonData(
                 id=id,
                 course=course,
                 length=length,
                 payroll=payroll,
-                room=room,
+                room=roomlist,
                 time=time,
                 place=place,
             )
 
 
+def lesson_rooms(room: str, course: CourseData, lesson_id: int) -> Optional[list[str]]:
+    """Read a list of possible rooms for the given lesson.
+    Check the components.
+    """
+    if not room:
+        return None
+    rlist = []
+    room_list = get_rooms()
+    rooms = room.rstrip("+")
+    if rooms:
+        for r in rooms.split("/"):
+            if r == "$":
+                # Get classroom
+                classroom = get_classes().get_classroom(course.klass)
+                if not classroom:
+                    SHOW_ERROR(
+                        T["NO_CLASSROOM"].format(
+                            klass=course.klass,
+                            id=lesson_id
+                        )
+                    )
+                    continue
+                rlist.append(classroom)
+            else:
+                try:
+                    room_list.index(r)
+                except KeyError:
+                    SHOW_ERROR(
+                        T["INVALID_ROOM"].format(
+                            rid=r,
+                            klass=course.klass,
+                            group=course.group,
+                            sid=course.sid,
+                            tid=course.tid,
+                        )
+                    )
+                else:
+                    rlist.append(r)
+    if room[-1] == "+":
+        rlist.append("+")
+    return rlist or None
 
+
+#----------------------------------------------------------
+#TODO ...
 
 def get_course_info():
     """Return course information for classes and teachers.
