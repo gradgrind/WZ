@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-06-28
+Last updated:  2022-06-29
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -39,7 +39,6 @@ if __name__ == "__main__":
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-# T = TRANSLATIONS("ui.dialogs")
 T = TRANSLATIONS("ui.modules.course_lessons")
 
 ### +++++
@@ -60,7 +59,7 @@ from core.basic_data import (
     get_rooms,
     get_payroll_weights,
     SHARED_DATA,
-    PAYROLL_FORMAT
+    PAYROLL_FORMAT,
 )
 from ui.ui_base import (
     GuiError,
@@ -1286,9 +1285,6 @@ class SingleRoomDialog(QDialog):
         self.result = None
         self.classroom = classroom
         self.home.setVisible(bool(classroom))
-        self.home.setChecked(False)
-        self.extra.setChecked(False)
-        self.noroom.setChecked(False)
         self.roomlist.clearSelection()
         self.roomlist.clearFocus()
         if start_value == "$":
@@ -1303,6 +1299,8 @@ class SingleRoomDialog(QDialog):
             try:
                 row = self.room2line[start_value]
                 self.roomlist.selectRow(row)
+                # Clear check-buttons from previous activation:
+                self.selection_changed()
             except KeyError:
                 SHOW_ERROR(f"{T['UNKNOWN_ROOM_ID']}: '{start_value}'")
                 self.noroom.setChecked(True)
@@ -1348,7 +1346,7 @@ class PayrollDialog(QDialog):
 
         entries = []
         for k, v in get_payroll_weights():
-            val = f"{v:.2f})".replace('.', CONFIG["DECIMAL_SEP"])
+            val = f"{v:.2f})".replace(".", CONFIG["DECIMAL_SEP"])
             entries.append((k, f"{k} ({val})"))
         self.factor.set_items(entries)
 
@@ -1384,15 +1382,6 @@ class PayrollDialog(QDialog):
 if __name__ == "__main__":
     open_database()
 
-    widget = SingleRoomDialog()
-    widget.init()
-    print("----->", widget.activate(start_value="rPh", classroom="r10G"))
-    print("----->", widget.activate(start_value="rCh", classroom="r10G"))
-    print("----->", widget.activate(start_value="+", classroom="r10G"))
-    print("----->", widget.activate(start_value="$"))
-    print("----->", widget.activate(start_value="r11G", classroom="r10G"))
-    quit(0)
-
     for p in placements(">ZwE#09G10G"):
         print("!!!!", p)
 
@@ -1410,12 +1399,6 @@ if __name__ == "__main__":
 
     #    quit(0)
 
-    widget = RoomDialog()
-    widget.init()
-    print("----->", widget.activate(start_value="$/rPh+", classroom="r10G"))
-
-    #    quit(0)
-
     widget = PartnersDialog()
     print("----->", widget.activate("huO"))
 
@@ -1430,4 +1413,16 @@ if __name__ == "__main__":
     print("----->", widget.activate("Di.4"))
     print("----->", widget.activate("Di.9"))
 
-#    run(widget)
+    widget = RoomDialog()
+    widget.init()
+    print("----->", widget.activate(start_value="$/rPh+", classroom="r10G"))
+
+    #    quit(0)
+
+    widget = SingleRoomDialog()
+    widget.init()
+    print("----->", widget.activate(start_value="rPh", classroom="r10G"))
+    print("----->", widget.activate(start_value="rCh", classroom="r10G"))
+    print("----->", widget.activate(start_value="+", classroom="r10G"))
+    print("----->", widget.activate(start_value="$"))
+    print("----->", widget.activate(start_value="r11G", classroom="r10G"))
