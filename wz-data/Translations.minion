@@ -185,7 +185,6 @@ timetable.courses: {
     INVALID_NON_LESSON: "LESSONS-Tabelle: fehlerhafte Zeile für Einheit ohne Unterrichtseinheit (nur für Deputat).\n  id: {id}"
     INVALID_BLOCK:  "LESSONS-Tabelle: fehlerhafte Zeile für Block-Unterricht (Epoche, usw.).\n  id: {id}"
     LENGTH_NOT_NUMBER: "Stundendauer für 'LESSON' {id} ist keine Zahl: '{length}'"
-    INVALID_PLAIN_LESSON: "LESSONS-Tabelle: fehlerhafte Zeile für Unterrichtsstunde ...\n  id={id}: Dauer='{length}', Zeit='{time}'"
     INVALID_LESSON: "LESSONS-Tabelle: fehlerhafte Zeile, id={id}"
     DOUBLE_PARTNER_TIME: "LESSONS-Tabelle: >1 Zeile, die die Zeit für Partnerkennzeichen {tag} angibt"
     ROOM_NOT_EXPECTED:  "LESSONS-Tabelle, id={id}: Raum ({room}) angegeben in Partner-Zeit-Zeile"
@@ -193,6 +192,10 @@ timetable.courses: {
     NO_PAYROLL:         "LESSONS-Tabelle, id={id}: Keine Deputatsangabe"
     PAYROLL_NO_NUMBER:  "LESSONS-Tabelle, id={id}: Bei der Deputatsangabe fehlt die Anzahl der Einheiten ({payroll})"
     PAYROLL_UNEXPECTED: "LESSONS-Tabelle, id={id}: Sonderzeile, Deputatsangabe nicht erwartet ... gefunden: '{payroll}'"
+    TEACHER_SUPPRESSED: "Lehrkraft ausgeschlossen: {tname}"
+    TEACHER_NO_COURSES: "Lehrkraft ohne Auftrag: {tname}"
+    INVALID_PARTNER_TIME: "LESSONS-Tabelle, id={id}, Sonderzeile (Partnerzeit): Länge und Raum müssen leer sein"
+    INVALID_TIME:       "LESSONS-Tabelle, id={id}: Zeit ({time}) ungültig"
 }
 
 timetable.asc_data: {

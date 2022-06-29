@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-06-28
+Last updated:  2022-06-29
 
 Collect information on activities for teachers and classes/groups.
 
@@ -21,9 +21,6 @@ Copyright 2022 Michael Towers
    limitations under the License.
 =-LICENCE========================================
 """
-
-#TODO: Move to translations:
-_SUPPRESSED = "Lehrkraft ausgeschlossen: {tname}"
 
 ###############################################################
 
@@ -57,9 +54,10 @@ from core.basic_data import (
     get_classes,
     get_teachers,
     get_rooms,
-    get_payroll_weights
+    get_payroll_weights,
 )
-#from timetable.courses import blocktag2blocksid
+
+# from timetable.courses import blocktag2blocksid
 
 ### -----
 
@@ -75,7 +73,7 @@ class LessonData(NamedTuple):
     id: int
     course: Optional[int]
     length: str
-    payroll: Optional[tuple[Optional[float],float]]
+    payroll: Optional[tuple[Optional[float], float]]
     room: Optional[list[str]]
     time: str
     place: str
@@ -94,6 +92,7 @@ class Courses:
         block_sublessons:   {block-tag -> [lesson-id, ... ]}
         partners_time:      {partner-tag -> lesson-id}
     """
+
     def __init__(self):
         ### First read the COURSES table
         classes = get_classes()
@@ -132,12 +131,19 @@ class Courses:
                 except KeyError:
                     self.teacher2courses[tid] = [course]
         ### Now read the LESSONS table
-        self.lesson2data = {}       # {lesson-id -> <LessonData>}
-        self.partners_time = {}     # {partner-tag -> lesson-id}
-        self.course2payroll = {}    # {course-id -> [lesson-id, ... ]}
-        self.course2block = {}      # {course-id -> [lesson-id, ... ]}
-        self.course2plain = {}      # {course-id -> [lesson-id, ... ]}
+        self.lesson2data = {}  # {lesson-id -> <LessonData>}
+        # Partners time records are the entries which specify the actual time
+        self.partners_time = {}  # {partner-tag -> lesson-id}
+#TODO:
+        # Partners records are the teaching lessons which are parallel
+        self.partners = {}      # {course-id -> [lesson-id, ... ]}
+        self.course2payroll = {}  # {course-id -> [lesson-id, ... ]}
+        self.course2block = {}  # {course-id -> [lesson-id, ... ]}
+        self.course2plain = {}  # {course-id -> [lesson-id, ... ]}
+        # Block sublessons are the records for the actual lessons:
         self.block_sublessons = {}  # {block-tag -> [lesson-id, ... ]}
+        # Block members are the records for the courses sharing the slots:
+        self.block_members = {} # {block-tag -> [lesson-id, ... ]}
         for id, course, length, payroll, room, time, place in db_read_fields(
             "LESSONS",
             ("id", "course", "LENGTH", "PAYROLL", "ROOM", "TIME", "PLACE"),
@@ -148,11 +154,12 @@ class Courses:
                         n, f = payroll.split("*", 1)
                         payroll_val = (
                             float(payroll_weights.map(f).replace(",", ".")),
-                            float(n.replace(",", ".")) if n else None
+                            float(n.replace(",", ".")) if n else None,
                         )
                     except (ValueError, KeyError):
-                        REPORT("ERROR", T["INVALID_PAYROLL"].format(
-                            id=id, payroll=payroll)
+                        REPORT(
+                            "ERROR",
+                            T["INVALID_PAYROLL"].format(id=id, payroll=payroll),
                         )
                         continue
                 else:
@@ -165,54 +172,81 @@ class Courses:
                         REPORT("ERROR", T["INVALID_NON_LESSON"].format(id=id))
                         continue
                     if payroll_val and payroll_val[0] is None:
-                        REPORT("ERROR", T["PAYROLL_NO_NUMBER"].format(
-                            id=id, payroll=payroll)
+                        REPORT(
+                            "ERROR",
+                            T["PAYROLL_NO_NUMBER"].format(
+                                id=id, payroll=payroll
+                            ),
                         )
                     try:
                         self.course2payroll[course].append(id)
                     except KeyError:
                         self.course2payroll[course] = [id]
-#TODO: Is it at all sensible to support multiple such entries for a course?
+                # TODO: Is it at all sensible to support multiple such entries for a course?
 
                 elif length == "*":
+                    ## block-member
                     if not time.startswith(">"):
                         REPORT("ERROR", T["INVALID_BLOCK"].format(id=id))
                         continue
-                    ## block-member
                     try:
                         self.course2block[course].append(id)
                     except KeyError:
                         self.course2block[course] = [id]
+                    try:
+                        self.block_members[time].append(id)
+                    except KeyError:
+                        self.block_members[time] = [id]
 
                 else:
+                    ## plain lesson
                     if not length.isnumeric():
-                        REPORT("ERROR", T["LENGTH_NOT_NUMBER"].format(
-                            id=id, length=length)
+                        REPORT(
+                            "ERROR",
+                            T["LENGTH_NOT_NUMBER"].format(id=id, length=length),
                         )
                         continue
-                    if time and time[0] in "@=":
-                        ## plain lesson
+                    if time.startswith("="):
                         try:
-                            self.course2plain[course].append(id)
+                            self.partners[time].append(id)
                         except KeyError:
-                            self.course2plain[course] = [id]
-                    else:
-                        REPORT("ERROR", T["INVALID_PLAIN_LESSON"].format(
-                            id=id, length=length, time=time)
+                            self.partners[time] = [id]
+                    elif not time.startswith("@"):
+                        REPORT("ERROR", T["INVALID_TIME"].format(
+                            id=id, time=time)
                         )
                         continue
+                    try:
+                        self.course2plain[course].append(id)
+                    except KeyError:
+                        self.course2plain[course] = [id]
+
                 roomlist = lesson_rooms(room, self.course2data[course], id)
 
             else:
                 if payroll:
-                    REPORT("ERROR", T["PAYROLL_UNEXPECTED"].format(
-                            id=id, payroll=payroll)
-                        )
+                    REPORT(
+                        "ERROR",
+                        T["PAYROLL_UNEXPECTED"].format(id=id, payroll=payroll),
+                    )
                 if place.startswith(">"):
                     ## block-sublesson: add the length to the list for this block-tag
                     if not length.isnumeric():
-                        REPORT("ERROR", T["LENGTH_NOT_NUMBER"].format(
-                            id=id, length=length)
+                        REPORT(
+                            "ERROR",
+                            T["LENGTH_NOT_NUMBER"].format(id=id, length=length),
+                        )
+                        continue
+#TODO: Do I really want to allow partnering with block sublessons?
+# It might at least be useful for "pseudoblocks"?
+                    if time.startswith("="):
+                        try:
+                            self.partners[time].append(id)
+                        except KeyError:
+                            self.partners[time] = [id]
+                    elif not time.startswith("@"):
+                        REPORT("ERROR", T["INVALID_TIME"].format(
+                            id=id, time=time)
                         )
                         continue
                     try:
@@ -223,14 +257,25 @@ class Courses:
 
                 elif place.startswith("="):
                     ## partner-time
+                    if length or room:
+                        REPORT("ERROR", T["INVALID_PARTNER_TIME"].format(id=id))
+                        continue
+                    if not time.startswith("@"):
+                        REPORT("ERROR", T["INVALID_TIME"].format(
+                            id=id, time=time)
+                        )
+                        continue
                     if place in self.partners_time:
-                        REPORT("ERROR", T["DOUBLE_PARTNER_TIME"].format(tag=place))
+                        REPORT(
+                            "ERROR", T["DOUBLE_PARTNER_TIME"].format(tag=place)
+                        )
                         continue
                     else:
                         self.partners_time[place] = id
                     if room:
-                        REPORT("ERROR", T["ROOM_NOT_EXPECTED"].format(
-                            id=id, room=room)
+                        REPORT(
+                            "ERROR",
+                            T["ROOM_NOT_EXPECTED"].format(id=id, room=room),
                         )
                         continue
                     roomlist = None
@@ -251,7 +296,9 @@ class Courses:
             )
 
 
-def lesson_rooms(room: str, course: CourseData, lesson_id: int) -> Optional[list[str]]:
+def lesson_rooms(
+    room: str, course: CourseData, lesson_id: int
+) -> Optional[list[str]]:
     """Read a list of possible rooms for the given lesson.
     Check the components.
     """
@@ -268,8 +315,7 @@ def lesson_rooms(room: str, course: CourseData, lesson_id: int) -> Optional[list
                 if not classroom:
                     SHOW_ERROR(
                         T["NO_CLASSROOM"].format(
-                            klass=course.klass,
-                            id=lesson_id
+                            klass=course.klass, id=lesson_id
                         )
                     )
                     continue
@@ -294,8 +340,9 @@ def lesson_rooms(room: str, course: CourseData, lesson_id: int) -> Optional[list
     return rlist or None
 
 
-#----------------------------------------------------------
-#TODO ...
+# ----------------------------------------------------------
+# TODO ...
+
 
 def get_course_info():
     """Return course information for classes and teachers.
@@ -339,10 +386,10 @@ def get_course_info():
             except KeyError:
                 teacher2courses[tid] = [course]
 
-    course2payroll = {}     # {course-id -> [payroll, ... ]}
-    course2block = {}       # {course-id -> [(block-tag, payroll), ... ]}
-    course2plain = {}       # {course-id -> [(length, payroll), ... ]}
-    block_sublessons = {}   # {block-tag -> [length, ... ]}
+    course2payroll = {}  # {course-id -> [payroll, ... ]}
+    course2block = {}  # {course-id -> [(block-tag, payroll), ... ]}
+    course2plain = {}  # {course-id -> [(length, payroll), ... ]}
+    block_sublessons = {}  # {block-tag -> [length, ... ]}
     for id, course, length, payroll, time, place in db_read_fields(
         "LESSONS",
         ("id", "course", "LENGTH", "PAYROLL", "TIME", "PLACE"),
@@ -354,7 +401,7 @@ def get_course_info():
                     course2payroll[course].append(payroll)
                 except KeyError:
                     course2payroll[course] = [payroll]
-#TODO: Is it at all sensible to support multiple such entries for a course?
+            # TODO: Is it at all sensible to support multiple such entries for a course?
 
             elif length == "*" and time.startswith(">"):
                 ## block-member
@@ -368,8 +415,9 @@ def get_course_info():
                 try:
                     l = int(length)
                 except ValueError:
-                    REPORT("ERROR", T["LENGTH_NOT_NUMBER"].format(
-                        id=id, length=length)
+                    REPORT(
+                        "ERROR",
+                        T["LENGTH_NOT_NUMBER"].format(id=id, length=length),
                     )
                     continue
                 if time and time[0] in "@=":
@@ -380,8 +428,11 @@ def get_course_info():
                     except KeyError:
                         course2plain[course] = [val]
                 else:
-                    REPORT("ERROR", T["INVALID_LESSON"].format(
-                        id=id, length=length, time=time)
+                    REPORT(
+                        "ERROR",
+                        T["INVALID_LESSON"].format(
+                            id=id, length=length, time=time
+                        ),
                     )
                     continue
 
@@ -393,20 +444,22 @@ def get_course_info():
             except KeyError:
                 block_sublessons[place] = [i]
             except ValueError:
-                raise Bug(f"Invalid block-sublesson: block-tag={place}, length={length}")
+                raise Bug(
+                    f"Invalid block-sublesson: block-tag={place}, length={length}"
+                )
 
         elif not place.startswith("="):
             ## partner-time is ignored, anything else is a bug
             raise Bug(f"LESSON id={id}, error in PLACE field: {place}")
 
     return {
-        "COURSE2DATA":    course2data,      # {course-id -> CourseData}
-        "CLASS2COURSES":  class2courses,    # {class -> {course-id, ... ]}
-        "TEACHER2COURSES": teacher2courses, # {tid -> {course-id, ... ]}
-        "COURSE2PAYROLL": course2payroll,   # {course-id -> [payroll, ... ]}
-        "COURSE2BLOCK":   course2block,     # {course-id -> [(block-tag, payroll), ... ]}
-        "COURSE2PLAIN":   course2plain,     # {course-id -> [(length, payroll), ... ]}
-        "BLOCK_SUBLESSONS": block_sublessons # {block-tag -> [length, ... ]}
+        "COURSE2DATA": course2data,  # {course-id -> CourseData}
+        "CLASS2COURSES": class2courses,  # {class -> {course-id, ... ]}
+        "TEACHER2COURSES": teacher2courses,  # {tid -> {course-id, ... ]}
+        "COURSE2PAYROLL": course2payroll,  # {course-id -> [payroll, ... ]}
+        "COURSE2BLOCK": course2block,  # {course-id -> [(block-tag, payroll), ... ]}
+        "COURSE2PLAIN": course2plain,  # {course-id -> [(length, payroll), ... ]}
+        "BLOCK_SUBLESSONS": block_sublessons,  # {block-tag -> [length, ... ]}
     }
 
 
@@ -471,7 +524,6 @@ def get_course_info():
 """
 
 
-
 def blockdata(course_info, course):
     for blocktag, payroll in course_info["COURSE2BLOCK"]:
         sublessons = course_info["BLOCK_SUBLESSONS"][blocktag]
@@ -484,74 +536,123 @@ def blockdata(course_info, course):
         # If payroll has a number and this is not the same as the number
         # of lessons, this is continuous, not an EPOCHE.
         n, f = payroll.split("*", 1)
-#TODO: error handling
+        # TODO: error handling
 
         ltotal = sum(sublessons)
         if n:
-#???
+            # ???
             if n > ltotal:
                 REPORT("ERROR", T["TOO_MUCH_PAY"].format(course=course))
             btype = _EPOCHE
         else:
             n = ltotal
-        pay = f"{n * get_payroll_weights().map(f):.2f}".replace(".", DECIMAL_SEP)
+        pay = f"{n * get_payroll_weights().map(f):.2f}".replace(
+            ".", DECIMAL_SEP
+        )
+
+
+# TODO ...
+
+
+class TeacherCourses(Courses):
+# TODO ...
+# Include ROOM field
+    def teacher_class_subjects(self, block_tids=None):
+        """For each teacher, present the subjects/courses together with
+        groups, rooms etc.
+        If <block_tids> is supplied, it should be a set of teacher-ids which
+        will be "blocked", i.e. not appear in the output.
+        Build a list of "pages", one for each teacher, with a list of his/her
+        classes and subjects.
+
+        Divide the information into blocks, plain lessons and payroll-only
+        entries. Each of these sections should have the subjects and
+        groups ordered alphabetically.
+        """
+        teachers = get_teachers()
+        if block_tids is None:
+            block_tids = set()
+        tlist = []
+        for tid in teachers:
+            tname = teachers.name(tid)
+            if tid in block_tids:
+                REPORT("INFO", T["TEACHER_SUPPRESSED"].format(tname=tname))
+                continue
+            try:
+                courses = self.teacher2courses[tid]
+            except KeyError:
+                ## teacher has no entries
+                REPORT("INFO", T["TEACHER_NO_COURSES"].format(tname=tname))
+                continue
+            print(f"\n*** {tname} ***")
+            blocks = []
+            plains = []
+            payrolls = []
+            for course in courses:
+                cdata = self.course2data[course]
+                print("  +++", cdata)
+
+#TODO: Maybe blocks should not be treated as blocks when there is no
+# number for the payroll AND member subject == block subject?
+# Maybe being a block or "plain" is not really so important?
+# I should collect co-teachers? Actually only relevant for parallel
+# lessons handled as blocks. But I should gather tag maps anyway!
+
+                try:
+                    # Get the block members
+                    lids = self.course2block[course]
+                    print("    --- BLOCKS")
+                    for lid in lids:
+                        print("      ...", self.lesson2data[lid])
+#TODO
+                except KeyError:
+                    pass
+                try:
+                    # Get the plain lessons
+                    lids = self.course2plain[course]
+                    print("    --- LESSONS")
+                    for lid in lids:
+                        print("      ...", self.lesson2data[lid])
+#TODO
+                except KeyError:
+                    pass
+                try:
+                    # Get the payroll-only entries
+                    lids = self.course2payroll[course]
+                    print("    --- EXTRA")
+                    for lid in lids:
+                        print("      ...", self.lesson2data[lid])
+#TODO
+                except KeyError:
+                    pass
+
+#        self.block_sublessons = {}  # {block-tag -> [lesson-id, ... ]}
+
+
+
+        return
 #TODO ...
+        for tid, tname, clist in teacher_subjects:
+            if tid in block_tids:
+                REPORT("INFO", _SUPPRESSED.format(tname=tname))
+                continue
+            else:
+                tlist.append((f"{tname} ({tid})", clist))
 
-
-#TODO ...
-# Include ROOM field?
-def teacher_class_subjects(course_info, block_tids=None):
-    """For each teacher, present the subjects/courses together with
-    groups, rooms etc.
-    If <block_tids> is supplied, it should be a set of teacher-ids which
-    will be "blocked", i.e. not appear in the output.
-    Build a list of "pages", one for each teacher, with a list of his/her
-    classes and subjects.
-    """
-    teachers = get_teachers()
-    tid2courses = course_info["TEACHER2COURSES"]
-    course2data = course_info["COURSE2DATA"]
-    if block_tids is None:
-        block_tids = set()
-    tlist = []
-    for tid in teachers:
-        try:
-            courses = tid2courses[tid]
-        except KeyError:
-            ## teacher has no entries
-            continue
-        if tid in block_tids:
-            REPORT("INFO", _SUPPRESSED.format(tname=tname))
-            continue
-        tname = teachers.name(tid)
-        for course in courses:
-            cdata = course2data[course]
-
-
-    for tid, tname, clist in teacher_subjects:
-        if tid in block_tids:
-            REPORT("INFO", _SUPPRESSED.format(tname=tname))
-            continue
-        else:
-            tlist.append((f"{tname} ({tid})", clist))
-
-    pdf = PdfCreator()
-    return pdf.build_pdf(tlist, title="Lehrer-Klassen-Fächer",
-            author="FWS Bothfeld")
+        pdf = PdfCreator()
+        return pdf.build_pdf(
+            tlist, title="Lehrer-Klassen-Fächer", author="FWS Bothfeld"
+        )
 
 
 BASE_MARGIN = 20 * mm
-#TODO
+# TODO
 class PdfCreator:
     def add_page_number(self, canvas, doc):
         canvas.saveState()
-        canvas.setFont('Times-Roman', 12)
+        canvas.setFont("Times-Roman", 12)
         page_number_text = "%d" % (doc.page)
-        canvas.drawCentredString(
-            18 * mm,
-            18 * mm,
-            page_number_text
-        )
+        canvas.drawCentredString(18 * mm, 18 * mm, page_number_text)
         canvas.restoreState()
 
     def build_pdf(self, pagelist, title, author):
@@ -564,17 +665,17 @@ class PdfCreator:
             topMargin=BASE_MARGIN,
             leftMargin=BASE_MARGIN,
             rightMargin=BASE_MARGIN,
-            bottomMargin=BASE_MARGIN
+            bottomMargin=BASE_MARGIN,
         )
         sample_style_sheet = getSampleStyleSheet()
-        body_style = sample_style_sheet['BodyText']
+        body_style = sample_style_sheet["BodyText"]
         body_style.fontSize = 14
         body_style.leading = 20
-        heading_style = sample_style_sheet['Heading1']
+        heading_style = sample_style_sheet["Heading1"]
         heading_style.spaceAfter = 24
-        class_style = sample_style_sheet['Heading2']
+        class_style = sample_style_sheet["Heading2"]
         class_style.spaceBefore = 25
-        #print("\n STYLES:", sample_style_sheet.list())
+        # print("\n STYLES:", sample_style_sheet.list())
 
         flowables = []
         for teacher, clist in pagelist:
@@ -601,9 +702,11 @@ class PdfCreator:
 
 if __name__ == "__main__":
     from core.db_management import open_database
+
     open_database()
 
-    courses = Courses()
+    courses = TeacherCourses()
+    courses.teacher_class_subjects()
 
     quit(0)
 
