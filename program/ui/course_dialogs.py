@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-06-29
+Last updated:  2022-06-30
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -1327,6 +1327,7 @@ class PayrollDialog(QDialog):
         self.number.setToolTip(T["PAYROLL_VALID_ENTRY"])
         hbox1.addWidget(self.number)
         # If <no_length> is true, there must be a number in the expression.
+#TODO: Change to integer only?
         regexp = QRegularExpression(
             PAYROLL_FORMAT if no_length else PAYROLL_FORMAT + "|"
         )
@@ -1345,9 +1346,9 @@ class PayrollDialog(QDialog):
         bt_cancel.clicked.connect(self.reject)
 
         entries = []
+#TODO: Check values here or in get_payroll_weights
         for k, v in get_payroll_weights():
-            val = f"{v:.2f})".replace(".", CONFIG["DECIMAL_SEP"])
-            entries.append((k, f"{k} ({val})"))
+            entries.append((k, f"{k} ({v})"))
         self.factor.set_items(entries)
 
     def do_accept(self):
@@ -1396,6 +1397,7 @@ if __name__ == "__main__":
 
     widget = PayrollDialog()
     print("----->", widget.activate(start_value="Fred*HuEp"))
+    print("----->", widget.activate(start_value="12,3*HuEp"))
 
     #    quit(0)
 

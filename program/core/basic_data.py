@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-06-29
+core/basic_data.py - last updated 2022-06-30
 
 Handle caching of the basic data sources
 
@@ -127,3 +127,5 @@ def get_payroll_weights() -> KeyValueList:
     payroll_weights = db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
     SHARED_DATA["PAYROLL"] = payroll_weights
     return payroll_weights
+
+#TODO: Check values and convert to int/float?

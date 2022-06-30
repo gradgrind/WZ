@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-06-29
+Last updated:  2022-06-30
 
 Collect information on activities for teachers and classes/groups.
 
@@ -134,9 +134,8 @@ class Courses:
         self.lesson2data = {}  # {lesson-id -> <LessonData>}
         # Partners time records are the entries which specify the actual time
         self.partners_time = {}  # {partner-tag -> lesson-id}
-#TODO:
         # Partners records are the teaching lessons which are parallel
-        self.partners = {}      # {course-id -> [lesson-id, ... ]}
+        self.partners = {}      # {partner-tag -> [lesson-id, ... ]}
         self.course2payroll = {}  # {course-id -> [lesson-id, ... ]}
         self.course2block = {}  # {course-id -> [lesson-id, ... ]}
         self.course2plain = {}  # {course-id -> [lesson-id, ... ]}
@@ -585,18 +584,53 @@ class TeacherCourses(Courses):
                 REPORT("INFO", T["TEACHER_NO_COURSES"].format(tname=tname))
                 continue
             print(f"\n*** {tname} ***")
+#???
             blocks = []
             plains = []
             payrolls = []
+
+            class_map = {}
             for course in courses:
                 cdata = self.course2data[course]
                 print("  +++", cdata)
+                # Sort on class, sid and group, using (class, sid, group) keys?
+                # Or two-level, first class, the (sid, group)?
+                try:
+                    __cmap = class_map[cdata.klass]
+                except KeyError:
+                    llist = []
+                    class_map[cdata.klass] = {(cdata.sid, cdata.group): llist}
+                else:
+                    try:
+                        llist = __cmap[(cdata.sid, cdata.group)]
+                    except KeyError:
+                        llist = []
+                        __cmap[(cdata.sid, cdata.group)] = llist
 
 #TODO: Maybe blocks should not be treated as blocks when there is no
 # number for the payroll AND member subject == block subject?
 # Maybe being a block or "plain" is not really so important?
 # I should collect co-teachers? Actually only relevant for parallel
 # lessons handled as blocks. But I should gather tag maps anyway!
+
+#TODO: IMPORTANT!
+# There are cases where blocks are used for teaching simultaneously in
+# several groups. I'm not sure that my data structures cover this
+# properly. If no number is given for a member, it means "continuous",
+# i.e. not in time-blocks. If a teacher has members of the same block-tag
+# in more than one class and these are continuous, then these cannot
+# be cumulative. However if they really are parallel, but not continuous
+# there is no way to distinguish them from separate time-blocks.
+# Perhaps a special marker could be used in the LENGTH field for parallel
+# blocks?
+# Another possibility would be the PAYROLL entry. This could have a special
+# tag to indicate sharing, or fractional numbers could be used. The former
+# should allow easier tracing of the parallel classes.
+# Actually, the PAYROLL field is the better choice, because this detail
+# is not directly relevant for the timetabling itself. It might also be
+# worth considering restricting the number component to integer values
+# (for compatibility with the LENGTH field, and given the possiblity of
+# handling fractional values in the factor-part).
 
                 try:
                     # Get the block members
