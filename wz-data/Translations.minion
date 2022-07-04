@@ -5,6 +5,11 @@ core.db_management: {
     BAD_KEY_VALUE_LIST: "Ungültige Schlüssel-Wert-Liste,\nein Paar pro Zeile, Trennung durch ':':\n{text}"
 }
 
+core.basic_data: {
+    # Messages
+    BAD_WEIGHT:     "Ungültiger Gewichtungsfaktor für Deputatsstunden: {key} -> '{val}'"
+}
+
 core.classes: {
     INVALID_GROUP_FIELD: "Die Gruppenangabe (Feld DIVISIONS) für Klasse {klass} ist fehlerhaft"
 }

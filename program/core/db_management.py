@@ -1,7 +1,7 @@
 """
 core/db_management.py
 
-Last updated:  2022-06-26
+Last updated:  2022-07-04
 
 Helper functions for accessing the database.
 
@@ -30,11 +30,13 @@ DATABASE = "db1.sqlite"
 
 if __name__ == "__main__":
     import sys, os
+
     this = sys.path[0]
     appdir = os.path.dirname(this)
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
+
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
@@ -49,8 +51,10 @@ from ui.ui_base import (
     QSqlQuery,
 )
 
+
 class NoRecord(Exception):
     pass
+
 
 ### -----
 
@@ -100,19 +104,27 @@ def table_extent(table):
     print("COUNT:", res)
 """
 
+
 def db_query(query_text):
     query = QSqlQuery(query_text)
     rec = query.record()
     nfields = rec.count()
     value_list = []
-    while (query.next()):
+    while query.next():
         value_list.append([query.value(i) for i in range(nfields)])
     return value_list
 
 
 class KeyValueList(list):
-    def __init__(self, iterable=None):
+    def __init__(self, iterable, check=None):
+        """Build a list which also has key -> index and key -> value methods.
+        iterable:   Lists (key, value) pairs
+        check:      If supplied, it takes a (key, value) pair and checks
+                    its validity. If invalid it returns <None>. If valid,
+                    it returns the value, which may be transformed.
+        """
         super().__init__()
+        self.__check = check
         self.__map = {}
         for item in iterable:
             self.append(item)
@@ -120,6 +132,12 @@ class KeyValueList(list):
     def append(self, item):
         if not len(item) == 2:
             raise Bug(f"KeyValueList – new item is not a pair: {repr(item)}")
+        if self.__check is not None:
+            i2 = self.__check(item)
+            if i2 is None:
+                return_value    # Value invalid
+            if i2 != item[1]:
+                item = (item[0], i2)
         self.__map[item[0]] = len(self)
         super().append(item)
 
@@ -131,12 +149,7 @@ class KeyValueList(list):
 
 
 def db_read_table(
-    table,
-    fields,
-    *wheres,
-    distinct=False,
-    sort_field=None,
-    **keys
+    table, fields, *wheres, distinct=False, sort_field=None, **keys
 ):
     """Read a list of table entries.
     <fields> specifies which fields are to be read. It may be
@@ -157,7 +170,7 @@ def db_read_table(
         elif isinstance(v, int):
             where_cond.append(f'"{k}" = {v}')
         elif isinstance(v, list):
-            instring = ', '.join(
+            instring = ", ".join(
                 [f'"{_v}"' if isinstance(_v, str) else str(_v) for _v in v]
             )
             where_cond.append(f'"{k}" IN ( {instring} )')
@@ -167,16 +180,16 @@ def db_read_table(
         where_clause = f" WHERE {' AND '.join(where_cond)}"
     else:
         where_clause = ""
-    f = ', '.join([f'"{f}"' for f in fields]) if fields else '*'
+    f = ", ".join([f'"{f}"' for f in fields]) if fields else "*"
     o = f' ORDER BY "{sort_field}"' if sort_field else ""
     d = " DISTINCT" if distinct else ""
     qtext = f"SELECT{d} {f} FROM {table}{where_clause}{o}"
-    #print("§§§", qtext)
+    # print("§§§", qtext)
     query = QSqlQuery(qtext)
     rec = query.record()
     nfields = rec.count()
     value_list = []
-    while (query.next()):
+    while query.next():
         value_list.append([query.value(i) for i in range(nfields)])
     if fields:
         if len(fields) != nfields:
@@ -208,13 +221,16 @@ def db_values(table, value_field, *wheres, **keys):
     return [v[0] for v in value_list]
 
 
-def db_key_value_list(table, key_field, value_field, sort_field=None):
+def db_key_value_list(
+    table, key_field, value_field, sort_field=None, check=None
+):
     """Return a <KeyValueList> of (key, value) pairs from the given
     database table.
     """
-    fields, value_list = db_read_table(table, [key_field, value_field],
-            sort_field=sort_field)
-    return KeyValueList(value_list)
+    fields, value_list = db_read_table(
+        table, [key_field, value_field], sort_field=sort_field
+    )
+    return KeyValueList(value_list, check)
 
 
 def db_read_fields(table, fields, sort_field=None):
@@ -225,7 +241,7 @@ def db_read_fields(table, fields, sort_field=None):
     return value_list
 
 
-def db_update_fields(table, field_values,  *wheres, **keys):
+def db_update_fields(table, field_values, *wheres, **keys):
     where_cond = [w for w in wheres]
     for k, v in keys.items():
         if isinstance(v, str):
@@ -233,7 +249,7 @@ def db_update_fields(table, field_values,  *wheres, **keys):
         elif isinstance(v, int):
             where_cond.append(f'"{k}" = {v}')
         elif isinstance(v, list):
-            instring = ', '.join(
+            instring = ", ".join(
                 [f'"{_v}"' if isinstance(_v, str) else str(_v) for _v in v]
             )
             where_cond.append(f'"{k}" IN ( {instring} )')
@@ -253,9 +269,9 @@ def db_update_fields(table, field_values,  *wheres, **keys):
         else:
             raise Bug(f"Unexpected field value: '{repr(v)}' for '{f}'")
 
-    f = ', '.join(fields)
+    f = ", ".join(fields)
     qtext = f"UPDATE {table} SET {f}{where_clause}"
-    #print("§§§", qtext)
+    # print("§§§", qtext)
     query = QSqlQuery()
     if query.exec(qtext):
         return True
@@ -264,8 +280,8 @@ def db_update_fields(table, field_values,  *wheres, **keys):
     return False
 
 
-def db_update_field(table, field, value,  *wheres, **keys):
-    return db_update_fields(table, [(field, value)],  *wheres, **keys)
+def db_update_field(table, field, value, *wheres, **keys):
+    return db_update_fields(table, [(field, value)], *wheres, **keys)
 
 
 def db_new_row(table, **values):
@@ -275,11 +291,13 @@ def db_new_row(table, **values):
         if isinstance(v, str):
             vlist.append(f'"{v}"')
         elif isinstance(v, int):
-            vlist.append(f'{v}')
+            vlist.append(f"{v}")
         else:
             raise Bug(f"Unexpected field value: '{repr(v)}' for '{f}'")
-    qtext = f"INSERT INTO {table} ({', '.join(flist)}) VALUES ({', '.join(vlist)})"
-    #print("§§§", qtext)
+    qtext = (
+        f"INSERT INTO {table} ({', '.join(flist)}) VALUES ({', '.join(vlist)})"
+    )
+    # print("§§§", qtext)
     query = QSqlQuery()
     if query.exec(qtext):
         newid = query.lastInsertId()
@@ -298,7 +316,7 @@ def db_delete_rows(table, *wheres, **keys):
         elif isinstance(v, int):
             where_cond.append(f'"{k}" = {v}')
         elif isinstance(v, list):
-            instring = ', '.join(
+            instring = ", ".join(
                 [f'"{_v}"' if isinstance(_v, str) else str(_v) for _v in v]
             )
             where_cond.append(f'"{k}" IN ( {instring} )')
@@ -331,6 +349,7 @@ def db_unique_fields(table):
     return fields
 """
 
+
 def read_pairs(data):
     """Read a list of (key, value) pairs from the given string.
 
@@ -342,7 +361,7 @@ def read_pairs(data):
     pairs = []
     for line in data.splitlines():
         try:
-            k, v = line.split(':', 1)
+            k, v = line.split(":", 1)
             pairs.append((k.strip(), v.strip()))
         except ValueError:
             SHOW_ERROR(T["BAD_KEY_VALUE_LIST"].format(text=data))
@@ -398,12 +417,12 @@ def enter_classes():
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-#    enter_classes()
+    #    enter_classes()
 
     l = KeyValueList([("a", 1), ("b", 2), ("c", 3)])
     l.append(("d", 4))
     print("KeyValueList:", l)
-    print("   ... map('b'):", l.map('b'))
+    print("   ... map('b'):", l.map("b"))
 
     open_database()
 
@@ -413,8 +432,7 @@ if __name__ == "__main__":
 
     print("\nCOURSES:")
     for r in db_read_fields(
-        "COURSES",
-        ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
+        "COURSES", ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
     ):
         print("  ", r)
 
@@ -428,18 +446,17 @@ if __name__ == "__main__":
     for row in values:
         print("  ", row)
 
-
     table = "LESSONS"
-    #print("\nExtent of table {table}:")
-    #table_extent(table)
-#    fields, values = db_read_full_table(table, 'course > 2')
-    fields, values = db_read_full_table(table, 'course IS NULL')
+    # print("\nExtent of table {table}:")
+    # table_extent(table)
+    #    fields, values = db_read_full_table(table, 'course > 2')
+    fields, values = db_read_full_table(table, "course IS NULL")
     print(f"\n{table} table: {fields}")
     for row in values[:10]:
         print("  ", row)
 
 # It seems that null entries are read as empty strings ...
 
-    #print("\nUNIQUE FIELDS")
-    #for table in "CLASSES", "TEACHERS", "COURSES", "LESSONS":
-    #    print(f"  {table}:", db_unique_fields(table))
+# print("\nUNIQUE FIELDS")
+# for table in "CLASSES", "TEACHERS", "COURSES", "LESSONS":
+#    print(f"  {table}:", db_unique_fields(table))

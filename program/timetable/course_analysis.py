@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-06-30
+Last updated:  2022-07-04
 
 Collect information on activities for teachers and classes/groups.
 
@@ -545,7 +545,7 @@ def blockdata(course_info, course):
             btype = _EPOCHE
         else:
             n = ltotal
-        pay = f"{n * get_payroll_weights().map(f):.2f}".replace(
+        pay = f"{n * float(get_payroll_weights().map(f)):.3f}".replace(
             ".", DECIMAL_SEP
         )
 

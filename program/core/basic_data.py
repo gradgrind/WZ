@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-06-30
+core/basic_data.py - last updated 2022-07-04
 
 Handle caching of the basic data sources
 
@@ -19,16 +19,19 @@ Copyright 2022 Michael Towers
    limitations under the License.
 """
 
+T = TRANSLATIONS("core.basic_data")
+
+### +++++
+
 from core.db_management import db_key_value_list, KeyValueList
 from core.classes import Classes
 from core.teachers import Teachers
+from ui.ui_base import QRegularExpression  ### QtCore
 
 SHARED_DATA = {}
 
 DECIMAL_SEP = CONFIG["DECIMAL_SEP"]
-PAYROLL_FORMAT = "[1-9]?[0-9](?:$[0-9]{1,2})?".replace(
-    "$", DECIMAL_SEP
-)
+PAYROLL_FORMAT = "[1-9]?[0-9](?:$[0-9]{1,3})?".replace("$", DECIMAL_SEP)
 
 ### -----
 
@@ -120,12 +123,22 @@ def get_payroll_weights() -> KeyValueList:
     (tag, weight) pairs.
     This data is cached, so subsequent calls get the same instance.
     """
+
+    def check(item):
+        i2 = item[1]
+        if regexp.match(i2).hasMatch():
+            return i2
+        else:
+            SHOW_ERROR(T["BAD_WEIGHT"].format(key=item[0], val=i2))
+            return None
+
+    regexp = QRegularExpression(f"^{PAYROLL_FORMAT}$")
     try:
         return SHARED_DATA["PAYROLL"]
     except KeyError:
         pass
-    payroll_weights = db_key_value_list("XDPT_WEIGHTINGS", "TAG", "WEIGHT")
+    payroll_weights = db_key_value_list(
+        "XDPT_WEIGHTINGS", "TAG", "WEIGHT", check=check
+    )
     SHARED_DATA["PAYROLL"] = payroll_weights
     return payroll_weights
-
-#TODO: Check values and convert to int/float?
