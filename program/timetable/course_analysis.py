@@ -1,7 +1,7 @@
 """
 timetable/courses.py
 
-Last updated:  2022-07-04
+Last updated:  2022-07-08
 
 Collect information on activities for teachers and classes/groups.
 
@@ -53,11 +53,16 @@ from core.db_management import db_read_fields
 from core.basic_data import (
     get_classes,
     get_teachers,
+    get_subjects,
     get_rooms,
     get_payroll_weights,
+    read_payroll,
+    read_time_field,
+    read_blocktag,
+    BlockTag,
+    PayrollData,
+    check_lesson_length
 )
-
-# from timetable.courses import blocktag2blocksid
 
 ### -----
 
@@ -68,15 +73,35 @@ class CourseData(NamedTuple):
     sid: str
     tid: str
 
+    def __str__(self):
+        return T["CourseData"].format(
+            klass=self.klass, group=self.group, sid=self.sid, tid=self.tid
+        )
+
 
 class LessonData(NamedTuple):
     id: int
     course: Optional[int]
     length: str
+    # ? optional?:
     payroll: Optional[tuple[Optional[float], float]]
-    room: Optional[list[str]]
+    room: list[str]
     time: str
     place: str
+
+
+class BlockInfo(NamedTuple):
+    course: CourseData
+    block: BlockTag
+    rooms: list[str]
+    payroll_data: PayrollData
+
+
+class LessonInfo(NamedTuple):
+    course: CourseData
+    length: int
+    rooms: list[str]
+    payroll_data: PayrollData
 
 
 class Courses:
@@ -90,6 +115,7 @@ class Courses:
         course2block:       {course-id -> [lesson-id, ... ]}
         course2plain:       {course-id -> [lesson-id, ... ]}
         block_sublessons:   {block-tag -> [lesson-id, ... ]}
+        block_members:      {block-tag -> [lesson-id, ... ]}
         partners_time:      {partner-tag -> lesson-id}
     """
 
@@ -135,14 +161,14 @@ class Courses:
         # Partners time records are the entries which specify the actual time
         self.partners_time = {}  # {partner-tag -> lesson-id}
         # Partners records are the teaching lessons which are parallel
-        self.partners = {}      # {partner-tag -> [lesson-id, ... ]}
+        self.partners = {}  # {partner-tag -> [lesson-id, ... ]}
         self.course2payroll = {}  # {course-id -> [lesson-id, ... ]}
         self.course2block = {}  # {course-id -> [lesson-id, ... ]}
         self.course2plain = {}  # {course-id -> [lesson-id, ... ]}
         # Block sublessons are the records for the actual lessons:
         self.block_sublessons = {}  # {block-tag -> [lesson-id, ... ]}
         # Block members are the records for the courses sharing the slots:
-        self.block_members = {} # {block-tag -> [lesson-id, ... ]}
+        self.block_members = {}  # {block-tag -> [lesson-id, ... ]}
         for id, course, length, payroll, room, time, place in db_read_fields(
             "LESSONS",
             ("id", "course", "LENGTH", "PAYROLL", "ROOM", "TIME", "PLACE"),
@@ -211,8 +237,8 @@ class Courses:
                         except KeyError:
                             self.partners[time] = [id]
                     elif not time.startswith("@"):
-                        REPORT("ERROR", T["INVALID_TIME"].format(
-                            id=id, time=time)
+                        REPORT(
+                            "ERROR", T["INVALID_TIME"].format(id=id, time=time)
                         )
                         continue
                     try:
@@ -236,23 +262,23 @@ class Courses:
                             T["LENGTH_NOT_NUMBER"].format(id=id, length=length),
                         )
                         continue
-#TODO: Do I really want to allow partnering with block sublessons?
-# It might at least be useful for "pseudoblocks"?
+                    # TODO: Do I really want to allow partnering with block sublessons?
+                    # It might at least be useful for "pseudoblocks"?
                     if time.startswith("="):
                         try:
                             self.partners[time].append(id)
                         except KeyError:
                             self.partners[time] = [id]
                     elif not time.startswith("@"):
-                        REPORT("ERROR", T["INVALID_TIME"].format(
-                            id=id, time=time)
+                        REPORT(
+                            "ERROR", T["INVALID_TIME"].format(id=id, time=time)
                         )
                         continue
                     try:
                         self.block_sublessons[place].append(id)
                     except KeyError:
                         self.block_sublessons[place] = [id]
-                    roomlist = room.split("/") if room else None
+                    roomlist = room.split("/") if room else []
 
                 elif place.startswith("="):
                     ## partner-time
@@ -260,8 +286,8 @@ class Courses:
                         REPORT("ERROR", T["INVALID_PARTNER_TIME"].format(id=id))
                         continue
                     if not time.startswith("@"):
-                        REPORT("ERROR", T["INVALID_TIME"].format(
-                            id=id, time=time)
+                        REPORT(
+                            "ERROR", T["INVALID_TIME"].format(id=id, time=time)
                         )
                         continue
                     if place in self.partners_time:
@@ -277,7 +303,7 @@ class Courses:
                             T["ROOM_NOT_EXPECTED"].format(id=id, room=room),
                         )
                         continue
-                    roomlist = None
+                    roomlist = []
 
                 else:
                     ## anything else is a bug
@@ -295,14 +321,12 @@ class Courses:
             )
 
 
-def lesson_rooms(
-    room: str, course: CourseData, lesson_id: int
-) -> Optional[list[str]]:
+def lesson_rooms(room: str, course: CourseData, lesson_id: int) -> list[str]:
     """Read a list of possible rooms for the given lesson.
     Check the components.
     """
     if not room:
-        return None
+        return []
     rlist = []
     room_list = get_rooms()
     rooms = room.rstrip("+")
@@ -312,10 +336,9 @@ def lesson_rooms(
                 # Get classroom
                 classroom = get_classes().get_classroom(course.klass)
                 if not classroom:
-                    SHOW_ERROR(
-                        T["NO_CLASSROOM"].format(
-                            klass=course.klass, id=lesson_id
-                        )
+                    REPORT(
+                        "ERROR",
+                        T["NO_CLASSROOM"].format(course=course, id=lesson_id),
                     )
                     continue
                 rlist.append(classroom)
@@ -323,20 +346,17 @@ def lesson_rooms(
                 try:
                     room_list.index(r)
                 except KeyError:
-                    SHOW_ERROR(
-                        T["INVALID_ROOM"].format(
-                            rid=r,
-                            klass=course.klass,
-                            group=course.group,
-                            sid=course.sid,
-                            tid=course.tid,
-                        )
+                    REPORT(
+                        "ERROR",
+                        T["UNKNOWN_ROOM"].format(
+                            rid=r, course=course, id=lesson_id
+                        ),
                     )
                 else:
                     rlist.append(r)
     if room[-1] == "+":
         rlist.append("+")
-    return rlist or None
+    return rlist
 
 
 # ----------------------------------------------------------
@@ -550,12 +570,471 @@ def blockdata(course_info, course):
         )
 
 
-# TODO ...
+class BlockData(NamedTuple):
+    blocksid: str
+    tag: str
+    tid: str
+    sid: str
+    groups: list[tuple[str, str]]
+    lengths: list[int]
+    payroll: list[Optional[float], float]
+    room: list[str]
 
 
-class TeacherCourses(Courses):
-# TODO ...
-# Include ROOM field
+class TeacherCourses:
+    def __init__(self):
+        ### First read the COURSES table
+        classes = get_classes()
+        class2groups = {
+            klass: classes.group_info(klass)["GROUPS"]
+            for klass, _ in classes.get_class_list()
+        }
+        self.course2data = {}
+        # ?
+        self.teacher2courses = {}
+        payroll_weights = get_payroll_weights()
+        for course, klass, group, sid, tid in db_read_fields(
+            "COURSES", ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
+        ):
+            # CLASS, SUBJECT and TEACHER are foreign keys and should be
+            # automatically bound to appropriate entries in the database.
+            # GRP should be checked here ...
+            if group and group not in class2groups[klass]:
+                if klass != "--" and group != "*":
+                    SHOW_ERROR(
+                        T["UNKNOWN_GROUP"].format(
+                            klass=klass, group=group, sid=sid, tid=tid
+                        )
+                    )
+                    continue
+            self.course2data[course] = CourseData(
+                klass=klass, group=group, sid=sid, tid=tid
+            )
+            # ?
+            if tid and tid != "--":
+                try:
+                    self.teacher2courses[tid].append(course)
+                except KeyError:
+                    self.teacher2courses[tid] = [course]
+        ### Now read the LESSONS table
+        self.lesson2data = {}  # {lesson-id -> <LessonData>}
+
+        # ?
+        # Partners time records are the entries which specify the actual time
+        self.partners_time = {}  # {partner-tag -> lesson-id}
+        # Partners records are the teaching lessons which are parallel
+        self.partners = {}  # {partner-tag -> [lesson-id, ... ]}
+        self.course2payroll = {}  # {course-id -> [lesson-id, ... ]}
+        self.course2block = {}  # {course-id -> [lesson-id, ... ]}
+        self.course2plain = {}  # {course-id -> [lesson-id, ... ]}
+
+        # Block sublessons are the records for the actual lessons:
+        self.block_sublessons = {}  # {block-tag -> [lesson-id, ... ]}
+
+        # Block members are the records for the courses sharing the slots:
+        self.block_members = {}  # {block-tag -> [lesson-id, ... ]}
+
+        self.teacher2paydata = {}  # {tid -> [(course-id, PayrollData), ... ]}
+        self.teacher2blockinfo = {}  # {tid -> [(course-id, BlockInfo), ... ]}
+        self.teacher2lessoninfo = {}  # {tid -> [(course-id, LessonInfo), ... ]}
+
+        for id, course, length, payroll, room, time, place in db_read_fields(
+            "LESSONS",
+            ("id", "course", "LENGTH", "PAYROLL", "ROOM", "TIME", "PLACE"),
+        ):
+            if course:
+                coursedata = self.course2data[course]
+                try:
+                    payroll_data = read_payroll(payroll)
+                except ValueError as e:
+                    REPORT(
+                        "ERROR",
+                        T["LESSON_ERROR"].format(id=id, course=coursedata, e=e),
+                    )
+                    continue
+
+                if length == "--":
+                    ## non-lesson, additional duties (with payment) for teachers
+                    if time or place or room:
+                        REPORT(
+                            "ERROR",
+                            T["INVALID_NON_LESSON"].format(
+                                id=id, course=coursedata
+                            ),
+                        )
+                        continue
+                    if coursedata.tid == "--":
+                        REPORT(
+                            "ERROR",
+                            T["NON_LESSON_NO_TEACHER"].format(
+                                id=id, course=coursedata
+                            ),
+                        )
+                        continue
+                    if payroll_data[0] is None:
+                        REPORT(
+                            "ERROR",
+                            T["PAYROLL_NO_NUMBER"].format(
+                                id=id, course=coursedata, payroll=payroll
+                            ),
+                        )
+                    data = (coursedata, payroll_data)
+                    try:
+                        self.teacher2paydata[coursedata.tid].append(data)
+                    except KeyError:
+                        self.teacher2paydata[coursedata.tid] = [data]
+                # TODO: Is it at all sensible to support multiple such entries for a course?
+                # Probably not, but it is perhaps also not worth adding code to check
+                # for duplication.
+                elif length == "*":
+                    ## block-member
+                    try:
+                        block = read_blocktag(time)
+                    except ValueError:
+                        REPORT(
+                            "ERROR",
+                            T["INVALID_BLOCK"].format(
+                                id=id, course=coursedata, tag=time
+                            ),
+                        )
+                        continue
+                    roomlist = lesson_rooms(room, coursedata, lesson_id=id)
+                    data = (coursedata, block, roomlist, payroll_data)
+                    try:
+                        self.teacher2blockinfo[coursedata.tid].append(data)
+                    except KeyError:
+                        self.teacher2blockinfo[coursedata.tid] = [data]
+                # TODO: Do I need a {blocktag -> members} mapping?
+                #                    try:
+                #                        self.block_members[time].append(id)
+                #                    except KeyError:
+                #                        self.block_members[time] = [id]
+
+                # TODO
+                else:
+                    ## plain lesson
+                    try:
+                        ilength = check_lesson_length(length)
+                    except ValueError as e:
+                        REPORT(
+                            "ERROR",
+                            T["LESSON_ERROR"].format(
+                                id=id, course=coursedata, e=e
+                            ),
+                        )
+                        continue
+
+                    # TODO: Do I want to collect the partner data here?
+                    try:
+                        time_tag = read_time_field(time)
+                    except ValueError:
+                        REPORT(
+                            "ERROR",
+                            T["INVALID_TIME"].format(
+                                id=id, course=coursedata, e=e)
+                        )
+                        continue
+
+
+
+#                    if time.startswith("="):
+#                        try:
+#                            self.partners[time].append(id)
+#                        except KeyError:
+#                            self.partners[time] = [id]
+#                    elif not time.startswith("@"):
+
+                    roomlist = lesson_rooms(room, coursedata, lesson_id=id)
+                    data = (coursedata, length, roomlist, payroll_data)
+                    try:
+                        self.teacher2lessoninfo[coursedata.tid].append(data)
+                    except KeyError:
+                        self.teacher2lessoninfo[coursedata.tid] = [data]
+
+#                    try:
+#                        self.course2plain[course].append(id)
+#                    except KeyError:
+#                        self.course2plain[course] = [id]
+
+            else:
+                if payroll:
+                    REPORT(
+                        "ERROR",
+                        T["PAYROLL_UNEXPECTED"].format(id=id, payroll=payroll),
+                    )
+                if place.startswith(">"):
+                    ## block-sublesson: add the length to the list for this block-tag
+                    if not length.isnumeric():
+                        REPORT(
+                            "ERROR",
+                            T["LENGTH_NOT_NUMBER"].format(id=id, length=length),
+                        )
+                        continue
+                    # TODO: Do I really want to allow partnering with block sublessons?
+                    # It might at least be useful for "pseudoblocks"?
+                    if time.startswith("="):
+                        try:
+                            self.partners[time].append(id)
+                        except KeyError:
+                            self.partners[time] = [id]
+                    elif not time.startswith("@"):
+                        REPORT(
+                            "ERROR", T["INVALID_TIME"].format(id=id, time=time)
+                        )
+                        continue
+                    try:
+                        self.block_sublessons[place].append(id)
+                    except KeyError:
+                        self.block_sublessons[place] = [id]
+                    roomlist = room.split("/") if room else []
+
+                elif place.startswith("="):
+                    ## partner-time
+                    if length or room:
+                        REPORT("ERROR", T["INVALID_PARTNER_TIME"].format(id=id))
+                        continue
+                    if not time.startswith("@"):
+                        REPORT(
+                            "ERROR", T["INVALID_TIME"].format(id=id, time=time)
+                        )
+                        continue
+                    if place in self.partners_time:
+                        REPORT(
+                            "ERROR", T["DOUBLE_PARTNER_TIME"].format(tag=place)
+                        )
+                        continue
+                    else:
+                        self.partners_time[place] = id
+                    if room:
+                        REPORT(
+                            "ERROR",
+                            T["ROOM_NOT_EXPECTED"].format(id=id, room=room),
+                        )
+                        continue
+                    roomlist = []
+
+                else:
+                    ## anything else is a bug
+                    REPORT("ERROR", T["INVALID_LESSON"].format(id=id))
+                    continue
+
+            self.lesson2data[id] = LessonData(
+                id=id,
+                course=course,
+                length=length,
+                payroll=payroll,
+                room=roomlist,
+                time=time,
+                place=place,
+            )
+
+    # TODO ...
+    # Include ROOM field
+
+    # TODO
+    def nsublessons(self, blocktag):
+        """Get the total length of all sublessons for this block."""
+        lsum = 0
+        for lid in self.block_sublessons[blocktag]:
+            lsum += int(self.lesson2data[lid].length)
+        return lsum
+
+    # OR:
+    def sublessonlengths(self, blocktag):
+        """Return a list of all sublesson lengths for this block."""
+        return [
+            int(self.lesson2data[lid].length)
+            for lid in self.block_sublessons[blocktag]
+        ]
+        # The total length can then be calculated using <sum> function.
+
+    def block_courses(self):
+        """Collect data concerning the "members" of each block.
+                Special attention is paid to tags indicating parallel teaching
+                of class-groups. Some checks are performed concerning the
+                consistency of the PAYROLL entries.
+        #TODO
+                Return a mapping {teacher-id -> ???}
+        """
+
+        class LocalError(Exception):
+            pass
+
+        # TODO: Make self.tid2blocks and self.class2blocks? They can index into
+        # the main list, perhaps.
+        self.tid2blocks = {}
+        self.class2blocks = {}
+        # ?
+        self.payroll_parallel = {}
+
+        # ?
+        # The block courses have following data:
+        #    [(class, group), ...], PayrollData, room]
+        # Normally, the list of (class. group) pairs contains only one
+        # entry, but when a payroll tag is used to couple courses in
+        blocks = []
+        tagged = {}  # for parallel courses:
+        # {tag -> [tid, sid, [(class, group), ...], PayrollData, room]}
+        for blocktag, lids in self.block_members.items():
+            try:
+                bsid, btag = read_blocktag(blocktag)
+            except ValueError:
+                REPORT(
+                    "ERROR",
+                    T["BAD_BLOCK_TAG"].format(tag=blocktag, course=coursedata),
+                )
+                continue
+            courses = set()
+
+            for lid in lids:
+                lessondata = self.lesson2data[lid]
+                coursedata = self.course2data[lessondata.course]
+
+                # Check: a course may only appear once per block-tag
+                if lessondata.course in courses:
+                    REPORT(
+                        "ERROR",
+                        T["BLOCK_COURSE_DOUBLE"].format(
+                            tag=blocktag, course=coursedata
+                        ),
+                    )
+                    continue
+                courses.add(lessondata.course)
+
+                # Treat payrolls with no number as a special case.
+                # As all the lessons are used, there can be no other
+                # subjects for a given teacher. There can be the same
+                # subject in another group, which implies combining the
+                # groups.
+                # If the course name is the same as the block name, it
+                # can be treated as a normal subject with more than one
+                # group.
+                # I suppose if there was only one course of a block in
+                # a class (probably rather unlikely ... better handled
+                # as parallel lessons?), I could use the course name
+                # instead of the block name?
+
+                try:
+                    payroll = read_payroll(lessondata.payroll)
+                except ValueError as e:
+                    REPORT(
+                        "ERROR",
+                        T["BAD_PAYROLL"].format(
+                            course=coursedata, tag=blocktag, e=e
+                        ),
+                    )
+                    continue
+
+                try:
+                    tidblocks = self.tid2blocks[coursedata.tid]
+                except KeyError:
+                    tidblocks = {}
+                    self.tid2blocks[coursedata.tid] = tidblocks
+                try:
+                    blockindex = tidblocks[blocktag]
+                except KeyError:
+                    # TODO --
+                    continue
+
+                    blocks.append(
+                        # TODO:
+                        BlockData()
+                    )
+                    #                                blocktag,
+                    #                                coursedata.tid,
+                    #                                coursedata.sid,
+                    #                                [(coursedata.klass, coursedata.group)],
+                    #                                payroll,
+                    #                                lessondata.room,
+                    # class BlockData(NamedTuple):
+                    #    blocksid: str
+                    #    tag: str
+                    #    tid: str
+                    #    sid: str
+                    #    groups: list[tuple[str, str]]
+                    #    lengths: list[int]
+                    #    payroll: list[Optional[float], float]
+                    #    room: list[str]
+
+                    # TODO
+                    # ? payroll[1]? Am I allowing empty PAYROLL fields? If so, should
+                    # [None, None] count as 0?
+                    if payroll[0] is None:  # ? and payroll[1] is not None:
+                        ## A continuous (not periodical) course
+                        try:
+                            blockdata = blocks[blockindex]
+                            if blockdata.sid != coursedata.sid:
+                                raise LocalError(T["subject_mismatch"])
+                            if blockdata.payroll != payroll:
+                                if (
+                                    blockdata.payroll[0] is None
+                                    and blockdata.payroll[1] is None
+                                ):
+                                    blockdata.payroll[1] = payroll[1]
+                                else:
+                                    raise LocalError(T["payroll_mismatch"])
+                            if lessondata.room:
+                                if blockdata.room:
+                                    if blockdata.room != lessondata.room:
+                                        raise LocalError(T["room_mismatch"])
+                                else:
+                                    blockdata.room.clear()
+                                    blockdata.room += lessondata.room
+                            blockdata.groups.append(
+                                (coursedata.klass, coursedata.group)
+                            )
+                        except LocalError as e:
+                            REPORT(
+                                "ERROR",
+                                T["PARALLEL_MISMATCH"].format(
+                                    e=e, tag=blocktag, course=coursedata
+                                ),
+                            )
+                        continue
+
+                else:
+                    ## A normal block course
+                    # TODO
+                    pass
+
+        # old?
+        # blocktag -> tid -> sid -> ((class, group), room, payroll-data)
+        # Also the room must be the same (or else empty)!
+
+        # Normally a block subject is identified by class.group, teacher and subject,
+        # i.e. the "course". For any given block-tag, a course may have only one
+        # entry. The number of lessons can be added up and should result in a
+        # number smaller than or equal to the number of lessons for the block-tag.
+        # However, the parallel flag indicates that two or more groups are
+        # taught at the same time, so their lessons should not be added more
+        # than once.
+        # The information needed for a teacher is a list of subjects, together
+        # with their class.groups, room and payroll entry. There is also the
+        # lesson contingent, but that is common to all entries. So, something like:
+        #    BLOCK Hauptunterricht # – Stunden: [2,2,2,2,2]
+        #      Mathematik (09G.alle, 09K.alle) {} – 2 Epochen
+        #      Physik (09G.alle) {rPh} – 1 Epoche
+        #
+        #    BLOCK Mathematik #09 – Stunden: [1,1]
+        #      Mathematik (09G.B, 09K.alle) {r09G} – durchgehend
+        #
+        # Ideally the latter would be displayed differently, because it is not
+        # really a block, actually it is a normal lesson, but it uses the block
+        # form to include the other class. Something like:
+        #    FACHSTUNDEN
+        #      Mathematik (09G.B, 09K.alle) {r09G} – Stunden: [1,1]
+        #
+        # This special case would arise when an empty number of lessons is
+        # specified in the payroll field AND when the block and course subjects
+        # are the same.
+
+        # TODO --
+        return
+
+        lengths = self.sublessonlengths(blocktag)
+        (nn, nf, f, parallel) = read_payroll(payroll)
+        return cid2payroll
+
     def teacher_class_subjects(self, block_tids=None):
         """For each teacher, present the subjects/courses together with
         groups, rooms etc.
@@ -584,7 +1063,7 @@ class TeacherCourses(Courses):
                 REPORT("INFO", T["TEACHER_NO_COURSES"].format(tname=tname))
                 continue
             print(f"\n*** {tname} ***")
-#???
+            # ???
             blocks = []
             plains = []
             payrolls = []
@@ -607,30 +1086,30 @@ class TeacherCourses(Courses):
                         llist = []
                         __cmap[(cdata.sid, cdata.group)] = llist
 
-#TODO: Maybe blocks should not be treated as blocks when there is no
-# number for the payroll AND member subject == block subject?
-# Maybe being a block or "plain" is not really so important?
-# I should collect co-teachers? Actually only relevant for parallel
-# lessons handled as blocks. But I should gather tag maps anyway!
+                # TODO: Maybe blocks should not be treated as blocks when there is no
+                # number for the payroll AND member subject == block subject?
+                # Maybe being a block or "plain" is not really so important?
+                # I should collect co-teachers? Actually only relevant for parallel
+                # lessons handled as blocks. But I should gather tag maps anyway!
 
-#TODO: IMPORTANT!
-# There are cases where blocks are used for teaching simultaneously in
-# several groups. I'm not sure that my data structures cover this
-# properly. If no number is given for a member, it means "continuous",
-# i.e. not in time-blocks. If a teacher has members of the same block-tag
-# in more than one class and these are continuous, then these cannot
-# be cumulative. However if they really are parallel, but not continuous
-# there is no way to distinguish them from separate time-blocks.
-# Perhaps a special marker could be used in the LENGTH field for parallel
-# blocks?
-# Another possibility would be the PAYROLL entry. This could have a special
-# tag to indicate sharing, or fractional numbers could be used. The former
-# should allow easier tracing of the parallel classes.
-# Actually, the PAYROLL field is the better choice, because this detail
-# is not directly relevant for the timetabling itself. It might also be
-# worth considering restricting the number component to integer values
-# (for compatibility with the LENGTH field, and given the possiblity of
-# handling fractional values in the factor-part).
+                # TODO: IMPORTANT!
+                # There are cases where blocks are used for teaching simultaneously in
+                # several groups. I'm not sure that my data structures cover this
+                # properly. If no number is given for a member, it means "continuous",
+                # i.e. not in time-blocks. If a teacher has members of the same block-tag
+                # in more than one class and these are continuous, then these cannot
+                # be cumulative. However if they really are parallel, but not continuous
+                # there is no way to distinguish them from separate time-blocks.
+                # Perhaps a special marker could be used in the LENGTH field for parallel
+                # blocks?
+                # Another possibility would be the PAYROLL entry. This could have a special
+                # tag to indicate sharing, or fractional numbers could be used. The former
+                # should allow easier tracing of the parallel classes.
+                # Actually, the PAYROLL field is the better choice, because this detail
+                # is not directly relevant for the timetabling itself. It might also be
+                # worth considering restricting the number component to integer values
+                # (for compatibility with the LENGTH field, and given the possiblity of
+                # handling fractional values in the factor-part).
 
                 try:
                     # Get the block members
@@ -638,7 +1117,7 @@ class TeacherCourses(Courses):
                     print("    --- BLOCKS")
                     for lid in lids:
                         print("      ...", self.lesson2data[lid])
-#TODO
+                # TODO
                 except KeyError:
                     pass
                 try:
@@ -647,7 +1126,7 @@ class TeacherCourses(Courses):
                     print("    --- LESSONS")
                     for lid in lids:
                         print("      ...", self.lesson2data[lid])
-#TODO
+                # TODO
                 except KeyError:
                     pass
                 try:
@@ -656,16 +1135,14 @@ class TeacherCourses(Courses):
                     print("    --- EXTRA")
                     for lid in lids:
                         print("      ...", self.lesson2data[lid])
-#TODO
+                # TODO
                 except KeyError:
                     pass
 
-#        self.block_sublessons = {}  # {block-tag -> [lesson-id, ... ]}
-
-
+        #        self.block_sublessons = {}  # {block-tag -> [lesson-id, ... ]}
 
         return
-#TODO ...
+        # TODO ...
         for tid, tname, clist in teacher_subjects:
             if tid in block_tids:
                 REPORT("INFO", _SUPPRESSED.format(tname=tname))
@@ -741,6 +1218,19 @@ if __name__ == "__main__":
 
     courses = TeacherCourses()
     courses.teacher_class_subjects()
+
+    print("\n ??????????????????????????????????????????????")
+
+    courses.block_courses()
+
+    print("\n§§§", courses.block_sublessons)
+    print(
+        "Hu# ->",
+        courses.sublessonlengths(">Hu#"),
+        sum(courses.sublessonlengths(">Hu#")),
+    )
+
+    print("\nBLOCKTAG >Ma#:", read_blocktag(">Ma#"))
 
     quit(0)
 

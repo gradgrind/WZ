@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-07-04
+Last updated:  2022-07-08
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -60,6 +60,9 @@ from core.basic_data import (
     get_payroll_weights,
     SHARED_DATA,
     PAYROLL_FORMAT,
+    read_time_field,
+    timeslot2index,
+    index2timeslot
 )
 from ui.ui_base import (
     GuiError,
@@ -106,52 +109,6 @@ def get_coursedata():
 
 
 ### -----
-
-
-class TimeSlotError(Exception):
-    pass
-
-
-def timeslot2index(timeslot):
-    """Convert a "timeslot" in the tag-form (e.g. "Mo.3") to a pair
-    of 0-based indexes.
-    """
-    i, j = -1, -1
-    if timeslot and timeslot != "?":
-        if timeslot[0] == "?":
-            # Remove "unfixed" flag
-            timeslot = timeslot[1:]
-        try:
-            d, p = timeslot.split(".")
-        except ValueError:
-            raise TimeSlotError
-        else:
-            n = 0
-            for day in get_days():
-                if day[0] == d:
-                    i = n
-                    break
-                n += 1
-            else:
-                raise TimeSlotError
-            n = 0
-            for period in get_periods():
-                if period[0] == p:
-                    j = n
-                    break
-                n += 1
-            else:
-                raise TimeSlotError
-    return i, j
-
-
-def index2timeslot(index):
-    """Convert a pair of 0-based indexes to a "timeslot" in the
-    tag-form (e.g. "Mo.3").
-    """
-    d = get_days()[index[0]][0]
-    p = get_periods()[index[1]][0]
-    return f"{d}.{p}"
 
 
 class DayPeriodDialog(QDialog):
@@ -223,8 +180,8 @@ class DayPeriodDialog(QDialog):
             self.result = None
             if d < 0:
                 d, p = 0, 0
-        except TimeSlotError:
-            SHOW_ERROR(f"Bug: invalid day.period: '{start_value}'")
+        except ValueError as e:
+            SHOW_ERROR(f"Bug: {e}")
             self.result = "?"
             d, p, fixed = 0, 0, True
         self.daylist.setCurrentRow(d)
@@ -258,7 +215,7 @@ def get_course_info(course):
     )
     if len(clist) > 1:
         raise Bug(f"COURSE {course}: multiple entries")
-    # Perhaps not found is an error?
+    #TODO: Perhaps not found is an error?
     return CourseKeyFields(*clist[0]) if clist else None
 
 
@@ -312,42 +269,6 @@ def placements(xtag):
         else:
             pl.append(pp)
     return pl
-
-
-def parse_time_field(tag):
-    """Convert a lesson time-field to a (Time, Tag) pair – assuming
-    the given value is a valid time slot or "partners" tag.
-    """
-    if tag.startswith("="):
-        tag = tag[1:]
-        return get_time_entry(tag), tag
-    else:
-        # Check validity of time
-        return check_start_time(tag), ""
-
-
-def get_time_entry(tag):
-    try:
-        ltime = db_read_unique_field("LESSONS", "TIME", PLACE=f"={tag}")
-    except NoRecord:
-        SHOW_ERROR(f'{T["NO_TIME_FOR_PARTNERS"]}: {tag}')
-        # TODO: add a time entry?
-        # TIME="?", PLACE=f"={tag}", everything else empty
-        return "?"
-    # Check validity
-    return check_start_time(ltime)
-
-
-def check_start_time(tag):
-    try:
-        if tag.startswith("@"):
-            ltime = tag[1:]
-            timeslot2index(ltime)
-            return ltime
-    except TimeSlotError:
-        pass
-    SHOW_ERROR(f"{T['BAD_TIME']}: {tag}")
-    return "?"
 
 
 class PartnersDialog(QDialog):
@@ -848,7 +769,7 @@ class BlockTagDialog(QDialog):
             lessonfields = lesson_list[r]
             # print("???", lessonfields)
             ltable.setItem(r, 0, QTableWidgetItem(lessonfields.LENGTH))
-            ltime, ltag = parse_time_field(lessonfields.TIME)
+            ltime, ltag = read_time_field(lessonfields.TIME)
             ltable.setItem(r, 1, QTableWidgetItem(ltime))
             ltable.setItem(r, 2, QTableWidgetItem(ltag))
 

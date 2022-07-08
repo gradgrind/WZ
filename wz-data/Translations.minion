@@ -8,6 +8,14 @@ core.db_management: {
 core.basic_data: {
     # Messages
     BAD_WEIGHT:     "Ungültiger Gewichtungsfaktor für Deputatsstunden: {key} -> '{val}'"
+    INVALID_PAYROLL: "Ungültige Angabe für Deputatsstunden: {text}"
+    BAD_NUMBER:     "Ungültige Nummer der Deputatsstunden: {val}"
+    UNKNOWN_PAYROLL_WEIGHT: "Unbekannter Gewichtungsfaktor für Deputatsstunden: {key}"
+    BLOCKTAG_INVALID: "Unbekanntes Block-Kennzeichen: {tag}"
+    BLOCKTAG_UNKNOWN_SUBJECT: "Block-Kennzeichen {tag} hat unbekanntes Fach: {sid}"
+    NO_TIME_FOR_PARTNERS: "Zeitangabe für Partner-Kennzeichen '{tag}' fehlt in Datenbank"
+    BAD_TIME:       "Zeitangabe ({tag}) – muss mit '@' anfangen"
+    INVALID_TIMESLOT: "Ungültige Zeitangabe ({val}) – sollte '[?][Tag.Stunde]' sein"
 }
 
 core.classes: {
@@ -109,7 +117,6 @@ ui.modules.course_lessons: {
     CLASSROOM_ALREADY_CHOSEN: "Klassenraum schon in Auswahl"
     UNKNOWN_ROOM_ID: "Unbekanntes Raumkürzel"
     INVALID_ROOM_IDS: "Ungültige Raumkürzel"
-    BAD_TIME:       "Ungültige Zeitangabe (Tag.Stunde)"
     INVALID_BLOCK_TAG: "Ungültiges Blockkennzeichen"
     UNKNOWN_SUBJECT_TAG: "Unbekanntes Fachkürzel"
     EMPTY_PARTNER_TAG: "Leeres „Partner-Kennzeichen“"
@@ -117,12 +124,11 @@ ui.modules.course_lessons: {
     DELETE_SELECTED: "Die zu löschende Zeile muss ausgewählt sein"
     NO_COURSE_SO_NO_LESSONS: "Kein Kurs => Keine Stunden"
     BLOCK_TAG_TIME_CLASH: "Zeitkonflikt mit anderen Kurs-Stunden:"
-    NO_TIME_FOR_PARTNERS: "Zeitangabe für Partner-Kennzeichen fehlt in Datenbank"
     NO_CLASSROOM:   "„Klassenraum“ ($) ist hier nicht zulässig, da die aktuelle Klasse keinen Klassenraum hat"
     
     PAYROLL_VALID_ENTRY: "* oder Dezimalzahl"
     INVALID_PAYROLL: "Ungültiger Wert"
-    
+
     # Labels
     MODULE_NAME:    "Kurse/Stunden"
     MODULE_TITLE:   "Unterrichtskurse und -stunden verwalten"
@@ -181,26 +187,37 @@ ui.modules.course_lessons: {
 
 timetable.courses: {
     INVALID_NON_LESSON_RECORD: "Fehlerhafte Zeile in LESSONS-Tabelle, TIME-Feld leer, aber LENGTH nicht '--'.\n  id: "
-    NO_CLASSROOM:   "Klasse {klass} hat keinen Klassenraum ($), wird aber benutzt in LESSONS-Tabelle, id={id}"
-    INVALID_ROOM:   "Im Kurs (Gruppe {klass}.{group}, Fach-id {sid}, Lehrer {tid}), unbekannter Raum: '{rid}'"
     BAD_TIME_FIELD: "Ungültiges Zeit-Feld (TIME) in LESSONS-Tabelle, id={id}: '{time}'"
     UNKNOWN_GROUP:  "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
 
     # new module: course_analysis
-    INVALID_NON_LESSON: "LESSONS-Tabelle: fehlerhafte Zeile für Einheit ohne Unterrichtseinheit (nur für Deputat).\n  id: {id}"
-    INVALID_BLOCK:  "LESSONS-Tabelle: fehlerhafte Zeile für Block-Unterricht (Epoche, usw.).\n  id: {id}"
-    LENGTH_NOT_NUMBER: "Stundendauer für 'LESSON' {id} ist keine Zahl: '{length}'"
+    CourseData:     "<Kurs: Klasse={klass}, Gruppe={group}, Fach={sid}, Lehrer={tid}>"
+    BAD_BLOCK_TAG:  "Für {course} wird das ungültige Block_kennzeichen {tag} verwendet"
+    BLOCK_COURSE_DOUBLE: "Für {course} wird das Block_kennzeichen {tag} wiederholt verwendet"
+    LESSON_ERROR:   "LESSONS-Tabelle, id={id}, {course}:\n  {e}"
+    INVALID_NON_LESSON: "LESSONS-Tabelle, id={id}, {course}:\n  fehlerhafte Zeile für Eintrag ohne Unterrichtseinheit (nur für Deputate)"
+    NON_LESSON_NO_TEACHER: "LESSONS-Tabelle, id={id}, {course}:\n  Deputatseintrag ohne Lehrer"
+    INVALID_BLOCK:  "LESSONS-Tabelle, id={id}, {course}:\n  Zeile für Block-Unterricht (Epoche, usw.) hat ungültiges Block-Kennzeichen: {tag}"
+    LENGTH_NOT_NUMBER: "Stundendauer ({val}) ist keine Zahl"
+    LENGTH_NOT_VALID: "Stundendauer ({val}) ist nicht möglich"
     INVALID_LESSON: "LESSONS-Tabelle: fehlerhafte Zeile, id={id}"
     DOUBLE_PARTNER_TIME: "LESSONS-Tabelle: >1 Zeile, die die Zeit für Partnerkennzeichen {tag} angibt"
+    NO_CLASSROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  Klasse hat keinen Klassenraum, wird aber angegeben ($) im Raum-Feld"
+    UNKNOWN_ROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  unbekannter Raum ({rid})"
     ROOM_NOT_EXPECTED:  "LESSONS-Tabelle, id={id}: Raum ({room}) angegeben in Partner-Zeit-Zeile"
-    INVALID_PAYROLL:    "LESSONS-Tabelle, id={id}: Deputatsangabe (PAYROLL-Feld) ungültig: '{payroll}'"
-    NO_PAYROLL:         "LESSONS-Tabelle, id={id}: Keine Deputatsangabe"
-    PAYROLL_NO_NUMBER:  "LESSONS-Tabelle, id={id}: Bei der Deputatsangabe fehlt die Anzahl der Einheiten ({payroll})"
+    BAD_PAYROLL:    "{course}, Eintrag mit Block-Kennzeichen {tag}:\n  {e}"
+#    INVALID_PAYROLL:    "LESSONS-Tabelle, id={id}: Deputatsangabe (PAYROLL-Feld) ungültig: '{payroll}'"
+#    NO_PAYROLL:         "LESSONS-Tabelle, id={id}: Keine Deputatsangabe"
+    PAYROLL_NO_NUMBER:  "LESSONS-Tabelle, id={id}, {course}:\n  Bei der Deputatsangabe ({payroll}) fehlt die Anzahl der Einheiten"
     PAYROLL_UNEXPECTED: "LESSONS-Tabelle, id={id}: Sonderzeile, Deputatsangabe nicht erwartet ... gefunden: '{payroll}'"
     TEACHER_SUPPRESSED: "Lehrkraft ausgeschlossen: {tname}"
     TEACHER_NO_COURSES: "Lehrkraft ohne Auftrag: {tname}"
     INVALID_PARTNER_TIME: "LESSONS-Tabelle, id={id}, Sonderzeile (Partnerzeit): Länge und Raum müssen leer sein"
-    INVALID_TIME:       "LESSONS-Tabelle, id={id}: Zeit ({time}) ungültig"
+    INVALID_TIME:       "LESSONS-Tabelle, id={id}, {course}:\n  {e}"
+    PARALLEL_MISMATCH:  "Gruppenübergreifender Unterricht {course}, Block-Kennzeichen {tag}: {e}"
+    subject_mismatch:   "Fach muss gleich sein"
+    payroll_mismatch:   "Deputatsangaben widersprüchlich"
+    room_mismatch:      "Raüme unterschiedlich"
 }
 
 timetable.asc_data: {

@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-07-04
+core/basic_data.py - last updated 2022-07-08
 
 Handle caching of the basic data sources
 
@@ -23,7 +23,13 @@ T = TRANSLATIONS("core.basic_data")
 
 ### +++++
 
-from core.db_management import db_key_value_list, KeyValueList
+from typing import Optional, NamedTuple
+
+from core.db_management import (
+    db_read_unique_field,
+    db_key_value_list,
+    KeyValueList
+)
 from core.classes import Classes
 from core.teachers import Teachers
 from ui.ui_base import QRegularExpression  ### QtCore
@@ -37,6 +43,7 @@ PAYROLL_FORMAT = "[1-9]?[0-9](?:$[0-9]{1,3})?".replace("$", DECIMAL_SEP)
 
 
 def clear_cache():
+    # IMPORTANT: This must be called after any data change.
     SHARED_DATA.clear()
 
 
@@ -142,3 +149,146 @@ def get_payroll_weights() -> KeyValueList:
     )
     SHARED_DATA["PAYROLL"] = payroll_weights
     return payroll_weights
+
+
+class BlockTag(NamedTuple):
+    sid: str
+    tag: str    # includes the '#'
+    subject: str
+
+    def __str__(self):
+        return f">{self.sid}{self.tag}"
+
+
+def read_blocktag(tag: str) -> BlockTag:
+    """Return block subject and #-tag for a block-tag.
+    An invalid value raises a <ValueError> exception.
+    """
+    try:
+        i = tag.index("#")
+        sid = tag[1:i]  # strips initial ">"
+        sbj = get_subjects().map(sid)
+    except ValueError:
+        raise ValueError(T["BLOCKTAG_INVALID"].format(tag=tag))
+    except KeyError:
+        raise ValueError(T["BLOCKTAG_UNKNOWN_SUBJECT"].format(tag=tag, sid=sid))
+    return BlockTag(sid, tag[i:], sbj)
+
+
+def check_lesson_length(length: str) -> int:
+    """Return the length of a valid lesson duration as an <int>.
+    Otherwise raise a <ValueError> exception.
+    """
+    try:
+        i = int(length)
+    except ValueError:
+        raise ValueError(T["LENGTH_NOT_NUMBER"].format(val=length))
+    if i < 1 or i > len(get_periods()):
+        raise ValueError(T["LENGTH_NOT_VALID"].format(val=length))
+    return i
+
+
+class PayrollData(NamedTuple):
+    number: Optional[float]
+    factor: Optional[float]
+    text: str
+
+    def isNone(self):
+        return self.factor is None
+
+    def __str__(self):
+        return self.text
+
+
+def read_payroll(payroll: str) -> PayrollData:
+    """Read the individual parts of a payroll entry.
+    If the input is invalid a <ValueError> exception wil be raised.
+    """
+    if not payroll:
+        return PayrollData(None, None, "")
+    try:
+        n, f = payroll.split("*", 1)  # can raise ValueError
+    except ValueError:
+        raise ValueError(T["INVALID_PAYROLL"].format(text=payroll))
+    if n:
+        regexp = QRegularExpression(f"^{PAYROLL_FORMAT}$")
+        if regexp.match(n).hasMatch():
+            nn = float(n.replace(",", "."))
+        else:
+            raise ValueError(T["BAD_NUMBER"].format(val=n))
+    else:
+        nn = None
+    try:
+        nf = float(get_payroll_weights().map(f).replace(",", "."))
+    except KeyError:
+        raise ValueError(T["UNKNOWN_PAYROLL_WEIGHT"].format(key=f))
+    return PayrollData(nn, nf, payroll)
+
+
+# ********** Handling the data in TIME-fields **********
+
+def read_time_field(tag):
+    """Convert a lesson time-field to a (Time, Tag) pair – assuming
+    the given value is a valid time slot or "partners" tag.
+    """
+    if tag.startswith("="):
+        tag = tag[1:]
+        return get_time_entry(tag), tag
+    else:
+        # Check validity of time
+        return check_start_time(tag), ""
+
+
+def timeslot2index(timeslot):
+    """Convert a "timeslot" in the tag-form (e.g. "Mo.3") to a pair
+    of 0-based indexes, (day, period).
+    THere may be a "?"-prefix, indicating that the time is not fixed.
+    Both a null value and a single "?" are accepted as "unspecified time",
+    returning (-1, -1).
+    Invalid values cause a <ValueError> exception.
+    """
+    if timeslot and timeslot != "?":
+        if timeslot[0] == "?":
+            # Remove "unfixed" flag
+            timeslot = timeslot[1:]
+        d, p = timeslot.split(".")  # Can raise <ValueError>
+        try:
+            return (get_days().index(d), get_periods().index(p))
+        except KeyError:
+            raise ValueError(T["INVALID_TIMESLOT"].format(val=timeslot))
+    return -1, -1
+
+
+def index2timeslot(index):
+    """Convert a pair of 0-based indexes to a "timeslot" in the
+    tag-form (e.g. "Mo.3").
+    """
+    d = get_days()[index[0]][0]
+    p = get_periods()[index[1]][0]
+    return f"{d}.{p}"
+
+
+def get_time_entry(tag):
+    try:
+        ltime = db_read_unique_field("LESSONS", "TIME", PLACE=f"={tag}")
+    except NoRecord:
+        raise ValueError(T["NO_TIME_FOR_PARTNERS"].format(tag=tag))
+#TODO: -- or ...
+        REPORT("ERROR", T["NO_TIME_FOR_PARTNERS"].format(tag=tag))
+        # TODO: add a time entry?
+        # TIME="?", PLACE=f"={tag}", everything else empty
+        return "?"
+    # Check validity
+    return check_start_time(ltime)
+
+
+def check_start_time(tag):
+    if tag.startswith("@"):
+        ltime = tag[1:]
+        timeslot2index(ltime)
+        return ltime
+    raise ValueError(T['BAD_TIME'].format(tag=tag))
+#TODO: -- or ...
+    REPORT("ERROR", T['BAD_TIME'].format(tag=tag))
+    return "?"
+
