@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-07-08
+Last updated:  2022-07-09
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -58,8 +58,10 @@ from core.basic_data import (
     get_subjects,
     get_rooms,
     get_payroll_weights,
+    read_payroll,
     SHARED_DATA,
     PAYROLL_FORMAT,
+    PAYROLL_MAX,
     read_time_field,
     timeslot2index,
     index2timeslot
@@ -79,6 +81,7 @@ from ui.ui_base import (
     QLayout,
     QVBoxLayout,
     QHBoxLayout,
+    QFormLayout,
     QLineEdit,
     QTableWidget,
     QTableWidgetItem,
@@ -1233,50 +1236,59 @@ class SingleRoomDialog(QDialog):
 
 class PayrollDialog(QDialog):
     @classmethod
-    def popup(cls, start_value="", no_length=False):
-        d = cls(no_length)
+    def popup(cls, start_value="", no_length=False, block=False):
+        d = cls(no_length, block)
         return d.activate(start_value)
 
-    def __init__(self, no_length=False):
+    def __init__(self, no_length=False, block=False):
         super().__init__()
-        vbox0 = QVBoxLayout(self)
-        vbox0.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
-
-        hbox1 = QHBoxLayout()
-        vbox0.addLayout(hbox1)
-        self.number = QLineEdit()
-        self.number.setToolTip(T["PAYROLL_VALID_ENTRY"])
-        hbox1.addWidget(self.number)
-        # If <no_length> is true, there must be a number in the expression.
-        regexp = QRegularExpression(
-            PAYROLL_FORMAT if no_length else PAYROLL_FORMAT + "|"
-        )
-        validator = QRegularExpressionValidator(regexp)
-        self.number.setValidator(validator)
-
+        self.__block = block
+        form = QFormLayout(self)
+        self.number = QComboBox()
+        self.number.setEditable(False)
+        form.addRow(T["NUMBER"], self.number)
+        if not no_length:
+            self.number.addItem("*")
+        for i in range(1, PAYROLL_MAX + 1):
+            self.number.addItem(str(i))
         self.factor = KeySelector()
-        hbox1.addWidget(self.factor)
-
-        vbox0.addWidget(HLine())
+        form.addRow(T["FACTOR"], self.factor)
+        self.factor.set_items(
+            [(k, f"{k} ({v})") for k, v in get_payroll_weights()]
+        )
+        self.pgroups = QLineEdit()
+        self.pteachers = QLineEdit()
+        if block:
+            form.addRow(T["PARALLEL_GROUPS"], self.pgroups)
+            form.addRow(T["PARALLEL_TEACHERS"], self.pteachers)
+            v = QRegularExpressionValidator(QRegularExpression("[^/+*,]*"))
+            self.pgroups.setValidator(v)
+            self.pteachers.setValidator(v)
+        form.addRow(HLine())
         buttonBox = QDialogButtonBox()
-        vbox0.addWidget(buttonBox)
+        form.addRow(buttonBox)
         bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
 
-        entries = []
-        for k, v in get_payroll_weights():
-            entries.append((k, f"{k} ({v})"))
-        self.factor.set_items(entries)
-
     def do_accept(self):
-        if not self.number.hasAcceptableInput():
-            SHOW_ERROR(T["INVALID_PAYROLL"])
-            return
-        n = self.number.text()
+        n = self.number.currentText()
         f = self.factor.selected()
-        text = n + "*" + f
+        g = self.pgroups.text().strip()
+        if g:
+            gs = [_g.rstrip(".") for _g in g.split()]
+            g = "/" + ",".join(gs)
+        t = self.pteachers.text().strip()
+        if t:
+            ts = t.split()
+            t = "+" + ",".join(ts)
+        text = n + g + t + "*" + f
+        try:
+            # Check final value
+            read_payroll(text)
+        except ValueError as e:
+            SHOW_ERROR(str(e))
         if text != self.text0:
             self.result = text
         self.accept()
@@ -1285,12 +1297,14 @@ class PayrollDialog(QDialog):
         self.result = None
         self.text0 = start_value
         try:
-            n, f = start_value.split("*", 1)
-            self.number.setText(n)
-            if not self.number.hasAcceptableInput():
-                self.number.setText("")
+            pdata = read_payroll(start_value)
+            self.number.setCurrentText(str(pdata.number))
+            self.factor.reset(pdata.factor)
+            if self.__block:
+                self.pgroups.setText(" ".join(pdata.groups))
+                self.pteachers.setText(" ".join(pdata.withtids))
+            elif pdata.groups or pdata.withtids:
                 raise ValueError
-            self.factor.reset(f)
         except (ValueError, GuiError):
             SHOW_ERROR(f"{T['INVALID_PAYROLL']}: '{start_value}'")
         self.exec()
@@ -1308,15 +1322,16 @@ if __name__ == "__main__":
     for p in partners("sp03"):
         print("??????", p)
 
-    widget = BlockTagDialog()
-    print("----->", widget.activate("ZwE", "09G10G"))
-    print("----->", widget.activate("Hu", ""))
+    widget = PayrollDialog()
+    print("----->", widget.activate(start_value="2*HuEp"))
+    print("----->", PayrollDialog.popup(start_value="1/10K+TU,MT*HuEp", block=True))
+    print("----->", widget.activate(start_value="Fred*HuEp"))
 
     #    quit(0)
 
-    widget = PayrollDialog()
-    print("----->", widget.activate(start_value="Fred*HuEp"))
-    print("----->", widget.activate(start_value="12,3*HuEp"))
+    widget = BlockTagDialog()
+    print("----->", widget.activate("ZwE", "09G10G"))
+    print("----->", widget.activate("Hu", ""))
 
     #    quit(0)
 

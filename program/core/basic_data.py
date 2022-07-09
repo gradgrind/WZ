@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-07-08
+core/basic_data.py - last updated 2022-07-09
 
 Handle caching of the basic data sources
 
@@ -38,6 +38,7 @@ SHARED_DATA = {}
 
 DECIMAL_SEP = CONFIG["DECIMAL_SEP"]
 PAYROLL_FORMAT = "[1-9]?[0-9](?:$[0-9]{1,3})?".replace("$", DECIMAL_SEP)
+PAYROLL_MAX = 20
 
 ### -----
 
@@ -175,6 +176,18 @@ def read_blocktag(tag: str) -> BlockTag:
     return BlockTag(sid, tag[i:], sbj)
 
 
+def check_group(klass, group=None):
+    try:
+        groups = get_classes().group_info(klass)["GROUPS"]
+    except KeyError:
+        return False
+    if group and group != "*":
+        #print("§§§", groups)
+        if group not in groups:
+            return False
+    return True
+
+
 def check_lesson_length(length: str) -> int:
     """Return the length of a valid lesson duration as an <int>.
     Otherwise raise a <ValueError> exception.
@@ -189,9 +202,12 @@ def check_lesson_length(length: str) -> int:
 
 
 class PayrollData(NamedTuple):
-    number: Optional[float]
-    factor: Optional[float]
+    number: Optional[int]
+    factor: Optional[str]
     text: str
+    factor_val: float
+    groups: list
+    withtids: list
 
     def isNone(self):
         return self.factor is None
@@ -205,24 +221,58 @@ def read_payroll(payroll: str) -> PayrollData:
     If the input is invalid a <ValueError> exception wil be raised.
     """
     if not payroll:
-        return PayrollData(None, None, "")
+        return PayrollData(None, None, "", 0.0, [], [])
     try:
         n, f = payroll.split("*", 1)  # can raise ValueError
     except ValueError:
         raise ValueError(T["INVALID_PAYROLL"].format(text=payroll))
     if n:
-        regexp = QRegularExpression(f"^{PAYROLL_FORMAT}$")
-        if regexp.match(n).hasMatch():
-            nn = float(n.replace(",", "."))
+        try:
+            n1, t1 = n.split("+", 1)
+        except ValueError:
+            n1, t1 = n, ""
+        try:
+            n2, g1 = n1.split("/", 1)
+        except ValueError:
+            n2, g1 = n1, ""
+        if g1:
+            xgroups = g1.split(",")
+            for g in xgroups:
+                try:
+                    _k, _g = g.split(".", 1)
+                except ValueError:
+                    if not check_group(g):
+                        raise ValueError(T["UNKNOWN_CLASS"].format(klass=g))
+                else:
+                    if not check_group(_k, _g):
+                        raise ValueError(T["UNKNOWN_GROUP"].format(
+                            klass=_k, group=_g)
+                        )
         else:
-            raise ValueError(T["BAD_NUMBER"].format(val=n))
+            xgroups = []
+        if t1:
+            teachers = get_teachers()
+            xteachers = t1.split(",")
+            for t in xteachers:
+                if t not in teachers:
+                    raise ValueError(T["UNKNOWN_TEACHER"].format(tid=t))
+        else:
+            xteachers = []
+        try:
+            nn = int(n2)
+            if nn < 1 or nn > PAYROLL_MAX:
+                raise ValueError
+        except ValueError:
+            raise ValueError(T["BAD_NUMBER"].format(val=n2))
     else:
         nn = None
+        xgroups = []
+        xteachers = []
     try:
         nf = float(get_payroll_weights().map(f).replace(",", "."))
     except KeyError:
         raise ValueError(T["UNKNOWN_PAYROLL_WEIGHT"].format(key=f))
-    return PayrollData(nn, nf, payroll)
+    return PayrollData(nn, f, payroll, nf, xgroups, xteachers)
 
 
 # ********** Handling the data in TIME-fields **********
@@ -269,26 +319,22 @@ def index2timeslot(index):
 
 
 def get_time_entry(tag):
+    """Can raise a <ValueError>.
+    """
     try:
         ltime = db_read_unique_field("LESSONS", "TIME", PLACE=f"={tag}")
     except NoRecord:
         raise ValueError(T["NO_TIME_FOR_PARTNERS"].format(tag=tag))
-#TODO: -- or ...
-        REPORT("ERROR", T["NO_TIME_FOR_PARTNERS"].format(tag=tag))
-        # TODO: add a time entry?
-        # TIME="?", PLACE=f"={tag}", everything else empty
-        return "?"
     # Check validity
     return check_start_time(ltime)
 
 
 def check_start_time(tag):
+    """Can raise a <ValueError>.
+    """
     if tag.startswith("@"):
         ltime = tag[1:]
         timeslot2index(ltime)
         return ltime
     raise ValueError(T['BAD_TIME'].format(tag=tag))
-#TODO: -- or ...
-    REPORT("ERROR", T['BAD_TIME'].format(tag=tag))
-    return "?"
 
