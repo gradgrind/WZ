@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-05-28
+Last updated:  2022-07-09
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -26,7 +26,7 @@ Copyright 2022 Michael Towers
 
 #####################################################
 
-import sys, os, locale, builtins, traceback, glob
+import sys, os, locale, builtins, traceback, glob, time
 
 # TODO: PySide6 only?: If I use this feature, this is probably the wrong path ...
 # Without the environment variable there is a disquieting error message.
@@ -51,6 +51,7 @@ SETTINGS = QSettings(QSettings.IniFormat, QSettings.UserScope, "MT", "WZ")
 # (presumably elsewhere as well?)
 APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
+
 def run(window):
     window.show()
     sys.exit(APP.exec())
@@ -58,6 +59,22 @@ def run(window):
 
 class GuiError(Exception):
     pass
+
+
+# XXXXXXXXXXXXXX
+if __name__ == "__main__":
+    import sys, os
+
+    this = sys.path[0]
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+    from core.base import start
+
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    #    start.setup(os.path.join(basedir, 'DATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
+# XXXXXXXXXXXXXX
 
 
 T = TRANSLATIONS("ui.ui_base")
@@ -125,7 +142,7 @@ class StandalonePage(StackPage):
     def closeEvent(self, event):
         if self.leave_ok():
             event.accept()
-            #super().closeEvent(event)
+            # super().closeEvent(event)
         else:
             event.ignore()
 
@@ -390,7 +407,9 @@ def TreeMultiSelect(title, message, data, checked=False):
         elements.append((category, items))
         parent = QTreeWidgetItem(tree)
         parent.setText(0, category)
-        parent.setFlags(parent.flags() | Qt.ItemIsTristate | Qt.ItemIsUserCheckable)
+        parent.setFlags(
+            parent.flags() | Qt.ItemIsTristate | Qt.ItemIsUserCheckable
+        )
         for d in dataline:
             child = QTreeWidgetItem(parent)
             items.append((child, d))
@@ -416,7 +435,9 @@ def TreeMultiSelect(title, message, data, checked=False):
         categories = []
         for k, items in elements:
             # Filter the changes lists
-            dlist = [d[0] for child, d in items if child.checkState(0) == Qt.Checked]
+            dlist = [
+                d[0] for child, d in items if child.checkState(0) == Qt.Checked
+            ]
             categories.append((k, dlist))
         return categories
     else:
@@ -424,15 +445,21 @@ def TreeMultiSelect(title, message, data, checked=False):
 
 
 def _popupInfo(message):
-    QMessageBox.information(None, T["INFO"], message)
+    QMessageBox.information(
+        None, T["INFO"], " " * 100 + "\n" + message.rstrip() + "\n"
+    )
 
 
 def _popupWarn(message):
-    QMessageBox.warning(None, T["WARNING"], message)
+    QMessageBox.warning(
+        None, T["WARNING"], " " * 100 + "\n" + message.rstrip() + "\n"
+    )
 
 
 def _popupError(message):
-    QMessageBox.critical(None, T["ERROR"], message)
+    QMessageBox.critical(
+        None, T["ERROR"], " " * 100 + "\n" + message.rstrip() + "\n"
+    )
 
 
 def _popupConfirm(question):
@@ -440,12 +467,13 @@ def _popupConfirm(question):
         QMessageBox.question(
             None,
             T["CONFIRMATION"],
-            question,
+            " " * 100 + "\n" + question.rstrip() + "\n",
             buttons=QMessageBox.Ok | QMessageBox.Cancel,
             defaultButton=QMessageBox.Ok,
         )
         == QMessageBox.Ok
     )
+
 
 builtins.SHOW_INFO = _popupInfo
 builtins.SHOW_WARNING = _popupWarn
@@ -454,9 +482,12 @@ builtins.SHOW_CONFIRM = _popupConfirm
 
 ### File/Folder Dialogs
 
+
 def openDialog(filetype, title=None):
     dir0 = SETTINGS.value("LAST_LOAD_DIR") or os.path.expanduser("~")
-    fpath = QFileDialog.getOpenFileName(None, title or _FILEOPEN, dir0, filetype)[0]
+    fpath = QFileDialog.getOpenFileName(
+        None, title or _FILEOPEN, dir0, filetype
+    )[0]
     if fpath:
         SETTINGS.setValue("LAST_LOAD_DIR", os.path.dirname(fpath))
     return fpath
@@ -485,8 +516,8 @@ def saveDialog(filetype, filename, title=None):
     return fpath
 
 
-#TODO: deprecated, see <RowSelectTable>
-#class TableViewRowSelect(QTableView):
+# TODO: deprecated, see <RowSelectTable>
+# class TableViewRowSelect(QTableView):
 #    """A QTableView with single row selection and restrictions on change
 #    of selection.
 #
@@ -502,7 +533,7 @@ def saveDialog(filetype, filename, title=None):
 #    current (selected) row does change. Clicking and moving (slightly
 #    dragging) the mouse produce different responses.
 #    """
-#TODO: Note that when the selection is changed via the keyboard, the
+# TODO: Note that when the selection is changed via the keyboard, the
 # "modified" method is not called! However, in the intended use case,
 # it is pretty unlikely that this will be a problem.
 #
@@ -535,6 +566,7 @@ class RowSelectTable(QTableView):
     pop up asking whether to ignore (i.e. lose) changes. If the
     dialog returns false, the item change will not be permitted.
     """
+
     def __init__(self, is_modified=None, name=None):
         super().__init__()
         self.__name = name
@@ -552,8 +584,8 @@ class RowSelectTable(QTableView):
 
     def currentChanged(self, currentitem, olditem):
         super().currentChanged(currentitem, olditem)
-        row = currentitem.row() # -1 => no current item
-        #print(f"CURRENT CHANGED ({self.__name}):", olditem.row(), "-->", row)
+        row = currentitem.row()  # -1 => no current item
+        # print(f"CURRENT CHANGED ({self.__name}):", olditem.row(), "-->", row)
         if olditem.row() == row:
             # Actually, this shouldn't be possible, but -1 -> -1 does
             # occur!
@@ -572,7 +604,7 @@ class RowSelectTable(QTableView):
                     QTimer.singleShot(0, self.__revert)
                     return
             self.__row = -1
-        #print("  ... ACCEPTED")
+        # print("  ... ACCEPTED")
         if self.__callback:
             self.__callback(row)
 
@@ -611,7 +643,7 @@ class FormLineEdit(QLineEdit):
         return sh
 
 
-#deprecated?
+# deprecated?
 class FormComboBox(QComboBox):
     """A specialized combobox for use in the editor form for a
     "RowSelectTable" table view. This combobox is used for editing
@@ -688,6 +720,99 @@ class ForeignKeyItemDelegate(QStyledItemDelegate):
         return self.key2value[key]
 
 
+class __Reporter(QDialog):
+    colours = {
+        "INFO":     "#00a000",
+        "WARNING":  "#eb8900",
+        "ERROR":    "#d00000"
+    }
+
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        vbox = QVBoxLayout(self)
+        vbox.setContentsMargins(2, 2, 2, 2)
+        self.reportview = QTextEdit()
+        self.reportview.setReadOnly(True)
+        vbox.addWidget(self.reportview)
+        # vbox.addWidget(HLine())
+        buttonBox = QDialogButtonBox()
+        vbox.addWidget(buttonBox)
+        self.bt_done = buttonBox.addButton(QDialogButtonBox.StandardButton.Ok)
+        self.bt_done.clicked.connect(self.ok)
+        self.resize(600, 400)
+        self.__active = False
+
+    def ok(self):
+        self.__close_pending = True
+
+    def closeEvent(self, e):
+        if self.__active:
+            self.__close_pending = True
+            e.ignore()
+        else:
+            e.accept()
+
+    def keyPressEvent(self, e):
+        if self.__active:
+            if e.key() in (Qt.Key_Escape, Qt.Key_Return):
+                self.__close_pending = True
+        else:
+            super().keyPressEvent(e)
+
+    def start(self, task, title=None, **kargs):
+        self.setWindowTitle(title or T["Reporter"])
+        self.setModal(True)
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self.bt_done.setEnabled(False)
+        self.show()
+        self.__active = True
+        txt = f'+++ {T["PROCESSING"]} ...'
+        self.reportview.append(f'<span style="color:#d406e3;">{txt}</span>')
+        self.reportview.append('')
+        self.__close_pending = False
+        time.sleep(0.01)
+        QCoreApplication.processEvents()
+        result = task(**kargs)
+        txt = f'+++ ... {T["DONE"]}'
+        self.reportview.append(f'<span style="color:#d406e3;">{txt}</span>')
+        self.__active = False
+        self.bt_done.setEnabled(True)
+        QApplication.restoreOverrideCursor()
+        while not self.__close_pending:
+            QCoreApplication.processEvents()
+            time.sleep(0.01)
+        return result
+
+    def newtext(self, mtype, text):
+        try:
+            ttype = T[mtype]
+        except:
+            ttype = mtype or ""
+        text = text or ""
+        if self.__active:
+            if mtype or text:
+                if mtype:
+                    clr = self.colours.get(mtype) or "#800080"
+                    t0 = f'<span style="color:{clr};">*** {ttype} ***</span>'
+                    self.reportview.append(t0)
+                self.reportview.append(text.rstrip() + "\n")
+            QCoreApplication.processEvents()
+        else:
+            if mtype == "ERROR":
+                SHOW_ERROR(text)
+            elif mtype == "WARNING":
+                SHOW_WARNING(text)
+            elif mtype == "INFO":
+                SHOW_INFO(text)
+            else:
+                raise Bug(f"Bad REPORT type: '{ttype}'\n ... {text}")
+
+
+__reporter = __Reporter()
+builtins.REPORT = __reporter.newtext
+builtins.PROCESS = __reporter.start
+
+
 ############### Handle uncaught exceptions ###############
 class UncaughtHook(QObject):
     def __init__(self, *args, **kwargs):
@@ -712,3 +837,26 @@ class UncaughtHook(QObject):
 
 # Create a global instance of <UncaughtHook> to register the hook
 qt_exception_hook = UncaughtHook()
+
+
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+
+if __name__ == "__main__":
+
+    def run_me(first="First line"):
+        time.sleep(2)
+        REPORT("INFO", first)
+        time.sleep(2)
+        REPORT("WARNING", "Second line\n\n")
+        time.sleep(2)
+        REPORT(
+            "ERROR",
+            "A much, much longe message, which could be\n"
+            "something of a problem. Not least because it contains\n"
+            "line-break characters. Let's see what happens!",
+        )
+        time.sleep(2)
+
+    run_me()
+    if SHOW_CONFIRM("Continue?"):
+        PROCESS(run_me, "Test function", first="Alternative first line")
