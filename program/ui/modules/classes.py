@@ -1,7 +1,7 @@
 """
 ui/modules/classes.py
 
-Last updated:  2022-06-26
+Last updated:  2022-07-10
 
 Edit classes' data.
 
@@ -46,7 +46,7 @@ T = TRANSLATIONS("ui.modules.classes")
 
 ### +++++
 
-from core.db_management import open_database, read_pairs
+from core.db_access import open_database, read_pairs
 from core.basic_data import get_days, get_periods
 from ui.ui_base import (
     HLine,

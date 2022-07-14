@@ -8,15 +8,15 @@ core.db_management: {
 core.basic_data: {
     # Messages
     BAD_WEIGHT:     "Ungültiger Gewichtungsfaktor für Deputatsstunden: {key} -> '{val}'"
-    INVALID_PAYROLL: "Ungültige Angabe für Deputatsstunden: {text}"
+    INVALID_PAYMENT: "Ungültige Form der Deputatsangabe: {text}"
+    INVALID_PAYMENT_TAG: "Ungültiges Partner-Kennzeichen: '{text}'"
     BAD_NUMBER:     "Ungültige Nummer der Deputatsstunden: {val}"
-    UNKNOWN_PAYROLL_WEIGHT: "Unbekannter Gewichtungsfaktor für Deputatsstunden: {key}"
-    BLOCKTAG_INVALID: "Unbekanntes Block-Kennzeichen: {tag}"
-    BLOCKTAG_UNKNOWN_SUBJECT: "Block-Kennzeichen {tag} hat unbekanntes Fach: {sid}"
+    UNKNOWN_PAYMENT_WEIGHT: "Unbekannter Gewichtungsfaktor für Deputatsstunden: {key}"
+    BLOCKTAG_INVALID: "Block-Kennzeichen {tag} hat ungültige „Kennung“"
+    BLOCKTAG_UNKNOWN_SUBJECT: "Block-Kennzeichen {tag} hat unbekanntes Fach: '{sid}'"
     LENGTH_NOT_NUMBER: "Stundendauer ({val}) ist keine Zahl"
     LENGTH_NOT_VALID: "Stundendauer ({val}) ist nicht möglich"
     NO_TIME_FOR_PARTNERS: "Zeitangabe für Partner-Kennzeichen '{tag}' fehlt in Datenbank"
-    BAD_TIME:       "Zeitangabe ({tag}) – muss mit '@' anfangen"
     INVALID_TIMESLOT: "Ungültige Zeitangabe ({val}) – sollte '[?][Tag.Stunde]' sein"
     UNKNOWN_GROUP:  "In Klasse {klass}, unbekannte Gruppe: {group}"
     UNKNOWN_CLASS:  "Unbekannte Klasse: {klass}"
@@ -111,8 +111,8 @@ ui.modules.classes: {
 
 ui.modules.course_lessons: {
     # Messages
-    PAYROLL_ENTRY:  "Dieser Eintrag ist kein „Kurs“, gibt aber Deputatsstunden an, die keinen Unterrichtsstunden direkt entsprechen."
-    NO_LESSONS_FOR_COURSE: "Dieser Kurs hat keine Unterrichtsstunden"
+#    PAYMENT_ENTRY:  "Dieser Eintrag ist kein „Kurs“, gibt aber Deputatsstunden an, die keinen Unterrichtsstunden direkt entsprechen."
+    NO_ENTRIES_FOR_COURSE: "Dieser Kurs hat keine Aktivitäten"
     COURSE_EXISTS:  "Der geänderte „Kurs“ existiert schon"
     REALLY_DELETE:  "Soll dieser „Kurs“ wirklich gelöscht werden?"
     COURSE_ADDED:   "„Kurs“ in Klasse {klass} eingefügt"
@@ -124,17 +124,19 @@ ui.modules.course_lessons: {
     CLASSROOM_ALREADY_CHOSEN: "Klassenraum schon in Auswahl"
     UNKNOWN_ROOM_ID: "Unbekanntes Raumkürzel"
     INVALID_ROOM_IDS: "Ungültige Raumkürzel"
-    INVALID_BLOCK_TAG: "Ungültiges Blockkennzeichen"
-    UNKNOWN_SUBJECT_TAG: "Unbekanntes Fachkürzel"
+    INVALID_BLOCK_TAG: "Ungültiges Block-Kennzeichen"
+    UNKNOWN_SUBJECT_TAG: "Unbekanntes Fachkürzel: {sid}"
     EMPTY_PARTNER_TAG: "Leeres „Partner-Kennzeichen“"
     SELECT_TO_COPY_LENGTH: "Wenn eine Zeile ausgewählt ist, wird deren Länge kopiert, sonst 1"
     DELETE_SELECTED: "Die zu löschende Zeile muss ausgewählt sein"
     NO_COURSE_SO_NO_LESSONS: "Kein Kurs => Keine Stunden"
-    BLOCK_TAG_TIME_CLASH: "Zeitkonflikt mit anderen Kurs-Stunden:"
+    BLOCK_TAG_CLASH: "Block-Kennzeichen ({tag}) wird schon im Kurs verwendet"
     NO_CLASSROOM:   "„Klassenraum“ ($) ist hier nicht zulässig, da die aktuelle Klasse keinen Klassenraum hat"
+    BLOCK_NO_SUBJECT: "Block-Kennzeichen ohne Blocknamen"
+    BLOCK_WITH_NO_TAG: "Mit leerem Block-Kennzeichen kann es keine Unterrichtsstunden geben"
     
-    PAYROLL_VALID_ENTRY: "* oder Dezimalzahl"
-    INVALID_PAYROLL: "Ungültiger Wert"
+#    PAYMENT_VALID_ENTRY: "* oder Dezimalzahl"
+#    INVALID_PAYMENT: "Ungültiger Wert"
 
     # Labels
     MODULE_NAME:    "Kurse/Stunden"
@@ -160,7 +162,7 @@ ui.modules.course_lessons: {
     COURSE_TITLE:   Kurse
     FILTER:         "Filter:"
 
-    # Course table fields
+    # COURSES table fields
     course:         KursNr
     CLASS:          Klasse
     GRP:            Gruppe
@@ -171,23 +173,35 @@ ui.modules.course_lessons: {
     COMPOSITE:      Sammelfach
 
     # Lesson table
-    LESSONS:        "Unterrichts- bzw. Deputatsstunden"
-    BLOCK_MEMBER:   Blockmitglied
+    LESSONS:        "Unterricht usw."
+#    BLOCK_MEMBER:   Blockmitglied
 
+    # BLOCKS table fields
     id:             ID
-    #course:         KursNr
-    LENGTH:         Länge
-    PAYROLL:        Deputat
-    TAG:            Kennzeichen
+    #course:         KursNr         # (siehe oben)
+    PAYMENT:        Deputat
     ROOM:           Raum
-    TIME:           "Zeit / Block"
-    Time:           Zeit
-    Partners:       Partner-id
-    Block_subject:  Epoche/Block
-    Block_tag:      Kennzeichen
-    PLACE:          Ort
-    PLACE_NOT_EDITABLE: "Der Ort wird im Stundenplanmodul gesetzt"
+    LESSON_TAG:     Kennzeichen
     NOTES:          Notizen
+
+#?
+    # LESSONS table fields
+    #id:             ID             # (siehe oben)
+    TAG:            Kennzeichen    # (siehe oben)
+    LENGTH:         Dauer
+    TIME:           Zeit
+    ROOMS:          Räume
+
+    Partners:       Partner-id
+
+#?
+    Block_subject:  Block/Epoche
+    Block_name:     Blockname
+    Block_tag:      Kennung
+#?
+    PARALLEL_TAG:   Partner-Kennzeichen
+#    PLACE:          Ort
+#    PLACE_NOT_EDITABLE: "Der Ort wird im Stundenplanmodul gesetzt"
 
 #    EDIT_LESSON:    "Bearbeiten"
 
@@ -215,11 +229,11 @@ timetable.courses: {
     INVALID_LESSON: "LESSONS-Tabelle: fehlerhafte Zeile, id={id}"
     NO_CLASSROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  Klasse hat keinen Klassenraum, wird aber angegeben ($) im Raum-Feld"
     UNKNOWN_ROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  unbekannter Raum ({rid})"
-    BAD_PAYROLL:    "{course}, Eintrag mit Block-Kennzeichen {tag}:\n  {e}"
-#    INVALID_PAYROLL:    "LESSONS-Tabelle, id={id}: Deputatsangabe (PAYROLL-Feld) ungültig: '{payroll}'"
-#    NO_PAYROLL:         "LESSONS-Tabelle, id={id}: Keine Deputatsangabe"
-    PAYROLL_NO_NUMBER:  "LESSONS-Tabelle, id={id}, {course}:\n  Bei der Deputatsangabe ({payroll}) fehlt die Anzahl der Einheiten"
-    PAYROLL_UNEXPECTED: "LESSONS-Tabelle, id={id}: Sonderzeile, Deputatsangabe nicht erwartet ... gefunden: '{payroll}'"
+    BAD_PAYMENT:    "{course}, Eintrag mit Block-Kennzeichen {tag}:\n  {e}"
+    INVALID_PAYMENT: "LESSONS-Tabelle, id={id}: Deputatsangabe (PAY_FACTOR-Feld) ungültig: '{payroll}'"
+#    NO_PAYMENT:         "LESSONS-Tabelle, id={id}: Keine Deputatsangabe"
+    PAYMENT_NO_NUMBER:  "LESSONS-Tabelle, id={id}, {course}:\n  Bei der Deputatsangabe ({payroll}) fehlt die Anzahl der Einheiten"
+    PAYMENT_UNEXPECTED: "LESSONS-Tabelle, id={id}: Sonderzeile, Deputatsangabe nicht erwartet ... gefunden: '{payroll}'"
     TEACHER_SUPPRESSED: "Lehrkraft ausgeschlossen: {tname}"
     TEACHER_NO_COURSES: "Lehrkraft ohne Auftrag: {tname}"
     INVALID_PARTNER_TIME: "LESSONS-Tabelle, id={id}, Sonderzeile (Partnerzeit): Länge und Raum müssen leer sein"

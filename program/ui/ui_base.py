@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-07-09
+Last updated:  2022-07-10
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -27,6 +27,19 @@ Copyright 2022 Michael Towers
 #####################################################
 
 import sys, os, locale, builtins, traceback, glob, time
+
+if __name__ == "__main__":
+    import sys, os
+
+    this = sys.path[0]
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+    from core.base import start
+
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    #    start.setup(os.path.join(basedir, 'DATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
 
 # TODO: PySide6 only?: If I use this feature, this is probably the wrong path ...
 # Without the environment variable there is a disquieting error message.
@@ -59,22 +72,6 @@ def run(window):
 
 class GuiError(Exception):
     pass
-
-
-# XXXXXXXXXXXXXX
-if __name__ == "__main__":
-    import sys, os
-
-    this = sys.path[0]
-    appdir = os.path.dirname(this)
-    sys.path[0] = appdir
-    basedir = os.path.dirname(appdir)
-    from core.base import start
-
-    #    start.setup(os.path.join(basedir, 'TESTDATA'))
-    #    start.setup(os.path.join(basedir, 'DATA'))
-    start.setup(os.path.join(basedir, "DATA-2023"))
-# XXXXXXXXXXXXXX
 
 
 T = TRANSLATIONS("ui.ui_base")
@@ -851,7 +848,7 @@ if __name__ == "__main__":
         time.sleep(2)
         REPORT(
             "ERROR",
-            "A much, much longe message, which could be\n"
+            "A much, much longer message, which could be\n"
             "something of a problem. Not least because it contains\n"
             "line-break characters. Let's see what happens!",
         )

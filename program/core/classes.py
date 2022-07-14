@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-06-20
+core/classes.py - last updated 2022-07-10
 
 Manage class data.
 
@@ -41,7 +41,7 @@ T = TRANSLATIONS("core.classes")
 
 from typing import NamedTuple, Optional
 
-from core.db_management import open_database, db_read_fields, read_pairs
+from core.db_access import open_database, db_read_fields, read_pairs
 
 ### -----
 

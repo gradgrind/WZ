@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-07-09
+core/basic_data.py - last updated 2022-07-14
 
 Handle caching of the basic data sources
 
@@ -25,7 +25,7 @@ T = TRANSLATIONS("core.basic_data")
 
 from typing import Optional, NamedTuple
 
-from core.db_management import (
+from core.db_access import (
     db_read_unique_field,
     db_key_value_list,
     KeyValueList
@@ -37,8 +37,12 @@ from ui.ui_base import QRegularExpression  ### QtCore
 SHARED_DATA = {}
 
 DECIMAL_SEP = CONFIG["DECIMAL_SEP"]
-PAYROLL_FORMAT = "[1-9]?[0-9](?:$[0-9]{1,3})?".replace("$", DECIMAL_SEP)
-PAYROLL_MAX = 20
+PAYMENT_FORMAT = QRegularExpression(
+    "^[1-9]?[0-9](?:&[0-9]{1,3})?$".replace("&", DECIMAL_SEP)
+)
+PAYMENT_MAX = 20.0
+TAG_FORMAT = QRegularExpression("^[A-Za-z0-9_.]+$")
+NO_SUBJECT = "-----"
 
 ### -----
 
@@ -126,54 +130,65 @@ def get_rooms() -> KeyValueList:
     return rooms
 
 
-def get_payroll_weights() -> KeyValueList:
-    """Return the "payroll lesson weightings" as a KeyValueList of
+def get_payment_weights() -> KeyValueList:
+    """Return the "payment lesson weightings" as a KeyValueList of
     (tag, weight) pairs.
     This data is cached, so subsequent calls get the same instance.
     """
 
     def check(item):
         i2 = item[1]
-        if regexp.match(i2).hasMatch():
+        if PAYMENT_FORMAT.match(i2).hasMatch():
             return i2
         else:
+#TODO: rather raise ValueError?
             SHOW_ERROR(T["BAD_WEIGHT"].format(key=item[0], val=i2))
             return None
 
-    regexp = QRegularExpression(f"^{PAYROLL_FORMAT}$")
     try:
-        return SHARED_DATA["PAYROLL"]
+        return SHARED_DATA["PAYMENT"]
     except KeyError:
         pass
-    payroll_weights = db_key_value_list(
+    payment_weights = db_key_value_list(
         "XDPT_WEIGHTINGS", "TAG", "WEIGHT", check=check
     )
-    SHARED_DATA["PAYROLL"] = payroll_weights
-    return payroll_weights
+    SHARED_DATA["PAYMENT"] = payment_weights
+    return payment_weights
 
 
 class BlockTag(NamedTuple):
     sid: str
-    tag: str    # includes the '#'
+    tag: str
     subject: str
 
+    def isNone(self):
+        return (not self.sid) and (not self.tag)
+
     def __str__(self):
-        return f">{self.sid}{self.tag}"
+        return f"{self.sid}#{self.tag}" if self.sid else self.tag
 
 
-def read_blocktag(tag: str) -> BlockTag:
-    """Return block subject and #-tag for a block-tag.
-    An invalid value raises a <ValueError> exception.
+def read_block_tag(block_tag: str) -> BlockTag:
+    """Decode the given block tag. Return a triple:
+    (subject-id, identifier-tag, subject name).
     """
+    if not block_tag:
+        return BlockTag("", "", NO_SUBJECT)
     try:
-        i = tag.index("#")
-        sid = tag[1:i]  # strips initial ">"
-        sbj = get_subjects().map(sid)
+        sid, tag = block_tag.split("#", 1)
     except ValueError:
-        raise ValueError(T["BLOCKTAG_INVALID"].format(tag=tag))
+        return BlockTag("", block_tag, NO_SUBJECT)
+    try:
+        subject = get_subjects().map(sid)
     except KeyError:
-        raise ValueError(T["BLOCKTAG_UNKNOWN_SUBJECT"].format(tag=tag, sid=sid))
-    return BlockTag(sid, tag[i:], sbj)
+        raise ValueError(
+            T["BLOCKTAG_UNKNOWN_SUBJECT"].format(tag=block_tag, sid=sid)
+        )
+    if not tag:
+        return BlockTag(sid, "", subject)
+    if TAG_FORMAT.match(tag).hasMatch():
+        return BlockTag(sid, tag, subject)
+    raise ValueError(T["BLOCKTAG_INVALID"].format(tag=block_tag))
 
 
 def check_group(klass, group=None):
@@ -201,86 +216,67 @@ def check_lesson_length(length: str) -> int:
     return i
 
 
-class PayrollData(NamedTuple):
-    number: Optional[int]
-    factor: Optional[str]
-    text: str
+class PaymentData(NamedTuple):
+    number: str
+    factor: str
+    tag: str
+    number_val: float
     factor_val: float
-    groups: list
-    withtids: list
 
     def isNone(self):
-        return self.factor is None
+        return not self.factor
 
     def __str__(self):
-        return self.text
+        if self.factor:
+            t = f"/{self.tag}" if self.tag else ""
+            return f"{self.number}*{self.factor}{t}"
+        return ""
 
-
-def read_payroll(payroll: str) -> PayrollData:
-    """Read the individual parts of a payroll entry.
+def read_payment(payment: str) -> Optional[PaymentData]:
+    """Read the individual parts of a payment entry.
     If the input is invalid a <ValueError> exception wil be raised.
     """
-    if not payroll:
-        return PayrollData(None, None, "", 0.0, [], [])
+    if not payment:
+        return PaymentData("", "", "", 0.0, 0.0)
     try:
-        n, f = payroll.split("*", 1)  # can raise ValueError
+        n, f = payment.split("*", 1)  # can raise ValueError
     except ValueError:
-        raise ValueError(T["INVALID_PAYROLL"].format(text=payroll))
+        raise ValueError(T["INVALID_PAYMENT"].format(text=payment))
+    try:
+        f, t = f.split("/", 1)
+    except ValueError:
+        t = ""
+    else:
+        if not TAG_FORMAT.match(t).hasMatch():
+            raise ValueError(T["INVALID_PAYMENT_TAG"].format(text=t))
     if n:
         try:
-            n1, t1 = n.split("+", 1)
-        except ValueError:
-            n1, t1 = n, ""
-        try:
-            n2, g1 = n1.split("/", 1)
-        except ValueError:
-            n2, g1 = n1, ""
-        if g1:
-            xgroups = g1.split(",")
-            for g in xgroups:
-                try:
-                    _k, _g = g.split(".", 1)
-                except ValueError:
-                    if not check_group(g):
-                        raise ValueError(T["UNKNOWN_CLASS"].format(klass=g))
-                else:
-                    if not check_group(_k, _g):
-                        raise ValueError(T["UNKNOWN_GROUP"].format(
-                            klass=_k, group=_g)
-                        )
-        else:
-            xgroups = []
-        if t1:
-            teachers = get_teachers()
-            xteachers = t1.split(",")
-            for t in xteachers:
-                if t not in teachers:
-                    raise ValueError(T["UNKNOWN_TEACHER"].format(tid=t))
-        else:
-            xteachers = []
-        try:
-            nn = int(n2)
-            if nn < 1 or nn > PAYROLL_MAX:
+            if PAYMENT_FORMAT.match(n).hasMatch():
+                nd = float(n.replace(",", "."))
+                if nd < 0.0 or nd > PAYMENT_MAX:
+                    raise ValueError
+            else:
                 raise ValueError
         except ValueError:
-            raise ValueError(T["BAD_NUMBER"].format(val=n2))
+            raise ValueError(T["BAD_NUMBER"].format(val=n))
     else:
-        nn = None
-        xgroups = []
-        xteachers = []
+        nd = 0.0
     try:
-        nf = float(get_payroll_weights().map(f).replace(",", "."))
+        fd = float(get_payment_weights().map(f).replace(",", "."))
     except KeyError:
-        raise ValueError(T["UNKNOWN_PAYROLL_WEIGHT"].format(key=f))
-    return PayrollData(nn, f, payroll, nf, xgroups, xteachers)
+        raise ValueError(T["UNKNOWN_PAYMENT_WEIGHT"].format(key=f))
+    return PaymentData(n, f, t, nd, fd)
 
 
 # ********** Handling the data in TIME-fields **********
 
+#TODO: deprecated
 def read_time_field(tag):
     """Convert a lesson time-field to a (Time, Tag) pair – assuming
     the given value is a valid time slot or "partners" tag.
     """
+    raise Bug(f"$!$!$! deprecated: read_time_field ({tag})")
+#TODO: "partners" tags are no longer supported (at least, not in this way).
     if tag.startswith("="):
         tag = tag[1:]
         return get_time_entry(tag), tag
@@ -292,7 +288,7 @@ def read_time_field(tag):
 def timeslot2index(timeslot):
     """Convert a "timeslot" in the tag-form (e.g. "Mo.3") to a pair
     of 0-based indexes, (day, period).
-    THere may be a "?"-prefix, indicating that the time is not fixed.
+    There may be a "?"-prefix, indicating that the time is not fixed.
     Both a null value and a single "?" are accepted as "unspecified time",
     returning (-1, -1).
     Invalid values cause a <ValueError> exception.
@@ -318,23 +314,11 @@ def index2timeslot(index):
     return f"{d}.{p}"
 
 
-def get_time_entry(tag):
-    """Can raise a <ValueError>.
-    """
-    try:
-        ltime = db_read_unique_field("LESSONS", "TIME", PLACE=f"={tag}")
-    except NoRecord:
-        raise ValueError(T["NO_TIME_FOR_PARTNERS"].format(tag=tag))
-    # Check validity
-    return check_start_time(ltime)
-
-
+#TODO: deprecated
 def check_start_time(tag):
     """Can raise a <ValueError>.
     """
-    if tag.startswith("@"):
-        ltime = tag[1:]
-        timeslot2index(ltime)
-        return ltime
-    raise ValueError(T['BAD_TIME'].format(tag=tag))
+    raise Bug(f"$!$!$! deprecated: basic_data.check_start_time ({tag})")
+# Do this instead:
+    timeslot2index(tag)
 
