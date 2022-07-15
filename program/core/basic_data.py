@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-07-14
+core/basic_data.py - last updated 2022-07-15
 
 Handle caching of the basic data sources
 
@@ -203,17 +203,20 @@ def check_group(klass, group=None):
     return True
 
 
-def check_lesson_length(length: str) -> int:
-    """Return the length of a valid lesson duration as an <int>.
-    Otherwise raise a <ValueError> exception.
-    """
-    try:
-        i = int(length)
-    except ValueError:
-        raise ValueError(T["LENGTH_NOT_NUMBER"].format(val=length))
-    if i < 1 or i > len(get_periods()):
-        raise ValueError(T["LENGTH_NOT_VALID"].format(val=length))
-    return i
+#def check_lesson_length(length: str) -> int:
+#    """Return the length of a valid lesson duration as an <int>.
+#    Otherwise raise a <ValueError> exception.
+#    """
+#    try:
+#        i = int(length)
+#    except ValueError:
+#        raise ValueError(T["LENGTH_NOT_NUMBER"].format(val=length))
+#    if i < 1 or i > len(get_periods()):
+#        raise ValueError(T["LENGTH_NOT_VALID"].format(val=length))
+#    return i
+#
+#    LENGTH_NOT_NUMBER: "Stundendauer ({val}) ist keine Zahl"
+#    LENGTH_NOT_VALID: "Stundendauer ({val}) ist nicht möglich"
 
 
 class PaymentData(NamedTuple):
@@ -266,23 +269,6 @@ def read_payment(payment: str) -> Optional[PaymentData]:
     except KeyError:
         raise ValueError(T["UNKNOWN_PAYMENT_WEIGHT"].format(key=f))
     return PaymentData(n, f, t, nd, fd)
-
-
-# ********** Handling the data in TIME-fields **********
-
-#TODO: deprecated
-def read_time_field(tag):
-    """Convert a lesson time-field to a (Time, Tag) pair – assuming
-    the given value is a valid time slot or "partners" tag.
-    """
-    raise Bug(f"$!$!$! deprecated: read_time_field ({tag})")
-#TODO: "partners" tags are no longer supported (at least, not in this way).
-    if tag.startswith("="):
-        tag = tag[1:]
-        return get_time_entry(tag), tag
-    else:
-        # Check validity of time
-        return check_start_time(tag), ""
 
 
 def timeslot2index(timeslot):

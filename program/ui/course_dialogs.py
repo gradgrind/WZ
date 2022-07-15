@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-07-14
+Last updated:  2022-07-15
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -67,6 +67,7 @@ from core.basic_data import (
     TAG_FORMAT,
     PAYMENT_FORMAT
 )
+from core.classes import Classes
 from ui.ui_base import (
     GuiError,
     HLine,
@@ -93,6 +94,7 @@ from ui.ui_base import (
     QRadioButton,
     QButtonGroup,
     QStyledItemDelegate,
+    QCompleter,
     ### QtGui:
     QRegularExpressionValidator,
     ### QtCore:
@@ -411,6 +413,121 @@ class DurationSelector(QComboBox):
         if self.__report_changes and self.__callback:
             self.__callback(text)
         self.clearFocus()
+
+
+class GroupSelector(QComboBox):
+    """A special combobox, offering the groups defined for the
+    current class. This list must be set up from the <setText> call.
+    """
+    """A specialized combobox for use in the editor form for a
+    "RowSelectTable" table view. This combobox offers the groups defined
+    for the current class. This list must be set up from the <setText> call.
+
+    The constructor receives the name of the field and a function which
+    is to be called when the selected value is changed. This function
+    takes the field name and a boolean (value != initial value, set by
+    the "setText" method).
+    """
+    def __init__(self, field, modified, parent=None):
+        super().__init__(parent)
+        self.__modified = modified
+        self.__field = field
+        self.text0 = None
+        self.currentTextChanged.connect(self.__changed)
+
+    def setText(self, group):
+        """Initialize the list of options and select the given one."""
+        # print("(GroupSelector.setText)", repr(group))
+        self.callback_enabled = False
+        self.clear()
+        self.addItem("")
+        __klass = get_coursedata().CLASS
+        if __klass != "--":
+            # N.B. The null class should have no groups.
+            self.addItem("*")
+            groups = Classes().group_info(__klass)["GROUPS"]
+            if groups:
+                self.addItems(groups)
+        self.setCurrentText(group)
+        if self.__modified:
+            self.callback_enabled = True
+
+    def text(self):
+        return self.currentText()
+
+    def __changed(self, text):
+        if self.callback_enabled:
+            self.__modified(self.__field, text != self.text0)
+        # self.clearFocus()
+
+
+class FormComboBox(QComboBox):
+    """A specialized combobox for use in the editor form for a
+    "RowSelectTable" table view. This combobox is used for editing
+    foreign key fields by offering the available values to choose from.
+
+    The constructor receives the name of the field and a function which
+    is to be called when the selected value is changed. This function
+    takes the field name and a boolean (value != initial value, set by
+    the "setText" method).
+
+    Also the "setup" method must be called to initialize the contents.
+    """
+
+    def __init__(self, field, modified, parent=None):
+        super().__init__(parent)
+        self.__modified = modified
+        self.__field = field
+        self.text0 = None
+        self.currentIndexChanged.connect(self.change_index)
+
+    def setup(self, key_value):
+        """Set up the indexes required for the table's item delegate
+        and the combobox (<editwidget>).
+
+        The argument is a list [(key, value), ... ].
+        """
+        self.keylist = []
+        self.key2i = {}
+        self.clear()
+        i = 0
+        self.callback_enabled = False
+        for k, v in key_value:
+            self.key2i[k] = i
+            self.keylist.append(k)
+            self.addItem(v)
+            i += 1
+        self.callback_enabled = True
+
+    def text(self):
+        """Return the current "key"."""
+        return self.keylist[self.currentIndex()]
+
+    def setText(self, text):
+        """<text> is the "key"."""
+        if text:
+            try:
+                i = self.key2i[text]
+            except KeyError:
+                raise Bug(
+                    f"Unknown key for editor field {self.__field}: '{text}'"
+                )
+            self.text0 = text
+            self.setCurrentIndex(i)
+        else:
+            self.text0 = self.keylist[0]
+            self.setCurrentIndex(0)
+
+    def change_index(self, i):
+        if self.callback_enabled:
+            self.__modified(self.__field, self.keylist[i] != self.text0)
+
+
+
+
+
+
+
 
 
 class DayPeriodSelector(QLineEdit):
@@ -1049,6 +1166,9 @@ class RoomDialog(QDialog):
             self.roomlist.setItem(i, 0, item)
             item = QTableWidgetItem(rooms[i][1])
             self.roomlist.setItem(i, 1, item)
+        completer = QCompleter(list(self.room2line))
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.roomtext.setCompleter(completer)
         self.roomlist.resizeColumnsToContents()
         Hhd = self.roomlist.horizontalHeader()
         Hhd.hide()
