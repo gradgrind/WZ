@@ -44,10 +44,18 @@ T = TRANSLATIONS("timetable.activities")
 from typing import NamedTuple, Optional
 
 from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, PageBreak, Spacer
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    PageBreak,
+    Spacer,
+    Preformatted
+)
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib.enums import TA_RIGHT
+
 
 from core.db_access import db_read_fields
 from core.basic_data import (
@@ -563,68 +571,6 @@ class Courses:
         return tlist
 
 
-"""
-
-    def teacher_check_list(self):
-        ### Return a "check-list" of the lessons for each teacher.
-
-        lines = []
-        tmap = self.lessons_teacher_lists()
-        for tid, lessons in tmap.items():
-            class_lessons = {}
-            for tag, block, klass, sid, groups, dmap, rooms in lessons:
-                try:
-                    class_list, class_blocks = class_lessons[klass]
-                except KeyError:
-                    class_list = []
-                    class_blocks = []
-                    class_lessons[klass] = [class_list, class_blocks]
-                n = len(rooms)
-                _rooms = f" [{n}: {', '.join(sorted(rooms))}]" if n else ""
-                sname = self.SUBJECTS[sid]
-                if block == '--':
-                    d = list(dmap)[0] if dmap else 0
-                    entry = f"    // {sname} [{','.join(groups)}]: EXTRA x {d}"
-                    class_blocks.append(entry)
-                elif block == '++':
-                    ll = ", ".join(lesson_lengths(dmap))
-                    entry = f"    // {sname} [{','.join(groups)}]: BLOCK: {ll}{_rooms}"
-                    class_blocks.append(entry)
-                elif block:
-                    # Component
-                    blesson = self.lessons[block]
-                    bname = self.SUBJECTS[blesson['SID']]
-                    if dmap:
-                        entry = f"    {sname} [{','.join(groups)}]: EPOCHE ({bname}) x {list(dmap)[0]}"
-                    else:
-                        entry = f"    {sname} [{','.join(groups)}]: ({bname})"
-                    class_list.append(entry)
-                else:
-                    ll = ", ".join(lesson_lengths(dmap))
-                    entry = f"    {sname} [{','.join(groups)}]: {ll}{_rooms}"
-                    class_list.append(entry)
-
-            if class_lessons:
-                lines.append("")
-                lines.append("")
-                lines.append(f"$$$ {tid} ({self.TEACHERS[tid]})")
-                for klass, clb in class_lessons.items():
-                    class_list, class_blocks = clb
-                    clines = []
-                    clines += class_blocks
-                    if class_blocks:
-                        clines.append("")
-                    clines += class_list
-                    if clines:
-                        lines.append("")
-                        lines.append(f"  Klasse {klass}:")
-                        lines += clines
-        return "\n".join(lines)
-
-"""
-
-
-#TODO
 def print_teachers(teacher_data, block_tids=None, show_workload=False):
     def partners(tag, course) -> tuple[int,str]:
         try:
@@ -660,7 +606,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
         else:
             shared = ""
         if show_workload:
-            text = f"<{n} × {paymentdata.factor}{shared} = {val:.3f}>"
+            text = f"$>>> {n} × {paymentdata.factor}{shared} = {val:.3f}"
         else:
             text = ""
         return (val, text)
@@ -668,17 +614,21 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
     blocked_tids = set() if block_tids is None else set(block_tids)
     classes = get_classes().get_class_list(skip_null=False)
 
-    class_lessons = {}
-
 #?
+#    class_lessons = {}
 #    def class_lists(k):
 #        try:
-#            return class_lessons[k]     # (class_list, class_blocks)
+#            return class_lessons[k] # (class_list, class_blocks, class_payonly)
 #        except KeyError:
-#            lb = ([], [])
+#            lb = ([], [], [])
 #            class_lessons[k] = lb
 #            return lb
+# ...
+#        class_lessons.clear()
+# ...
+#        class_list, class_blocks, class_payonly = class_lists(klass)
 
+    teacherlists = []
     for tid, tname, c2tags, c2paydata, tag2courses in teacher_data:
         if tid in blocked_tids:
             REPORT("INFO", T["TEACHER_SUPPRESSED"].format(tname=tname))
@@ -686,12 +636,8 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
         if not (c2tags or c2paydata):
             REPORT("INFO", T["TEACHER_NO_ACTIVITIES"].format(tname=tname))
             continue
-        class_lessons.clear()
-
-#?
-#        class_list, class_blocks = class_lists(klass)
-
         print("\n $$$$$$", tname)
+        classlists = []
         pay_total = 0.0
         for klass, kname in classes:
             class_list, class_blocks, class_payonly = [], {}, []
@@ -754,7 +700,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                     class_list.append(
                                         f"  {sname + plist:<18}"
                                         f" {rooms:<12}"
-                                        f" – Stunden: {lessons:<12}"
+                                        f" – {T['lessons']}: {lessons:<12}"
                                         + paytext
                                     )
                                     print("§§§", class_list[-1])
@@ -768,7 +714,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                     text = (
                                         f"  {sname:<18}"
                                         f" {rooms:<12}"
-                                        " durchgehend"
+                                        " {T['continuous']}"
                                         + paytext
                                     )
                                     try:
@@ -788,14 +734,14 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                         rooms = f'{{{"|".join(blockinfo.rooms)}}}'
                         lessons = f'[{",".join(map(str, blockinfo.lessons))}]'
                         pay, paytext = workload(
-                            payment,
+                            blockinfo.payment_data,
                             blockinfo.lessons
                         )
                         pay_total += pay
                         class_list.append(
                             f"  {sname:<18}"
                             f" {rooms:<12}"
-                            f" – Stunden: {lessons:<12}"
+                            f" – {T['lessons']}: {lessons:<12}"
                             + paytext
                         )
                         print("§§§", class_list[-1])
@@ -826,28 +772,61 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                         f"    {sname:<20}"
                         + paytext
                     )
-        print("  +++++++++++++++++++++", pay_total)
 
+            # Collate the various activities
+            all_items = []
+            for bname, data in class_blocks.items():
+                all_items.append(f"BLOCK: {bname:>18} {data[0]}")
+                for line in data[1]:
+                    all_items.append(line)
+            all_items += class_list
+            if show_workload:
+                all_items += class_payonly
+            if all_items:
+                classlists.append((klass, all_items))
 
-# TODO ...
-def todo():
-    for tid, tname, clist in teacher_subjects:
-        if tid in blocked_tids:
-            REPORT("INFO", _SUPPRESSED.format(tname=tname))
-            continue
-        else:
-            tlist.append((f"{tname} ({tid})", clist))
+        xtid = f"({tid})"
+        teacherline = f"{tname:<30} {xtid:>6}"
+        if show_workload:
+            teacherline += f" {pay_total:.2f}"
+        print("  +++++++++++++++++++++", teacherline)
+        teacherlists.append((teacherline, classlists))
 
     pdf = PdfCreator()
     return pdf.build_pdf(
-        tlist, title="Lehrer-Klassen-Fächer", author="FWS Bothfeld"
+        teacherlists, title="Lehrer-Klassen-Fächer", author="FWS Bothfeld"
     )
 
 
 BASE_MARGIN = 20 * mm
 # TODO
+import copy
+
+class MyDocTemplate(SimpleDocTemplate):
+    def __init__(self, *args, **kargs):
+        self.key = 0
+        super().__init__(*args, **kargs)
+
+    def handle_flowable(self, flowables):
+        if flowables:
+            flowable = flowables[0]
+            if (
+                isinstance(flowable, Paragraph)
+                and flowable.style.name == 'Heading1'
+            ):
+                t = flowable.getPlainText().split("(", 1)[0].rstrip()
+                self.key += 1
+                k = f"key_{self.key}"
+                self.canv.bookmarkPage(k)
+                self.canv.addOutlineEntry(t, k, 0, 1)
+        super().handle_flowable(flowables)
+
+
 class PdfCreator:
     def add_page_number(self, canvas, doc):
+#        key = f"t{doc.page}"
+#        canvas.bookmarkPage(key)
+#        canvas.addOutlineEntry(self.teacher, key, 0, 1)
         canvas.saveState()
         canvas.setFont("Times-Roman", 12)
         page_number_text = "%d" % (doc.page)
@@ -856,7 +835,7 @@ class PdfCreator:
 
     def build_pdf(self, pagelist, title, author):
         pdf_buffer = BytesIO()
-        my_doc = SimpleDocTemplate(
+        my_doc = MyDocTemplate(
             pdf_buffer,
             title=title,
             author=author,
@@ -867,23 +846,51 @@ class PdfCreator:
             bottomMargin=BASE_MARGIN,
         )
         sample_style_sheet = getSampleStyleSheet()
-        body_style = sample_style_sheet["BodyText"]
-        body_style.fontSize = 14
-        body_style.leading = 20
+        #body_style = sample_style_sheet["BodyText"]
+        body_style = sample_style_sheet["Code"]
+        body_style.fontSize = 12
+        body_style.leading = 14
+        body_style.alignment = 1
+        body_style.leftIndent = 0
+
+        body_style_2 = copy.deepcopy(body_style)
+        body_style.spaceBefore = 10
+
+        body_style_2.alignment = TA_RIGHT
         heading_style = sample_style_sheet["Heading1"]
+        heading_style.fontSize = 16
         heading_style.spaceAfter = 24
         class_style = sample_style_sheet["Heading2"]
-        class_style.spaceBefore = 25
+        class_style.fontSize = 13
+        class_style.spaceBefore = 20
         # print("\n STYLES:", sample_style_sheet.list())
 
         flowables = []
         for teacher, clist in pagelist:
-            flowables.append(Paragraph(teacher, heading_style))
+            h = Paragraph(teacher, heading_style)
+#             self.teacher = teacher
+            flowables.append(h)
             for klass, slist in clist:
                 flowables.append(Paragraph(klass, class_style))
                 for subject in slist:
                     if subject:
-                        flowables.append(Paragraph(subject, body_style))
+                        lines = subject.split("$")
+#                        flowables.append(Paragraph(subject, body_style))
+                        flowables.append(
+                            Preformatted(
+                                lines[0],
+                                body_style,
+                                maxLineLength=70,
+                                newLineChars=' '
+                            )
+                        )
+                        for line in lines[1:]:
+                            flowables.append(
+                                Paragraph(
+                                    line,
+                                    body_style_2,
+                                )
+                            )
                     else:
                         flowables.append(Spacer(1, 4 * mm))
             flowables.append(PageBreak())
@@ -901,13 +908,21 @@ class PdfCreator:
 
 if __name__ == "__main__":
     from core.db_access import open_database
+    from ui.ui_base import saveDialog
 
     open_database()
 
     def run_me():
         courses = Courses()
         tlist = courses.teacher_class_subjects()
-        print_teachers(tlist, show_workload=True)
+        pdfbytes = print_teachers(tlist, show_workload=True)
+        filepath = saveDialog("pdf-Datei (*.pdf)", "teacher_class_subjects")
+        if filepath and os.path.isabs(filepath):
+            if not filepath.endswith(".pdf"):
+                filepath += ".pdf"
+            with open(filepath, "wb") as fh:
+                fh.write(pdfbytes)
+            print("  --->", filepath)
 
     PROCESS(run_me, "Courses() ... courses.teacher_class_subjects()")
 

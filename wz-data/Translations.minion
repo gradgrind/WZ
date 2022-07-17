@@ -227,6 +227,10 @@ timetable.activities: {
     CONTINUOUS_PLUS_OTHERS: "{course}: eine durchgehende Aktivität (Kennzeichen {tag}) kann nicht parallel zu anderen Aktivitäten stattfinden"
     BLOCK_TOO_FULL: "{teacher}: Block (Kennzeichen {tag}) hat zu viele Aktivitäten"
     
+    
+    # output
+    lessons:    Stunden
+    continuous: durchgehend
 
 # check: ...
     INVALID_NON_LESSON_RECORD: "Fehlerhafte Zeile in LESSONS-Tabelle, TIME-Feld leer, aber LENGTH nicht '--'.\n  id: "
