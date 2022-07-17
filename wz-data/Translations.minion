@@ -132,6 +132,8 @@ ui.modules.course_lessons: {
     NO_CLASSROOM:   "„Klassenraum“ ($) ist hier nicht zulässig, da die aktuelle Klasse keinen Klassenraum hat"
     BLOCK_NO_SUBJECT: "Block-Kennzeichen ohne Blocknamen"
     BLOCK_WITH_NO_TAG: "Mit leerem Block-Kennzeichen kann es keine Unterrichtsstunden geben"
+    PAYTAG_WITH_NO_NUMBER: "Ohne „Anzahl“ darf es keine Deputatskennung geben"
+    NULL_FACTOR_NOT_CLEAN: "Faktor 0: Die anderen Felder müssen leer sein"
     
 #    PAYMENT_VALID_ENTRY: "* oder Dezimalzahl"
 #    INVALID_PAYMENT: "Ungültiger Wert"
@@ -215,8 +217,15 @@ timetable.activities: {
     ROOM_NON_LESSON: "BLOCKS-Tabelle, id={id}, {course}:\n  Eintrag ohne Unterrichtseinheit (nur für Deputate) hat einen Raum ({room})"
     NON_LESSON_NO_TEACHER: "BLOCKS-Tabelle, id={id}, {course}:\n  Deputatseintrag ohne Lehrer"
     PAYMENT_NO_NUMBER:  "BLOCKS-Tabelle, id={id}, {course}:\n  Bei der Deputatsangabe ({payment}) fehlt die Anzahl der Einheiten"
-
-    
+    TEACHER_SUPPRESSED: "Lehrkraft ausgeschlossen: {tname}"
+    TEACHER_NO_ACTIVITIES: "Lehrkraft ohne „Aktivitäten“: {tname}"
+    CONTINUOUS_BLOCK_TAG: "Durchgehende Kurse dürfen keine Deputatskennung haben: {course} mit Kennzeichen {tag}"
+    PARTNER_PAY_MISMATCH: "„Partner-Kurse“ müssen die gleichen Deputatsangaben haben:\n  {course1}\n  {course2}\n  Kennzeichen {tag}"
+    PARTNER_SID_MISMATCH: "„Partner-Kurse“ müssen das gleiche Fach haben:\n  {course1}\n  {course2}\n  Kennzeichen {tag}"
+    PARTNER_ROOM_MISMATCH: "„Partner-Kurse“ müssen dan gleichen Raum haben:\n  {course1}\n  {course2}\n  Kennzeichen {tag}"
+    BAD_PLAIN_BLOCK:    "{course}: für Kennzeichen {tag} muss es genau einen Kurs geben"
+    CONTINUOUS_PLUS_OTHERS: "{course}: eine durchgehende Aktivität (Kennzeichen {tag}) kann nicht parallel zu anderen Aktivitäten stattfinden"
+    BLOCK_TOO_FULL: "{teacher}: Block (Kennzeichen {tag}) hat zu viele Aktivitäten"
     
 
 # check: ...
@@ -236,7 +245,6 @@ timetable.activities: {
     INVALID_PAYMENT: "LESSONS-Tabelle, id={id}: Deputatsangabe (PAY_FACTOR-Feld) ungültig: '{payroll}'"
 #    NO_PAYMENT:         "LESSONS-Tabelle, id={id}: Keine Deputatsangabe"
     PAYMENT_UNEXPECTED: "LESSONS-Tabelle, id={id}: Sonderzeile, Deputatsangabe nicht erwartet ... gefunden: '{payroll}'"
-    TEACHER_SUPPRESSED: "Lehrkraft ausgeschlossen: {tname}"
     TEACHER_NO_COURSES: "Lehrkraft ohne Auftrag: {tname}"
     INVALID_PARTNER_TIME: "LESSONS-Tabelle, id={id}, Sonderzeile (Partnerzeit): Länge und Raum müssen leer sein"
     DOUBLE_PARTNER_TIME: "LESSONS-Tabelle: >1 Zeile, die die Zeit für Partnerkennzeichen {tag} angibt"

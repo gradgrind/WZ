@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-07-15
+Last updated:  2022-07-16
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -61,7 +61,6 @@ from core.basic_data import (
     read_payment,
     read_block_tag,
     SHARED_DATA,
-    read_time_field,
     timeslot2index,
     index2timeslot,
     TAG_FORMAT,
@@ -1422,9 +1421,15 @@ class PaymentDialog(QDialog):
         f = self.factor.selected()
         t = self.ptag.text()
         if f == "--":
+            if n or t:
+                SHOW_ERROR(T["NULL_FACTOR_NOT_CLEAN"])
+                return
             text = ""
         else:
             if t:
+                if not n:
+                    SHOW_ERROR(T["PAYTAG_WITH_NO_NUMBER"])
+                    return
                 t = "/" + t
             text = n + "*" + f + t
             try:
@@ -1452,9 +1457,13 @@ class PaymentDialog(QDialog):
                 self.factor.setCurrentIndex(0)
                 self.ptag.setText("")
             else:
+                if pdata.tag and not pdata.number:
+                    SHOW_ERROR(T["PAYTAG_WITH_NO_NUMBER"])
+                    self.ptag.setText("")
+                else:
+                    self.ptag.setText(pdata.tag)
                 self.number.setText(pdata.number)
                 self.factor.reset(pdata.factor)
-                self.ptag.setText(pdata.tag)
         except ValueError as e:
             SHOW_ERROR(str(e))
             self.number.setText("1")
@@ -1475,19 +1484,19 @@ if __name__ == "__main__":
 #    for p in partners("sp03"):
 #        print("??????", p)
 
-    widget = BlockTagDialog()
-    print("----->", widget.activate("XXX#"))
-    print("----->", widget.activate("ZwE#09G10G"))
-    print("----->", widget.activate("Hu#"))
-    print("----->", widget.activate("NoSubject"))
-
-    #    quit(0)
-
     widget = PaymentDialog()
     print("----->", widget.activate(start_value="2*HuEp"))
     print("----->", widget.activate(start_value=""))
     print("----->", PaymentDialog.popup(start_value="0,5*HuEp/tag1"))
     print("----->", widget.activate(start_value="Fred*HuEp"))
+
+    #    quit(0)
+
+    widget = BlockTagDialog()
+    print("----->", widget.activate("XXX#"))
+    print("----->", widget.activate("ZwE#09G10G"))
+    print("----->", widget.activate("Hu#"))
+    print("----->", widget.activate("NoSubject"))
 
     #    quit(0)
 
