@@ -1,7 +1,7 @@
 """
 timetable/activities.py
 
-Last updated:  2022-07-17
+Last updated:  2022-07-18
 
 Collect information on activities for teachers and classes/groups.
 
@@ -49,7 +49,7 @@ from reportlab.platypus import (
     Paragraph,
     PageBreak,
     Spacer,
-    Preformatted
+    Preformatted,
 )
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
@@ -64,11 +64,14 @@ from core.basic_data import (
     get_subjects,
     get_rooms,
     get_payment_weights,
+    check_group,
     read_payment,
     read_block_tag,
     BlockTag,
     PaymentData,
 )
+
+DECIMAL_SEP = CONFIG["DECIMAL_SEP"]
 
 ### -----
 
@@ -134,46 +137,63 @@ def lesson_rooms(room: str, course: CourseData, lesson_id: int) -> list[str]:
     return rlist
 
 
-#TODO: Am I checking that also rooms are the same (or empty) in partner-courses?
 class Courses:
     def __init__(self):
         ### First read the COURSES table.
-        classes = get_classes()
-        class2groups = {
-            klass: classes.group_info(klass)["GROUPS"]
-            for klass, _ in classes.get_class_list()
-        }
+#        classes = get_classes()
+#        class2groups = {
+#            klass: classes.group_info(klass)["GROUPS"]
+#            for klass, _ in classes.get_class_list()
+#        }
         course2data = {}
-        payment_weights = get_payment_weights()
         for course, klass, group, sid, tid in db_read_fields(
             "COURSES", ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
         ):
             # CLASS, SUBJECT and TEACHER are foreign keys and should be
             # automatically bound to appropriate entries in the database.
             # GRP should be checked here ...
-            if group and group not in class2groups[klass]:
-                if klass != "--" and group != "*":
+            if klass == "--":
+                if group:
                     REPORT(
                         "ERROR",
-                        T["UNKNOWN_GROUP"].format(
-                            klass=klass, group=group, sid=sid, tid=tid
+                        T["NULL_CLASS_GROUP"].format(
+                            group=group, sid=sid, tid=tid
                         )
                     )
                     continue
+            elif not check_group(klass, group):
+                REPORT(
+                    "ERROR",
+                    T["UNKNOWN_GROUP"].format(
+                        klass=klass, group=group, sid=sid, tid=tid
+                    ),
+                )
+                continue
+
+#            if group and group not in class2groups[klass]:
+#                if klass != "--" and group != "*":
+#                    REPORT(
+#                        "ERROR",
+#                        T["UNKNOWN_GROUP"].format(
+#                            klass=klass, group=group, sid=sid, tid=tid
+#                        ),
+#                    )
+#                    continue
+
             course2data[course] = CourseData(
                 klass=klass, group=group, sid=sid, tid=tid
             )
             if not tid:
                 raise Bug(f"Empty teacher field in {course2data[course]}")
 
-#                try:
-#                    self.teacher2courses[tid].append(course)
-#                except KeyError:
-#                    self.teacher2courses[tid] = [course]
+        #                try:
+        #                    self.teacher2courses[tid].append(course)
+        #                except KeyError:
+        #                    self.teacher2courses[tid] = [course]
 
         ### Now read the LESSONS table.
         ## Block sublessons are the records for the actual lessons:
-        sublesson_lengths = {}      # {block-tag -> [length, ... ]}
+        sublesson_lengths = {}  # {block-tag -> [length, ... ]}
         for tag, length in db_read_fields("LESSONS", ("TAG", "LENGTH")):
             try:
                 sublesson_lengths[tag].append(length)
@@ -181,13 +201,13 @@ class Courses:
                 sublesson_lengths[tag] = [length]
 
         ### Now read the BLOCKS table.
-        self.paydata = []       # [(CourseData, PaymentData), ... ]
-        self.tid2paydata = {}   # {tid -> [(CourseData, PaymentData), ... ]}
-        tag2entries = {}    # {block-tag -> [BlockInfo, ... ]}
+        self.paydata = []  # [(CourseData, PaymentData), ... ]
+        self.tid2paydata = {}  # {tid -> [(CourseData, PaymentData), ... ]}
+        tag2entries = {}  # {block-tag -> [BlockInfo, ... ]}
         self.tag2entries = tag2entries
-        tid2tags = {}   # {tid -> {block-tag -> [BlockInfo, ... ]}}
+        tid2tags = {}  # {tid -> {block-tag -> [BlockInfo, ... ]}}
         self.tid2tags = tid2tags
-        klass2tags = {} # {klass -> {block-tag -> [BlockInfo, ... ]}}
+        klass2tags = {}  # {klass -> {block-tag -> [BlockInfo, ... ]}}
         self.klass2tags = klass2tags
         # Collect payment-only entries for courses (check for multiple entries):
         paycourses = set()
@@ -220,7 +240,7 @@ class Courses:
                 except KeyError as e:
                     REPORT(
                         "ERROR",
-                        f"(DB-BLOCKS, {coursedata}) TAG ({tag}) -> LENGTHS: {e}"
+                        f"(DB-BLOCKS, {coursedata}) TAG ({tag}) -> LENGTHS: {e}",
                     )
                     continue
                 roomlist = lesson_rooms(room, coursedata, id)
@@ -289,97 +309,96 @@ class Courses:
                 try:
                     self.tid2paydata[tid].append(pd)
                 except KeyError:
-                    self.tid2paydata [tid] = [pd]
+                    self.tid2paydata[tid] = [pd]
 
                 # Check multiple such entries for any one course
                 if course in paycourses:
                     REPORT(
                         "WARNING",
-                        T["COURSE_MULTIPLE_PAY"].format(course=coursedata)
+                        T["COURSE_MULTIPLE_PAY"].format(course=coursedata),
                     )
                 else:
                     paycourses.add(course)
 
+    # The main criterion for differentiation is probably the comparison of
+    # course-subject with block-subject.
+    # There are "blocks" without a block-subject, just a tag. These are
+    # normally plain lesson "blocks". Indeed I have tried in the editor to
+    # prevent these tags from being shared between courses.
+    # There is also the "number" part of a "payment". If this is empty, the
+    # item is to be regarded as continuous, not in time-blocks. Could there
+    # be valid reasons for giving even these a number?
 
-# The main criterion for differentiation is probably the comparison of
-# course-subject with block-subject.
-# There are "blocks" without a block-subject, just a tag. These are
-# normally plain lesson "blocks". Indeed I have tried in the editor to
-# prevent these tags from being shared between courses.
-# There is also the "number" part of a "payment". If this is empty, the
-# item is to be regarded as continuous, not in time-blocks. Could there
-# be valid reasons for giving even these a number?
+    # Treat payments with no number as a special case.
+    # As all the lessons are used, there can be no other
+    # subjects for a given teacher. There can be the same
+    # subject in another group, which implies combining the
+    # groups.
+    # If the course name is the same as the block name, it
+    # can be treated as a normal subject with more than one
+    # group.
+    # I suppose if there was only one course of a block in
+    # a class (probably rather unlikely ... better handled
+    # as parallel lessons?), I could use the course name
+    # instead of the block name?
 
-# Treat payments with no number as a special case.
-# As all the lessons are used, there can be no other
-# subjects for a given teacher. There can be the same
-# subject in another group, which implies combining the
-# groups.
-# If the course name is the same as the block name, it
-# can be treated as a normal subject with more than one
-# group.
-# I suppose if there was only one course of a block in
-# a class (probably rather unlikely ... better handled
-# as parallel lessons?), I could use the course name
-# instead of the block name?
+    # TODO: Maybe blocks should not be treated as blocks when there is no
+    # number for the payment AND member subject == block subject?
+    # Maybe being a block or "plain" is not really so important?
+    # I should collect co-teachers? Actually only relevant for parallel
+    # lessons handled as blocks. But I should gather tag maps anyway!
 
-# TODO: Maybe blocks should not be treated as blocks when there is no
-# number for the payment AND member subject == block subject?
-# Maybe being a block or "plain" is not really so important?
-# I should collect co-teachers? Actually only relevant for parallel
-# lessons handled as blocks. But I should gather tag maps anyway!
+    # TODO: IMPORTANT!
+    # There are cases where blocks are used for teaching simultaneously in
+    # several groups. I'm not sure that my data structures cover this
+    # properly. If no number is given for a member, it means "continuous",
+    # i.e. not in time-blocks. If a teacher has members of the same block-tag
+    # in more than one class and these are continuous, then these cannot
+    # be cumulative. However if they really are parallel, but not continuous
+    # there is no way to distinguish them from separate time-blocks.
+    # Perhaps a special marker could be used in the LENGTH field for parallel
+    # blocks?
+    # Another possibility would be the PAYMENT entry. This could have a special
+    # tag to indicate sharing, or fractional numbers could be used. The former
+    # should allow easier tracing of the parallel classes.
+    # Actually, the PAYMENT field is the better choice, because this detail
+    # is not directly relevant for the timetabling itself. It might also be
+    # worth considering restricting the number component to integer values
+    # (for compatibility with the LENGTH field, and given the possiblity of
+    # handling fractional values in the factor-part).
 
-# TODO: IMPORTANT!
-# There are cases where blocks are used for teaching simultaneously in
-# several groups. I'm not sure that my data structures cover this
-# properly. If no number is given for a member, it means "continuous",
-# i.e. not in time-blocks. If a teacher has members of the same block-tag
-# in more than one class and these are continuous, then these cannot
-# be cumulative. However if they really are parallel, but not continuous
-# there is no way to distinguish them from separate time-blocks.
-# Perhaps a special marker could be used in the LENGTH field for parallel
-# blocks?
-# Another possibility would be the PAYMENT entry. This could have a special
-# tag to indicate sharing, or fractional numbers could be used. The former
-# should allow easier tracing of the parallel classes.
-# Actually, the PAYMENT field is the better choice, because this detail
-# is not directly relevant for the timetabling itself. It might also be
-# worth considering restricting the number component to integer values
-# (for compatibility with the LENGTH field, and given the possiblity of
-# handling fractional values in the factor-part).
+    # Normally a block subject is identified by class.group, teacher and subject,
+    # i.e. the "course". For any given block-tag, a course may have only one
+    # entry. The number of lessons can be added up and should result in a
+    # number smaller than or equal to the number of lessons for the block-tag.
+    # However, the parallel flag indicates that two or more groups are
+    # taught at the same time, so their lessons should not be added more
+    # than once.
+    # The information needed for a teacher is a list of subjects, together
+    # with their class.groups, room and payment entry. There is also the
+    # lesson contingent, but that is common to all entries. So, something like:
+    #    BLOCK Hauptunterricht # – Stunden: [2,2,2,2,2]
+    #      Mathematik (09G.alle, 09K.alle) {} – 2 Epochen
+    #      Physik (09G.alle) {rPh} – 1 Epoche
+    #
+    #    BLOCK Mathematik #09 – Stunden: [1,1]
+    #      Mathematik (09G.B, 09K.alle) {r09G} – durchgehend
+    #
+    # Ideally the latter would be displayed differently, because it is not
+    # really a block, actually it is a normal lesson, but it uses the block
+    # form to include the other class. Something like:
+    #    FACHSTUNDEN
+    #      Mathematik (09G.B, 09K.alle) {r09G} – Stunden: [1,1]
+    #
+    # This special case would arise when an empty number of lessons is
+    # specified in the payment field AND when the block and course subjects
+    # are the same.
 
-# Normally a block subject is identified by class.group, teacher and subject,
-# i.e. the "course". For any given block-tag, a course may have only one
-# entry. The number of lessons can be added up and should result in a
-# number smaller than or equal to the number of lessons for the block-tag.
-# However, the parallel flag indicates that two or more groups are
-# taught at the same time, so their lessons should not be added more
-# than once.
-# The information needed for a teacher is a list of subjects, together
-# with their class.groups, room and payment entry. There is also the
-# lesson contingent, but that is common to all entries. So, something like:
-#    BLOCK Hauptunterricht # – Stunden: [2,2,2,2,2]
-#      Mathematik (09G.alle, 09K.alle) {} – 2 Epochen
-#      Physik (09G.alle) {rPh} – 1 Epoche
-#
-#    BLOCK Mathematik #09 – Stunden: [1,1]
-#      Mathematik (09G.B, 09K.alle) {r09G} – durchgehend
-#
-# Ideally the latter would be displayed differently, because it is not
-# really a block, actually it is a normal lesson, but it uses the block
-# form to include the other class. Something like:
-#    FACHSTUNDEN
-#      Mathematik (09G.B, 09K.alle) {r09G} – Stunden: [1,1]
-#
-# This special case would arise when an empty number of lessons is
-# specified in the payment field AND when the block and course subjects
-# are the same.
-
-        # self.paydata:                 [(CourseData, PaymentData), ... ]
-        # self.tid2paydata:     {tid -> [(CourseData, PaymentData), ... ]}
-        # self.tag2entries:             {block-tag -> [BlockInfo, ... ]}
-        # self.tid2tags:        {tid -> {block-tag -> [BlockInfo, ... ]}}
-        # self.klass2tags:      {klass -> {block-tag -> [BlockInfo, ... ]}}
+    # self.paydata:                 [(CourseData, PaymentData), ... ]
+    # self.tid2paydata:     {tid -> [(CourseData, PaymentData), ... ]}
+    # self.tag2entries:             {block-tag -> [BlockInfo, ... ]}
+    # self.tid2tags:        {tid -> {block-tag -> [BlockInfo, ... ]}}
+    # self.klass2tags:      {klass -> {block-tag -> [BlockInfo, ... ]}}
 
     def teacher_class_subjects(self):
         """Organize the data according to teachers and classes, keeping
@@ -401,7 +420,7 @@ class Courses:
             ### Divide the data into classes
             ## lesson data
             c2tags = {}
-            tag2courses = {}    # {partner-tag -> [course, ... ]}
+            tag2courses = {}  # {partner-tag -> [course, ... ]}
             for tag, blockinfolist in (self.tid2tags.get(tid) or {}).items():
                 continuous = None
                 total_length = 0
@@ -418,9 +437,8 @@ class Courses:
                             REPORT(
                                 "ERROR",
                                 T["BAD_PLAIN_BLOCK"].format(
-                                    course=course,
-                                    tag=tag
-                                )
+                                    course=course, tag=tag
+                                ),
                             )
                             continue
                         else:
@@ -436,7 +454,7 @@ class Courses:
                                 tagged[stkey] = (
                                     __courses,
                                     (payinfo.number, payinfo.factor),
-                                    blockinfo.rooms
+                                    blockinfo.rooms,
                                 )
                                 tag2courses[f"{tag}+{stkey}"] = __courses
                             else:
@@ -446,8 +464,8 @@ class Courses:
                                         T["PARTNER_PAY_MISMATCH"].format(
                                             course1=clist[0],
                                             course2=course,
-                                            tag=tag
-                                        )
+                                            tag=tag,
+                                        ),
                                     )
                                     continue
                                 if (
@@ -460,8 +478,8 @@ class Courses:
                                         T["PARTNER_ROOM_MISMATCH"].format(
                                             course1=clist[0],
                                             course2=course,
-                                            tag=tag
-                                        )
+                                            tag=tag,
+                                        ),
                                     )
                                     continue
                                 clist.append(course)
@@ -480,20 +498,21 @@ class Courses:
                                 "ERROR",
                                 T["CONTINUOUS_BLOCK_TAG"].format(
                                     course=course, tag=tag
-                                )
+                                ),
                             )
                             continue
                         if continuous:
                             if continuous[1] != (
-                                payinfo.number, payinfo.factor
+                                payinfo.number,
+                                payinfo.factor,
                             ):
                                 REPORT(
                                     "ERROR",
                                     T["PARTNER_PAY_MISMATCH"].format(
                                         course1=continuous[0][0],
                                         course2=course,
-                                        tag=tag
-                                    )
+                                        tag=tag,
+                                    ),
                                 )
                                 continue
                             if continuous[0][0].sid != course.sid:
@@ -502,8 +521,8 @@ class Courses:
                                     T["PARTNER_SID_MISMATCH"].format(
                                         course1=continuous[0][0],
                                         course2=course,
-                                        tag=tag
-                                    )
+                                        tag=tag,
+                                    ),
                                 )
                                 continue
                             if (
@@ -516,8 +535,8 @@ class Courses:
                                     T["PARTNER_ROOM_MISMATCH"].format(
                                         course1=continuous[0][0],
                                         course2=course,
-                                        tag=tag
-                                    )
+                                        tag=tag,
+                                    ),
                                 )
                                 continue
                             continuous[0].append(course)
@@ -525,7 +544,7 @@ class Courses:
                             continuous = (
                                 [course],
                                 (payinfo.number, payinfo.factor),
-                                blockinfo.rooms
+                                blockinfo.rooms,
                             )
                             tag2courses[tag] = continuous[0]
 
@@ -545,22 +564,18 @@ class Courses:
                         REPORT(
                             "ERROR",
                             T["CONTINUOUS_PLUS_OTHERS"].format(
-                                course=continuous[0][0],
-                                tag=tag
-                            )
+                                course=continuous[0][0], tag=tag
+                            ),
                         )
                 elif total_length > sum(blockinfolist[0].lessons):
                     REPORT(
                         "WARNING",
-                        T["BLOCK_TOO_FULL"].format(
-                            teacher=tname,
-                            tag=tag
-                        )
+                        T["BLOCK_TOO_FULL"].format(teacher=tname, tag=tag),
                     )
 
             ## Payment-only data
             c2paydata = {}
-            for course_pay_data in (self.tid2paydata.get(tid) or []):
+            for course_pay_data in self.tid2paydata.get(tid) or []:
                 klass = course_pay_data[0].klass
                 try:
                     c2paydata[klass].append(course_pay_data)
@@ -571,24 +586,39 @@ class Courses:
         return tlist
 
 
+def ljtrim(text, n):
+    if len(text) > n:
+        m = n - 4
+        return f"{text[:m]:<{m}} ..."
+    return f"{text:<{n}}"
+
+
+def class_group(course, bullet=None):
+    if course.group:
+        kg = f"{course.klass}.{course.group}"
+    else:
+        kg = f"({course.klass})"
+    return ljtrim(f" {bullet} {kg}" if bullet else kg, 10)
+
+
 def print_teachers(teacher_data, block_tids=None, show_workload=False):
-    def partners(tag, course) -> tuple[int,str]:
+    def partners(tag, course) -> tuple[int, str]:
         try:
             courses = tag2courses[tag]
         except KeyError:
             return ""
         glist = [
-            c.klass if c.group == '*' else f"{c.klass}.{c.group}"
+            c.klass if c.group == "*" else f"{c.klass}.{c.group}"
             for c in courses
             if c != course
         ]
         return (len(glist), f' ({", ".join(glist)})' if glist else "")
 
     def workload(
-        paymentdata:PaymentData,
-        lessons:Optional[list[int]]=None,
-        ngroups:int=0   # number of other groups
-    ) -> tuple[float,str]:
+        paymentdata: PaymentData,
+        lessons: Optional[list[int]] = None,
+        ngroups: int = 0,  # number of other groups
+    ) -> tuple[float, str]:
         if paymentdata.number:
             n = paymentdata.number
             nd = paymentdata.number_val
@@ -599,14 +629,15 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
             else:
                 n = sum(lessons)
                 nd = float(n)
-        val = nd*paymentdata.factor_val
+        val = nd * paymentdata.factor_val
         if ngroups:
             shared = f" /{ngroups+1}"
             val /= 2.0
         else:
             shared = ""
         if show_workload:
-            text = f"$>>> {n} × {paymentdata.factor}{shared} = {val:.3f}"
+            val_str = f"{val:.3f}".replace(".", DECIMAL_SEP)
+            text = f"$>>> {n} × {paymentdata.factor}{shared} = {val_str}"
         else:
             text = ""
         return (val, text)
@@ -614,19 +645,19 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
     blocked_tids = set() if block_tids is None else set(block_tids)
     classes = get_classes().get_class_list(skip_null=False)
 
-#?
-#    class_lessons = {}
-#    def class_lists(k):
-#        try:
-#            return class_lessons[k] # (class_list, class_blocks, class_payonly)
-#        except KeyError:
-#            lb = ([], [], [])
-#            class_lessons[k] = lb
-#            return lb
-# ...
-#        class_lessons.clear()
-# ...
-#        class_list, class_blocks, class_payonly = class_lists(klass)
+    # ?
+    #    class_lessons = {}
+    #    def class_lists(k):
+    #        try:
+    #            return class_lessons[k] # (class_list, class_blocks, class_payonly)
+    #        except KeyError:
+    #            lb = ([], [], [])
+    #            class_lessons[k] = lb
+    #            return lb
+    # ...
+    #        class_lessons.clear()
+    # ...
+    #        class_list, class_blocks, class_payonly = class_lists(klass)
 
     teacherlists = []
     for tid, tname, c2tags, c2paydata, tag2courses in teacher_data:
@@ -636,7 +667,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
         if not (c2tags or c2paydata):
             REPORT("INFO", T["TEACHER_NO_ACTIVITIES"].format(tname=tname))
             continue
-        print("\n $$$$$$", tname)
+        # print("\n $$$$$$", tname)
         classlists = []
         pay_total = 0.0
         for klass, kname in classes:
@@ -647,7 +678,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                 pass
             else:
                 for tag, blockinfolist in tags.items():
-                    #print("???TAG", tag)
+                    # print("???TAG", tag)
                     block = blockinfolist[0].block
                     if block.sid:
                         bname = block.subject
@@ -655,76 +686,73 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                             course = blockinfo.course
                             sname = get_subjects().map(course.sid)
                             rooms = f'{{{"|".join(blockinfo.rooms)}}}'
-                            lessons = f'[{",".join(map(str, blockinfo.lessons))}]'
+                            lessons = (
+                                f'[{",".join(map(str, blockinfo.lessons))}]'
+                            )
                             payment = blockinfo.payment_data
                             if payment.number:
                                 # With number of units taught
                                 if payment.tag:
                                     n, plist = partners(
                                         f"{tag}+{course.sid}&{payment.tag}",
-                                        course
+                                        course,
                                     )
                                 else:
                                     n, plist = 0, ""
                                 pay, paytext = workload(
-                                    payment,
-                                    blockinfo.lessons,
-                                    n
+                                    payment, blockinfo.lessons, n
                                 )
                                 pay_total += pay
+                                if payment.number_val >= sum(blockinfo.lessons):
+                                    extent = f" – {T['continuous']}"
+                                else:
+                                    extent = f" – {T['blocks']}: {payment.number}"
                                 text = (
-                                    f"  {sname + plist:<18}"
-                                    f" {rooms:<12}"
-                                    f" × {payment.number}"
+                                    class_group(course, '+') +
+                                    f" {ljtrim(sname + plist, 18)}"
+                                    f" {ljtrim(rooms, 12)}"
+                                    + extent
                                     + paytext
                                 )
                                 try:
                                     class_blocks[bname][1].append(text)
                                 except KeyError:
-                                    class_blocks[bname] = (
-                                        lessons,
-                                        [text]
-                                    )
-                                print(f"%%% ({bname} {lessons}) {text}")
+                                    class_blocks[bname] = (lessons, [text])
+                                # print(f"%%% ({bname} {lessons}) {text}")
 
                             else:
                                 # Continuous teaching
                                 n, plist = partners(tag, course)
                                 pay, paytext = workload(
-                                    payment,
-                                    blockinfo.lessons,
-                                    n
+                                    payment, blockinfo.lessons, n
                                 )
                                 pay_total += pay
                                 if course.sid == block.sid:
                                     class_list.append(
-                                        f"  {sname + plist:<18}"
-                                        f" {rooms:<12}"
+                                        class_group(course) +
+                                        f" {ljtrim(sname + plist, 18)}"
+                                        f" {ljtrim(rooms, 12)}"
                                         f" – {T['lessons']}: {lessons:<12}"
                                         + paytext
                                     )
-                                    print("§§§", class_list[-1])
+                                    # print("§§§", class_list[-1])
 
                                 else:
                                     pay, paytext = workload(
-                                        payment,
-                                        blockinfo.lessons
+                                        payment, blockinfo.lessons
                                     )
                                     pay_total += pay
                                     text = (
-                                        f"  {sname:<18}"
-                                        f" {rooms:<12}"
-                                        " {T['continuous']}"
-                                        + paytext
+                                        class_group(course, "+") +
+                                        f" {ljtrim(sname, 18)}"
+                                        f" {ljtrim(rooms, 12)}"
+                                        f" – {T['continuous']}" + paytext
                                     )
                                     try:
                                         class_blocks[bname][1].append(text)
                                     except KeyError:
-                                        class_blocks[bname] = (
-                                            lessons,
-                                            [text]
-                                        )
-                                    print(f"&&& ({bname} {lessons}) {text}")
+                                        class_blocks[bname] = (lessons, [text])
+                                    # print(f"&&& ({bname} {lessons}) {text}")
 
                     else:
                         ## Simple, plain lesson block
@@ -734,30 +762,16 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                         rooms = f'{{{"|".join(blockinfo.rooms)}}}'
                         lessons = f'[{",".join(map(str, blockinfo.lessons))}]'
                         pay, paytext = workload(
-                            blockinfo.payment_data,
-                            blockinfo.lessons
+                            blockinfo.payment_data, blockinfo.lessons
                         )
                         pay_total += pay
                         class_list.append(
-                            f"  {sname:<18}"
-                            f" {rooms:<12}"
-                            f" – {T['lessons']}: {lessons:<12}"
-                            + paytext
+                            class_group(course) +
+                            f" {ljtrim(sname, 18)}"
+                            f" {ljtrim(rooms, 12)}"
+                            f" – {T['lessons']}: {lessons:<12}" + paytext
                         )
-                        print("§§§", class_list[-1])
-
-#    BLOCK Hauptunterricht # – Stunden: [2,2,2,2,2]
-#      Mathematik (09G.alle, 09K.alle) {} – 2 Epochen
-#      Physik (09G.alle) {rPh} – 1 Epoche
-#
-#    BLOCK Mathematik #09 – Stunden: [1,1]
-#      Mathematik (09G.B, 09K.alle) {r09G} – durchgehend
-#
-# Ideally the latter would be displayed differently, because it is not
-# really a block, actually it is a normal lesson, but it uses the block
-# form to include the other class. Something like:
-#    FACHSTUNDEN
-#      Mathematik (09G.B, 09K.alle) {r09G} – Stunden: [1,1]
+                        # print("§§§", class_list[-1])
 
             try:
                 paydata = c2paydata[klass]
@@ -769,27 +783,35 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                     pay_total += pay
                     sname = get_subjects().map(course.sid)
                     class_payonly.append(
-                        f"    {sname:<20}"
-                        + paytext
+                        class_group(course, '-') +
+                        f"  {ljtrim(sname, 30)}" + paytext
                     )
 
             # Collate the various activities
             all_items = []
             for bname, data in class_blocks.items():
-                all_items.append(f"BLOCK: {bname:>18} {data[0]}")
+                all_items.append(
+                    f"{T['BLOCK_SLOT']}"
+                    f" {ljtrim(bname, 30)}"
+                    f" – {T['lessons']}: {data[0]}")
                 for line in data[1]:
                     all_items.append(line)
+            if all_items:
+                all_items.append("")
             all_items += class_list
             if show_workload:
+                if all_items:
+                    all_items.append("")
                 all_items += class_payonly
             if all_items:
                 classlists.append((klass, all_items))
 
         xtid = f"({tid})"
-        teacherline = f"{tname:<30} {xtid:>6}"
+        teacherline = f"{tname} {xtid}"
         if show_workload:
-            teacherline += f" {pay_total:.2f}"
-        print("  +++++++++++++++++++++", teacherline)
+            pay_str = f"{pay_total:.2f}".replace(".", DECIMAL_SEP)
+            teacherline = f"{teacherline:<30} – {T['WORKLOAD']}: {pay_str}"
+        # print("  +++++++++++++++++++++", teacherline)
         teacherlists.append((teacherline, classlists))
 
     pdf = PdfCreator()
@@ -799,9 +821,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
 
 
 BASE_MARGIN = 20 * mm
-# TODO
 import copy
-
 class MyDocTemplate(SimpleDocTemplate):
     def __init__(self, *args, **kargs):
         self.key = 0
@@ -810,23 +830,26 @@ class MyDocTemplate(SimpleDocTemplate):
     def handle_flowable(self, flowables):
         if flowables:
             flowable = flowables[0]
-            if (
-                isinstance(flowable, Paragraph)
-                and flowable.style.name == 'Heading1'
-            ):
-                t = flowable.getPlainText().split("(", 1)[0].rstrip()
-                self.key += 1
-                k = f"key_{self.key}"
-                self.canv.bookmarkPage(k)
-                self.canv.addOutlineEntry(t, k, 0, 1)
+
+            try:
+                flowable.toc(self.canv)
+            except AttributeError:
+                pass
+
+        #            if (
+        #                isinstance(flowable, Paragraph)
+        #                and flowable.style.name == 'Heading1'
+        #            ):
+        #                t = flowable.getPlainText().split("(", 1)[0].rstrip()
+        #                self.key += 1
+        #                k = f"key_{self.key}"
+        #                self.canv.bookmarkPage(k)
+        #                self.canv.addOutlineEntry(t, k, 0, 1)
         super().handle_flowable(flowables)
 
 
 class PdfCreator:
     def add_page_number(self, canvas, doc):
-#        key = f"t{doc.page}"
-#        canvas.bookmarkPage(key)
-#        canvas.addOutlineEntry(self.teacher, key, 0, 1)
         canvas.saveState()
         canvas.setFont("Times-Roman", 12)
         page_number_text = "%d" % (doc.page)
@@ -834,6 +857,25 @@ class PdfCreator:
         canvas.restoreState()
 
     def build_pdf(self, pagelist, title, author):
+        all_refs = set()
+
+        #class PageHeader(Paragraph):
+        class PageHeader(Preformatted):
+            def __init__(self, text, ref):
+                if ref in all_refs:
+                    # TODO: T ...
+                    REPORT("ERROR", f"Repeated page title: {ref}")
+                    self.ref = None
+                else:
+                    self.ref = ref
+                    all_refs.add(ref)
+                super().__init__(text, heading_style)
+
+            def toc(self, canvas):
+                if self.ref:
+                    canvas.bookmarkPage(self.ref)
+                    canvas.addOutlineEntry(self.ref, self.ref, 0, 0)
+
         pdf_buffer = BytesIO()
         my_doc = MyDocTemplate(
             pdf_buffer,
@@ -846,20 +888,23 @@ class PdfCreator:
             bottomMargin=BASE_MARGIN,
         )
         sample_style_sheet = getSampleStyleSheet()
-        #body_style = sample_style_sheet["BodyText"]
+        # body_style = sample_style_sheet["BodyText"]
         body_style = sample_style_sheet["Code"]
         body_style.fontSize = 12
         body_style.leading = 14
-        body_style.alignment = 1
         body_style.leftIndent = 0
 
         body_style_2 = copy.deepcopy(body_style)
         body_style.spaceBefore = 10
-
         body_style_2.alignment = TA_RIGHT
-        heading_style = sample_style_sheet["Heading1"]
+
+        # heading_style = sample_style_sheet["Heading1"]
+        # print("????????????", heading_style.fontName)
+        heading_style = copy.deepcopy(body_style)
+        heading_style.fontName = "Helvetica-Bold"
         heading_style.fontSize = 16
         heading_style.spaceAfter = 24
+
         class_style = sample_style_sheet["Heading2"]
         class_style.fontSize = 13
         class_style.spaceBefore = 20
@@ -867,21 +912,23 @@ class PdfCreator:
 
         flowables = []
         for teacher, clist in pagelist:
-            h = Paragraph(teacher, heading_style)
-#             self.teacher = teacher
+            # print("§§§", repr(teacher))
+            #            h = Paragraph(teacher, heading_style)
+            h = PageHeader(teacher, teacher.split("(", 1)[0].rstrip())
+            #             self.teacher = teacher
             flowables.append(h)
             for klass, slist in clist:
-                flowables.append(Paragraph(klass, class_style))
+#                flowables.append(Paragraph(klass, class_style))
                 for subject in slist:
                     if subject:
                         lines = subject.split("$")
-#                        flowables.append(Paragraph(subject, body_style))
+                        #                        flowables.append(Paragraph(subject, body_style))
                         flowables.append(
                             Preformatted(
                                 lines[0],
                                 body_style,
                                 maxLineLength=70,
-                                newLineChars=' '
+                                newLineChars=" ",
                             )
                         )
                         for line in lines[1:]:
@@ -916,6 +963,7 @@ if __name__ == "__main__":
         courses = Courses()
         tlist = courses.teacher_class_subjects()
         pdfbytes = print_teachers(tlist, show_workload=True)
+#        pdfbytes = print_teachers(tlist)
         filepath = saveDialog("pdf-Datei (*.pdf)", "teacher_class_subjects")
         if filepath and os.path.isabs(filepath):
             if not filepath.endswith(".pdf"):
@@ -925,27 +973,3 @@ if __name__ == "__main__":
             print("  --->", filepath)
 
     PROCESS(run_me, "Courses() ... courses.teacher_class_subjects()")
-
-    quit(0)
-
-    print("\n ??????????????????????????????????????????????")
-
-    courses.block_courses()
-
-    print("\n§§§", courses.block_sublessons)
-    print(
-        "Hu# ->",
-        courses.sublessonlengths(">Hu#"),
-        sum(courses.sublessonlengths(">Hu#")),
-    )
-
-    print("\nBLOCKTAG >Ma#:", read_block_tag(">Ma#"))
-
-    quit(0)
-
-    course_info = get_course_info()
-    class2courses = course_info["CLASS2COURSES"]
-    for c in sorted(class2courses):
-        info = class2courses[c]
-        print(f"\nCLASS {c}:")
-        print("  ...", info)

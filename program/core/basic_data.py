@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-07-15
+core/basic_data.py - last updated 2022-07-18
 
 Handle caching of the basic data sources
 
@@ -191,11 +191,23 @@ def read_block_tag(block_tag: str) -> BlockTag:
     raise ValueError(T["BLOCKTAG_INVALID"].format(tag=block_tag))
 
 
-def check_group(klass, group=None):
+def get_group_info(klass):
+    tag = f"group_info_{klass}"
     try:
-        groups = get_classes().group_info(klass)["GROUPS"]
+        return SHARED_DATA[tag]
     except KeyError:
-        return False
+        pass
+    gi = get_classes().group_info(klass)
+    SHARED_DATA[tag] = gi
+    return gi
+
+
+def check_group(klass, group=None):
+    groups = get_group_info(klass)["GROUPS"]
+#    try:
+#        groups = get_classes().group_info(klass)["GROUPS"]
+#    except KeyError:
+#        return False
     if group and group != "*":
         #print("§§§", groups)
         if group not in groups:
