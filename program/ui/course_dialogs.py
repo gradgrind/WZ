@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-07-16
+Last updated:  2022-07-18
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -64,7 +64,9 @@ from core.basic_data import (
     timeslot2index,
     index2timeslot,
     TAG_FORMAT,
-    PAYMENT_FORMAT
+#
+    PAYMENT_FORMAT,
+    PAYMENT_TAG_FORMAT
 )
 from core.classes import Classes
 from ui.ui_base import (
@@ -1404,7 +1406,7 @@ class PaymentDialog(QDialog):
         )
         self.ptag = QLineEdit()
         form.addRow(T["PARALLEL_TAG"], self.ptag)
-        v = QRegularExpressionValidator(TAG_FORMAT)
+        v = QRegularExpressionValidator(PAYMENT_TAG_FORMAT)
         self.ptag.setValidator(v)
         form.addRow(HLine())
         buttonBox = QDialogButtonBox()

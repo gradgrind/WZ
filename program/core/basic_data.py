@@ -25,11 +25,7 @@ T = TRANSLATIONS("core.basic_data")
 
 from typing import Optional, NamedTuple
 
-from core.db_access import (
-    db_read_unique_field,
-    db_key_value_list,
-    KeyValueList
-)
+from core.db_access import db_read_unique_field, db_key_value_list, KeyValueList
 from core.classes import Classes
 from core.teachers import Teachers
 from ui.ui_base import QRegularExpression  ### QtCore
@@ -37,11 +33,12 @@ from ui.ui_base import QRegularExpression  ### QtCore
 SHARED_DATA = {}
 
 DECIMAL_SEP = CONFIG["DECIMAL_SEP"]
-PAYMENT_FORMAT = QRegularExpression(
-    "^[1-9]?[0-9](?:&[0-9]{1,3})?$".replace("&", DECIMAL_SEP)
-)
+__FLOAT = f"[1-9]?[0-9](?:{DECIMAL_SEP}[0-9]{{1,3}})?"
+PAYMENT_FORMAT = QRegularExpression(f"^{__FLOAT}$")
 PAYMENT_MAX = 20.0
-TAG_FORMAT = QRegularExpression("^[A-Za-z0-9_.]+$")
+__TAG_CHAR = "[A-Za-z0-9_.]"
+TAG_FORMAT = QRegularExpression(f"^{__TAG_CHAR}+$")
+PAYMENT_TAG_FORMAT = QRegularExpression(f"^{__TAG_CHAR}*(?:/{__FLOAT})?$")
 NO_SUBJECT = "-----"
 
 ### -----
@@ -141,7 +138,7 @@ def get_payment_weights() -> KeyValueList:
         if PAYMENT_FORMAT.match(i2).hasMatch():
             return i2
         else:
-#TODO: rather raise ValueError?
+            # TODO: rather raise ValueError?
             SHOW_ERROR(T["BAD_WEIGHT"].format(key=item[0], val=i2))
             return None
 
@@ -191,6 +188,27 @@ def read_block_tag(block_tag: str) -> BlockTag:
     raise ValueError(T["BLOCKTAG_INVALID"].format(tag=block_tag))
 
 
+'''
+def blocknotes_info(text:str) -> dict[str,str]:
+    """Read an info mapping from the "NOTES" field of a "BLOCKS" entry.
+    This ends with "#", the individual entries are separated by spaces
+    and are ":"-separated key/value pairs.
+    """
+    items = {}
+    info = text.split("#", 1)
+    if len(info) == 2:
+        for item in info[0].split():
+            try:
+                _k, v = item.split(":", 1)
+            except:
+                raise ValueError(
+                    T["BAD_NOTES_INFO"].format(info=info[0], item=item)
+                )
+            items[k] = v
+    return items
+'''
+
+
 def get_group_info(klass):
     tag = f"group_info_{klass}"
     try:
@@ -204,18 +222,18 @@ def get_group_info(klass):
 
 def check_group(klass, group=None):
     groups = get_group_info(klass)["GROUPS"]
-#    try:
-#        groups = get_classes().group_info(klass)["GROUPS"]
-#    except KeyError:
-#        return False
+    #    try:
+    #        groups = get_classes().group_info(klass)["GROUPS"]
+    #    except KeyError:
+    #        return False
     if group and group != "*":
-        #print("§§§", groups)
+        # print("§§§", groups)
         if group not in groups:
             return False
     return True
 
 
-#def check_lesson_length(length: str) -> int:
+# def check_lesson_length(length: str) -> int:
 #    """Return the length of a valid lesson duration as an <int>.
 #    Otherwise raise a <ValueError> exception.
 #    """
@@ -235,6 +253,7 @@ class PaymentData(NamedTuple):
     number: str
     factor: str
     tag: str
+    divisor: str
     number_val: float
     factor_val: float
 
@@ -244,26 +263,33 @@ class PaymentData(NamedTuple):
     def __str__(self):
         if self.factor:
             t = f"/{self.tag}" if self.tag else ""
+            if self.divisor:
+                t += f"/{self.divisor}"
             return f"{self.number}*{self.factor}{t}"
         return ""
+
 
 def read_payment(payment: str) -> Optional[PaymentData]:
     """Read the individual parts of a payment entry.
     If the input is invalid a <ValueError> exception wil be raised.
     """
     if not payment:
-        return PaymentData("", "", "", 0.0, 0.0)
+        return PaymentData("", "", "", "", 0.0, 0.0)
     try:
         n, f = payment.split("*", 1)  # can raise ValueError
     except ValueError:
         raise ValueError(T["INVALID_PAYMENT"].format(text=payment))
     try:
-        f, t = f.split("/", 1)
+        f, __t = f.split("/", 1)
     except ValueError:
-        t = ""
+        t, d = "", ""
     else:
-        if not TAG_FORMAT.match(t).hasMatch():
+        if not PAYMENT_TAG_FORMAT.match(__t).hasMatch():
             raise ValueError(T["INVALID_PAYMENT_TAG"].format(text=t))
+        try:
+            t, d = __t.split("/", 1)
+        except ValueError:
+            t, d = __t, ""
     if n:
         try:
             if PAYMENT_FORMAT.match(n).hasMatch():
@@ -280,7 +306,7 @@ def read_payment(payment: str) -> Optional[PaymentData]:
         fd = float(get_payment_weights().map(f).replace(",", "."))
     except KeyError:
         raise ValueError(T["UNKNOWN_PAYMENT_WEIGHT"].format(key=f))
-    return PaymentData(n, f, t, nd, fd)
+    return PaymentData(n, f, t, d, nd, fd)
 
 
 def timeslot2index(timeslot):
@@ -312,11 +338,9 @@ def index2timeslot(index):
     return f"{d}.{p}"
 
 
-#TODO: deprecated
+# TODO: deprecated
 def check_start_time(tag):
-    """Can raise a <ValueError>.
-    """
+    """Can raise a <ValueError>."""
     raise Bug(f"$!$!$! deprecated: basic_data.check_start_time ({tag})")
-# Do this instead:
+    # Do this instead:
     timeslot2index(tag)
-

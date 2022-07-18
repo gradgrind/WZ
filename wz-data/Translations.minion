@@ -18,6 +18,7 @@ core.basic_data: {
     INVALID_TIMESLOT: "Ungültige Zeitangabe ({val}) – sollte '[?][Tag.Stunde]' sein"
     UNKNOWN_GROUP:  "In Klasse {klass}, unbekannte Gruppe: {group}"
     UNKNOWN_CLASS:  "Unbekannte Klasse: {klass}"
+    BAD_NOTES_INFO: "„Notizen-Info ungültig, '{item}' in '{info}'"
 }
 
 core.classes: {
@@ -229,6 +230,8 @@ timetable.activities: {
     BLOCK_TOO_FULL: "{teacher}: Block (Kennzeichen {tag}) hat zu viele Aktivitäten"
     NO_CLASSROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  Klasse hat keinen Klassenraum, wird aber angegeben ($) im Raum-Feld"
     UNKNOWN_ROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  unbekannter Raum ({rid})"
+#?
+    BLOCK_ERROR:    "BLOCKS-Tabelle, {course}, Kennzeichen {tag}:\n  {e}"
     
     CourseData:     "<Kurs: Klasse={klass}, Gruppe={group}, Fach={sid}, Lehrer={tid}>"
     
