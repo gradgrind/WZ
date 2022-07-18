@@ -140,11 +140,6 @@ def lesson_rooms(room: str, course: CourseData, lesson_id: int) -> list[str]:
 class Courses:
     def __init__(self):
         ### First read the COURSES table.
-#        classes = get_classes()
-#        class2groups = {
-#            klass: classes.group_info(klass)["GROUPS"]
-#            for klass, _ in classes.get_class_list()
-#        }
         course2data = {}
         for course, klass, group, sid, tid in db_read_fields(
             "COURSES", ("course", "CLASS", "GRP", "SUBJECT", "TEACHER")
@@ -170,26 +165,11 @@ class Courses:
                 )
                 continue
 
-#            if group and group not in class2groups[klass]:
-#                if klass != "--" and group != "*":
-#                    REPORT(
-#                        "ERROR",
-#                        T["UNKNOWN_GROUP"].format(
-#                            klass=klass, group=group, sid=sid, tid=tid
-#                        ),
-#                    )
-#                    continue
-
             course2data[course] = CourseData(
                 klass=klass, group=group, sid=sid, tid=tid
             )
             if not tid:
                 raise Bug(f"Empty teacher field in {course2data[course]}")
-
-        #                try:
-        #                    self.teacher2courses[tid].append(course)
-        #                except KeyError:
-        #                    self.teacher2courses[tid] = [course]
 
         ### Now read the LESSONS table.
         ## Block sublessons are the records for the actual lessons:
@@ -319,86 +299,6 @@ class Courses:
                     )
                 else:
                     paycourses.add(course)
-
-    # The main criterion for differentiation is probably the comparison of
-    # course-subject with block-subject.
-    # There are "blocks" without a block-subject, just a tag. These are
-    # normally plain lesson "blocks". Indeed I have tried in the editor to
-    # prevent these tags from being shared between courses.
-    # There is also the "number" part of a "payment". If this is empty, the
-    # item is to be regarded as continuous, not in time-blocks. Could there
-    # be valid reasons for giving even these a number?
-
-    # Treat payments with no number as a special case.
-    # As all the lessons are used, there can be no other
-    # subjects for a given teacher. There can be the same
-    # subject in another group, which implies combining the
-    # groups.
-    # If the course name is the same as the block name, it
-    # can be treated as a normal subject with more than one
-    # group.
-    # I suppose if there was only one course of a block in
-    # a class (probably rather unlikely ... better handled
-    # as parallel lessons?), I could use the course name
-    # instead of the block name?
-
-    # TODO: Maybe blocks should not be treated as blocks when there is no
-    # number for the payment AND member subject == block subject?
-    # Maybe being a block or "plain" is not really so important?
-    # I should collect co-teachers? Actually only relevant for parallel
-    # lessons handled as blocks. But I should gather tag maps anyway!
-
-    # TODO: IMPORTANT!
-    # There are cases where blocks are used for teaching simultaneously in
-    # several groups. I'm not sure that my data structures cover this
-    # properly. If no number is given for a member, it means "continuous",
-    # i.e. not in time-blocks. If a teacher has members of the same block-tag
-    # in more than one class and these are continuous, then these cannot
-    # be cumulative. However if they really are parallel, but not continuous
-    # there is no way to distinguish them from separate time-blocks.
-    # Perhaps a special marker could be used in the LENGTH field for parallel
-    # blocks?
-    # Another possibility would be the PAYMENT entry. This could have a special
-    # tag to indicate sharing, or fractional numbers could be used. The former
-    # should allow easier tracing of the parallel classes.
-    # Actually, the PAYMENT field is the better choice, because this detail
-    # is not directly relevant for the timetabling itself. It might also be
-    # worth considering restricting the number component to integer values
-    # (for compatibility with the LENGTH field, and given the possiblity of
-    # handling fractional values in the factor-part).
-
-    # Normally a block subject is identified by class.group, teacher and subject,
-    # i.e. the "course". For any given block-tag, a course may have only one
-    # entry. The number of lessons can be added up and should result in a
-    # number smaller than or equal to the number of lessons for the block-tag.
-    # However, the parallel flag indicates that two or more groups are
-    # taught at the same time, so their lessons should not be added more
-    # than once.
-    # The information needed for a teacher is a list of subjects, together
-    # with their class.groups, room and payment entry. There is also the
-    # lesson contingent, but that is common to all entries. So, something like:
-    #    BLOCK Hauptunterricht # – Stunden: [2,2,2,2,2]
-    #      Mathematik (09G.alle, 09K.alle) {} – 2 Epochen
-    #      Physik (09G.alle) {rPh} – 1 Epoche
-    #
-    #    BLOCK Mathematik #09 – Stunden: [1,1]
-    #      Mathematik (09G.B, 09K.alle) {r09G} – durchgehend
-    #
-    # Ideally the latter would be displayed differently, because it is not
-    # really a block, actually it is a normal lesson, but it uses the block
-    # form to include the other class. Something like:
-    #    FACHSTUNDEN
-    #      Mathematik (09G.B, 09K.alle) {r09G} – Stunden: [1,1]
-    #
-    # This special case would arise when an empty number of lessons is
-    # specified in the payment field AND when the block and course subjects
-    # are the same.
-
-    # self.paydata:                 [(CourseData, PaymentData), ... ]
-    # self.tid2paydata:     {tid -> [(CourseData, PaymentData), ... ]}
-    # self.tag2entries:             {block-tag -> [BlockInfo, ... ]}
-    # self.tid2tags:        {tid -> {block-tag -> [BlockInfo, ... ]}}
-    # self.klass2tags:      {klass -> {block-tag -> [BlockInfo, ... ]}}
 
     def teacher_class_subjects(self):
         """Organize the data according to teachers and classes, keeping
@@ -644,21 +544,6 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
 
     blocked_tids = set() if block_tids is None else set(block_tids)
     classes = get_classes().get_class_list(skip_null=False)
-
-    # ?
-    #    class_lessons = {}
-    #    def class_lists(k):
-    #        try:
-    #            return class_lessons[k] # (class_list, class_blocks, class_payonly)
-    #        except KeyError:
-    #            lb = ([], [], [])
-    #            class_lessons[k] = lb
-    #            return lb
-    # ...
-    #        class_lessons.clear()
-    # ...
-    #        class_list, class_blocks, class_payonly = class_lists(klass)
-
     teacherlists = []
     for tid, tname, c2tags, c2paydata, tag2courses in teacher_data:
         if tid in blocked_tids:
@@ -783,8 +668,8 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                     pay_total += pay
                     sname = get_subjects().map(course.sid)
                     class_payonly.append(
-                        class_group(course, '-') +
-                        f"  {ljtrim(sname, 30)}" + paytext
+                        class_group(course, '–') +
+                        f" {ljtrim(sname, 30)}" + paytext
                     )
 
             # Collate the various activities
@@ -823,6 +708,8 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
 BASE_MARGIN = 20 * mm
 import copy
 class MyDocTemplate(SimpleDocTemplate):
+    """This is adapted to emit an "outline" for the teacher pages.
+    """
     def __init__(self, *args, **kargs):
         self.key = 0
         super().__init__(*args, **kargs)
@@ -830,21 +717,10 @@ class MyDocTemplate(SimpleDocTemplate):
     def handle_flowable(self, flowables):
         if flowables:
             flowable = flowables[0]
-
             try:
                 flowable.toc(self.canv)
             except AttributeError:
                 pass
-
-        #            if (
-        #                isinstance(flowable, Paragraph)
-        #                and flowable.style.name == 'Heading1'
-        #            ):
-        #                t = flowable.getPlainText().split("(", 1)[0].rstrip()
-        #                self.key += 1
-        #                k = f"key_{self.key}"
-        #                self.canv.bookmarkPage(k)
-        #                self.canv.addOutlineEntry(t, k, 0, 1)
         super().handle_flowable(flowables)
 
 
@@ -898,10 +774,10 @@ class PdfCreator:
         body_style.spaceBefore = 10
         body_style_2.alignment = TA_RIGHT
 
-        # heading_style = sample_style_sheet["Heading1"]
+        heading_style = sample_style_sheet["Heading1"]
         # print("????????????", heading_style.fontName)
-        heading_style = copy.deepcopy(body_style)
-        heading_style.fontName = "Helvetica-Bold"
+        # heading_style = copy.deepcopy(body_style)
+        # heading_style.fontName = "Helvetica-Bold"
         heading_style.fontSize = 16
         heading_style.spaceAfter = 24
 
