@@ -64,7 +64,6 @@ from core.basic_data import (
     get_teachers,
     get_subjects,
     get_rooms,
-    get_payment_weights,
     check_group,
     read_payment,
     read_block_tag,
@@ -102,7 +101,7 @@ class ClassBlockInfo(NamedTuple):
     course: CourseData
     lessons: list[int]
     block: BlockTag
-    periods: float      # (per week, averaged over the year)
+    periods: float  # (per week, averaged over the year)
     notes: str
 
 
@@ -162,7 +161,7 @@ class Courses:
                         "ERROR",
                         T["NULL_CLASS_GROUP"].format(
                             group=group, sid=sid, tid=tid
-                        )
+                        ),
                     )
                     continue
             elif not check_group(klass, group):
@@ -491,7 +490,6 @@ class Courses:
             tlist.append((tid, tname, c2tags, c2paydata, tag2courses))
         return tlist
 
-
     def read_class_blocks(self):
         """Organize the data according to classes.
         This method isolates the actual lessons taught in the various
@@ -506,10 +504,10 @@ class Courses:
         """
         classes = get_classes()
         clist = []
-        tag2classes = {}     # {tag -> {klass}}
+        tag2classes = {}  # {tag -> {klass}}
         self.tag2classes = tag2classes
         for klass, kname in classes.get_class_list():
-            tag2blocks = {}     # {tag -> [ClassBlockInfo, ... ]}
+            tag2blocks = {}  # {tag -> [ClassBlockInfo, ... ]}
             # Prepare group data – the null class is excluded
             group_info = get_group_info(klass)
             basic_groups = group_info["BASIC"]
@@ -517,8 +515,8 @@ class Courses:
                 group2basic = group_info["GROUP_MAP"]
             else:
                 # If no class divisions, add an entry for the whole class
-                basic_groups = {'*'}
-                group2basic = {'*': ['*']}
+                basic_groups = {"*"}
+                group2basic = {"*": ["*"]}
             # Counters for number of periods per basic-group:
             group_counts = {g: 0.0 for g in basic_groups}
             # Read blocklist for each tag
@@ -554,16 +552,15 @@ class Courses:
                     # Only include info if there are real pupils
                     if course.group:
                         # Add number of periods to totals for basic groups
-                        if course.group == '*':
+                        if course.group == "*":
                             basics = basic_groups
                         else:
                             basics = group2basic[course.group]
                         payinfo = blockinfo.payment_data
                         if payinfo.number:
                             if payinfo.divisor:
-                                n = (
-                                    payinfo.number_val /
-                                    float(payinfo.divisor.replace(",", "."))
+                                n = payinfo.number_val / float(
+                                    payinfo.divisor.replace(",", ".")
                                 )
                             else:
                                 n = payinfo.number_val
@@ -574,7 +571,7 @@ class Courses:
                                         "ERROR",
                                         T["EXCESS_LESSONS"].format(
                                             klass=klass, tag=tag
-                                        )
+                                        ),
                                     )
                                 else:
                                     total_length[group] = l + n
@@ -586,7 +583,7 @@ class Courses:
                                         "ERROR",
                                         T["EXCESS_LESSONS"].format(
                                             klass=klass, tag=tag
-                                        )
+                                        ),
                                     )
                                 elif l == 0.0:
                                     total_length[group] = -1.0
@@ -598,7 +595,7 @@ class Courses:
                                 blockinfo.lessons,
                                 blockinfo.block,
                                 n,
-                                blockinfo.notes
+                                blockinfo.notes,
                             )
                         )
 
@@ -609,7 +606,7 @@ class Courses:
                 if xsgroups:
                     REPORT(
                         "WARNING",
-                        T["EXCESS_LESSONS"].format(klass=klass, tag=tag)
+                        T["EXCESS_LESSONS"].format(klass=klass, tag=tag),
                     )
                 # Update total period counts
                 for g in group_counts:
@@ -678,7 +675,9 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
             shared = ""
         if show_workload:
             val_str = f"{val:.3f}".replace(".", DECIMAL_SEP)
-            text = f"$>>> {n} × {paymentdata.factor}{shared} = {val_str}"
+            text = (
+                f"$>>> {n} × {paymentdata.factor or '--'}{shared} = {val_str}"
+            )
         else:
             text = ""
         return (val, text)
@@ -732,13 +731,14 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                 if payment.number_val >= sum(blockinfo.lessons):
                                     extent = f" – {T['continuous']}"
                                 else:
-                                    extent = f" – {T['blocks']}: {payment.number}"
+                                    extent = (
+                                        f" – {T['blocks']}: {payment.number}"
+                                    )
                                 text = (
-                                    class_group(course, '+') +
-                                    f" {ljtrim(sname + plist, 18)}"
-                                    f" {ljtrim(rooms, 12)}"
-                                    + extent
-                                    + paytext
+                                    sname,
+                                    class_group(course, "+")
+                                    + f" {ljtrim(sname + plist, 18)}"
+                                    f" {ljtrim(rooms, 12)}" + extent + paytext,
                                 )
                                 try:
                                     class_blocks[bname][1].append(text)
@@ -755,11 +755,14 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                 pay_total += pay
                                 if course.sid == block.sid:
                                     class_list.append(
-                                        class_group(course) +
-                                        f" {ljtrim(sname + plist, 18)}"
-                                        f" {ljtrim(rooms, 12)}"
-                                        f" – {T['lessons']}: {lessons:<12}"
-                                        + paytext
+                                        (
+                                            sname,
+                                            class_group(course)
+                                            + f" {ljtrim(sname + plist, 18)}"
+                                            f" {ljtrim(rooms, 12)}"
+                                            f" – {T['lessons']}: {lessons:<12}"
+                                            + paytext,
+                                        )
                                     )
                                     # print("§§§", class_list[-1])
 
@@ -769,10 +772,11 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                     )
                                     pay_total += pay
                                     text = (
-                                        class_group(course, "+") +
-                                        f" {ljtrim(sname, 18)}"
+                                        sname,
+                                        class_group(course, "+")
+                                        + f" {ljtrim(sname, 18)}"
                                         f" {ljtrim(rooms, 12)}"
-                                        f" – {T['continuous']}" + paytext
+                                        f" – {T['continuous']}" + paytext,
                                     )
                                     try:
                                         class_blocks[bname][1].append(text)
@@ -792,10 +796,12 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                         )
                         pay_total += pay
                         class_list.append(
-                            class_group(course) +
-                            f" {ljtrim(sname, 18)}"
-                            f" {ljtrim(rooms, 12)}"
-                            f" – {T['lessons']}: {lessons:<12}" + paytext
+                            (
+                                sname,
+                                class_group(course) + f" {ljtrim(sname, 18)}"
+                                f" {ljtrim(rooms, 12)}"
+                                f" – {T['lessons']}: {lessons:<12}" + paytext,
+                            )
                         )
                         # print("§§§", class_list[-1])
 
@@ -809,26 +815,30 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                     pay_total += pay
                     sname = get_subjects().map(course.sid)
                     class_payonly.append(
-                        class_group(course, '–') +
-                        f" {ljtrim(sname, 30)}" + paytext
+                        (
+                            sname,
+                            class_group(course, "–")
+                            + f" {ljtrim(sname, 30)}"
+                            + paytext,
+                        )
                     )
 
             # Collate the various activities
             all_items = []
             for bname, data in class_blocks.items():
                 all_items.append(
-                    f"{T['BLOCK_SLOT']}"
-                    f" {ljtrim(bname, 30)}"
-                    f" – {T['lessons']}: {data[0]}")
-                for line in data[1]:
-                    all_items.append(line)
+                    f"{ljtrim(f'[[{bname}]]', 42)}"
+                    f" – {T['lessons']}: {data[0]}"
+                )
+                for line in sorted(data[1]):
+                    all_items.append(line[1])
             if all_items:
                 all_items.append("")
-            all_items += class_list
+            all_items += [item[1] for item in sorted(class_list)]
             if show_workload:
                 if all_items:
                     all_items.append("")
-                all_items += class_payonly
+                all_items += [item[1] for item in sorted(class_payonly)]
             if all_items:
                 classlists.append((klass, all_items))
 
@@ -853,7 +863,7 @@ def print_classes(class_data, tag2classes):
             REPORT("INFO", T["CLASS_NO_ACTIVITIES"].format(klass=klass))
             continue
         class_list, class_blocks = [], {}
-        for tag in sorted(tag2blocks):
+        for tag in tag2blocks:
             blockinfolist = tag2blocks[tag]
             # print("???TAG", tag)
             __blockinfo = blockinfolist[0]
@@ -870,7 +880,7 @@ def print_classes(class_data, tag2classes):
                 if tag_classes:
                     parallel = f' ({", ".join(tag_classes)})'
                 else:
-                    parallel = ''
+                    parallel = ""
                 # Add block entry
                 class_blocks[block] = (lessons, blocklist, parallel)
                 # Add members
@@ -903,16 +913,15 @@ def print_classes(class_data, tag2classes):
 
         # Collate the various activities
         all_items = []
-        for block, data in class_blocks.items():
+        for block in sorted(class_blocks):
+            data = class_blocks[block]
             sbj, tag = block.subject, block.tag
             lbs, lbt = len(sbj), len(tag)
             if tag:
                 if lbs + lbt > 28 and lbs > 18:
-                    blockname = ljtrim(
-                        f"[[{ljtrim(sbj, 18)} #{tag}]]", 28
-                    )
+                    blockname = ljtrim(f"[[{ljtrim(sbj, 18)} #{tag}]]", 28)
                 else:
-                    blockname = ljtrim(f'[[{sbj} #{tag}]]', 28)
+                    blockname = ljtrim(f"[[{sbj} #{tag}]]", 28)
             else:
                 blockname = ljtrim(f"[[{sbj}]]", 28)
             all_items.append(
@@ -922,12 +931,13 @@ def print_classes(class_data, tag2classes):
                 all_items.append(line)
         if all_items:
             all_items.append("")
-        all_items += class_list
+        all_items += sorted(class_list)
 
         classline = f"{kname} ({klass})"
         line = []
         countlines = [line]
-        for g, n in counts.items():
+        for g in sorted(counts):
+            n = counts[g]
             if len(line) >= 4:
                 line = []
                 countlines.append(line)
@@ -935,7 +945,7 @@ def print_classes(class_data, tag2classes):
             line.append(f"{item:<16}")
         # print("  +++++++++++++++++++++", classline)
         xlines = ["".join(l) for l in countlines]
-        xlines.append("  " + "="*60)
+        xlines.append("  " + "=" * 60)
         xlines.append("")
         classlists.append((classline, [("", xlines + all_items)]))
 
@@ -947,9 +957,11 @@ def print_classes(class_data, tag2classes):
 
 BASE_MARGIN = 20 * mm
 import copy
+
+
 class MyDocTemplate(SimpleDocTemplate):
-    """This is adapted to emit an "outline" for the teacher pages.
-    """
+    """This is adapted to emit an "outline" for the teacher pages."""
+
     def __init__(self, *args, **kargs):
         self.key = 0
         super().__init__(*args, **kargs)
@@ -975,12 +987,11 @@ class PdfCreator:
     def build_pdf(self, pagelist, title, author):
         all_refs = set()
 
-        #class PageHeader(Paragraph):
+        # class PageHeader(Paragraph):
         class PageHeader(Preformatted):
             def __init__(self, text, ref):
                 if ref in all_refs:
-                    # TODO: T ...
-                    REPORT("ERROR", f"Repeated page title: {ref}")
+                    REPORT("ERROR", T["Repeated_page_title"].format(ref=ref))
                     self.ref = None
                 else:
                     self.ref = ref
@@ -1033,7 +1044,7 @@ class PdfCreator:
             h = PageHeader(pagehead, pagehead.split("(", 1)[0].rstrip())
             flowables.append(h)
             for secthead, slist in plist:
-#                flowables.append(Paragraph(secthead, sect_style))
+                #                flowables.append(Paragraph(secthead, sect_style))
                 for sline in slist:
                     if sline:
                         lines = sline.split("$")
@@ -1079,7 +1090,7 @@ if __name__ == "__main__":
 
         tlist = courses.teacher_class_subjects()
         pdfbytes = print_teachers(tlist, show_workload=True)
-#        pdfbytes = print_teachers(tlist)
+        #        pdfbytes = print_teachers(tlist)
 
         filepath = saveDialog("pdf-Datei (*.pdf)", "teacher_class_subjects")
         if filepath and os.path.isabs(filepath):
