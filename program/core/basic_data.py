@@ -221,9 +221,9 @@ def get_group_info(klass):
 
 
 def check_group(klass, group=None):
-    groups = get_group_info(klass)["GROUPS"]
+    groups = get_group_info(klass)["GROUP_MAP"]
     #    try:
-    #        groups = get_classes().group_info(klass)["GROUPS"]
+    #        groups = get_classes().group_info(klass)["GROUP_MAP"]
     #    except KeyError:
     #        return False
     if group and group != "*":

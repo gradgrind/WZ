@@ -1,7 +1,7 @@
 """
 timetable/activities.py
 
-Last updated:  2022-07-18
+Last updated:  2022-07-19
 
 Collect information on activities for teachers and classes/groups.
 
@@ -59,6 +59,7 @@ from reportlab.lib.enums import TA_RIGHT
 
 from core.db_access import db_read_fields
 from core.basic_data import (
+    get_group_info,
     get_classes,
     get_teachers,
     get_subjects,
@@ -94,6 +95,14 @@ class BlockInfo(NamedTuple):
     block: BlockTag
     rooms: list[str]
     payment_data: PaymentData
+    notes: str
+
+
+class ClassBlockInfo(NamedTuple):
+    course: CourseData
+    lessons: list[int]
+    block: BlockTag
+    periods: float      # (per week, averaged over the year)
     notes: str
 
 
@@ -247,9 +256,9 @@ class Courses:
                 # Add to class mapping
                 klass = coursedata.klass
                 try:
-                    __tag2entries = klass2tags[tid]
+                    __tag2entries = klass2tags[klass]
                 except KeyError:
-                    klass2tags[tid] = {tag: [entry]}
+                    klass2tags[klass] = {tag: [entry]}
                 else:
                     try:
                         __tag2entries[tag].append(entry)
@@ -310,7 +319,7 @@ class Courses:
             lesson-data: {class -> {tag -> [BlockInfo, ... ]}}
             payment-only-data: {class -> [(CourseData, PaymentData), ... ]}
             partner-courses: {partner-tag -> [CourseData, ... ]}
-        A partner-tag is just the block-tag for "continuous" items; if
+        For "continuous" items, a partner-tag is just the block-tag; if
         there is a pay-tag, the partner-tag is "block-tag+sid&pay-tag".
         """
         teachers = get_teachers()
@@ -325,7 +334,6 @@ class Courses:
                 continuous = None
                 total_length = 0
                 tagged = {}
-                plain = []
                 for blockinfo in blockinfolist:
                     payinfo = blockinfo.payment_data
                     course = blockinfo.course
@@ -341,8 +349,6 @@ class Courses:
                                 ),
                             )
                             continue
-                        else:
-                            plain.append(blockinfo)
 
                     elif payinfo.number:
                         if payinfo.tag:
@@ -484,6 +490,118 @@ class Courses:
             ### Add teacher data to list of all teachers
             tlist.append((tid, tname, c2tags, c2paydata, tag2courses))
         return tlist
+
+
+    def read_class_blocks(self):
+        """Organize the data according to classes.
+        This method isolates the actual lessons taught in the various
+        classes – as far as the available information allows.
+        Payment-only entries are ignored.
+        Return an ordered list of the classes, each with its own data.
+        The entries in this list are tuples:
+            class: str
+            name: str
+            lesson-data: {tag -> [ClassBlockInfo, ... ]}
+            period-counts: {basic-group -> average number of periods per week}
+        """
+        classes = get_classes()
+        clist = []
+        tag2classes = {}     # {tag -> {klass}}
+        self.tag2classes = tag2classes
+        for klass, kname in classes.get_class_list():
+            tag2blocks = {}     # {tag -> [ClassBlockInfo, ... ]}
+            # Prepare group data – the null class is excluded
+            group_info = get_group_info(klass)
+            basic_groups = group_info["BASIC"]
+            if basic_groups:
+                group2basic = group_info["GROUP_MAP"]
+            else:
+                # If no class divisions, add an entry for the whole class
+                basic_groups = {'*'}
+                group2basic = {'*': ['*']}
+            # Counters for number of periods per basic-group:
+            group_counts = {g: 0.0 for g in basic_groups}
+            # Read blocklist for each tag
+            try:
+                tag2blocklist = self.klass2tags[klass]
+            except KeyError:
+                clist.append((klass, kname, tag2blocks, group_counts))
+                continue
+            for tag, blockinfolist in tag2blocklist.items():
+                try:
+                    tag2classes[tag].add(klass)
+                except KeyError:
+                    tag2classes[tag] = {klass}
+                blocks = []
+                tag2blocks[tag] = blocks
+                total_length = {g: 0.0 for g in basic_groups}
+                lesson_sum = 0
+                for blockinfo in blockinfolist:
+                    if not lesson_sum:
+                        lesson_sum = sum(blockinfo.lessons)
+                    payinfo = blockinfo.payment_data
+                    if payinfo.number:
+                        n = payinfo.number_val
+                    else:
+                        n = lesson_sum
+                    course = blockinfo.course
+
+                    if not blockinfo.block.sid:
+                        ## A "plain" lesson
+                        # No block-sid, nothing parallel
+                        if len(blockinfolist) > 1:
+                            REPORT(
+                                "ERROR",
+                                T["BAD_PLAIN_BLOCK"].format(
+                                    course=course, tag=tag
+                                ),
+                            )
+                            continue
+
+                    elif payinfo.divisor:
+                        n /= float(payinfo.divisor.replace(",", "."))
+
+                    # Only include info if there are real pupils
+                    if course.group:
+                    # Add number of periods to totals for basic groups
+                        if course.group == '*':
+                            basics = basic_groups
+                        else:
+                            basics = group2basic[course.group]
+                        for group in basics:
+                            total_length[group] += n
+
+                        # Collect the necessary information about the block
+                        blocks.append(
+                            ClassBlockInfo(
+                                course,
+                                blockinfo.lessons,
+                                blockinfo.block,
+                                n,
+                                blockinfo.notes
+                            )
+                        )
+
+                # Check that no group has more lessons than is possible ...
+                xsgroups = [
+                    g for g, n in total_length.items() if n > lesson_sum
+                ]
+                if xsgroups:
+                    REPORT(
+                        "WARNING",
+                        T["EXCESS_LESSONS"].format(klass=klass, tag=tag)
+                    )
+                # Update total period counts
+                for g in group_counts:
+                    gx = total_length[g]
+                    if gx:
+                        group_counts[g] += gx
+            ## Payment-only data is not collected for classes
+
+            ### Add class data to list of all classes
+            clist.append((klass, kname, tag2blocks, group_counts))
+            # print(f"$$$ {klass}:", group_counts)
+        return clist
 
 
 def ljtrim(text, n):
@@ -705,6 +823,95 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
     )
 
 
+def print_classes(class_data, tag2classes):
+    classlists = []
+    for klass, kname, tag2blocks, counts in class_data:
+        if not tag2blocks:
+            REPORT("INFO", T["CLASS_NO_ACTIVITIES"].format(klass=klass))
+            continue
+        class_list, class_blocks = [], {}
+        for tag in sorted(tag2blocks):
+            blockinfolist = tag2blocks[tag]
+            # print("???TAG", tag)
+            __blockinfo = blockinfolist[0]
+            block = __blockinfo.block
+            lessons = f'[{",".join(map(str, __blockinfo.lessons))}]'
+            if block.sid:
+                ## All block types with block name
+                blocklist = []
+                # Include parallel classes
+                try:
+                    tag_classes = tag2classes[tag] - {klass}
+                except KeyError:
+                    raise Bug(f"Tag {tag} not in 'tag2classes'")
+                if tag_classes:
+                    parallel = f' ({", ".join(tag_classes)})'
+                else:
+                    parallel = ''
+                # Add block entry
+                class_blocks[block.subject] = (lessons, blocklist, parallel)
+                # Add members
+                for blockinfo in blockinfolist:
+                    course = blockinfo.course
+                    sname = get_subjects().map(course.sid)
+                    group_periods = f" >>> {blockinfo.periods:.2f}".replace(
+                        ".", DECIMAL_SEP
+                    )
+                    blocklist.append(
+                        f" + {ljtrim(sname, 36)}"
+                        f" {f'{course.tid}':<5}"
+                        f" {course.group:<3}" + group_periods
+                    )
+                blocklist.sort()
+
+            else:
+                ## Simple, plain lesson block
+                course = __blockinfo.course
+                sname = get_subjects().map(course.sid)
+                group_periods = f" >>> {__blockinfo.periods:.2f}".replace(
+                    ".", DECIMAL_SEP
+                )
+                class_list.append(
+                    f"{ljtrim(sname, 26)}"
+                    f" {ljtrim(lessons, 12)}"
+                    f" {f'{course.tid}':<5}"
+                    f" {course.group:<3}" + group_periods
+                )
+
+        # Collate the various activities
+        all_items = []
+        for bname, data in class_blocks.items():
+            all_items.append(
+                f"{ljtrim(T['BLOCK_SLOT'] + ' ' + bname, 26)}"
+                f" {ljtrim(data[0], 12)}" + ljtrim(data[2], 20)
+            )
+            for line in data[1]:
+                all_items.append(line)
+        if all_items:
+            all_items.append("")
+        all_items += class_list
+
+        classline = f"{kname} ({klass})"
+        line = []
+        countlines = [line]
+        for g, n in counts.items():
+            if len(line) >= 4:
+                line = []
+                countlines.append(line)
+            item = f"   {g}: " + f"{n:.1f}".replace(".", DECIMAL_SEP)
+            line.append(f"{item:<16}")
+        # print("  +++++++++++++++++++++", classline)
+        xlines = ["".join(l) for l in countlines]
+        xlines.append("  " + "="*60)
+        xlines.append("")
+        classlists.append((classline, [("", xlines + all_items)]))
+
+    pdf = PdfCreator()
+    return pdf.build_pdf(
+        classlists, title="Klassen-Fächer", author="FWS Bothfeld"
+    )
+
+
 BASE_MARGIN = 20 * mm
 import copy
 class MyDocTemplate(SimpleDocTemplate):
@@ -781,24 +988,23 @@ class PdfCreator:
         heading_style.fontSize = 16
         heading_style.spaceAfter = 24
 
-        class_style = sample_style_sheet["Heading2"]
-        class_style.fontSize = 13
-        class_style.spaceBefore = 20
+        sect_style = sample_style_sheet["Heading2"]
+        sect_style.fontSize = 13
+        sect_style.spaceBefore = 20
         # print("\n STYLES:", sample_style_sheet.list())
 
         flowables = []
-        for teacher, clist in pagelist:
-            # print("§§§", repr(teacher))
-            #            h = Paragraph(teacher, heading_style)
-            h = PageHeader(teacher, teacher.split("(", 1)[0].rstrip())
-            #             self.teacher = teacher
+        for pagehead, plist in pagelist:
+            # print("§§§", repr(pagehead))
+            # h = Paragraph(pagehead, heading_style)
+            h = PageHeader(pagehead, pagehead.split("(", 1)[0].rstrip())
             flowables.append(h)
-            for klass, slist in clist:
-#                flowables.append(Paragraph(klass, class_style))
-                for subject in slist:
-                    if subject:
-                        lines = subject.split("$")
-                        #                        flowables.append(Paragraph(subject, body_style))
+            for secthead, slist in plist:
+#                flowables.append(Paragraph(secthead, sect_style))
+                for sline in slist:
+                    if sline:
+                        lines = sline.split("$")
+                        # flowables.append(Paragraph(sline, body_style))
                         flowables.append(
                             Preformatted(
                                 lines[0],
@@ -837,9 +1043,11 @@ if __name__ == "__main__":
 
     def run_me():
         courses = Courses()
+
         tlist = courses.teacher_class_subjects()
         pdfbytes = print_teachers(tlist, show_workload=True)
 #        pdfbytes = print_teachers(tlist)
+
         filepath = saveDialog("pdf-Datei (*.pdf)", "teacher_class_subjects")
         if filepath and os.path.isabs(filepath):
             if not filepath.endswith(".pdf"):
@@ -848,4 +1056,15 @@ if __name__ == "__main__":
                 fh.write(pdfbytes)
             print("  --->", filepath)
 
-    PROCESS(run_me, "Courses() ... courses.teacher_class_subjects()")
+        clist = courses.read_class_blocks()
+        pdfbytes = print_classes(clist, courses.tag2classes)
+
+        filepath = saveDialog("pdf-Datei (*.pdf)", "class_subjects")
+        if filepath and os.path.isabs(filepath):
+            if not filepath.endswith(".pdf"):
+                filepath += ".pdf"
+            with open(filepath, "wb") as fh:
+                fh.write(pdfbytes)
+            print("  --->", filepath)
+
+    PROCESS(run_me, "Courses() ... print teacher and class workload")

@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-07-10
+core/classes.py - last updated 2022-07-19
 
 Manage class data.
 
@@ -237,10 +237,14 @@ def build_group_data(divisions):
         for g, groups in gmap.items()
     ]
     gmapl.sort()
+    basic_groups = set()
+    for g, glist in gmapl:
+        basic_groups.update(glist)
     return {
         "INDEPENDENT_DIVISIONS": idivs,
         "GROUP_MAP": dict(gmapl),
-        "GROUPS": groups2stringlist(groups),
+#        "GROUPS": groups2stringlist(groups),
+        "BASIC": basic_groups,
         "MINIMAL_SUBGROUPS": groups2stringlist(cross_terms),
     }
 
@@ -279,7 +283,8 @@ if __name__ == "__main__":
     print("\n ... Group-map:")
     for g, l in res["GROUP_MAP"].items():
         print(f"  {str(g):20}: {l}")
-    print("\n ... Groups:", res["GROUPS"])
+#    print("\n ... Groups:", res["GROUPS"])
+    print("\n ... Basic:", res["BASIC"])
     print("\n ... Atoms:", res["MINIMAL_SUBGROUPS"])
 
     print("\n -------------------------------\n")
@@ -307,5 +312,6 @@ if __name__ == "__main__":
     print("\n ... Group-map:")
     for g, l in res["GROUP_MAP"].items():
         print(f"  {str(g):20}: {l}")
-    print("\n ... Groups:", res["GROUPS"])
+#    print("\n ... Groups:", res["GROUPS"])
+    print("\n ... Basic:", res["BASIC"])
     print("\n ... Atoms:", res["MINIMAL_SUBGROUPS"])
