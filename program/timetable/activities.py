@@ -539,13 +539,7 @@ class Courses:
                 for blockinfo in blockinfolist:
                     if not lesson_sum:
                         lesson_sum = sum(blockinfo.lessons)
-                    payinfo = blockinfo.payment_data
-                    if payinfo.number:
-                        n = payinfo.number_val
-                    else:
-                        n = lesson_sum
                     course = blockinfo.course
-
                     if not blockinfo.block.sid:
                         ## A "plain" lesson
                         # No block-sid, nothing parallel
@@ -557,20 +551,46 @@ class Courses:
                                 ),
                             )
                             continue
-
-                    elif payinfo.divisor:
-                        n /= float(payinfo.divisor.replace(",", "."))
-
                     # Only include info if there are real pupils
                     if course.group:
-                    # Add number of periods to totals for basic groups
+                        # Add number of periods to totals for basic groups
                         if course.group == '*':
                             basics = basic_groups
                         else:
                             basics = group2basic[course.group]
-                        for group in basics:
-                            total_length[group] += n
-
+                        payinfo = blockinfo.payment_data
+                        if payinfo.number:
+                            if payinfo.divisor:
+                                n = (
+                                    payinfo.number_val /
+                                    float(payinfo.divisor.replace(",", "."))
+                                )
+                            else:
+                                n = payinfo.number_val
+                            for group in basics:
+                                l = total_length[group]
+                                if l < 0.0:
+                                    REPORT(
+                                        "ERROR",
+                                        T["EXCESS_LESSONS"].format(
+                                            klass=klass, tag=tag
+                                        )
+                                    )
+                                else:
+                                    total_length[group] = l + n
+                        else:
+                            for group in basics:
+                                l = total_length[group]
+                                if l > 0.0:
+                                    REPORT(
+                                        "ERROR",
+                                        T["EXCESS_LESSONS"].format(
+                                            klass=klass, tag=tag
+                                        )
+                                    )
+                                elif l == 0.0:
+                                    total_length[group] = -1.0
+                            n = lesson_sum
                         # Collect the necessary information about the block
                         blocks.append(
                             ClassBlockInfo(
@@ -594,8 +614,11 @@ class Courses:
                 # Update total period counts
                 for g in group_counts:
                     gx = total_length[g]
-                    if gx:
+                    if gx > 0.0:
                         group_counts[g] += gx
+                    elif gx < 0.0:
+                        group_counts[g] += lesson_sum
+
             ## Payment-only data is not collected for classes
 
             ### Add class data to list of all classes
@@ -849,7 +872,7 @@ def print_classes(class_data, tag2classes):
                 else:
                     parallel = ''
                 # Add block entry
-                class_blocks[block.subject] = (lessons, blocklist, parallel)
+                class_blocks[block] = (lessons, blocklist, parallel)
                 # Add members
                 for blockinfo in blockinfolist:
                     course = blockinfo.course
@@ -858,7 +881,7 @@ def print_classes(class_data, tag2classes):
                         ".", DECIMAL_SEP
                     )
                     blocklist.append(
-                        f" + {ljtrim(sname, 36)}"
+                        f" + {ljtrim(sname, 38)}"
                         f" {f'{course.tid}':<5}"
                         f" {course.group:<3}" + group_periods
                     )
@@ -872,7 +895,7 @@ def print_classes(class_data, tag2classes):
                     ".", DECIMAL_SEP
                 )
                 class_list.append(
-                    f"{ljtrim(sname, 26)}"
+                    f"{ljtrim(sname, 28)}"
                     f" {ljtrim(lessons, 12)}"
                     f" {f'{course.tid}':<5}"
                     f" {course.group:<3}" + group_periods
@@ -880,10 +903,20 @@ def print_classes(class_data, tag2classes):
 
         # Collate the various activities
         all_items = []
-        for bname, data in class_blocks.items():
+        for block, data in class_blocks.items():
+            sbj, tag = block.subject, block.tag
+            lbs, lbt = len(sbj), len(tag)
+            if tag:
+                if lbs + lbt > 28 and lbs > 18:
+                    blockname = ljtrim(
+                        f"[[{ljtrim(sbj, 18)} #{tag}]]", 28
+                    )
+                else:
+                    blockname = ljtrim(f'[[{sbj} #{tag}]]', 28)
+            else:
+                blockname = ljtrim(f"[[{sbj}]]", 28)
             all_items.append(
-                f"{ljtrim(T['BLOCK_SLOT'] + ' ' + bname, 26)}"
-                f" {ljtrim(data[0], 12)}" + ljtrim(data[2], 20)
+                blockname + f" {ljtrim(data[0], 12)}" + ljtrim(data[2], 20)
             )
             for line in data[1]:
                 all_items.append(line)
