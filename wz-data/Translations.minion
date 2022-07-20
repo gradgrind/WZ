@@ -232,6 +232,7 @@ timetable.activities: {
     UNKNOWN_ROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  unbekannter Raum ({rid})"
     EXCESS_LESSONS: "Klasse {klass}: Zu viele Stunden in Block mit Kennzeichen {tag}"
     CLASS_NO_ACTIVITIES: "Klasse ohne „Aktivitäten“: {klass}"
+    TAG_NO_ACTIVITIES: "Klasse {klass}: Kennzeichen ({tag}) hat keine Aktivitäten"
     Repeated_page_title: "Seitentitel wurde doppelt verwendet: {ref}"
     
     CourseData:     "<Kurs: Klasse={klass}, Gruppe={group}, Fach={sid}, Lehrer={tid}>"

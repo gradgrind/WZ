@@ -48,15 +48,12 @@ from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
     PageBreak,
-    Spacer,
-    Preformatted,
     Table,
-    TableStyle
+    TableStyle,
 )
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib import colors
 
 from core.db_access import db_read_fields
@@ -651,7 +648,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
             for c in courses
             if c != course
         ]
-        return (len(glist), f' //{",".join(glist)}' if glist else '')
+        return (len(glist), f' //{",".join(glist)}' if glist else "")
 
     def workload(
         paymentdata: PaymentData,
@@ -671,14 +668,12 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
         val = nd * paymentdata.factor_val
         if ngroups:
             shared = f" /{ngroups+1}"
-            val /= float(ngroups+1)
+            val /= float(ngroups + 1)
         else:
             shared = ""
         if show_workload:
             val_str = f"{val:.3f}".replace(".", DECIMAL_SEP)
-            text = (
-                f"{n} × {paymentdata.factor or '--'}{shared} = {val_str}"
-            )
+            text = f"{n} × {paymentdata.factor or '--'}{shared} = {val_str}"
         else:
             text = ""
         return (val, text)
@@ -736,7 +731,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                                 sname + plist,
                                                 rooms,
                                                 lessons,
-                                                paytext
+                                                paytext,
                                             )
                                         )
                                         continue
@@ -745,11 +740,11 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                     extent = payment.number
                                 line = (
                                     sname,
-                                    f' – {class_group(course)}',
+                                    f" – {class_group(course)}",
                                     sname + plist,
                                     rooms,
-                                    f'[{extent}]',
-                                    paytext
+                                    f"[{extent}]",
+                                    paytext,
                                 )
                                 try:
                                     class_blocks[bname][1].append(line)
@@ -772,7 +767,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                             sname + plist,
                                             rooms,
                                             lessons,
-                                            paytext
+                                            paytext,
                                         )
                                     )
                                     # print("§§§", class_list[-1])
@@ -780,11 +775,11 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                 else:
                                     line = (
                                         sname,
-                                        f' – {class_group(course)}',
+                                        f" – {class_group(course)}",
                                         sname,
                                         rooms,
                                         f'[{T["continuous"]}]',
-                                        paytext
+                                        paytext,
                                     )
                                     try:
                                         class_blocks[bname][1].append(line)
@@ -810,7 +805,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                 sname,
                                 rooms,
                                 lessons,
-                                paytext
+                                paytext,
                             )
                         )
                         # print("§§§", class_list[-1])
@@ -827,26 +822,18 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                     class_payonly.append(
                         (
                             sname,
-                            f'({class_group(course)})',
+                            f"({class_group(course)})",
                             sname,
                             "",
                             "",
-                            paytext
+                            paytext,
                         )
                     )
 
             # Collate the various activities
             all_items = []
             for bname, data in class_blocks.items():
-                all_items.append(
-                    (
-                        f'[[{bname}]]',
-                        "",
-                        "",
-                        data[0],
-                        ""
-                    )
-                )
+                all_items.append((f"[[{bname}]]", "", "", data[0], ""))
                 for line in sorted(data[1]):
                     all_items.append(line[1:])
             # if all_items:
@@ -865,7 +852,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
         if show_workload:
             pay_str = f"{pay_total:.2f}".replace(".", DECIMAL_SEP)
             xclass[1].append(("-----", "", "", "", "", pay_str))
-            #teacherline = f"{teacherline:<30} – {T['WORKLOAD']}: {pay_str}"
+            # teacherline = f"{teacherline:<30} – {T['WORKLOAD']}: {pay_str}"
 
         # print("\n  +++++++++++++++++++++", teacherline)
         # print(classlists)
@@ -884,9 +871,9 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
         teacherlists,
         title=T["teachers-subjects"],
         author=CONFIG["SCHOOL_NAME"],
-        headers = headers,
-        colwidths = colwidths,
-#        do_landscape=True
+        headers=headers,
+        colwidths=colwidths,
+        #        do_landscape=True
     )
 
 
@@ -900,7 +887,13 @@ def print_classes(class_data, tag2classes):
         for tag in tag2blocks:
             blockinfolist = tag2blocks[tag]
             # print("???TAG", tag)
-            __blockinfo = blockinfolist[0]
+            try:
+                __blockinfo = blockinfolist[0]
+            except IndexError:
+                REPORT(
+                    "ERROR", T["TAG_NO_ACTIVITIES"].format(klass=klass, tag=tag)
+                )
+                continue
             block = __blockinfo.block
             lessons = ",".join(map(str, __blockinfo.lessons))
             if block.sid:
@@ -926,11 +919,11 @@ def print_classes(class_data, tag2classes):
                     )
                     blocklist.append(
                         (
-                            f' – {sname}',
+                            f" – {sname}",
                             course.group,
                             course.tid,
-                            '',
-                            group_periods
+                            "",
+                            group_periods,
                         )
                     )
                 blocklist.sort()
@@ -943,13 +936,7 @@ def print_classes(class_data, tag2classes):
                     ".", DECIMAL_SEP
                 )
                 class_list.append(
-                    (
-                        sname,
-                        course.group,
-                        course.tid,
-                        lessons,
-                        group_periods
-                    )
+                    (sname, course.group, course.tid, lessons, group_periods)
                 )
 
         # Collate the various activities
@@ -957,20 +944,11 @@ def print_classes(class_data, tag2classes):
         for block in sorted(class_blocks):
             data = class_blocks[block]
             sbj, tag = block.subject, block.tag
-            lbs, lbt = len(sbj), len(tag)
             if tag:
-                blockname = f'[[{sbj} #{tag}]]'
+                blockname = f"[[{sbj} #{tag}]]"
             else:
-                blockname = f'[[{sbj}]]'
-            all_items.append(
-                (
-                    blockname + data[2],
-                    "",
-                    "",
-                    data[0],
-                    ""
-                )
-            )
+                blockname = f"[[{sbj}]]"
+            all_items.append((blockname + data[2], "", "", data[0], ""))
             for line in data[1]:
                 all_items.append(line)
         if all_items:
@@ -988,27 +966,27 @@ def print_classes(class_data, tag2classes):
             item = f"   {g}: " + f"{n:.1f}".replace(".", DECIMAL_SEP)
             line.append(f"{item:<16}")
         while len(line) < 6:
-            line.append(" "*16)
+            line.append(" " * 16)
         countlines.append([""])
         classlists.append((classline, [("#", countlines), ("", all_items)]))
 
     pdf = PdfCreator()
     headers = [
-        T[h] for h in ("H_subject", "H_group", "H_teacher", "H_lessons", "H_total")
+        T[h]
+        for h in ("H_subject", "H_group", "H_teacher", "H_lessons", "H_total")
     ]
-    colwidths = (80, 20, 20, 30, 20)
+    colwidths = (75, 20, 20, 30, 25)
     return pdf.build_pdf(
         classlists,
         title=T["classes-subjects"],
         author=CONFIG["SCHOOL_NAME"],
-        headers = headers,
-        colwidths = colwidths,
-#        do_landscape=True
+        headers=headers,
+        colwidths=colwidths,
+        #        do_landscape=True
     )
 
 
 BASE_MARGIN = 20 * mm
-import copy
 
 
 class MyDocTemplate(SimpleDocTemplate):
@@ -1029,21 +1007,21 @@ class MyDocTemplate(SimpleDocTemplate):
 
 
 tablestyle0 = [
-    ('FONT', (0, 0), (-1, -1), 'Helvetica'),
-    ('FONTSIZE', (0, 0), (-1, -1), 12),
-    ('LINEABOVE', (0, -1), (-1, -1), 1, colors.lightgrey),
+    ("FONT", (0, 0), (-1, -1), "Helvetica"),
+    ("FONTSIZE", (0, 0), (-1, -1), 12),
+    ("LINEABOVE", (0, -1), (-1, -1), 1, colors.lightgrey),
 ]
 
 tablestyle = [
-#         ('ALIGN', (0, 1), (-1, -1), 'RIGHT'),
-    ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
-    ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
-    ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold'),
-#         ('LINEABOVE', (0,-1), (-1,-1), 1, colors.black),
-    ('FONT', (0, 1), (-1, -1), 'Helvetica'),
-#         ('BACKGROUND', (1, 1), (-2, -2), colors.white),
-    ('TEXTCOLOR', (0, 0), (1, -1), colors.black),
-    ('FONTSIZE', (0, 0), (-1, -1), 11),
+    #         ('ALIGN', (0, 1), (-1, -1), 'RIGHT'),
+    ("LINEBELOW", (0, 0), (-1, 0), 1, colors.black),
+    ("LINEBELOW", (0, -1), (-1, -1), 1, colors.black),
+    ("FONT", (0, 0), (-1, 0), "Helvetica-Bold"),
+    #         ('LINEABOVE', (0,-1), (-1,-1), 1, colors.black),
+    ("FONT", (0, 1), (-1, -1), "Helvetica"),
+    #         ('BACKGROUND', (1, 1), (-2, -2), colors.white),
+    ("TEXTCOLOR", (0, 0), (1, -1), colors.black),
+    ("FONTSIZE", (0, 0), (-1, -1), 11),
 ]
 
 
@@ -1062,12 +1040,12 @@ class PdfCreator:
         author,
         headers,
         colwidths=None,
-        do_landscape=False
+        do_landscape=False,
     ):
         all_refs = set()
 
         class PageHeader(Paragraph):
-        #class PageHeader(Preformatted):
+            # class PageHeader(Preformatted):
             def __init__(self, text, ref):
                 if ref in all_refs:
                     REPORT("ERROR", T["Repeated_page_title"].format(ref=ref))
@@ -1121,12 +1099,12 @@ class PdfCreator:
             # print("§§§", repr(pagehead))
             tstyle = tablestyle.copy()
             # h = Paragraph(pagehead, heading_style)
-            h = PageHeader(pagehead, pagehead)#.split("(", 1)[0].rstrip())
+            h = PageHeader(pagehead, pagehead)  # .split("(", 1)[0].rstrip())
             flowables.append(h)
             lines = [headers]
             nh = len(headers)
             for secthead, slist in plist:
-                if secthead == '#':
+                if secthead == "#":
                     table = Table(slist)
                     table_style = TableStyle(tablestyle0)
                     table.setStyle(table_style)
@@ -1136,11 +1114,11 @@ class PdfCreator:
                 for sline in slist:
                     r = len(lines)
                     if sline:
-                        if sline[0].startswith('[['):
-                            tstyle.append(('SPAN', (0, r), (2, r)))
+                        if sline[0].startswith("[["):
+                            tstyle.append(("SPAN", (0, r), (2, r)))
                         if sline[0] == "-----":
                             tstyle.append(
-                                ('LINEABOVE', (0, r), (-1, r), 1, colors.black),
+                                ("LINEABOVE", (0, r), (-1, r), 1, colors.black),
                             )
                             sline = sline[1:]
                         lines.append(sline[:nh])
@@ -1150,7 +1128,7 @@ class PdfCreator:
 
             kargs = {"repeatRows": 1}
             if colwidths:
-                kargs["colWidths"] = [w*mm for w in colwidths]
+                kargs["colWidths"] = [w * mm for w in colwidths]
             table = Table(lines, **kargs)
             table_style = TableStyle(tstyle)
             table.setStyle(table_style)
