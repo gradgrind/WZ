@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-07-18
+Last updated:  2022-07-20
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -446,7 +446,7 @@ class GroupSelector(QComboBox):
         if __klass != "--":
             # N.B. The null class should have no groups.
             self.addItem("*")
-            groups = Classes().group_info(__klass)["GROUPS"]
+            groups = Classes().group_info(__klass)["GROUP_MAP"]
             if groups:
                 self.addItems(groups)
         self.setCurrentText(group)

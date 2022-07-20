@@ -237,11 +237,17 @@ timetable.activities: {
     CourseData:     "<Kurs: Klasse={klass}, Gruppe={group}, Fach={sid}, Lehrer={tid}>"
     
     # output
-    lessons:    Stunden
-    blocks:     Epochen
     continuous: durchgehend
+    H_group:    Gruppe
+    H_subject:  Fach
+    H_room:     Raum
+    H_lessons_blocks: "St./[Epochen]"
+    H_workload: Deputat
+    
+    # old
+    lessons:    Stunden
     WORKLOAD:   Deputatsstunden
-
+    blocks:     Epochen
 }
 
 timetable.asc_data: {
