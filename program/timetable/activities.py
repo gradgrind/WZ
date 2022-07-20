@@ -1,7 +1,7 @@
 """
 timetable/activities.py
 
-Last updated:  2022-07-19
+Last updated:  2022-07-20
 
 Collect information on activities for teachers and classes/groups.
 
@@ -50,12 +50,14 @@ from reportlab.platypus import (
     PageBreak,
     Spacer,
     Preformatted,
+    Table,
+    TableStyle
 )
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib.enums import TA_RIGHT
-
+from reportlab.lib import colors
 
 from core.db_access import db_read_fields
 from core.basic_data import (
@@ -631,12 +633,11 @@ def ljtrim(text, n):
     return f"{text:<{n}}"
 
 
-def class_group(course, bullet=None):
+def class_group(course):
     if course.group:
-        kg = f"{course.klass}.{course.group}"
+        return f"{course.klass}.{course.group}"
     else:
-        kg = f"({course.klass})"
-    return ljtrim(f" {bullet} {kg}" if bullet else kg, 10)
+        return f"({course.klass})"
 
 
 def print_teachers(teacher_data, block_tids=None, show_workload=False):
@@ -650,7 +651,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
             for c in courses
             if c != course
         ]
-        return (len(glist), f' ({", ".join(glist)})' if glist else "")
+        return (len(glist), f' //{",".join(glist)}' if glist else '')
 
     def workload(
         paymentdata: PaymentData,
@@ -670,13 +671,13 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
         val = nd * paymentdata.factor_val
         if ngroups:
             shared = f" /{ngroups+1}"
-            val /= 2.0
+            val /= float(ngroups+1)
         else:
             shared = ""
         if show_workload:
             val_str = f"{val:.3f}".replace(".", DECIMAL_SEP)
             text = (
-                f"$>>> {n} × {paymentdata.factor or '--'}{shared} = {val_str}"
+                f"{n} × {paymentdata.factor or '--'}{shared} = {val_str}"
             )
         else:
             text = ""
@@ -710,10 +711,8 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                         for blockinfo in blockinfolist:
                             course = blockinfo.course
                             sname = get_subjects().map(course.sid)
-                            rooms = f'{{{"|".join(blockinfo.rooms)}}}'
-                            lessons = (
-                                f'[{",".join(map(str, blockinfo.lessons))}]'
-                            )
+                            rooms = "|".join(blockinfo.rooms)
+                            lessons = ",".join(map(str, blockinfo.lessons))
                             payment = blockinfo.payment_data
                             if payment.number:
                                 # With number of units taught
@@ -729,22 +728,34 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                 )
                                 pay_total += pay
                                 if payment.number_val >= sum(blockinfo.lessons):
-                                    extent = f" – {T['continuous']}"
+                                    if course.sid == block.sid:
+                                        class_list.append(
+                                            (
+                                                sname,
+                                                class_group(course),
+                                                sname + plist,
+                                                rooms,
+                                                lessons,
+                                                paytext
+                                            )
+                                        )
+                                        continue
+                                    extent = T["continuous"]
                                 else:
-                                    extent = (
-                                        f" – {T['blocks']}: {payment.number}"
-                                    )
-                                text = (
+                                    extent = payment.number
+                                line = (
                                     sname,
-                                    class_group(course, "+")
-                                    + f" {ljtrim(sname + plist, 18)}"
-                                    f" {ljtrim(rooms, 12)}" + extent + paytext,
+                                    f' – {class_group(course)}',
+                                    sname + plist,
+                                    rooms,
+                                    f'[{extent}]',
+                                    paytext
                                 )
                                 try:
-                                    class_blocks[bname][1].append(text)
+                                    class_blocks[bname][1].append(line)
                                 except KeyError:
-                                    class_blocks[bname] = (lessons, [text])
-                                # print(f"%%% ({bname} {lessons}) {text}")
+                                    class_blocks[bname] = (lessons, [line])
+                                # print(f"%%% ({bname} {lessons}) {line}")
 
                             else:
                                 # Continuous teaching
@@ -757,40 +768,37 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                     class_list.append(
                                         (
                                             sname,
-                                            class_group(course)
-                                            + f" {ljtrim(sname + plist, 18)}"
-                                            f" {ljtrim(rooms, 12)}"
-                                            f" – {T['lessons']}: {lessons:<12}"
-                                            + paytext,
+                                            class_group(course),
+                                            sname + plist,
+                                            rooms,
+                                            lessons,
+                                            paytext
                                         )
                                     )
                                     # print("§§§", class_list[-1])
 
                                 else:
-                                    pay, paytext = workload(
-                                        payment, blockinfo.lessons
-                                    )
-                                    pay_total += pay
-                                    text = (
+                                    line = (
                                         sname,
-                                        class_group(course, "+")
-                                        + f" {ljtrim(sname, 18)}"
-                                        f" {ljtrim(rooms, 12)}"
-                                        f" – {T['continuous']}" + paytext,
+                                        f' – {class_group(course)}',
+                                        sname,
+                                        rooms,
+                                        f'[{T["continuous"]}]',
+                                        paytext
                                     )
                                     try:
-                                        class_blocks[bname][1].append(text)
+                                        class_blocks[bname][1].append(line)
                                     except KeyError:
-                                        class_blocks[bname] = (lessons, [text])
-                                    # print(f"&&& ({bname} {lessons}) {text}")
+                                        class_blocks[bname] = (lessons, [line])
+                                    # print(f"&&& ({bname} {lessons}) {line}")
 
                     else:
                         ## Simple, plain lesson block
                         blockinfo = blockinfolist[0]
                         course = blockinfo.course
                         sname = get_subjects().map(course.sid)
-                        rooms = f'{{{"|".join(blockinfo.rooms)}}}'
-                        lessons = f'[{",".join(map(str, blockinfo.lessons))}]'
+                        rooms = "|".join(blockinfo.rooms)
+                        lessons = ",".join(map(str, blockinfo.lessons))
                         pay, paytext = workload(
                             blockinfo.payment_data, blockinfo.lessons
                         )
@@ -798,9 +806,11 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                         class_list.append(
                             (
                                 sname,
-                                class_group(course) + f" {ljtrim(sname, 18)}"
-                                f" {ljtrim(rooms, 12)}"
-                                f" – {T['lessons']}: {lessons:<12}" + paytext,
+                                class_group(course),
+                                sname,
+                                rooms,
+                                lessons,
+                                paytext
                             )
                         )
                         # print("§§§", class_list[-1])
@@ -817,9 +827,11 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                     class_payonly.append(
                         (
                             sname,
-                            class_group(course, "–")
-                            + f" {ljtrim(sname, 30)}"
-                            + paytext,
+                            f'({class_group(course)})',
+                            sname,
+                            "",
+                            "",
+                            paytext
                         )
                     )
 
@@ -827,32 +839,54 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
             all_items = []
             for bname, data in class_blocks.items():
                 all_items.append(
-                    f"{ljtrim(f'[[{bname}]]', 42)}"
-                    f" – {T['lessons']}: {data[0]}"
+                    (
+                        f'[[{bname}]]',
+                        "",
+                        "",
+                        data[0],
+                        ""
+                    )
                 )
                 for line in sorted(data[1]):
-                    all_items.append(line[1])
-            if all_items:
-                all_items.append("")
-            all_items += [item[1] for item in sorted(class_list)]
+                    all_items.append(line[1:])
+            # if all_items:
+            #     all_items.append(None)
+            all_items += [item[1:] for item in sorted(class_list)]
             if show_workload:
-                if all_items:
-                    all_items.append("")
-                all_items += [item[1] for item in sorted(class_payonly)]
+                # if all_items:
+                #     all_items.append(None)
+                all_items += [item[1:] for item in sorted(class_payonly)]
             if all_items:
                 classlists.append((klass, all_items))
 
-        xtid = f"({tid})"
-        teacherline = f"{tname} {xtid}"
+        teacherline = f"{tname} ({tid})"
+        xclass = ("", [])
+        classlists.append(xclass)
         if show_workload:
             pay_str = f"{pay_total:.2f}".replace(".", DECIMAL_SEP)
-            teacherline = f"{teacherline:<30} – {T['WORKLOAD']}: {pay_str}"
-        # print("  +++++++++++++++++++++", teacherline)
+            xclass[1].append(("-----", "", "", "", "", pay_str))
+            #teacherline = f"{teacherline:<30} – {T['WORKLOAD']}: {pay_str}"
+
+        # print("\n  +++++++++++++++++++++", teacherline)
+        # print(classlists)
         teacherlists.append((teacherline, classlists))
 
     pdf = PdfCreator()
+    headers = [
+        T[h] for h in ("H_group", "H_subject", "H_room", "H_lessons_blocks")
+    ]
+    if show_workload:
+        headers.append(T["H_workload"])
+        colwidths = (20, 50, 30, 30, 40)
+    else:
+        colwidths = (20, 60, 40, 40)
     return pdf.build_pdf(
-        teacherlists, title="Lehrer-Klassen-Fächer", author="FWS Bothfeld"
+        teacherlists,
+        title="Lehrer-Klassen-Fächer",
+        author=CONFIG["SCHOOL_NAME"],
+        headers = headers,
+        colwidths = colwidths,
+#        do_landscape=True
     )
 
 
@@ -868,7 +902,7 @@ def print_classes(class_data, tag2classes):
             # print("???TAG", tag)
             __blockinfo = blockinfolist[0]
             block = __blockinfo.block
-            lessons = f'[{",".join(map(str, __blockinfo.lessons))}]'
+            lessons = ",".join(map(str, __blockinfo.lessons))
             if block.sid:
                 ## All block types with block name
                 blocklist = []
@@ -878,7 +912,7 @@ def print_classes(class_data, tag2classes):
                 except KeyError:
                     raise Bug(f"Tag {tag} not in 'tag2classes'")
                 if tag_classes:
-                    parallel = f' ({", ".join(tag_classes)})'
+                    parallel = f' //{",".join(tag_classes)}'
                 else:
                     parallel = ""
                 # Add block entry
@@ -887,13 +921,17 @@ def print_classes(class_data, tag2classes):
                 for blockinfo in blockinfolist:
                     course = blockinfo.course
                     sname = get_subjects().map(course.sid)
-                    group_periods = f" >>> {blockinfo.periods:.2f}".replace(
+                    group_periods = f"{blockinfo.periods:.2f}".replace(
                         ".", DECIMAL_SEP
                     )
                     blocklist.append(
-                        f" + {ljtrim(sname, 38)}"
-                        f" {f'{course.tid}':<5}"
-                        f" {course.group:<3}" + group_periods
+                        (
+                            f' – {sname}',
+                            course.group,
+                            course.tid,
+                            '',
+                            group_periods
+                        )
                     )
                 blocklist.sort()
 
@@ -901,14 +939,17 @@ def print_classes(class_data, tag2classes):
                 ## Simple, plain lesson block
                 course = __blockinfo.course
                 sname = get_subjects().map(course.sid)
-                group_periods = f" >>> {__blockinfo.periods:.2f}".replace(
+                group_periods = f"{__blockinfo.periods:.2f}".replace(
                     ".", DECIMAL_SEP
                 )
                 class_list.append(
-                    f"{ljtrim(sname, 28)}"
-                    f" {ljtrim(lessons, 12)}"
-                    f" {f'{course.tid}':<5}"
-                    f" {course.group:<3}" + group_periods
+                    (
+                        sname,
+                        course.group,
+                        course.tid,
+                        lessons,
+                        group_periods
+                    )
                 )
 
         # Collate the various activities
@@ -918,19 +959,22 @@ def print_classes(class_data, tag2classes):
             sbj, tag = block.subject, block.tag
             lbs, lbt = len(sbj), len(tag)
             if tag:
-                if lbs + lbt > 28 and lbs > 18:
-                    blockname = ljtrim(f"[[{ljtrim(sbj, 18)} #{tag}]]", 28)
-                else:
-                    blockname = ljtrim(f"[[{sbj} #{tag}]]", 28)
+                blockname = f'[[{sbj} #{tag}]]'
             else:
-                blockname = ljtrim(f"[[{sbj}]]", 28)
+                blockname = f'[[{sbj}]]'
             all_items.append(
-                blockname + f" {ljtrim(data[0], 12)}" + ljtrim(data[2], 20)
+                (
+                    blockname + data[2],
+                    "",
+                    "",
+                    data[0],
+                    ""
+                )
             )
             for line in data[1]:
                 all_items.append(line)
         if all_items:
-            all_items.append("")
+            all_items.append(None)
         all_items += sorted(class_list)
 
         classline = f"{kname} ({klass})"
@@ -938,20 +982,30 @@ def print_classes(class_data, tag2classes):
         countlines = [line]
         for g in sorted(counts):
             n = counts[g]
-            if len(line) >= 4:
+            if len(line) >= 6:
                 line = []
                 countlines.append(line)
             item = f"   {g}: " + f"{n:.1f}".replace(".", DECIMAL_SEP)
             line.append(f"{item:<16}")
-        # print("  +++++++++++++++++++++", classline)
-        xlines = ["".join(l) for l in countlines]
-        xlines.append("  " + "=" * 60)
-        xlines.append("")
-        classlists.append((classline, [("", xlines + all_items)]))
+        while len(line) < 6:
+            line.append(" "*16)
+        countlines.append([""])
+        classlists.append((classline, [("#", countlines), ("", all_items)]))
 
     pdf = PdfCreator()
+#TODO
+#    headers = [
+#        T[h] for h in ("H_subject", "H_room", "H_lessons_blocks")
+#    ]
+    headers = ("Fach", "Gruppe", "Lehrer", "Schülerstunden", "gesamt")
+    colwidths = (70, 20, 20, 40, 20)
     return pdf.build_pdf(
-        classlists, title="Klassen-Fächer", author="FWS Bothfeld"
+        classlists,
+        title="Klassen-Fächer",
+        author=CONFIG["SCHOOL_NAME"],
+        headers = headers,
+        colwidths = colwidths,
+#        do_landscape=True
     )
 
 
@@ -976,6 +1030,25 @@ class MyDocTemplate(SimpleDocTemplate):
         super().handle_flowable(flowables)
 
 
+tablestyle0 = [
+    ('FONT', (0, 0), (-1, -1), 'Helvetica'),
+    ('FONTSIZE', (0, 0), (-1, -1), 12),
+    ('LINEABOVE', (0, -1), (-1, -1), 1, colors.lightgrey),
+]
+
+tablestyle = [
+#         ('ALIGN', (0, 1), (-1, -1), 'RIGHT'),
+    ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+    ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
+    ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold'),
+#         ('LINEABOVE', (0,-1), (-1,-1), 1, colors.black),
+    ('FONT', (0, 1), (-1, -1), 'Helvetica'),
+#         ('BACKGROUND', (1, 1), (-2, -2), colors.white),
+    ('TEXTCOLOR', (0, 0), (1, -1), colors.black),
+    ('FONTSIZE', (0, 0), (-1, -1), 11),
+]
+
+
 class PdfCreator:
     def add_page_number(self, canvas, doc):
         canvas.saveState()
@@ -984,11 +1057,19 @@ class PdfCreator:
         canvas.drawCentredString(18 * mm, 18 * mm, page_number_text)
         canvas.restoreState()
 
-    def build_pdf(self, pagelist, title, author):
+    def build_pdf(
+        self,
+        pagelist,
+        title,
+        author,
+        headers,
+        colwidths=None,
+        do_landscape=False
+    ):
         all_refs = set()
 
-        # class PageHeader(Paragraph):
-        class PageHeader(Preformatted):
+        class PageHeader(Paragraph):
+        #class PageHeader(Preformatted):
             def __init__(self, text, ref):
                 if ref in all_refs:
                     REPORT("ERROR", T["Repeated_page_title"].format(ref=ref))
@@ -1008,64 +1089,75 @@ class PdfCreator:
             pdf_buffer,
             title=title,
             author=author,
-            pagesize=A4,
+            pagesize=landscape(A4) if do_landscape else A4,
             topMargin=BASE_MARGIN,
             leftMargin=BASE_MARGIN,
             rightMargin=BASE_MARGIN,
             bottomMargin=BASE_MARGIN,
         )
         sample_style_sheet = getSampleStyleSheet()
-        # body_style = sample_style_sheet["BodyText"]
-        body_style = sample_style_sheet["Code"]
-        body_style.fontSize = 12
-        body_style.leading = 14
-        body_style.leftIndent = 0
+        body_style = sample_style_sheet["BodyText"]
+        # body_style = sample_style_sheet["Code"]
+        body_style.fontSize = 11
+        # body_style.leading = 14
+        # body_style.leftIndent = 0
 
-        body_style_2 = copy.deepcopy(body_style)
-        body_style.spaceBefore = 10
-        body_style_2.alignment = TA_RIGHT
+        # body_style_2 = copy.deepcopy(body_style)
+        # body_style.spaceBefore = 10
+        # body_style_2.alignment = TA_RIGHT
 
         heading_style = sample_style_sheet["Heading1"]
         # print("????????????", heading_style.fontName)
         # heading_style = copy.deepcopy(body_style)
-        # heading_style.fontName = "Helvetica-Bold"
-        heading_style.fontSize = 16
+        heading_style.fontName = "Helvetica-Bold"
+        heading_style.fontSize = 14
         heading_style.spaceAfter = 24
 
-        sect_style = sample_style_sheet["Heading2"]
-        sect_style.fontSize = 13
-        sect_style.spaceBefore = 20
+        # sect_style = sample_style_sheet["Heading2"]
+        # sect_style.fontSize = 13
+        # sect_style.spaceBefore = 20
         # print("\n STYLES:", sample_style_sheet.list())
 
         flowables = []
         for pagehead, plist in pagelist:
             # print("§§§", repr(pagehead))
+            tstyle = tablestyle.copy()
             # h = Paragraph(pagehead, heading_style)
-            h = PageHeader(pagehead, pagehead.split("(", 1)[0].rstrip())
+            h = PageHeader(pagehead, pagehead)#.split("(", 1)[0].rstrip())
             flowables.append(h)
+            lines = [headers]
+            nh = len(headers)
             for secthead, slist in plist:
-                #                flowables.append(Paragraph(secthead, sect_style))
+                if secthead == '#':
+                    table = Table(slist)
+                    table_style = TableStyle(tablestyle0)
+                    table.setStyle(table_style)
+                    flowables.append(table)
+                    continue
+                lines.append("")
                 for sline in slist:
+                    r = len(lines)
                     if sline:
-                        lines = sline.split("$")
-                        # flowables.append(Paragraph(sline, body_style))
-                        flowables.append(
-                            Preformatted(
-                                lines[0],
-                                body_style,
-                                maxLineLength=70,
-                                newLineChars=" ",
+                        if sline[0].startswith('[['):
+                            tstyle.append(('SPAN', (0, r), (2, r)))
+                        if sline[0] == "-----":
+                            tstyle.append(
+                                ('LINEABOVE', (0, r), (-1, r), 1, colors.black),
                             )
-                        )
-                        for line in lines[1:]:
-                            flowables.append(
-                                Paragraph(
-                                    line,
-                                    body_style_2,
-                                )
-                            )
+                            sline = sline[1:]
+                        lines.append(sline[:nh])
                     else:
-                        flowables.append(Spacer(1, 4 * mm))
+                        lines.append("")
+                lines.append("")
+
+            kargs = {"repeatRows": 1}
+            if colwidths:
+                kargs["colWidths"] = [w*mm for w in colwidths]
+            table = Table(lines, **kargs)
+            table_style = TableStyle(tstyle)
+            table.setStyle(table_style)
+            flowables.append(table)
+
             flowables.append(PageBreak())
         my_doc.build(
             flowables,
@@ -1092,7 +1184,8 @@ if __name__ == "__main__":
         pdfbytes = print_teachers(tlist, show_workload=True)
         #        pdfbytes = print_teachers(tlist)
 
-        filepath = saveDialog("pdf-Datei (*.pdf)", "teacher_class_subjects")
+#TODO
+        filepath = saveDialog("pdf-Datei (*.pdf)", "teacher_class_subjects2")
         if filepath and os.path.isabs(filepath):
             if not filepath.endswith(".pdf"):
                 filepath += ".pdf"
@@ -1100,10 +1193,13 @@ if __name__ == "__main__":
                 fh.write(pdfbytes)
             print("  --->", filepath)
 
+#        return
+
         clist = courses.read_class_blocks()
         pdfbytes = print_classes(clist, courses.tag2classes)
 
-        filepath = saveDialog("pdf-Datei (*.pdf)", "class_subjects")
+#TODO
+        filepath = saveDialog("pdf-Datei (*.pdf)", "class_subjects2")
         if filepath and os.path.isabs(filepath):
             if not filepath.endswith(".pdf"):
                 filepath += ".pdf"
