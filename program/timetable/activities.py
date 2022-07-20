@@ -882,7 +882,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
         colwidths = (20, 60, 40, 40)
     return pdf.build_pdf(
         teacherlists,
-        title="Lehrer-Klassen-Fächer",
+        title=T["teachers-subjects"],
         author=CONFIG["SCHOOL_NAME"],
         headers = headers,
         colwidths = colwidths,
@@ -993,15 +993,13 @@ def print_classes(class_data, tag2classes):
         classlists.append((classline, [("#", countlines), ("", all_items)]))
 
     pdf = PdfCreator()
-#TODO
-#    headers = [
-#        T[h] for h in ("H_subject", "H_room", "H_lessons_blocks")
-#    ]
-    headers = ("Fach", "Gruppe", "Lehrer", "Schülerstunden", "gesamt")
-    colwidths = (70, 20, 20, 40, 20)
+    headers = [
+        T[h] for h in ("H_subject", "H_group", "H_teacher", "H_lessons", "H_total")
+    ]
+    colwidths = (80, 20, 20, 30, 20)
     return pdf.build_pdf(
         classlists,
-        title="Klassen-Fächer",
+        title=T["classes-subjects"],
         author=CONFIG["SCHOOL_NAME"],
         headers = headers,
         colwidths = colwidths,
@@ -1182,10 +1180,8 @@ if __name__ == "__main__":
 
         tlist = courses.teacher_class_subjects()
         pdfbytes = print_teachers(tlist, show_workload=True)
-        #        pdfbytes = print_teachers(tlist)
-
-#TODO
-        filepath = saveDialog("pdf-Datei (*.pdf)", "teacher_class_subjects2")
+        # pdfbytes = print_teachers(tlist)
+        filepath = saveDialog("pdf-Datei (*.pdf)", "teachers_subjects")
         if filepath and os.path.isabs(filepath):
             if not filepath.endswith(".pdf"):
                 filepath += ".pdf"
@@ -1193,13 +1189,9 @@ if __name__ == "__main__":
                 fh.write(pdfbytes)
             print("  --->", filepath)
 
-#        return
-
         clist = courses.read_class_blocks()
         pdfbytes = print_classes(clist, courses.tag2classes)
-
-#TODO
-        filepath = saveDialog("pdf-Datei (*.pdf)", "class_subjects2")
+        filepath = saveDialog("pdf-Datei (*.pdf)", "class_subjects")
         if filepath and os.path.isabs(filepath):
             if not filepath.endswith(".pdf"):
                 filepath += ".pdf"

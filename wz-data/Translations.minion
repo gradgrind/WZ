@@ -243,11 +243,11 @@ timetable.activities: {
     H_room:     Raum
     H_lessons_blocks: "St./[Epochen]"
     H_workload: Deputat
-    
-    # old
-    lessons:    Stunden
-    WORKLOAD:   Deputatsstunden
-    blocks:     Epochen
+    H_teacher:  Lehrer
+    H_lessons:  Stunden
+    H_total:    insgesamt
+    classes-subjects: "Klassen-Fächer"
+    teachers-subjects: "Lehrer-Fächer"
 }
 
 timetable.asc_data: {
