@@ -25,7 +25,11 @@ T = TRANSLATIONS("core.basic_data")
 
 from typing import Optional, NamedTuple
 
-from core.db_access import db_read_fields, db_key_value_list, KeyValueList
+from core.db_access import (
+    db_read_fields,
+    db_key_value_list,
+    KeyValueList
+)
 from core.classes import Classes
 from core.teachers import Teachers
 from ui.ui_base import QRegularExpression  ### QtCore
@@ -135,16 +139,20 @@ class Sublesson(NamedTuple):
     ROOMS: str
 
 
-def sublessons(tag):
+def sublessons(tag, reset=False):
     if tag.replace(" ", "") != tag:
         SHOW_ERROR(f"Bug: Spaces in partner tag: '{tag}'")
         return []
     if not tag:
         return []
-    try:
-        slmap = SHARED_DATA["SUBLESSONS"]
-    except KeyError:
+    if reset:
         slmap = {}
+    else:
+        try:
+            slmap =  SHARED_DATA["SUBLESSONS"]
+        except KeyError:
+            slmap = {}
+    if not slmap:
         for row in db_read_fields("LESSONS", Sublesson._fields):
             sl = Sublesson(*row)
             try:

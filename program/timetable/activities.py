@@ -55,6 +55,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib import colors
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from core.db_access import db_read_fields
 from core.basic_data import (
@@ -1030,6 +1031,8 @@ def print_classes(class_data, tag2classes):
     )
 
 
+PAGESIZE = A4
+PAGESIZE_L = landscape(PAGESIZE)
 BASE_MARGIN = 20 * mm
 
 
@@ -1072,9 +1075,13 @@ tablestyle = [
 class PdfCreator:
     def add_page_number(self, canvas, doc):
         canvas.saveState()
-        canvas.setFont("Times-Roman", 12)
-        page_number_text = "%d" % (doc.page)
-        canvas.drawCentredString(18 * mm, 10 * mm, page_number_text)
+        font_name = "Helvetica"
+        font_size = 11
+        canvas.setFont(font_name, font_size)
+        page_number_text = str(doc.page)
+        w = stringWidth(page_number_text, font_name, font_size)
+        x = (self.pagesize[0] - w)/2
+        canvas.drawCentredString(x, 10 * mm, page_number_text)
         canvas.restoreState()
 
     def build_pdf(
@@ -1105,11 +1112,12 @@ class PdfCreator:
                     canvas.addOutlineEntry(self.ref, self.ref, 0, 0)
 
         pdf_buffer = BytesIO()
+        self.pagesize = PAGESIZE_L if do_landscape else PAGESIZE
         my_doc = MyDocTemplate(
             pdf_buffer,
             title=title,
             author=author,
-            pagesize=landscape(A4) if do_landscape else A4,
+            pagesize=self.pagesize,
             topMargin=BASE_MARGIN,
             leftMargin=BASE_MARGIN,
             rightMargin=BASE_MARGIN,

@@ -699,7 +699,7 @@ class BlockLesson(QWidget):
         self.show_sublessons(edb.get_block())
 
     def show_sublessons(self, block_tag):
-        slist = sublessons(block_tag)
+        slist = sublessons(block_tag, reset=True)
         # print(" ...", slist)
         ltable = self.lesson_table
         self.__ltable_ready = False
