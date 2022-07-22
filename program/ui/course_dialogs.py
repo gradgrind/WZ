@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-07-20
+Last updated:  2022-07-21
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -50,7 +50,6 @@ from core.db_access import (
     db_read_table,
     db_values,
     db_read_unique_field,
-    NoRecord,
 )
 from core.basic_data import (
     get_days,
@@ -58,15 +57,16 @@ from core.basic_data import (
     get_subjects,
     get_rooms,
     get_payment_weights,
+    sublessons,
     read_payment,
     read_block_tag,
     SHARED_DATA,
     timeslot2index,
     index2timeslot,
     TAG_FORMAT,
-#
+    #
     PAYMENT_FORMAT,
-    PAYMENT_TAG_FORMAT
+    PAYMENT_TAG_FORMAT,
 )
 from core.classes import Classes
 from ui.ui_base import (
@@ -109,6 +109,7 @@ DECIMAL_SEP = CONFIG["DECIMAL_SEP"]
 COUNT_FORMAT = QRegularExpression(
     "[1-9]?[0-9](?:$[0-9]{1,3})?|".replace("$", DECIMAL_SEP)
 )
+
 
 def set_coursedata(coursedata: dict):
     SHARED_DATA["COURSE"] = coursedata
@@ -225,7 +226,7 @@ def get_course_info(course):
     )
     if len(clist) > 1:
         raise Bug(f"COURSE {course}: multiple entries")
-    #TODO: Perhaps not found is an error?
+    # TODO: Perhaps not found is an error?
     return CourseKeyFields(*clist[0]) if clist else None
 
 
@@ -236,7 +237,7 @@ class Partner(NamedTuple):
     PLACE: str
 
 
-#?
+# ?
 def partners(tag):
     if tag.replace(" ", "") != tag:
         SHOW_ERROR(f"Bug: Spaces in partner tag: '{tag}'")
@@ -251,25 +252,7 @@ def courses_with_lessontag(tag):
     return db_values("BLOCKS", "course", LESSON_TAG=tag)
 
 
-class Sublesson(NamedTuple):
-    id: int
-    TAG: str
-    LENGTH: str
-    TIME: str
-    ROOMS: str
-
-
-def sublessons(tag):
-    if tag.replace(" ", "") != tag:
-        SHOW_ERROR(f"Bug: Spaces in partner tag: '{tag}'")
-        return []
-    if not tag:
-        return []
-    flist, plist = db_read_table("LESSONS", Sublesson._fields, TAG=tag)
-    return [Sublesson(*p) for p in plist]
-
-
-#?
+# ?
 def placements(xtag):
     """Return a list of <Partner> tuples with the given prefixed (full)
     tag in the PLACE field.
@@ -285,7 +268,7 @@ def placements(xtag):
     return pl
 
 
-#TODO: How to include partners is not yet clear ...
+# TODO: How to include partners is not yet clear ...
 class PartnersDialog(QDialog):
     @classmethod
     def popup(cls, start_value="", pos=None):
@@ -374,7 +357,7 @@ class PartnersDialog(QDialog):
         self.value0 = start_value
         self.result = None
         self.identifier.clear()
-#TODO ...
+        # TODO ...
         taglist = db_values(
             "LESSONS",
             "PLACE",
@@ -420,6 +403,7 @@ class GroupSelector(QComboBox):
     """A special combobox, offering the groups defined for the
     current class. This list must be set up from the <setText> call.
     """
+
     """A specialized combobox for use in the editor form for a
     "RowSelectTable" table view. This combobox offers the groups defined
     for the current class. This list must be set up from the <setText> call.
@@ -429,6 +413,7 @@ class GroupSelector(QComboBox):
     takes the field name and a boolean (value != initial value, set by
     the "setText" method).
     """
+
     def __init__(self, field, modified, parent=None):
         super().__init__(parent)
         self.__modified = modified
@@ -522,13 +507,6 @@ class FormComboBox(QComboBox):
     def change_index(self, i):
         if self.callback_enabled:
             self.__modified(self.__field, self.keylist[i] != self.text0)
-
-
-
-
-
-
-
 
 
 class DayPeriodSelector(QLineEdit):
@@ -909,10 +887,10 @@ class BlockTagSelector(QLineEdit):
 
     def set_block(self, block_tag):
         """Check the value and display it appropriately:
-            empty                   -> empty
-            with subject and tag    -> subject #tag
-            with subject, no tag    -> subject
-            only tag                -> = tag
+        empty                   -> empty
+        with subject and tag    -> subject #tag
+        with subject, no tag    -> subject
+        only tag                -> = tag
         """
         try:
             self.block_tag = read_block_tag(block_tag)
@@ -1401,8 +1379,8 @@ class PaymentDialog(QDialog):
         self.factor = KeySelector()
         form.addRow(T["FACTOR"], self.factor)
         self.factor.set_items(
-            [("--", "0")] +
-            [(k, f"{k} ({v})") for k, v in get_payment_weights()]
+            [("--", "0")]
+            + [(k, f"{k} ({v})") for k, v in get_payment_weights()]
         )
         self.ptag = QLineEdit()
         form.addRow(T["PARALLEL_TAG"], self.ptag)
@@ -1480,11 +1458,11 @@ class PaymentDialog(QDialog):
 if __name__ == "__main__":
     open_database()
 
-#    for p in placements(">ZwE#09G10G"):
-#        print("!!!!", p)
+    #    for p in placements(">ZwE#09G10G"):
+    #        print("!!!!", p)
 
-#    for p in partners("sp03"):
-#        print("??????", p)
+    #    for p in partners("sp03"):
+    #        print("??????", p)
 
     widget = PaymentDialog()
     print("----->", widget.activate(start_value="2*HuEp"))
@@ -1502,8 +1480,8 @@ if __name__ == "__main__":
 
     #    quit(0)
 
-#    widget = PartnersDialog()
-#    print("----->", widget.activate("huO"))
+    #    widget = PartnersDialog()
+    #    print("----->", widget.activate("huO"))
 
     #    quit(0)
 

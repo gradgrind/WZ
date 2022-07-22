@@ -37,13 +37,13 @@ if __name__ == "__main__":
     # start.setup(os.path.join(basedir, "TESTDATA"))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-T = TRANSLATIONS("timetable.courses")
+#T = TRANSLATIONS("timetable.courses")
 
 ### +++++
 
 from typing import NamedTuple, Optional
 
-from core.db_management import open_database, db_read_fields
+from core.db_access import open_database, db_read_fields
 from core.basic_data import get_classes, get_rooms
 
 ### -----

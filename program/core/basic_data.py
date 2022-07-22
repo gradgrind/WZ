@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-07-18
+core/basic_data.py - last updated 2022-07-22
 
 Handle caching of the basic data sources
 
@@ -25,7 +25,7 @@ T = TRANSLATIONS("core.basic_data")
 
 from typing import Optional, NamedTuple
 
-from core.db_access import db_read_unique_field, db_key_value_list, KeyValueList
+from core.db_access import db_read_fields, db_key_value_list, KeyValueList
 from core.classes import Classes
 from core.teachers import Teachers
 from ui.ui_base import QRegularExpression  ### QtCore
@@ -125,6 +125,39 @@ def get_rooms() -> KeyValueList:
     rooms = db_key_value_list("TT_ROOMS", "RID", "NAME", sort_field="RID")
     SHARED_DATA["ROOMS"] = rooms
     return rooms
+
+
+class Sublesson(NamedTuple):
+    id: int
+    TAG: str
+    LENGTH: int
+    TIME: str
+    ROOMS: str
+
+
+def sublessons(tag):
+    if tag.replace(" ", "") != tag:
+        SHOW_ERROR(f"Bug: Spaces in partner tag: '{tag}'")
+        return []
+    if not tag:
+        return []
+    try:
+        slmap = SHARED_DATA["SUBLESSONS"]
+    except KeyError:
+        slmap = {}
+        for row in db_read_fields("LESSONS", Sublesson._fields):
+            sl = Sublesson(*row)
+            try:
+                slmap[sl.TAG].append(sl)
+            except KeyError:
+                slmap[sl.TAG] = [sl]
+        SHARED_DATA["SUBLESSONS"] = slmap
+    try:
+        return slmap[tag]
+    except KeyError:
+        l = []
+        slmap[tag] = l
+    return l
 
 
 def get_payment_weights() -> KeyValueList:

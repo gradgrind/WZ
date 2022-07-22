@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-06-27
+timetable/asc_data.py - last updated 2022-07-21
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -20,7 +20,7 @@ Copyright 2022 Michael Towers
 """
 
 __TEST = False
-#__TEST = True
+__TEST = True
 __TESTX = False
 __TESTY = False
 
@@ -67,21 +67,24 @@ import re, json
 
 import xmltodict
 
-from core.db_management import open_database, db_read_fields
+from core.db_access import db_read_fields
 from core.basic_data import (
     get_days,
     get_periods,
     get_classes,
     get_teachers,
     get_subjects,
-    get_rooms
+    get_rooms,
+    timeslot2index
 )
+
+from activities import lesson_rooms, read_block_tag
+
+#TODO: deprecated?
 from timetable.courses import (
     get_timetable_data,
     blocktag2blocksid,
-    lesson_rooms,
 )
-from ui.course_dialogs import timeslot2index, TimeSlotError
 
 
 def idsub(tag):
@@ -346,6 +349,7 @@ def get_lessons():
         return rooms
 
     def block_lesson(ldata):
+#TODO: use read_block_tag instead
         blocksid = blocktag2blocksid(ldata.place)
         try:
             klass, blesson, place = block_cache[ldata.place]
@@ -408,6 +412,9 @@ def get_lessons():
 
     TIMETABLE_TEACHERS.clear()
     TIMETABLE_SUBJECTS.clear()
+    courses = Courses()
+
+#?
     tt_data = get_timetable_data()
     # Fields:
     #   LESSONLIST
@@ -615,6 +622,7 @@ def build_dict(
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
+    from core.db_access import open_database
     open_database()
     from qtpy.QtWidgets import QApplication, QFileDialog
 
@@ -700,21 +708,10 @@ if __name__ == "__main__":
         for c in cards:
             print("  !!!", c)
 
-#    quit(0)
+    quit(0)
 
     outdir = DATAPATH("TIMETABLE/out")
     os.makedirs(outdir, exist_ok=True)
-
-#TODO:
-#    # Check-lists for teachers
-#    outpath = os.path.join(outdir, "teacher_check.txt")
-#    with open(outpath, "w", encoding="utf-8") as fh:
-#        fh.write(
-#            "STUNDENPLAN 2022/23: Lehrer-Stunden\n"
-#            "===================================\n"
-#        )
-#        fh.write(_classes.teacher_check_list())
-#    print("\nTEACHER CHECK-LIST ->", outpath)
 
     xml_aSc = xmltodict.unparse(
         build_dict(

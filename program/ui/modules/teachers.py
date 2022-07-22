@@ -1,7 +1,7 @@
 """
 ui/modules/teachers.py
 
-Last updated:  2022-06-24
+Last updated:  2022-07-21
 
 Edit teachers' data.
 
@@ -45,7 +45,7 @@ T = TRANSLATIONS("ui.modules.teachers")
 
 ### +++++
 
-from core.db_management import open_database, db_key_value_list, read_pairs
+from core.db_access import open_database, db_key_value_list, read_pairs
 
 from ui.ui_base import (
     HLine,

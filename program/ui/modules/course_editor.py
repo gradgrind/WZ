@@ -1,7 +1,7 @@
 """
 ui/modules/course_editor.py
 
-Last updated:  2022-07-15
+Last updated:  2022-07-22
 
 Edit course and blocks+lessons data.
 
@@ -57,6 +57,11 @@ from core.db_access import (
 )
 from core.teachers import Teachers
 from core.classes import Classes
+from core.basic_data import (
+    get_payment_weights,
+    get_subjects,
+    sublessons,
+)
 
 from ui.ui_base import (
     HLine,
@@ -90,26 +95,22 @@ from ui.ui_base import (
 )
 
 from ui.course_dialogs import (
-    get_payment_weights,
-    get_subjects,
     set_coursedata,
     get_coursedata,
     GroupSelector,
-#    DurationSelector,
-#    DayPeriodSelector,
-#    PartnersSelector,
+    #    DurationSelector,
+    #    DayPeriodSelector,
+    #    PartnersSelector,
     PaymentSelector,
     RoomSelector,
-#    partners,
-    sublessons,
+    #    partners,
     DayPeriodDelegate,
     DurationDelegate,
-#    PartnersDelegate,
+    #    PartnersDelegate,
     BlockTagSelector,
     BlockTagDialog,
-    read_block_tag,
-#    parse_time_field,
-#    get_time_entry,
+    #    parse_time_field,
+    #    get_time_entry,
     TableWidget,
     courses_with_lessontag,
 )
@@ -142,9 +143,10 @@ class COURSE_KEY(NamedTuple):
     TEACHER: str
 
     def __str__(self):
-        return f"<{self.CLASS}:{self.GRP}:{self.SUBJECT}:{self.TEACHER}>"
+        return f"({self.CLASS}:{self.GRP}:{self.SUBJECT}:{self.TEACHER})"
 
-#print("§§§§§§§§§§§", COURSE_KEY._fields, str(COURSE_KEY("10G", "*", "Ma", "EA")))
+
+# print("§§§§§§§§§§§", COURSE_KEY._fields, str(COURSE_KEY("10G", "*", "Ma", "EA")))
 
 BLOCK_COLS = [
     (f, T[f])
@@ -245,7 +247,7 @@ class CourseEditor(QSplitter):
 
         # The blocks table
         self.blocktable = RowSelectTable(name="activities")
-        self.blocktable.setMinimumHeight(120)
+        self.blocktable.setMinimumHeight(80)
         self.blocktable.setEditTriggers(
             QAbstractItemView.NoEditTriggers
         )  # non-editable
@@ -345,7 +347,10 @@ class CourseEditor(QSplitter):
                 self.coursetable.setItemDelegateForColumn(i, delegate)
             elif f == "TEACHER":
                 teachers = Teachers()
-                kv = [(tid, teachers.name(tid)) for tid, tiddata in teachers.items()]
+                kv = [
+                    (tid, teachers.name(tid))
+                    for tid, tiddata in teachers.items()
+                ]
                 self.filter_list[f] = kv
                 delegate = ForeignKeyItemDelegate(kv, parent=self.coursemodel)
                 self.coursetable.setItemDelegateForColumn(i, delegate)
@@ -399,7 +404,7 @@ class CourseEditor(QSplitter):
             # print("EMPTY TABLE")
             self.set_course(0)
             self.course_delete_button.setEnabled(False)
-#TODO: This could cause problems when an attempt is made to use the value?
+            # TODO: This could cause problems when an attempt is made to use the value?
             set_coursedata(None)
 
     def course_delete(self):
@@ -573,7 +578,7 @@ class CourseEditor(QSplitter):
         record = model.record()
         record.setValue("course", self.this_course)
         record.setValue("PAYMENT", f"1*{get_payment_weights()[0][0]}")
-#        record.setValue("NOTES", "")
+        #        record.setValue("NOTES", "")
         n = model.rowCount()
         if model.insertRecord(-1, record) and model.submitAll():
             # lid = model.query().lastInsertId()
@@ -635,7 +640,7 @@ class BlockLesson(QWidget):
 
         # "Sublesson" table
         self.lesson_table = TableWidget()
-        self.lesson_table.setMinimumHeight(120)
+        self.lesson_table.setMinimumHeight(150)
         self.lesson_table.setSelectionMode(
             QTableView.SelectionMode.SingleSelection
         )
@@ -780,7 +785,6 @@ class NonLesson(QWidget):
     def set_data(self, record):
         self.block_id = record.value("id")
         self.course_id = record.value("course")
-        block_tag = record.value("LESSON_TAG")
         self.editors["PAYMENT"].setText(record.value("PAYMENT"))
 
     def payment_changed(self, text):
@@ -818,8 +822,12 @@ class CourseEditorForm(QDialog):
         buttonBox = QDialogButtonBox()
         vbox0.addWidget(buttonBox)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-        self.course_update_button = buttonBox.addButton(QDialogButtonBox.StandardButton.Apply)
-        self.course_add_button = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
+        self.course_update_button = buttonBox.addButton(
+            QDialogButtonBox.StandardButton.Apply
+        )
+        self.course_add_button = buttonBox.addButton(
+            QDialogButtonBox.StandardButton.Save
+        )
         self.course_add_button.setText(T["NEW"])
         bt_cancel.clicked.connect(self.reject)
         self.course_update_button.clicked.connect(self.course_update)

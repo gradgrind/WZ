@@ -1,7 +1,7 @@
 """
 timetable/activities.py
 
-Last updated:  2022-07-20
+Last updated:  2022-07-22
 
 Collect information on activities for teachers and classes/groups.
 
@@ -63,6 +63,7 @@ from core.basic_data import (
     get_teachers,
     get_subjects,
     get_rooms,
+    sublessons,
     check_group,
     read_payment,
     read_block_tag,
@@ -89,7 +90,6 @@ class CourseData(NamedTuple):
 
 class BlockInfo(NamedTuple):
     course: CourseData
-    lessons: list[int]
     block: BlockTag
     rooms: list[str]
     payment_data: PaymentData
@@ -98,8 +98,9 @@ class BlockInfo(NamedTuple):
 
 class ClassBlockInfo(NamedTuple):
     course: CourseData
-    lessons: list[int]
     block: BlockTag
+    lessons: list[int]
+#TODO: Rather str? block members in brackets? ... or negative?
     periods: float  # (per week, averaged over the year)
     notes: str
 
@@ -178,20 +179,17 @@ class Courses:
             if not tid:
                 raise Bug(f"Empty teacher field in {course2data[course]}")
 
-        ### Now read the LESSONS table.
-        ## Block sublessons are the records for the actual lessons:
-        sublesson_lengths = {}  # {block-tag -> [length, ... ]}
-        for tag, length in db_read_fields("LESSONS", ("TAG", "LENGTH")):
-            try:
-                sublesson_lengths[tag].append(length)
-            except KeyError:
-                sublesson_lengths[tag] = [length]
-
         ### Now read the BLOCKS table.
+
+        #TODO: Is this really needed? At present it is not used.
         self.paydata = []  # [(CourseData, PaymentData), ... ]
+
         self.tid2paydata = {}  # {tid -> [(CourseData, PaymentData), ... ]}
+
+        #TODO: Is this really needed? At present it is not used.
         tag2entries = {}  # {block-tag -> [BlockInfo, ... ]}
         self.tag2entries = tag2entries
+
         tid2tags = {}  # {tid -> {block-tag -> [BlockInfo, ... ]}}
         self.tid2tags = tid2tags
         klass2tags = {}  # {klass -> {block-tag -> [BlockInfo, ... ]}}
@@ -199,6 +197,7 @@ class Courses:
         # Collect payment-only entries for courses (check for multiple entries):
         paycourses = set()
         # The "id" field is read only for error reports
+        empty_tags = set()  # for limiting warnings
         for id, course, payment, room, tag, notes in db_read_fields(
             "BLOCKS",
             ("id", "course", "PAYMENT", "ROOM", "LESSON_TAG", "NOTES"),
@@ -222,17 +221,23 @@ class Courses:
                         T["LESSON_ERROR"].format(id=id, course=coursedata, e=e),
                     )
                     continue
-                try:
-                    lessons = sublesson_lengths[tag]
-                except KeyError as e:
-                    REPORT(
-                        "ERROR",
-                        f"(DB-BLOCKS, {coursedata}) TAG ({tag}) -> LENGTHS: {e}",
-                    )
-                    continue
+#                try:
+#                    lessons = sublesson_lengths[tag]
+#                except KeyError:
+#                    # Issue this warning only once per tag
+#                    if tag not in empty_tags:
+#                        REPORT(
+#                            "WARNING",
+#                            T["TAG_NO_LESSONS"].format(
+#                                course=coursedata, tag=tag
+#                            )
+#                        )
+#                        empty_tags.add(tag)
+#                    lessons = []
+
                 roomlist = lesson_rooms(room, coursedata, id)
                 entry = BlockInfo(
-                    coursedata, lessons, blocktag, roomlist, payment_data, notes
+                    coursedata, blocktag, roomlist, payment_data, notes
                 )
                 try:
                     tag2entries[tag].append(entry)
@@ -318,7 +323,7 @@ class Courses:
             payment-only-data: {class -> [(CourseData, PaymentData), ... ]}
             partner-courses: {partner-tag -> [CourseData, ... ]}
         For "continuous" items, a partner-tag is just the block-tag; if
-        there is a pay-tag, the partner-tag is "block-tag+sid&pay-tag".
+        there is a pay-tag, the partner-tag is "block-tag+sid%pay-tag".
         """
         teachers = get_teachers()
         tlist = []
@@ -349,8 +354,10 @@ class Courses:
                             continue
 
                     elif payinfo.number:
+#                        if payinfo.factor == "HuEp":
+#                            print("$$$", course, payinfo)
                         if payinfo.tag:
-                            stkey = f"{course.sid}&{payinfo.tag}"
+                            stkey = f"{course.sid}%{payinfo.tag}"
                             try:
                                 clist, pay, rooms = tagged[stkey]
                             except KeyError:
@@ -471,11 +478,13 @@ class Courses:
                                 course=continuous[0][0], tag=tag
                             ),
                         )
-                elif total_length > sum(blockinfolist[0].lessons):
-                    REPORT(
-                        "WARNING",
-                        T["BLOCK_TOO_FULL"].format(teacher=tname, tag=tag),
-                    )
+                else:
+                    lessons = [sl.LENGTH for sl in sublessons(tag)]
+                    if total_length > sum(lessons):
+                        REPORT(
+                            "WARNING",
+                            T["BLOCK_TOO_FULL"].format(teacher=tname, tag=tag),
+                        )
 
             ## Payment-only data
             c2paydata = {}
@@ -529,13 +538,12 @@ class Courses:
                     tag2classes[tag].add(klass)
                 except KeyError:
                     tag2classes[tag] = {klass}
+                lessons = [sl.LENGTH for sl in sublessons(tag)]
+                lesson_sum = sum(lessons)
+                groups = set()
                 blocks = []
                 tag2blocks[tag] = blocks
-                total_length = {g: 0.0 for g in basic_groups}
-                lesson_sum = 0
                 for blockinfo in blockinfolist:
-                    if not lesson_sum:
-                        lesson_sum = sum(blockinfo.lessons)
                     course = blockinfo.course
                     if not blockinfo.block.sid:
                         ## A "plain" lesson
@@ -548,13 +556,26 @@ class Courses:
                                 ),
                             )
                             continue
+
                     # Only include info if there are real pupils
                     if course.group:
                         # Add number of periods to totals for basic groups
                         if course.group == "*":
-                            basics = basic_groups
+                            groups.update(basic_groups)
                         else:
-                            basics = group2basic[course.group]
+                            groups.update(group2basic[course.group])
+
+#TODO: This is too simple! Need "continuous" too?
+# if sid == blocksid specially? Only if it's a single entry? But if
+# there are multiple entries, the groups must be distinct? Surely not,
+# there could be a block with teacher1 and another with teacher2 ...
+                        payinfo = blockinfo.payment_data
+                        if payinfo.number:
+                            n = payinfo.number_val
+                        else:
+                            n = lesson_sum
+#TODO: remove unneeded T entries ...
+                        """
                         payinfo = blockinfo.payment_data
                         if payinfo.number:
                             if payinfo.divisor:
@@ -587,32 +608,39 @@ class Courses:
                                 elif l == 0.0:
                                     total_length[group] = -1.0
                             n = lesson_sum
+                        """
+
                         # Collect the necessary information about the block
                         blocks.append(
                             ClassBlockInfo(
                                 course,
-                                blockinfo.lessons,
                                 blockinfo.block,
+                                lessons,
                                 n,
                                 blockinfo.notes,
                             )
                         )
+#
+#                # Check that no group has more lessons than is possible ...
+#                xsgroups = [
+#                    g for g, n in total_length.items() if n > lesson_sum
+#                ]
+#                if xsgroups:
+#                    REPORT(
+#                        "WARNING",
+#                        T["EXCESS_LESSONS"].format(klass=klass, tag=tag),
+#                    )
+#                # Update total period counts
+#                for g in group_counts:
+#                    gx = total_length[g]
+#                    if gx > 0.0:
+#                        group_counts[g] += gx
+#                    elif gx < 0.0:
+#                        group_counts[g] += lesson_sum
 
-                # Check that no group has more lessons than is possible ...
-                xsgroups = [
-                    g for g, n in total_length.items() if n > lesson_sum
-                ]
-                if xsgroups:
-                    REPORT(
-                        "WARNING",
-                        T["EXCESS_LESSONS"].format(klass=klass, tag=tag),
-                    )
-                # Update total period counts
-                for g in group_counts:
-                    gx = total_length[g]
-                    if gx > 0.0:
-                        group_counts[g] += gx
-                    elif gx < 0.0:
+
+                if lesson_sum:
+                    for g in groups:
                         group_counts[g] += lesson_sum
 
             ## Payment-only data is not collected for classes
@@ -699,6 +727,9 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                 pass
             else:
                 for tag, blockinfolist in tags.items():
+                    lessonlist = [sl.LENGTH for sl in sublessons(tag)]
+                    lessons = ",".join(map(str, lessonlist))
+                    lesson_sum = sum(lessonlist)
                     # print("???TAG", tag)
                     block = blockinfolist[0].block
                     if block.sid:
@@ -707,22 +738,21 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                             course = blockinfo.course
                             sname = get_subjects().map(course.sid)
                             rooms = "|".join(blockinfo.rooms)
-                            lessons = ",".join(map(str, blockinfo.lessons))
                             payment = blockinfo.payment_data
                             if payment.number:
                                 # With number of units taught
                                 if payment.tag:
                                     n, plist = partners(
-                                        f"{tag}+{course.sid}&{payment.tag}",
+                                        f"{tag}+{course.sid}%{payment.tag}",
                                         course,
                                     )
                                 else:
                                     n, plist = 0, ""
                                 pay, paytext = workload(
-                                    payment, blockinfo.lessons, n
+                                    payment, lessonlist, n
                                 )
                                 pay_total += pay
-                                if payment.number_val >= sum(blockinfo.lessons):
+                                if payment.number_val >= lesson_sum:
                                     if course.sid == block.sid:
                                         class_list.append(
                                             (
@@ -756,7 +786,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                 # Continuous teaching
                                 n, plist = partners(tag, course)
                                 pay, paytext = workload(
-                                    payment, blockinfo.lessons, n
+                                    payment, lessonlist, n
                                 )
                                 pay_total += pay
                                 if course.sid == block.sid:
@@ -793,9 +823,9 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                         course = blockinfo.course
                         sname = get_subjects().map(course.sid)
                         rooms = "|".join(blockinfo.rooms)
-                        lessons = ",".join(map(str, blockinfo.lessons))
+                        lessons = ",".join(map(str, lessonlist))
                         pay, paytext = workload(
-                            blockinfo.payment_data, blockinfo.lessons
+                            blockinfo.payment_data, lessonlist
                         )
                         pay_total += pay
                         class_list.append(
@@ -822,7 +852,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                     class_payonly.append(
                         (
                             sname,
-                            f"({class_group(course)})",
+                            f"[{class_group(course)}]",
                             sname,
                             "",
                             "",
@@ -895,7 +925,6 @@ def print_classes(class_data, tag2classes):
                 )
                 continue
             block = __blockinfo.block
-            lessons = ",".join(map(str, __blockinfo.lessons))
             if block.sid:
                 ## All block types with block name
                 blocklist = []
@@ -909,7 +938,7 @@ def print_classes(class_data, tag2classes):
                 else:
                     parallel = ""
                 # Add block entry
-                class_blocks[block] = (lessons, blocklist, parallel)
+                class_blocks[block] = (__blockinfo.lessons, blocklist, parallel)
                 # Add members
                 for blockinfo in blockinfolist:
                     course = blockinfo.course
@@ -923,11 +952,10 @@ def print_classes(class_data, tag2classes):
                             course.group,
                             course.tid,
                             "",
-                            group_periods,
+                            f'({group_periods})',
                         )
                     )
                 blocklist.sort()
-
             else:
                 ## Simple, plain lesson block
                 course = __blockinfo.course
@@ -936,7 +964,13 @@ def print_classes(class_data, tag2classes):
                     ".", DECIMAL_SEP
                 )
                 class_list.append(
-                    (sname, course.group, course.tid, lessons, group_periods)
+                    (
+                        sname,
+                        course.group,
+                        course.tid,
+                        ",".join(map(str, __blockinfo.lessons)),
+                        group_periods
+                    )
                 )
 
         # Collate the various activities
@@ -948,12 +982,22 @@ def print_classes(class_data, tag2classes):
                 blockname = f"[[{sbj} #{tag}]]"
             else:
                 blockname = f"[[{sbj}]]"
-            all_items.append((blockname + data[2], "", "", data[0], ""))
+            lessons = data[0]
+            all_items.append(
+                (
+                    blockname + data[2],
+                    "",
+                    "",
+                    ",".join(map(str, lessons)),
+                    str(sum(lessons))
+                )
+            )
             for line in data[1]:
                 all_items.append(line)
         if all_items:
             all_items.append(None)
         all_items += sorted(class_list)
+        all_items.append(None)
 
         classline = f"{kname} ({klass})"
         line = []
@@ -1030,7 +1074,7 @@ class PdfCreator:
         canvas.saveState()
         canvas.setFont("Times-Roman", 12)
         page_number_text = "%d" % (doc.page)
-        canvas.drawCentredString(18 * mm, 18 * mm, page_number_text)
+        canvas.drawCentredString(18 * mm, 10 * mm, page_number_text)
         canvas.restoreState()
 
     def build_pdf(
@@ -1116,7 +1160,7 @@ class PdfCreator:
                     if sline:
                         if sline[0].startswith("[["):
                             tstyle.append(("SPAN", (0, r), (2, r)))
-                        if sline[0] == "-----":
+                        elif sline[0] == "-----":
                             tstyle.append(
                                 ("LINEABOVE", (0, r), (-1, r), 1, colors.black),
                             )
@@ -1124,7 +1168,6 @@ class PdfCreator:
                         lines.append(sline[:nh])
                     else:
                         lines.append("")
-                lines.append("")
 
             kargs = {"repeatRows": 1}
             if colwidths:
