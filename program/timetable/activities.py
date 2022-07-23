@@ -902,7 +902,7 @@ def print_classes(class_data, tag2classes):
                 except KeyError:
                     raise Bug(f"Tag {tag} not in 'tag2classes'")
                 if tag_classes:
-                    parallel = f' //{",".join(tag_classes)}'
+                    parallel = f' //{",".join(sorted(tag_classes))}'
                 else:
                     parallel = ""
                 # Add block entry
