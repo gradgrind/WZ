@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-07-22
+core/basic_data.py - last updated 2022-07-23
 
 Handle caching of the basic data sources
 
@@ -294,7 +294,7 @@ class PaymentData(NamedTuple):
     number: str
     factor: str
     tag: str
-    divisor: str
+#    divisor: str
     number_val: float
     factor_val: float
 
@@ -304,8 +304,8 @@ class PaymentData(NamedTuple):
     def __str__(self):
         if self.factor:
             t = f"/{self.tag}" if self.tag else ""
-            if self.divisor:
-                t += f"/{self.divisor}"
+#            if self.divisor:
+#                t += f"/{self.divisor}"
             return f"{self.number}*{self.factor}{t}"
         return ""
 
@@ -315,22 +315,24 @@ def read_payment(payment: str) -> Optional[PaymentData]:
     If the input is invalid a <ValueError> exception wil be raised.
     """
     if not payment:
-        return PaymentData("", "", "", "", 0.0, 0.0)
+#        return PaymentData("", "", "", "", 0.0, 0.0)
+        return PaymentData("", "", "", 0.0, 0.0)
     try:
         n, f = payment.split("*", 1)  # can raise ValueError
     except ValueError:
         raise ValueError(T["INVALID_PAYMENT"].format(text=payment))
     try:
-        f, __t = f.split("/", 1)
+        f, t = f.split("/", 1)
     except ValueError:
-        t, d = "", ""
+#        t, d = "", ""
+        t = ""
     else:
-        if not PAYMENT_TAG_FORMAT.match(__t).hasMatch():
+        if not PAYMENT_TAG_FORMAT.match(t).hasMatch():
             raise ValueError(T["INVALID_PAYMENT_TAG"].format(text=t))
-        try:
-            t, d = __t.split("/", 1)
-        except ValueError:
-            t, d = __t, ""
+#        try:
+#            t, d = t.split("/", 1)
+#        except ValueError:
+#            t, d = t, ""
     if n:
         try:
             if PAYMENT_FORMAT.match(n).hasMatch():
@@ -347,7 +349,8 @@ def read_payment(payment: str) -> Optional[PaymentData]:
         fd = float(get_payment_weights().map(f).replace(",", "."))
     except KeyError:
         raise ValueError(T["UNKNOWN_PAYMENT_WEIGHT"].format(key=f))
-    return PaymentData(n, f, t, d, nd, fd)
+#    return PaymentData(n, f, t, d, nd, fd)
+    return PaymentData(n, f, t, nd, fd)
 
 
 def timeslot2index(timeslot):

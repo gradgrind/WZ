@@ -230,7 +230,6 @@ timetable.activities: {
     BLOCK_TOO_FULL: "{teacher}: Block (Kennzeichen {tag}) hat zu viele Aktivitäten"
     NO_CLASSROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  Klasse hat keinen Klassenraum, wird aber angegeben ($) im Raum-Feld"
     UNKNOWN_ROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  unbekannter Raum ({rid})"
-    EXCESS_LESSONS: "Klasse {klass}: Zu viele Stunden in Block mit Kennzeichen {tag}"
     CLASS_NO_ACTIVITIES: "Klasse ohne „Aktivitäten“: {klass}"
     TAG_NO_ACTIVITIES: "Klasse {klass}: Kennzeichen ({tag}) hat keine Aktivitäten"
     Repeated_page_title: "Seitentitel wurde doppelt verwendet: {ref}"

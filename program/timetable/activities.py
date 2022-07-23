@@ -1,7 +1,7 @@
 """
 timetable/activities.py
 
-Last updated:  2022-07-22
+Last updated:  2022-07-23
 
 Collect information on activities for teachers and classes/groups.
 
@@ -101,7 +101,6 @@ class ClassBlockInfo(NamedTuple):
     course: CourseData
     block: BlockTag
     lessons: list[int]
-#TODO: Rather str? block members in brackets? ... or negative?
     periods: float  # (per week, averaged over the year)
     notes: str
 
@@ -198,12 +197,16 @@ class Courses:
         # Collect payment-only entries for courses (check for multiple entries):
         paycourses = set()
         # The "id" field is read only for error reports
-        empty_tags = set()  # for limiting warnings
+#        empty_tags = set()  # for limiting warnings
         for id, course, payment, room, tag, notes in db_read_fields(
             "BLOCKS",
             ("id", "course", "PAYMENT", "ROOM", "LESSON_TAG", "NOTES"),
         ):
-            coursedata = course2data[course]
+            try:
+                coursedata = course2data[course]
+            except KeyError:
+                # The error should have been reported earlier ...
+                continue
             try:
                 payment_data = read_payment(payment)
             except ValueError as e:
@@ -355,8 +358,6 @@ class Courses:
                             continue
 
                     elif payinfo.number:
-#                        if payinfo.factor == "HuEp":
-#                            print("$$$", course, payinfo)
                         if payinfo.tag:
                             stkey = f"{course.sid}%{payinfo.tag}"
                             try:
@@ -565,52 +566,11 @@ class Courses:
                             groups.update(basic_groups)
                         else:
                             groups.update(group2basic[course.group])
-
-#TODO: This is too simple! Need "continuous" too?
-# if sid == blocksid specially? Only if it's a single entry? But if
-# there are multiple entries, the groups must be distinct? Surely not,
-# there could be a block with teacher1 and another with teacher2 ...
                         payinfo = blockinfo.payment_data
                         if payinfo.number:
                             n = payinfo.number_val
                         else:
                             n = lesson_sum
-#TODO: remove unneeded T entries ...
-                        """
-                        payinfo = blockinfo.payment_data
-                        if payinfo.number:
-                            if payinfo.divisor:
-                                n = payinfo.number_val / float(
-                                    payinfo.divisor.replace(",", ".")
-                                )
-                            else:
-                                n = payinfo.number_val
-                            for group in basics:
-                                l = total_length[group]
-                                if l < 0.0:
-                                    REPORT(
-                                        "ERROR",
-                                        T["EXCESS_LESSONS"].format(
-                                            klass=klass, tag=tag
-                                        ),
-                                    )
-                                else:
-                                    total_length[group] = l + n
-                        else:
-                            for group in basics:
-                                l = total_length[group]
-                                if l > 0.0:
-                                    REPORT(
-                                        "ERROR",
-                                        T["EXCESS_LESSONS"].format(
-                                            klass=klass, tag=tag
-                                        ),
-                                    )
-                                elif l == 0.0:
-                                    total_length[group] = -1.0
-                            n = lesson_sum
-                        """
-
                         # Collect the necessary information about the block
                         blocks.append(
                             ClassBlockInfo(
@@ -621,25 +581,6 @@ class Courses:
                                 blockinfo.notes,
                             )
                         )
-#
-#                # Check that no group has more lessons than is possible ...
-#                xsgroups = [
-#                    g for g, n in total_length.items() if n > lesson_sum
-#                ]
-#                if xsgroups:
-#                    REPORT(
-#                        "WARNING",
-#                        T["EXCESS_LESSONS"].format(klass=klass, tag=tag),
-#                    )
-#                # Update total period counts
-#                for g in group_counts:
-#                    gx = total_length[g]
-#                    if gx > 0.0:
-#                        group_counts[g] += gx
-#                    elif gx < 0.0:
-#                        group_counts[g] += lesson_sum
-
-
                 if lesson_sum:
                     for g in groups:
                         group_counts[g] += lesson_sum
@@ -650,6 +591,25 @@ class Courses:
             clist.append((klass, kname, tag2blocks, group_counts))
             # print(f"$$$ {klass}:", group_counts)
         return clist
+
+
+def print_rooms(rooms):
+    r = "|".join(rooms)
+    if len(r) > 14:
+        return r[:11] + " ..."
+    return r
+
+
+def print_subject(subject):
+    if len(subject) > 18:
+        return subject[:15] + " ..."
+    return subject
+
+
+def print_xsubject(subject):
+    if len(subject) > 28:
+        return subject[:25] + " ..."
+    return subject
 
 
 def ljtrim(text, n):
@@ -737,8 +697,10 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                         bname = block.subject
                         for blockinfo in blockinfolist:
                             course = blockinfo.course
-                            sname = get_subjects().map(course.sid)
-                            rooms = "|".join(blockinfo.rooms)
+                            sname = print_subject(
+                                get_subjects().map(course.sid)
+                            )
+                            rooms = print_rooms(blockinfo.rooms)
                             payment = blockinfo.payment_data
                             if payment.number:
                                 # With number of units taught
@@ -759,22 +721,19 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                             (
                                                 sname,
                                                 class_group(course),
-                                                sname + plist,
+                                                print_xsubject(sname + plist),
                                                 rooms,
                                                 lessons,
                                                 paytext,
                                             )
                                         )
                                         continue
-                                    extent = T["continuous"]
-                                else:
-                                    extent = payment.number
                                 line = (
                                     sname,
                                     f" – {class_group(course)}",
-                                    sname + plist,
+                                    print_xsubject(sname + plist),
                                     rooms,
-                                    f"[{extent}]",
+                                    f"[{payment.number}]",
                                     paytext,
                                 )
                                 try:
@@ -795,7 +754,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                         (
                                             sname,
                                             class_group(course),
-                                            sname + plist,
+                                            print_xsubject(sname + plist),
                                             rooms,
                                             lessons,
                                             paytext,
@@ -822,8 +781,8 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                         ## Simple, plain lesson block
                         blockinfo = blockinfolist[0]
                         course = blockinfo.course
-                        sname = get_subjects().map(course.sid)
-                        rooms = "|".join(blockinfo.rooms)
+                        sname = print_subject(get_subjects().map(course.sid))
+                        rooms = print_rooms(blockinfo.rooms)
                         lessons = ",".join(map(str, lessonlist))
                         pay, paytext = workload(
                             blockinfo.payment_data, lessonlist
