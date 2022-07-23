@@ -331,6 +331,7 @@ class Courses:
         """
         teachers = get_teachers()
         tlist = []
+        already_warned = set()   # for limiting warnings
         for tid in teachers:
             tname = teachers.name(tid)
             ### Divide the data into classes
@@ -482,11 +483,18 @@ class Courses:
                         )
                 else:
                     lessons = [sl.LENGTH for sl in sublessons(tag)]
-                    if total_length > sum(lessons):
-                        REPORT(
-                            "WARNING",
-                            T["BLOCK_TOO_FULL"].format(teacher=tname, tag=tag),
-                        )
+                    suml = sum(lessons)
+                    if suml:
+                        if total_length > suml:
+                            REPORT(
+                                "ERROR",
+                                T["BLOCK_TOO_FULL"].format(
+                                    teacher=tname, tag=tag
+                                ),
+                            )
+                    elif tag not in already_warned:
+                        REPORT("WARNING", T["BLOCK_NO_LESSONS"].format(tag=tag))
+                        already_warned.add(tag)
 
             ## Payment-only data
             c2paydata = {}
