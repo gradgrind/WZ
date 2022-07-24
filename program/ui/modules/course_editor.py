@@ -1,7 +1,7 @@
 """
 ui/modules/course_editor.py
 
-Last updated:  2022-07-22
+Last updated:  2022-07-24
 
 Edit course and blocks+lessons data.
 
@@ -755,7 +755,7 @@ class BlockLesson(QWidget):
             length = "1"
         editor = self.editors["Block_subject"]
         block_tag = editor.get_block()
-        db_new_row("LESSONS", TAG=block_tag, LENGTH=length, TIME="?")
+        db_new_row("LESSONS", TAG=block_tag, LENGTH=length, TIME="")
         self.show_sublessons(block_tag)
 
     def block_del(self):

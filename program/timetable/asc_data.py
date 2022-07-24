@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-07-21
+timetable/asc_data.py - last updated 2022-07-24
 
 Prepare aSc-timetables input from the various sources ...
 
@@ -24,6 +24,8 @@ __TEST = True
 __TESTX = False
 __TESTY = False
 
+MULTICLASS = "XX"   # class "tag" for lesson items involving more than 1 class
+EXTRA_ROOM = "rXXX" # room tag for unknown room ...
 
 # IMPORTANT: Before importing the data generated here, some setting up of
 # the school data is required, especially the setting of the total number
@@ -75,10 +77,12 @@ from core.basic_data import (
     get_teachers,
     get_subjects,
     get_rooms,
-    timeslot2index
+    sublessons,
+    timeslot2index,
+    read_block_tag,
 )
 
-from activities import lesson_rooms, read_block_tag
+from timetable.activities import Courses
 
 #TODO: deprecated?
 from timetable.courses import (
@@ -153,12 +157,12 @@ def get_rooms_aSc() -> list[dict]:
     return rooms
 
 
-def get_subjects_aSc() -> list[dict]:
+def get_subjects_aSc(subjects) -> list[dict]:
     """Return an ordered list of aSc elements for the subjects."""
     return [
         {"@id": idsub(sid), "@short": sid, "@name": name}
         for sid, name in get_subjects()
-        if sid in TIMETABLE_SUBJECTS
+        if sid in subjects
     ]
 
 
@@ -177,6 +181,10 @@ def get_classes_aSc():
     ]
 
 
+def asc_group(klass, group):
+    return idsub(f"{klass}-{group}")
+
+
 def get_groups_aSc():
     """Return an ordered list of aSc elements for the groups within the classes."""
     group_list = []
@@ -185,7 +193,7 @@ def get_groups_aSc():
         g = WHOLE_CLASS
         group_list.append(
             {
-                "@id": idsub(f"{klass}-{g}"),
+                "@id": asc_group(klass, g),
                 "@classid": klass,
                 "@name": g,
                 "@entireclass": "1",
@@ -200,7 +208,7 @@ def get_groups_aSc():
             for grp in div:
                 group_list.append(
                     {
-                        "@id": idsub(f"{klass}-{grp}"),
+                        "@id": asc_group(klass, grp),
                         "@classid": klass,
                         "@name": grp,
                         "@entireclass": "0",
@@ -236,7 +244,7 @@ def timeoff_aSc(tt_data: dict) -> str:
     return ",".join(weektags)
 
 
-def get_teachers_aSc():
+def get_teachers_aSc(teachers):
     """Return an ordered list of aSc elements for the teachers."""
     return [
         {
@@ -249,48 +257,11 @@ def get_teachers_aSc():
             "@timeoff": timeoff_aSc(tdata.tt_data)
         }
         for tdata in get_teachers().values()
-        if tdata.tid in TIMETABLE_TEACHERS
+        if tdata.tid in teachers
     ]
 
 
-def aSc_lesson(classes, sid, groups, tids, duration, rooms):
-    """Given the data for an aSc lesson item, return the school class
-    ("XX" if there are multiple classes) and the lesson item prototype –
-    the id is added later.
-    """
-    if tids:
-        tids.discard("--")
-        TIMETABLE_TEACHERS.update(tids)
-    classes.discard("--")
-    if groups and classes:
-        __classes = sorted(classes)
-    else:
-        __classes = []
-    if sid:
-        if sid == "--":
-            raise Bug("sid = '--'")
-        TIMETABLE_SUBJECTS.add(sid)
-
-    # <id> is initially empty, it is added later
-    return (
-        "XX" if len(__classes) != 1 else idsub(__classes[0]),  # class
-        {
-            "@id": None,
-            "@classids": ",".join(__classes),
-            "@subjectid": sid,
-            "@groupids": ",".join(sorted(groups)),
-            "@teacherids": ",".join(sorted(tids)),
-            "@durationperiods": duration,
-            # Note that in aSc the number of periods means the
-            # number of _single_ periods, so it is the same as
-            # the previous field – lessons are added singly, not
-            # as multiples.
-            "@periodsperweek": duration,
-            "@classroomids": ",".join(rooms),
-        },
-    )
-
-
+#?
 def aSc_block_lesson(lesson, length):
     """Build an aSc lesson record for a block sublesson based on an
     earlier record (cached).
@@ -301,6 +272,145 @@ def aSc_block_lesson(lesson, length):
     return l2
 
 
+class TimetableCourses(Courses):
+    def read_class_lessons(self):
+        """Organize the data according to classes.
+        Produce a list of aSc-lesson items with item identifiers
+        including the class of the lesson – to aid sorting and searching.
+        Lessons involving more than one class are collected under the
+        class "tag" <MULTICLASS>.
+        Any blocks with no sublessons are ignored.
+        Any sublessons which have (time) placements are added to a list
+        of aSc-card items.
+        """
+        # Collect teachers and subjects with timetable entries:
+        self.timetable_teachers = set()
+        self.timetable_subjects = set()
+
+        # Collect aSc-lesson items and aSc-card items
+        self.asc_lesson_list = []
+        self.asc_card_list = []
+        # For counting items within the classes:
+        self.class_counter = {} # {class -> number}
+
+        # tag2entries: {block-tag -> [BlockInfo, ... ]}
+        for tag, blocklist in self.tag2entries.items():
+            lessons = sublessons(tag)
+            if not lessons:
+                continue
+            class_set = set()
+            group_set = set()
+            teacher_set = set()
+            room_list = []
+            extra_room = False
+            for blockinfo in blocklist:
+                course = blockinfo.course
+                class_set.add(course.klass)
+                kgroup = full_group(course.klass, course.group)
+                group_set.update(kgroup)
+                teacher_set.add(course.tid)
+                # Add rooms, retaining order
+                for room in blockinfo.rooms:
+                    if room == "+":
+                        extra_room = True
+                    elif room not in room_list:
+                        room_list.append(room)
+            # Get the subject-id from the block-tag, if it has a
+            # subject, otherwise from the course
+            sid = blockinfo.block.sid or course.sid
+            if extra_room:
+                room_list.append(EXTRA_ROOM)
+            # Divide lessons up according to duration
+            durations = {}
+            for sl in lessons:
+                l = sl.LENGTH
+                try:
+                    durations[l].append(sl)
+                except KeyError:
+                    durations[l] = [sl]
+            # Build aSc lesson items
+            for d in sorted(durations):
+                self.aSc_lesson(
+                    classes=class_set,
+                    sid=idsub(sid),
+                    groups=group_set,
+                    tids=teacher_set,
+                    sl_list=durations[d],
+                    number=d,
+                    rooms=room_list
+                )
+        self.asc_lesson_list.sort(key = lambda x: x["@id"])
+#TODO: ? extend sorting?
+# Am I doing this right with multiple items? Should it be just one card?
+        self.asc_card_list.sort(key = lambda x: x["@lessonid"])
+
+    def aSc_lesson(self, classes, sid, groups, tids, sl_list, number, rooms):
+        """Given the data for an aSc-lesson item, build the item and
+        add it to the list: <self.asc_lesson_list>.
+        If any of its sublessons have a placement, add aSc-card items
+        to the list <self.asc_card_list>.
+        """
+        if tids:
+            tids.discard("--")
+            self.timetable_teachers.update(tids)
+        classes.discard("--")
+        if groups and classes:
+            __classes = sorted(classes)
+        else:
+            __classes = []
+        if sid:
+            if sid == "--":
+                raise Bug("sid = '--'")
+            self.timetable_subjects.add(sid)
+        klass = MULTICLASS if len(__classes) != 1 else idsub(__classes[0])
+        i = (self.class_counter.get(klass) or 0) + 1
+        self.class_counter[klass] = i
+        # It is not likely that there will be >99 lesson items for a class:
+        asc_id = f"{klass}_{i:02}"
+        asc_rooms = ",".join(rooms)
+        duration = len(sl_list)
+        self.asc_lesson_list.append(
+            {
+                "@id": asc_id,
+                "@classids": ",".join(__classes),
+                "@subjectid": sid,
+                "@groupids": ",".join(sorted(groups)),
+                "@teacherids": ",".join(sorted(tids)),
+                "@durationperiods": str(duration),
+                # Note that in aSc the number of periods per week means
+                # the total number of _single_ periods:
+                "@periodsperweek": str(number*duration),
+                "@classroomids": asc_rooms,
+            }
+        )
+
+        # Now add aSc-card items for the sublessons which have placements.
+        # The identifier must be the same as the corresponding aSc-lesson item.
+        # The rooms should be taken from the aSc-lesson item if the
+        # sublesson has none.
+        for sl in sl_list:
+            timeslot = sl.TIME
+            if timeslot:
+                if sl.ROOMS:
+                    rl = sl.ROOMS
+                else:
+                    rl = asc_rooms
+                d, p = timeslot2index(timeslot)
+                self.asc_card_list.append(
+                    {
+                        "@lessonid": asc_id,
+                        "@period": str(p+1),
+                        "@day": str(d+1),
+                        "@classroomids": ",".join(rooms),
+                        "@locked": '0' if timeslot[0] == '?' else '1',
+                    }
+                )
+
+
+
+
+#TODO: deprecated, but keep it for now for reference:
+# I might still want to build some of the data structures here
 def get_lessons():
     """Build list of lessons for aSc-timetables."""
 
@@ -414,118 +524,27 @@ def get_lessons():
     TIMETABLE_SUBJECTS.clear()
     courses = Courses()
 
-#?
-    tt_data = get_timetable_data()
-    # Fields:
-    #   LESSONLIST
-    #   CLASS2LESSONS
-    #   BLOCK_MEMBERS
-    #   BLOCK_SUBLESSONS
-    #   PARTNERS
-    #   PARTNERS_TIME
-    #   TIMETABLE_CELLS
-
-    presorted = {}
-    block_cache = {}  # cache for block lessons: {tag -> lesson dict}
-    lessons = tt_data["LESSONLIST"]  # id-indexed LessonData items
-    block_members = tt_data["BLOCK_MEMBERS"]
-    cardlist = []  # for collecting placements
-    for tt_cell in tt_data["TIMETABLE_CELLS"]:
-        lessondata = lessons[tt_cell]
-        coursedata = lessondata.course
-        if lessondata.place.startswith(">"):
-            ## block sublesson with direct time
-            block_lesson(lessondata)
-
-        elif lessondata.place.startswith("="):
-            ## partner time
-            # As far as I can tell, it is not possible in aSc to specify
-            # that a group of lessons must start at the same time.
-            # Thus I just add normal lessons, setting the time if it is
-            # specified, and emit a list of parallel lessons for the
-            # user.
-            for id in tt_data["PARTNERS"][lessondata.place]:
-                # print("***********", lessons[id])
-                plesson = lessons[id]
-                if plesson.place.startswith(">"):
-                    ## block sublesson with indirect time
-                    # TODO: Not supported in aSc generator?
-                    SHOW_WARNING(f"Partner tag in block sublesson: {plesson}")
-                    # ?
-                    block_lesson(plesson)
-
-                else:
-                    ## plain lesson with indirect time
-                    pcdata = plesson.course
-                    klass, lesson = aSc_lesson(
-                        {pcdata.klass},
-                        pcdata.sid,
-                        full_group(pcdata.klass, pcdata.group),
-                        {pcdata.tid},
-                        plesson.length,
-                        parse_rooms(plesson),  # ordered, so a set can't be used
-                    )
-                    new_lesson(klass, pcdata.sid, lesson,
-                        check_place(plesson)
-                    )
-
-        else:
-            ## plain lesson with direct time
-            klass, lesson = aSc_lesson(
-                {coursedata.klass},
-                coursedata.sid,
-                full_group(coursedata.klass, coursedata.group),
-                {coursedata.tid},
-                lessondata.length,
-                parse_rooms(lessondata),  # ordered, so a set can't be used
-            )
-            new_lesson(klass, coursedata.sid, lesson,
-                check_place(lessondata)
-            )
-
-    lesson_list = []  # final lesson list
-    class_counter = {}  # for indexing lessons on a class-by-class basis
-    for klass in sorted(presorted):
-        kpmap = presorted[klass]
-        for sid in sorted(kpmap):
-            for lesson in kpmap[sid]:
-                # Add id and move lesson to <lesson_list>
-                i = class_counter.get(klass) or 0
-                i += 1
-                class_counter[klass] = i
-                # It is not likely that there will be >99 lessons for a class:
-                lesson["@id"] = f"{klass}_{i:02}"
-                lesson_list.append(lesson)
-
-    cards = []
-    for l, d, p, r, locked in sorted(cardlist, key=lambda x: x[0]["@id"]):
-        # print("CARD:", l, "\n  ...", d, p, r, locked)
-        cards.append(
-            {
-                "@lessonid": l["@id"],
-                "@period": str(p),
-                "@day": str(d),
-                "@classroomids": r,
-                "@locked": locked,
-            }
-        )
-    return lesson_list, cards
+    ### Collect lesson items, grouping according to class. Items which
+    ### involve more than one class are collected separately, using a
+    ### special class name, <MULTICLASS>.
 
 
 def full_group(klass, group):
     """Return the group as a "full group" – also containing the class.
-    The result is a set.
+    As some groups need to be represented as "compounds", return the
+    result as a set.
     """
     if klass and klass != "--":
         if group:
             if group == "*":
-                return {f"{klass}-{WHOLE_CLASS}"}
+                return {asc_group(klass, WHOLE_CLASS)}
             # Some groups are compounds – I need to get the components!
             groups = get_classes().group_info(klass)["GROUP_MAP"][group]
-            return {f"{klass}-{g}" for g in groups}
+            return {asc_group(klass, g) for g in groups}
     return set()
 
 
+#?
 def check_place(lessondata):
     __place = lessondata.place
     if __place:
@@ -682,15 +701,22 @@ if __name__ == "__main__":
         for gdata in groups:
             print("   ", gdata)
 
-    lessons, cards = get_lessons()
+    courses = TimetableCourses()
+    courses.read_class_lessons()
 
-    allsubjects = get_subjects_aSc() # must be after call to <get_lessons>
+#    quit(0)
+
+#    lessons, cards = get_lessons()
+
+    # Must be after collecting lessons:
+    allsubjects = get_subjects_aSc(courses.timetable_subjects)
     if __TEST:
         print("\n*** SUBJECTS ***")
         for sdata in allsubjects:
             print("   ", sdata)
 
-    teachers = get_teachers_aSc() # must be after call to <get_lessons>
+    # Must be after collecting lessons:
+    teachers = get_teachers_aSc(courses.timetable_teachers)
     if __TEST:
         print("\n*** TEACHERS ***")
         for tdata in teachers:
@@ -708,7 +734,7 @@ if __name__ == "__main__":
         for c in cards:
             print("  !!!", c)
 
-    quit(0)
+#    quit(0)
 
     outdir = DATAPATH("TIMETABLE/out")
     os.makedirs(outdir, exist_ok=True)
@@ -721,8 +747,8 @@ if __name__ == "__main__":
             SUBJECTS=allsubjects,
             CLASSES=classes,
             GROUPS=groups,
-            LESSONS=lessons,
-            CARDS=cards,
+            LESSONS=courses.asc_lesson_list,
+            CARDS=courses.asc_card_list,
             #            CARDS = [],
         ),
         pretty=True,

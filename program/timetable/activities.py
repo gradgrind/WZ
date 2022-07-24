@@ -44,13 +44,6 @@ from core.basic_data import (
 ### -----
 
 
-def class_group(course):
-    if course.group:
-        return f"{course.klass}.{course.group}"
-    else:
-        return f"({course.klass})"
-
-
 class CourseData(NamedTuple):
     klass: str
     group: str
@@ -61,6 +54,12 @@ class CourseData(NamedTuple):
         return T["CourseData"].format(
             klass=self.klass, group=self.group, sid=self.sid, tid=self.tid
         )
+
+    def class_group(self):
+        if self.group:
+            return f"{self.klass}.{self.group}"
+        else:
+            return f"({self.klass})"
 
 
 class BlockInfo(NamedTuple):

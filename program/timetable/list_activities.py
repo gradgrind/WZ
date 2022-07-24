@@ -67,7 +67,7 @@ from core.basic_data import (
     BlockTag,
     PaymentData,
 )
-from timetable.activities import class_group, CourseData, Courses
+from timetable.activities import CourseData, Courses
 
 DECIMAL_SEP = CONFIG["DECIMAL_SEP"]
 
@@ -486,7 +486,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                         class_list.append(
                                             (
                                                 sname,
-                                                class_group(course),
+                                                course.class_group(),
                                                 print_xsubject(sname + plist),
                                                 rooms,
                                                 lessons,
@@ -496,7 +496,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                         continue
                                 line = (
                                     sname,
-                                    f" – {class_group(course)}",
+                                    f" – {course.class_group()}",
                                     print_xsubject(sname + plist),
                                     rooms,
                                     f"[{payment.number}]",
@@ -517,7 +517,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                     class_list.append(
                                         (
                                             sname,
-                                            class_group(course),
+                                            course.class_group(),
                                             print_xsubject(sname + plist),
                                             rooms,
                                             lessons,
@@ -529,7 +529,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                                 else:
                                     line = (
                                         sname,
-                                        f" – {class_group(course)}",
+                                        f" – {course.class_group()}",
                                         sname,
                                         rooms,
                                         f'[{T["continuous"]}]',
@@ -555,7 +555,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                         class_list.append(
                             (
                                 sname,
-                                class_group(course),
+                                course.class_group(),
                                 sname,
                                 rooms,
                                 lessons,
@@ -576,7 +576,7 @@ def print_teachers(teacher_data, block_tids=None, show_workload=False):
                     class_payonly.append(
                         (
                             sname,
-                            f"[{class_group(course)}]",
+                            f"[{course.class_group()}]",
                             sname,
                             "",
                             "",

@@ -139,7 +139,7 @@ class Sublesson(NamedTuple):
     ROOMS: str
 
 
-def get_sublessons(reset=False) -> dict[str,list[Sublesson]]:
+def get_sublessons(reset:bool=False) -> dict[str,list[Sublesson]]:
     if not reset:
         try:
             return SHARED_DATA["SUBLESSONS"]
@@ -156,7 +156,7 @@ def get_sublessons(reset=False) -> dict[str,list[Sublesson]]:
     return slmap
 
 
-def sublessons(tag, reset=False):
+def sublessons(tag:str, reset:bool=False) -> list[Sublesson]:
     """Return a list of <Sublesson>s for the given block-tag.
     The <reset> parameter is needed by the course-editor, which can
     change the db contents.
@@ -367,11 +367,10 @@ def timeslot2index(timeslot):
     """Convert a "timeslot" in the tag-form (e.g. "Mo.3") to a pair
     of 0-based indexes, (day, period).
     There may be a "?"-prefix, indicating that the time is not fixed.
-    Both a null value and a single "?" are accepted as "unspecified time",
-    returning (-1, -1).
+    A null value means "unspecified time", returning (-1, -1).
     Invalid values cause a <ValueError> exception.
     """
-    if timeslot and timeslot != "?":
+    if timeslot:
         if timeslot[0] == "?":
             # Remove "unfixed" flag
             timeslot = timeslot[1:]

@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-07-21
+Last updated:  2022-07-24
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -174,7 +174,7 @@ class DayPeriodDialog(QDialog):
         self.accept()
 
     def do_clear(self):
-        self.result = "?"
+        self.result = ""
         self.accept()
 
     def init(self):
@@ -184,16 +184,16 @@ class DayPeriodDialog(QDialog):
         self.periodlist.addItems([p[1] for p in get_periods()])
 
     def activate(self, start_value=None):
+        self.result = None
         try:
             if start_value:
-                fixed = start_value == "?" or start_value[0] != "?"
-            d, p = timeslot2index(start_value)
-            self.result = None
-            if d < 0:
-                d, p = 0, 0
+                fixed = start_value[0] != "?"
+                d, p = timeslot2index(start_value)
+            else:
+                d, p, fixed = 0, 0, True
         except ValueError as e:
             SHOW_ERROR(f"Bug: {e}")
-            self.result = "?"
+            self.result = ""
             d, p, fixed = 0, 0, True
         self.daylist.setCurrentRow(d)
         self.periodlist.setCurrentRow(p)
@@ -633,7 +633,7 @@ class DayPeriodDelegate(QStyledItemDelegate):
         rect = self.__table.visualRect(index)
         pos = self.__table.viewport().mapToGlobal(rect.bottomLeft())
         result = DayPeriodDialog.popup(old_value, pos=pos)
-        if result:
+        if result is not None:
             if (not self.__modified) or self.__modified(index.row(), result):
                 model.setData(index, result)
         self.__table.setFocus()
@@ -1490,7 +1490,7 @@ if __name__ == "__main__":
     #    widget.resize(1000, 550)
     #    widget.exec()
 
-    print("----->", widget.activate("?"))
+    print("----->", widget.activate(""))
     print("----->", widget.activate("Di.4"))
     print("----->", widget.activate("Di.9"))
 
