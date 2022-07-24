@@ -329,14 +329,14 @@ class TimetableCourses(Courses):
                 except KeyError:
                     durations[l] = [sl]
             # Build aSc lesson items
-            for d in sorted(durations):
+            for l in sorted(durations):
                 self.aSc_lesson(
                     classes=class_set,
                     sid=idsub(sid),
                     groups=group_set,
                     tids=teacher_set,
-                    sl_list=durations[d],
-                    number=d,
+                    sl_list=durations[l],
+                    duration=l,
                     rooms=room_list
                 )
         self.asc_lesson_list.sort(key = lambda x: x["@id"])
@@ -344,7 +344,7 @@ class TimetableCourses(Courses):
 # Am I doing this right with multiple items? Should it be just one card?
         self.asc_card_list.sort(key = lambda x: x["@lessonid"])
 
-    def aSc_lesson(self, classes, sid, groups, tids, sl_list, number, rooms):
+    def aSc_lesson(self, classes, sid, groups, tids, sl_list, duration, rooms):
         """Given the data for an aSc-lesson item, build the item and
         add it to the list: <self.asc_lesson_list>.
         If any of its sublessons have a placement, add aSc-card items
@@ -368,7 +368,7 @@ class TimetableCourses(Courses):
         # It is not likely that there will be >99 lesson items for a class:
         asc_id = f"{klass}_{i:02}"
         asc_rooms = ",".join(rooms)
-        duration = len(sl_list)
+        number = len(sl_list)
         self.asc_lesson_list.append(
             {
                 "@id": asc_id,
