@@ -213,12 +213,19 @@ ui.modules.course_lessons: {
 }
 
 timetable.activities: {
-    UNKNOWN_GROUP:  "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
+    CourseData:     "<Kurs: Klasse={klass}, Gruppe={group}, Fach={sid}, Lehrer={tid}>"
+    NO_CLASSROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  Klasse hat keinen Klassenraum, wird aber angegeben ($) im Raum-Feld"
+    UNKNOWN_ROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  unbekannter Raum ({rid})"
     NULL_CLASS_GROUP: "Null-Klasse: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
+    UNKNOWN_GROUP:  "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
     LESSON_ERROR:   "BLOCKS-Tabelle, id={id}, {course}:\n  {e}"
     ROOM_NON_LESSON: "BLOCKS-Tabelle, id={id}, {course}:\n  Eintrag ohne Unterrichtseinheit (nur für Deputate) hat einen Raum ({room})"
     NON_LESSON_NO_TEACHER: "BLOCKS-Tabelle, id={id}, {course}:\n  Deputatseintrag ohne Lehrer"
     PAYMENT_NO_NUMBER:  "BLOCKS-Tabelle, id={id}, {course}:\n  Bei der Deputatsangabe ({payment}) fehlt die Anzahl der Einheiten"
+    COURSE_MULTIPLE_PAY: "{course}: Normalerweise sollte ein Kurs maximal eine „Aktivität“ haben, die nur deputatsrelevant ist"
+}
+
+timetable.list_activities: {
     TEACHER_SUPPRESSED: "Lehrkraft ausgeschlossen: {tname}"
     TEACHER_NO_ACTIVITIES: "Lehrkraft ohne „Aktivitäten“: {tname}"
     CONTINUOUS_BLOCK_TAG: "Durchgehende Kurse dürfen keine Deputatskennung haben: {course} mit Kennzeichen {tag}"
@@ -229,14 +236,10 @@ timetable.activities: {
     CONTINUOUS_PLUS_OTHERS: "{course}: eine durchgehende Aktivität (Kennzeichen {tag}) kann nicht parallel zu anderen Aktivitäten stattfinden"
     BLOCK_TOO_FULL: "{teacher}: Block (Kennzeichen {tag}) hat zu viele Unterrichtseinheiten"
     BLOCK_NO_LESSONS: "Block (Kennzeichen {tag}) hat keine Unterrichtseinheiten"
-    NO_CLASSROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  Klasse hat keinen Klassenraum, wird aber angegeben ($) im Raum-Feld"
-    UNKNOWN_ROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  unbekannter Raum ({rid})"
     CLASS_NO_ACTIVITIES: "Klasse ohne „Aktivitäten“: {klass}"
     TAG_NO_ACTIVITIES: "Klasse {klass}: Kennzeichen ({tag}) hat keine Aktivitäten"
     Repeated_page_title: "Seitentitel wurde doppelt verwendet: {ref}"
     TAG_NO_LESSONS: "{course}, Kennzeichen {tag}: Keine Aktivitäten"
-    
-    CourseData:     "<Kurs: Klasse={klass}, Gruppe={group}, Fach={sid}, Lehrer={tid}>"
     
     # output
     continuous: durchgehend

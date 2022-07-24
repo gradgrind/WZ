@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-07-23
+core/basic_data.py - last updated 2022-07-24
 
 Handle caching of the basic data sources
 
@@ -139,27 +139,37 @@ class Sublesson(NamedTuple):
     ROOMS: str
 
 
+def get_sublessons(reset=False) -> dict[str,list[Sublesson]]:
+    if not reset:
+        try:
+            return SHARED_DATA["SUBLESSONS"]
+        except KeyError:
+            pass
+    slmap = {}
+    for row in db_read_fields("LESSONS", Sublesson._fields):
+        sl = Sublesson(*row)
+        try:
+            slmap[sl.TAG].append(sl)
+        except KeyError:
+            slmap[sl.TAG] = [sl]
+    SHARED_DATA["SUBLESSONS"] = slmap
+    return slmap
+
+
 def sublessons(tag, reset=False):
+    """Return a list of <Sublesson>s for the given block-tag.
+    The <reset> parameter is needed by the course-editor, which can
+    change the db contents.
+    Also tags are accepted which have no entry in the mapping (i.e. no
+    entries in the db table) – because there can be blocks with no
+    sublessons. These are added to the mapping as empty lists.
+    """
     if tag.replace(" ", "") != tag:
         SHOW_ERROR(f"Bug: Spaces in partner tag: '{tag}'")
         return []
     if not tag:
         return []
-    if reset:
-        slmap = {}
-    else:
-        try:
-            slmap =  SHARED_DATA["SUBLESSONS"]
-        except KeyError:
-            slmap = {}
-    if not slmap:
-        for row in db_read_fields("LESSONS", Sublesson._fields):
-            sl = Sublesson(*row)
-            try:
-                slmap[sl.TAG].append(sl)
-            except KeyError:
-                slmap[sl.TAG] = [sl]
-        SHARED_DATA["SUBLESSONS"] = slmap
+    slmap = get_sublessons(reset)
     try:
         return slmap[tag]
     except KeyError:
