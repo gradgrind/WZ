@@ -1,7 +1,7 @@
 """
 timetable/asc_data.py - last updated 2022-07-24
 
-Prepare aSc-timetables input from the various sources ...
+Prepare aSc-timetables input from the database ...
 
 ==============================
 Copyright 2022 Michael Towers
@@ -24,21 +24,13 @@ __TEST = True
 __TESTX = False
 __TESTY = False
 
-MULTICLASS = "XX"   # class "tag" for lesson items involving more than 1 class
-EXTRA_ROOM = "rXXX" # room tag for unknown room ...
+MULTICLASS = "XX"  # class "tag" for lesson items involving more than 1 class
+EXTRA_ROOM = "rXXX"  # room tag for unknown room ...
 
 # IMPORTANT: Before importing the data generated here, some setting up of
 # the school data is required, especially the setting of the total number
 # of lesson slots per day, which seems to be preset to 7 in the program
 # and there is no obvious way of changing this via an import.
-
-### Messages
-
-_NO_JOINT_ROOMS = (
-    "Fach {sid} ({tag}), Klassen {classes}:" " Keine verfügbare Räume (zu '?')"
-)
-_LESSON_NO_GROUP = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Gruppe"
-_LESSON_NO_TEACHER = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Lehrer"
 
 ########################################################################
 
@@ -65,7 +57,7 @@ T = TRANSLATIONS("timetable.asc_data")
 
 ### +++++
 
-import re, json
+import re
 
 import xmltodict
 
@@ -79,16 +71,9 @@ from core.basic_data import (
     get_rooms,
     sublessons,
     timeslot2index,
-    read_block_tag,
 )
 
 from timetable.activities import Courses
-
-#TODO: deprecated?
-from timetable.courses import (
-    get_timetable_data,
-    blocktag2blocksid,
-)
 
 
 def idsub(tag):
@@ -99,9 +84,6 @@ def idsub(tag):
 
 
 WHOLE_CLASS = T["WHOLE_CLASS"]
-
-TIMETABLE_TEACHERS = set()
-TIMETABLE_SUBJECTS = set()
 
 ### -----
 
@@ -175,7 +157,7 @@ def get_classes_aSc():
             "@short": klass,
             "@name": name,
             "@classroomids": __classes.get_classroom(klass),
-            "@timeoff": timeoff_aSc(__classes[klass].tt_data)
+            "@timeoff": timeoff_aSc(__classes[klass].tt_data),
         }
         for klass, name in __classes.get_class_list()
     ]
@@ -251,17 +233,17 @@ def get_teachers_aSc(teachers):
             "@id": idsub(tdata.tid),
             "@short": tdata.tid,
             "@name": tdata.signed,
-#TODO: "@gender": "M" or "F"?
+            # TODO: "@gender": "M" or "F"?
             "@firstname": tdata.firstname,
             "@lastname": tdata.lastname,
-            "@timeoff": timeoff_aSc(tdata.tt_data)
+            "@timeoff": timeoff_aSc(tdata.tt_data),
         }
         for tdata in get_teachers().values()
         if tdata.tid in teachers
     ]
 
 
-#?
+# ?
 def aSc_block_lesson(lesson, length):
     """Build an aSc lesson record for a block sublesson based on an
     earlier record (cached).
@@ -291,7 +273,7 @@ class TimetableCourses(Courses):
         self.asc_lesson_list = []
         self.asc_card_list = []
         # For counting items within the classes:
-        self.class_counter = {} # {class -> number}
+        self.class_counter = {}  # {class -> number}
 
         # tag2entries: {block-tag -> [BlockInfo, ... ]}
         for tag, blocklist in self.tag2entries.items():
@@ -337,12 +319,12 @@ class TimetableCourses(Courses):
                     tids=teacher_set,
                     sl_list=durations[l],
                     duration=l,
-                    rooms=room_list
+                    rooms=room_list,
                 )
-        self.asc_lesson_list.sort(key = lambda x: x["@id"])
-#TODO: ? extend sorting?
-# Am I doing this right with multiple items? Should it be just one card?
-        self.asc_card_list.sort(key = lambda x: x["@lessonid"])
+        self.asc_lesson_list.sort(key=lambda x: x["@id"])
+        # TODO: ? extend sorting?
+        # Am I doing this right with multiple items? Should it be just one card?
+        self.asc_card_list.sort(key=lambda x: x["@lessonid"])
 
     def aSc_lesson(self, classes, sid, groups, tids, sl_list, duration, rooms):
         """Given the data for an aSc-lesson item, build the item and
@@ -379,7 +361,7 @@ class TimetableCourses(Courses):
                 "@durationperiods": str(duration),
                 # Note that in aSc the number of periods per week means
                 # the total number of _single_ periods:
-                "@periodsperweek": str(number*duration),
+                "@periodsperweek": str(number * duration),
                 "@classroomids": asc_rooms,
             }
         )
@@ -399,17 +381,15 @@ class TimetableCourses(Courses):
                 self.asc_card_list.append(
                     {
                         "@lessonid": asc_id,
-                        "@period": str(p+1),
-                        "@day": str(d+1),
-                        "@classroomids": ",".join(rooms),
-                        "@locked": '0' if timeslot[0] == '?' else '1',
+                        "@period": str(p + 1),
+                        "@day": str(d + 1),
+                        "@classroomids": rl,
+                        "@locked": "0" if timeslot[0] == "?" else "1",
                     }
                 )
 
 
-
-
-#TODO: deprecated, but keep it for now for reference:
+# TODO: deprecated, but keep it for now for reference:
 # I might still want to build some of the data structures here
 def get_lessons():
     """Build list of lessons for aSc-timetables."""
@@ -459,7 +439,7 @@ def get_lessons():
         return rooms
 
     def block_lesson(ldata):
-#TODO: use read_block_tag instead
+        # TODO: use read_block_tag instead
         blocksid = blocktag2blocksid(ldata.place)
         try:
             klass, blesson, place = block_cache[ldata.place]
@@ -544,7 +524,7 @@ def full_group(klass, group):
     return set()
 
 
-#?
+# ?
 def check_place(lessondata):
     __place = lessondata.place
     if __place:
@@ -643,30 +623,6 @@ def build_dict(
 if __name__ == "__main__":
     from core.db_access import open_database
     open_database()
-    from qtpy.QtWidgets import QApplication, QFileDialog
-
-    def getActivities(working_folder):
-        app = QApplication.instance()
-        if app is None:
-            # if it does not exist then a QApplication is created
-            app = QApplication(sys.argv)
-        d = QFileDialog(
-            None, "Open fet 'activities' file", "", "XML Files (*.xml)"
-        )
-        d.setFileMode(QFileDialog.ExistingFile)
-        d.setOptions(QFileDialog.DontUseNativeDialog)
-        history_file = os.path.join(working_folder, "activities_history")
-        if os.path.isfile(history_file):
-            with open(history_file, "r", encoding="utf-8") as fh:
-                history = fh.read().split()
-            d.setHistory(history)
-        d.exec()
-        files = d.selectedFiles()
-        if files:
-            with open(history_file, "w", encoding="utf-8") as fh:
-                fh.write("\n".join(d.history()[-10:]))
-            return files[0]
-        return None
 
     days = get_days_aSc()
     if __TEST:
@@ -704,9 +660,9 @@ if __name__ == "__main__":
     courses = TimetableCourses()
     courses.read_class_lessons()
 
-#    quit(0)
+    #    quit(0)
 
-#    lessons, cards = get_lessons()
+    #    lessons, cards = get_lessons()
 
     # Must be after collecting lessons:
     allsubjects = get_subjects_aSc(courses.timetable_subjects)
@@ -722,19 +678,19 @@ if __name__ == "__main__":
         for tdata in teachers:
             print("   ", tdata)
 
-#    quit(0)
+    #    quit(0)
 
     if __TESTX:
         print("\n*** LESSON ITEMS ***")
-        for l in lessons:
+        for l in courses.asc_lesson_list:
             print("  +++", l)
 
     if __TESTY:
         print("\n*** CARDS ***")
-        for c in cards:
+        for c in courses.asc_card_list:
             print("  !!!", c)
 
-#    quit(0)
+    #    quit(0)
 
     outdir = DATAPATH("TIMETABLE/out")
     os.makedirs(outdir, exist_ok=True)
