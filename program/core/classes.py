@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-07-19
+core/classes.py - last updated 2022-07-25
 
 Manage class data.
 
@@ -247,6 +247,25 @@ def build_group_data(divisions):
         "BASIC": basic_groups,
         "MINIMAL_SUBGROUPS": groups2stringlist(cross_terms),
     }
+
+
+def atomic_maps(atoms, groups):
+    """Build mapping {group -> atom-list} for the "usable" groups
+    (those defined for the class in the database).
+    """
+    if len(atoms) > 1:
+        atomsetlist = [(a, set(a.split('.'))) for a in atoms]
+        gmap = {'': atoms}
+        for g in groups:
+            gset = set()
+            g_s = set(g.split('.'))
+            for a, a_s in atomsetlist:
+                if g_s <= a_s:
+                    gset.add(a)
+            gmap[g] = sorted(gset)
+        return gmap
+    else:
+        return {'': []}
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

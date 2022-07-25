@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-07-24
+timetable/asc_data.py - last updated 2022-07-25
 
 Prepare aSc-timetables input from the database ...
 
@@ -24,8 +24,7 @@ __TEST = True
 __TESTX = False
 __TESTY = False
 
-MULTICLASS = "XX"  # class "tag" for lesson items involving more than 1 class
-EXTRA_ROOM = "rXXX"  # room tag for unknown room ...
+MULTICLASS = "XX"   # class "tag" for lesson items involving more than 1 class
 
 # IMPORTANT: Before importing the data generated here, some setting up of
 # the school data is required, especially the setting of the total number
@@ -135,7 +134,13 @@ def get_rooms_aSc() -> list[dict]:
         {"@id": idsub(rid), "@short": rid, "@name": name}
         for rid, name in get_rooms()
     ]
-    rooms.append({"@id": "rXXX", "@short": "rXXX", "@name": T["ROOM_TODO"]})
+    rooms.append(
+        {
+            "@id": CONFIG["EXTRA_ROOM"],
+            "@short": CONFIG["EXTRA_ROOM"],
+            "@name": T["ROOM_TODO"],
+        }
+    )
     return rooms
 
 
@@ -301,7 +306,7 @@ class TimetableCourses(Courses):
             # subject, otherwise from the course
             sid = blockinfo.block.sid or course.sid
             if extra_room:
-                room_list.append(EXTRA_ROOM)
+                room_list.append(CONFIG["EXTRA_ROOM"])
             # Divide lessons up according to duration
             durations = {}
             for sl in lessons:
@@ -435,7 +440,7 @@ def get_lessons():
     def parse_rooms(lessondata):
         rooms = lesson_rooms(lessondata)
         if rooms and rooms[-1] == "+":
-            rooms[-1] = "rXXX"
+            rooms[-1] = CONFIG["EXTRA_ROOM"]
         return rooms
 
     def block_lesson(ldata):
@@ -489,7 +494,7 @@ def get_lessons():
         # same block tag (change length).
         if "+" in brooms:
             brooms.discard("+")
-            brooms.add("rXXX")
+            brooms.add(CONFIG["EXTRA_ROOM"])
         klass, lesson = aSc_lesson(
             bclasses, blocksid, bgroups, btids, ldata.length, sorted(brooms)
         )

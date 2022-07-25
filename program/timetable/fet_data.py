@@ -1,5 +1,5 @@
 """
-timetable/fet_data.py - last updated 2022-07-24
+timetable/fet_data.py - last updated 2022-07-25
 
 Prepare fet-timetables input from the database ...
 
@@ -25,9 +25,6 @@ _TEST = True
 FET_VERSION = "6.2.7"
 
 WEIGHTS = [None, "50", "67", "80", "88", "93", "95", "97", "98", "99", "100"]
-
-#TODO: T ...
-LUNCH_BREAK = ("mp", "Mittagspause")
 
 _MAX_GAPS_PER_WEEK = 10  # maximum value for max. gaps per week (for classes)
 
@@ -76,6 +73,8 @@ if __name__ == "__main__":
 
 from typing import Dict, List, Set, FrozenSet, Tuple
 
+T = TRANSLATIONS("timetable.fet_data")
+
 ### +++++
 
 from itertools import product
@@ -92,6 +91,7 @@ from core.basic_data import (
     sublessons,
     timeslot2index,
 )
+from core.classes import atomic_maps
 from timetable.activities import Courses
 
 
@@ -102,9 +102,130 @@ def get_days_fet() -> list[dict[str,str]]:
     return [{"Name": d[0]} for d in get_days()]
 
 
+def get_periods_fet() -> list[dict[str,str]]:
+    return [{"Name": p[0]} for p in get_periods()]
 
-class Classes_fet:#(Classes):
+
+def get_rooms_fet() -> list[dict[str,str]]:
+    # Build an ordered list of fet elements for the rooms
+    rlist = [
+        {
+            "Name": rid,
+            "Building": None,
+            "Capacity": "30000",
+            "Virtual": "false",
+            "Comments": room,
+        }
+        for rid, room in get_rooms()
+    ]
+    rlist.append(
+        {
+            "Name": CONFIG["EXTRA_ROOM"],
+            "Building": None,
+            "Capacity": "30000",
+            "Virtual": "false",
+            "Comments": T["ROOM_TODO"],
+        }
+    )
+#TODO ???
+#    fet_rooms += self.__virtual_rooms.values()
+    return rlist
+
+
+#TODO: This might need a list of subjects which are actually used (see aSc version)
+def get_subjects_fet() -> list[dict[str,str]]:
+    slist = [{"Name": sid, "Comments": name} for sid, name in get_subjects()]
+    sid, name = T["LUNCH_BREAK"].split(':', 1)
+    slist.append({"Name": sid, "Comments": name})
+    return slist
+
+
+#TODO: This might need a list of teachers who are actually used (see aSc version)
+def get_teachers_fet() -> list[dict[str,str]]:
+    teachers = get_teachers()
+    return [
+        {
+            "Name": tid,
+            "Target_Number_of_Hours": "0",
+            "Qualified_Subjects": None,
+            "Comments": teachers.name(tid),
+        }
+        for tid in teachers
+    ]
+
+
+def get_classes_fet() -> list[dict]: # the structure of the <dict> is not simple
+    classes = get_classes()
+    fet_classes = []
+    for klass, kname in classes.get_class_list():
+        ### Build a fet students_list/year entry for the given class
+        group_info = classes.group_info(klass)
+        group_map = group_info["GROUP_MAP"] # the groups which are usable
+        atoms = group_info["MINIMAL_SUBGROUPS"]
+        # If the class is not divided, <atoms> contains just a null string
+        # print("$$$", klass, atoms, group_map)
+        group2atomlist = atomic_maps(atoms, list(group_map))
+        # print(" -->", group2atomlist)
+
+        # Try with just 0 or 1 category.
+        # The groups are all the "elemental" groups plus any dotted groups
+        # which are used, excluding any "atomic" groups already defined
+        # as subgroups.
+        divided = len(atoms) > 1
+        year_entry = {
+            "Name": klass,
+            "Number_of_Students": "0",
+            "Comments": kname,
+            "Number_of_Categories": "1" if divided else "0",
+            "Separator": ".",
+        }
+        if divided:
+            _groups = []
+            _agset = set()
+            for g in sorted(group_map):
+                sgs = group2atomlist[g]
+                if g in sgs:
+                    # This group is an atomic group
+                    if g not in _agset:
+                        _agset.add(g)
+                        _groups.append(
+                            {
+                                "Name": f"{klass}.{g}",
+                                "Number_of_Students": "0",
+                                "Comments": None,
+                            }
+                        )
+                else:
+                    _agset.update(sgs)
+                    _subgroups = [
+                        {
+                            "Name": f"{klass}.{sg}",
+                            "Number_of_Students": "0",
+                            "Comments": None,
+                        }
+                        for sg in sorted(sgs)
+                    ]
+                    _groups.append(
+                        {
+                            "Name": f"{klass}.{g}",
+                            "Number_of_Students": "0",
+                            "Comments": None,
+                            "Subgroup": _subgroups,
+                        }
+                    )
+            year_entry["Category"] = {
+                "Number_of_Divisions": f"{len(atoms)}",
+                "Division": atoms,
+            }
+            year_entry["Group"] = _groups
+        fet_classes.append(year_entry)
+    return fet_classes
+
+
+class TimetableCourses(Courses):
     __slots__ = (
+        "timetable_teachers",
+        "timetable_subjects",
         "activities",
         "__virtual_room_map",
         "__virtual_rooms",
@@ -114,85 +235,171 @@ class Classes_fet:#(Classes):
         "class2sid2ag2aids",
     )
 
+#TODO: copied from asc_data ...
+    def read_class_lessons(self):
+#TODO: ???
+        """Organize the data according to classes.
+        Produce a list of aSc-lesson items with item identifiers
+        including the class of the lesson – to aid sorting and searching.
+        Lessons involving more than one class are collected under the
+        class "tag" <MULTICLASS>.
+        Any blocks with no sublessons are ignored.
+        Any sublessons which have (time) placements are added to a list
+        of aSc-card items.
+        """
+        # Collect teachers and subjects with timetable entries:
+        self.timetable_teachers = set()
+        self.timetable_subjects = set()
 
+        self.time_constraints = {}
+        self.space_constraints = {}
+        self.activities: List[dict] = []  # fet activities
+        # Used for managing "virtual" rooms:
+        self.__virtual_room_map: Dict[str, str] = {}  # rooms hash -> room id
+        self.__virtual_rooms: Dict[str, dict] = {}  # room id -> fet room
+        # For constraints concerning relative placement of individual
+        # lessons in the various subjects, collect the "atomic" pupil
+        # groups and their activity ids for each subject, divided by class:
+        self.class2sid2ag2aids: Dict[str, Dict[str, Dict[str, List[int]]]] = {}
+        self.lid2aids: Dict[int, List[int]] = {}
 
-
-    def gen_fetdata(self):
-        # Build an ordered list of fet elements for the days
-        fet_days = [{"Name": d.short} for d in self.DAYS]
-        if _TEST:
-            print("\n*** DAYS ***")
-            for _day in self.DAYS:
-                print("   ", _day)
-            print("\n    ... for fet ...\n   ", fet_days)
-            print("\n  ==================================================")
-
-        # Build an ordered list of fet elements for the periods
-        fet_periods = [{"Name": p.short} for p in self.PERIODS]
-        if _TEST:
-            print("\n*** PERIODS ***")
-            for _period in self.PERIODS:
-                print("   ", _period)
-            print("\n    ... for fet ...\n   ", fet_periods)
-            print("\n  ==================================================")
-
-        # Build an ordered list of fet elements for the rooms
-        fet_rooms = [
-            {
-                "Name": rid,
-                "Building": None,
-                "Capacity": "30000",
-                "Virtual": "false",
-                "Comments": self.ROOMS[rid],
-            }
-            for rid in sorted(self.ROOMS)
-        ]
-        fet_rooms += self.__virtual_rooms.values()
-        if _TEST:
-            print("\nROOMS:")
-            for rdata in fet_rooms:
-                print("   ", rdata)
-
-        fet_subjects = [
-            {"Name": sid, "Comments": name}
-            for sid, name in self.SUBJECTS.items()
-        ]
-        fet_subjects.append(
-            {"Name": LUNCH_BREAK[0], "Comments": LUNCH_BREAK[1]}
-        )
-        if _TEST:
-            print("\nSUBJECTS:")
-            for sdata in fet_subjects:
-                print("   ", sdata)
-
-        fet_teachers: List[dict] = []
-        for tid in self.teacher_tags():
-            fet_teachers.append(
-                {
-                    "Name": tid,
-                    "Target_Number_of_Hours": "0",
-                    "Qualified_Subjects": None,
-                    "Comments": self.TEACHERS[tid],
-                }
-            )
-        if _TEST:
-            print("\nTEACHERS:")
-            for tdata in fet_teachers:
-                print("   ", tdata)
-        fet_classes = []
-        if _TEST:
-            print("\nCLASSES:")
-        for klass in self.classes:
-            if klass.startswith("XX"):
+        lesson_index: int = -1  # index of the current "lesson"
+        # tag2entries: {block-tag -> [BlockInfo, ... ]}
+        for tag, blocklist in self.tag2entries.items():
+            lessons = sublessons(tag)
+            if not lessons:
                 continue
-            class_data = self.class_data(klass)
-            fet_classes.append(class_data)
-            if _TEST:
-                print(f"\nfet-CLASS {klass}")
-                for g in class_data.get("Group") or []:
-                    print("  ---", g["Name"])
-                    for sg in g.get("Subgroup") or []:
-                        print("     +", sg["Name"])
+
+#TODO
+        return
+        if x:
+
+            class_set = set()
+            group_set = set()
+            teacher_set = set()
+            room_lists = []
+            extra_room = False
+            for blockinfo in blocklist:
+                course = blockinfo.course
+                class_set.add(course.klass)
+                kgroup = full_group(course.klass, course.group)
+                group_set.update(kgroup)
+                teacher_set.add(course.tid)
+                # Add rooms, retaining order
+                for room in blockinfo.rooms:
+                    if room == "+":
+                        extra_room = True
+                    elif room not in room_list:
+                        room_list.append(room)
+            # Get the subject-id from the block-tag, if it has a
+            # subject, otherwise from the course
+            sid = blockinfo.block.sid or course.sid
+            if extra_room:
+                room_list.append(CONFIG["EXTRA_ROOM"])
+            # Divide lessons up according to duration
+            durations = {}
+            for sl in lessons:
+                l = sl.LENGTH
+                try:
+                    durations[l].append(sl)
+                except KeyError:
+                    durations[l] = [sl]
+            # Build aSc lesson items
+            for l in sorted(durations):
+                self.aSc_lesson(
+                    classes=class_set,
+                    sid=idsub(sid),
+                    groups=group_set,
+                    tids=teacher_set,
+                    sl_list=durations[l],
+                    duration=l,
+                    rooms=room_list,
+                )
+
+
+#???
+        self.asc_lesson_list.sort(key=lambda x: x["@id"])
+        # TODO: ? extend sorting?
+        # Am I doing this right with multiple items? Should it be just one card?
+        self.asc_card_list.sort(key=lambda x: x["@lessonid"])
+
+
+
+
+
+
+# old ...
+        # Collect aSc-lesson items and aSc-card items
+        self.asc_lesson_list = []
+        self.asc_card_list = []
+        # For counting items within the classes:
+        self.class_counter = {}  # {class -> number}
+
+        # tag2entries: {block-tag -> [BlockInfo, ... ]}
+        for tag, blocklist in self.tag2entries.items():
+            lessons = sublessons(tag)
+            if not lessons:
+                continue
+            class_set = set()
+            group_set = set()
+            teacher_set = set()
+            room_list = []
+            extra_room = False
+            for blockinfo in blocklist:
+                course = blockinfo.course
+                class_set.add(course.klass)
+                kgroup = full_group(course.klass, course.group)
+                group_set.update(kgroup)
+                teacher_set.add(course.tid)
+                # Add rooms, retaining order
+                for room in blockinfo.rooms:
+                    if room == "+":
+                        extra_room = True
+                    elif room not in room_list:
+                        room_list.append(room)
+            # Get the subject-id from the block-tag, if it has a
+            # subject, otherwise from the course
+            sid = blockinfo.block.sid or course.sid
+            if extra_room:
+                room_list.append(CONFIG["EXTRA_ROOM"])
+            # Divide lessons up according to duration
+            durations = {}
+            for sl in lessons:
+                l = sl.LENGTH
+                try:
+                    durations[l].append(sl)
+                except KeyError:
+                    durations[l] = [sl]
+            # Build aSc lesson items
+            for l in sorted(durations):
+                self.aSc_lesson(
+                    classes=class_set,
+                    sid=idsub(sid),
+                    groups=group_set,
+                    tids=teacher_set,
+                    sl_list=durations[l],
+                    duration=l,
+                    rooms=room_list,
+                )
+        self.asc_lesson_list.sort(key=lambda x: x["@id"])
+        # TODO: ? extend sorting?
+        # Am I doing this right with multiple items? Should it be just one card?
+        self.asc_card_list.sort(key=lambda x: x["@lessonid"])
+
+
+
+#########################################################
+
+#TODO
+    def gen_fetdata(self):
+        fet_days = get_days_fet()
+        fet_periods = get_periods_fet()
+        fet_rooms = get_rooms_fet()
+#TODO: This might need a list of subjects which are actually used
+        fet_subjects = get_subjects_fet()
+#TODO: This might need a list of teachers who are actually used
+        fet_teachers = get_teachers_fet()
+        fet_classes = get_classes_fet()
 
         fet_dict = {
             "@version": f"{FET_VERSION}",
@@ -235,64 +442,6 @@ class Classes_fet:#(Classes):
         fet_dict["Space_Constraints_List"] = sc_dict
         return {"fet": fet_dict}
 
-    def class_data(self, klass):
-        """Return a fet students_list/year entry for the given class."""
-        class_groups = self.class_groups[klass]
-        division = self.atomics_lists[klass]
-        # Try with just 0 or 1 category.
-        # The groups are all the "elemental" groups plus any dotted groups
-        # which are used and not "atomic" groups already defined as subgroups.
-        year_entry = {
-            "Name": klass,
-            # TODO: long name?
-            "Number_of_Students": "0",
-            "Comments": None,  # '1. Großklasse'. etc.?
-            "Number_of_Categories": "1" if division else "0",
-            "Separator": ".",
-        }
-        if division:
-            _groups = []
-            _agset = set()
-            for g in sorted(class_groups):
-                sgs = class_groups[g]
-                if g == "*":
-                    continue
-                g = f"{klass}.{g}"
-                if g in sgs:
-                    # This group is an atomic group
-                    if g not in _agset:
-                        _agset.add(g)
-                        _groups.append(
-                            {
-                                "Name": g,
-                                "Number_of_Students": "0",
-                                "Comments": None,
-                            }
-                        )
-                else:
-                    _agset.update(sgs)
-                    _subgroups = [
-                        {
-                            "Name": sg,
-                            "Number_of_Students": "0",
-                            "Comments": None,
-                        }
-                        for sg in sorted(sgs)
-                    ]
-                    _groups.append(
-                        {
-                            "Name": g,
-                            "Number_of_Students": "0",
-                            "Comments": None,
-                            "Subgroup": _subgroups,
-                        }
-                    )
-            year_entry["Category"] = {
-                "Number_of_Divisions": f"{len(division)}",
-                "Division": division,
-            }
-            year_entry["Group"] = _groups
-        return year_entry
 
     def constraint_blocked_periods(self):
         """Constraint: students set not available ..."""
@@ -408,6 +557,9 @@ class Classes_fet:#(Classes):
         self.lid2aids: Dict[int, List[int]] = {}
 
         lesson_index: int = -1  # index of the current "lesson"
+
+
+#?
         for lesson in self.lesson_list:
             lesson_index += 1
             if lesson.BLOCK == "--":
@@ -1269,6 +1421,51 @@ if __name__ == "__main__":
             print("   ", _day)
         print("\n    ... for fet ...\n   ", fet_days)
         print("\n  ==================================================")
+
+    fet_periods = get_periods_fet()
+    if _TEST:
+        print("\n*** PERIODS ***")
+        for _period in get_periods():
+            print("   ", _period)
+        print("\n    ... for fet ...\n   ", fet_periods)
+        print("\n  ==================================================")
+
+    fet_rooms = get_rooms_fet()
+    if _TEST:
+        print("\nROOMS:")
+        for rdata in fet_rooms:
+            print("   ", rdata)
+
+    fet_subjects = get_subjects_fet()
+    if _TEST:
+        print("\nSUBJECTS:")
+        for sdata in fet_subjects:
+            print("   ", sdata)
+
+    fet_teachers = get_teachers_fet()
+    if _TEST:
+        print("\nTEACHERS:")
+        for tdata in fet_teachers:
+            print("   ", tdata)
+
+    fet_classes = get_classes_fet()
+    if _TEST:
+        print("\nCLASSES:")
+        for year_entry in fet_classes:
+            glist = year_entry.get("Group") or []
+            print()
+            for k, v in year_entry.items():
+                if k != "Group":
+                    print(f" ... {k}: {v}")
+            if glist:
+                print(" ... Group:")
+                for g in glist:
+                    print("  ---", g["Name"])
+                    for sg in g.get("Subgroup") or []:
+                        print("     +", sg["Name"])
+
+    courses = TimetableCourses()
+    courses.read_class_lessons()
 
     quit(0)
 
