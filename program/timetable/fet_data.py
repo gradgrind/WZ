@@ -1,5 +1,5 @@
 """
-timetable/fet_data.py - last updated 2022-07-25
+timetable/fet_data.py - last updated 2022-07-26
 
 Prepare fet-timetables input from the database ...
 
@@ -155,6 +155,12 @@ def get_teachers_fet() -> list[dict[str,str]]:
 
 
 def get_classes_fet() -> list[dict]: # the structure of the <dict> is not simple
+    """Build the structure for the classes definition.
+    Return this as a list of tuples (one pre class):
+        1) class tag (short name)
+        2) fet class entry – <dict> representing XML structure
+        3) {teaching group -> [atom, ...] (list of "minimal subgroups".
+    """
     classes = get_classes()
     fet_classes = []
     for klass, kname in classes.get_class_list():
@@ -218,7 +224,7 @@ def get_classes_fet() -> list[dict]: # the structure of the <dict> is not simple
                 "Division": atoms,
             }
             year_entry["Group"] = _groups
-        fet_classes.append(year_entry)
+        fet_classes.append((klass, year_entry, group2atomlist))
     return fet_classes
 
 
@@ -226,6 +232,7 @@ class TimetableCourses(Courses):
     __slots__ = (
         "timetable_teachers",
         "timetable_subjects",
+        "timetable_classes",
         "activities",
         "__virtual_room_map",
         "__virtual_rooms",
@@ -263,6 +270,12 @@ class TimetableCourses(Courses):
         self.class2sid2ag2aids: Dict[str, Dict[str, Dict[str, List[int]]]] = {}
         self.lid2aids: Dict[int, List[int]] = {}
 
+        group2atoms = {}
+        self.timetable_classes = []
+        for klass, year_entry, g2atoms in get_classes_fet():
+            group2atoms[klass] = g2atoms
+            self.timetable_classes.append(year_entry)
+
         lesson_index: int = -1  # index of the current "lesson"
         # tag2entries: {block-tag -> [BlockInfo, ... ]}
         for tag, blocklist in self.tag2entries.items():
@@ -271,31 +284,55 @@ class TimetableCourses(Courses):
                 continue
 
 #TODO
-        return
-        if x:
+#        return
+#        if x:
 
             class_set = set()
-            group_set = set()
+            group_sets = {} # {klass -> set of atomic groups}
             teacher_set = set()
-            room_lists = []
-            extra_room = False
+            roomlists = []  # list of unique room lists
             for blockinfo in blocklist:
                 course = blockinfo.course
-                class_set.add(course.klass)
-                kgroup = full_group(course.klass, course.group)
-                group_set.update(kgroup)
-                teacher_set.add(course.tid)
+                klass = course.klass
+                class_set.add(klass)
+                g = course.group
+                if g and klass != "--":
+                    # Only add a group "Students" entry if there is a
+                    # group and a (real) class
+                    if g == '*':
+                        g = ''
+                    gatoms = group2atoms[klass][g]
+                    try:
+                        group_sets[klass].update(gatoms)
+                    except KeyError:
+                        group_sets[klass] = set(gatoms)
+                if course.tid != "--":
+                    teacher_set.add(course.tid)
                 # Add rooms, retaining order
-                for room in blockinfo.rooms:
-                    if room == "+":
-                        extra_room = True
-                    elif room not in room_list:
-                        room_list.append(room)
+                rl = blockinfo.rooms.copy()
+                if rl and rl[-1] == '+':
+                    rl[-1] = CONFIG["EXTRA_ROOM"]
+                if rl not in roomlists:
+                    roomlists.append(rl)
+            if len(roomlists) == 1:
+                rooms = roomlists[0]
+            elif len(roomlists) > 1:
+#TODO: virtual_room
+#                rooms = [self.virtual_room(roomlists)]
+                rooms = roomlists
+            else:
+                rooms = []
+
+            print("§§§", tag, class_set)
+            print("   +++", teacher_set, group_sets)
+            print("   ---", rooms)
+
+        return
+
+        if x:
             # Get the subject-id from the block-tag, if it has a
             # subject, otherwise from the course
             sid = blockinfo.block.sid or course.sid
-            if extra_room:
-                room_list.append(CONFIG["EXTRA_ROOM"])
             # Divide lessons up according to duration
             durations = {}
             for sl in lessons:
@@ -388,6 +425,30 @@ class TimetableCourses(Courses):
 
 
 
+    def combine_atomic_groups(self, groups):
+        """Given a set of atomic groups, possibly from more than one
+        class,try to reduce it to elemental groups (as used in the data
+        input).
+        Return the possibly "simplified" groups as a set.
+        """
+        kgroups = {}
+        for g in groups:
+            k, group = class_group_split(g)
+            try:
+                kgroups[k].append(g)
+            except KeyError:
+                kgroups[k] = [g]
+        _groups = set()
+        for k, glist in kgroups.items():
+            try:
+                gmap = self.groupsets_class[k]
+                _groups.add(gmap[frozenset(glist)])
+            except:
+                _groups.update(glist)
+        return _groups
+
+
+
 #########################################################
 
 #TODO
@@ -399,7 +460,6 @@ class TimetableCourses(Courses):
         fet_subjects = get_subjects_fet()
 #TODO: This might need a list of teachers who are actually used
         fet_teachers = get_teachers_fet()
-        fet_classes = get_classes_fet()
 
         fet_dict = {
             "@version": f"{FET_VERSION}",
@@ -417,7 +477,7 @@ class TimetableCourses(Courses):
             "Subjects_List": {"Subject": fet_subjects},
             "Activity_Tags_List": None,
             "Teachers_List": {"Teacher": fet_teachers},
-            "Students_List": {"Year": fet_classes},
+            "Students_List": {"Year": self.timetable_classes},
             "Activities_List": {"Activity": self.activities},
             "Buildings_List": None,
             "Rooms_List": {"Room": fet_rooms},
@@ -1451,7 +1511,7 @@ if __name__ == "__main__":
     fet_classes = get_classes_fet()
     if _TEST:
         print("\nCLASSES:")
-        for year_entry in fet_classes:
+        for klass, year_entry, g2atoms in fet_classes:
             glist = year_entry.get("Group") or []
             print()
             for k, v in year_entry.items():
@@ -1463,6 +1523,7 @@ if __name__ == "__main__":
                     print("  ---", g["Name"])
                     for sg in g.get("Subgroup") or []:
                         print("     +", sg["Name"])
+            print("Group -> Atoms:", g2atoms)
 
     courses = TimetableCourses()
     courses.read_class_lessons()
