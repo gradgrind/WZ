@@ -272,6 +272,7 @@ timetable.fet_data: {
     WHOLE_CLASS:    alle  # name for a "group" comprising the whole class
     BAD_PLAIN_BLOCK: "{course}: für Kennzeichen {tag} muss es genau einen Kurs geben"
     ROOM_TODO:      "Raum muss noch festgelegt werden"
+    ROOM_BLOCK_CONFLICT: "Raumangaben für {course}, Räume nicht unabhängig: {rooms}"
 
     
     # Entries probably "aSc"-specific

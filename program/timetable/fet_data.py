@@ -282,11 +282,6 @@ class TimetableCourses(Courses):
             lessons = sublessons(tag)
             if not lessons:
                 continue
-
-#TODO
-#        return
-#        if x:
-
             class_set = set()
             group_sets = {} # {klass -> set of atomic groups}
             teacher_set = set()
@@ -312,22 +307,113 @@ class TimetableCourses(Courses):
                 rl = blockinfo.rooms.copy()
                 if rl and rl[-1] == '+':
                     rl[-1] = CONFIG["EXTRA_ROOM"]
-                if rl not in roomlists:
+                if rl and rl not in roomlists:
                     roomlists.append(rl)
-            if len(roomlists) == 1:
-                rooms = roomlists[0]
-            elif len(roomlists) > 1:
-#TODO: virtual_room
-#                rooms = [self.virtual_room(roomlists)]
-                rooms = roomlists
+            # Simplify room lists and check for room conflicts
+            singles = []
+            roomlists0 = []
+            for rl in roomlists:
+                if len(rl) == 1:
+                    singles.append(rl[0])
+                else:
+                    roomlists0.append(rl)
+            roomlists1 = []
+            for rl in roomlists0:
+                _rl = rl.copy()
+                for sl in singles:
+                    try:
+                        _rl.remove(sl)
+                    except ValueError:
+                        pass
+                if _rl:
+                    roomlists1.append(_rl)
+                else:
+                    REPORT(
+                        "ERROR",
+                        T["ROOM_BLOCK_CONFLICT"].format(
+                            course=course, rooms=repr(roomlists)
+                        )
+                    )
+            for sl in singles:
+                roomlists1.append([sl])
+            if len(roomlists1) == 1:
+                rooms = roomlists1[0]
+            elif len(roomlists1) > 1:
+                rooms = [self.virtual_room(roomlists1)]
             else:
                 rooms = []
-
+#TODO --
             print("§§§", tag, class_set)
             print("   +++", teacher_set, group_sets)
             print("   ---", rooms)
+            if len(roomlists1) > 1:
+                print(roomlists1)
+                print(self.__virtual_rooms[rooms[0]])
 
         return
+        """
+        Defining a set of lessons as an "Activity_Group" / subactivities:
+        This might not be much help because the time constraint won't cover
+        lessons in a group with shared atoms ... these would need to be
+        added via a subject search anyway.
+        It might be easier to keep a reference on a class-by-class basis
+        for each atom and subject! Then at the end add appropriate constraints.
+        This could also be used for cross-subject constraints. Something
+        like:
+            {class -> {sid -> {atom -> [activity-ids]}}}
+        or:
+            {class -> {sid -> {activity-ids -> [atoms]}}}
+        On the other hand, it might be useful to have this coupling
+        within the fet gui.
+
+        <Activity>
+            <Teacher>AA</Teacher>
+            <Subject>Awt</Subject>
+            <Students>01G</Students>
+            <Duration>1</Duration>
+            <Total_Duration>5</Total_Duration>
+            <Id>869</Id>
+            <Activity_Group_Id>869</Activity_Group_Id>
+            <Active>true</Active>
+            <Comments></Comments>
+        </Activity>
+        <Activity>
+            <Teacher>AA</Teacher>
+            <Subject>Awt</Subject>
+            <Students>01G</Students>
+            <Duration>2</Duration>
+            <Total_Duration>5</Total_Duration>
+            <Id>870</Id>
+            <Activity_Group_Id>869</Activity_Group_Id>
+            <Active>true</Active>
+            <Comments></Comments>
+        </Activity>
+        <Activity>
+            <Teacher>AA</Teacher>
+            <Subject>Awt</Subject>
+            <Students>01G</Students>
+            <Duration>2</Duration>
+            <Total_Duration>5</Total_Duration>
+            <Id>871</Id>
+            <Activity_Group_Id>869</Activity_Group_Id>
+            <Active>true</Active>
+            <Comments></Comments>
+        </Activity>
+
+        ...
+
+        <ConstraintMinDaysBetweenActivities>
+            <Weight_Percentage>95</Weight_Percentage>
+            <Consecutive_If_Same_Day>true</Consecutive_If_Same_Day>
+            <Number_of_Activities>3</Number_of_Activities>
+            <Activity_Id>869</Activity_Id>
+            <Activity_Id>870</Activity_Id>
+            <Activity_Id>871</Activity_Id>
+            <MinDays>1</MinDays>
+            <Active>true</Active>
+            <Comments></Comments>
+        </ConstraintMinDaysBetweenActivities>
+        """
 
         if x:
             # Get the subject-id from the block-tag, if it has a
