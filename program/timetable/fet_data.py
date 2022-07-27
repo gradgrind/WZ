@@ -1,5 +1,5 @@
 """
-timetable/fet_data.py - last updated 2022-07-26
+timetable/fet_data.py - last updated 2022-07-27
 
 Prepare fet-timetables input from the database ...
 
@@ -81,6 +81,7 @@ from itertools import product
 
 import xmltodict
 
+from core.base import class_group_split
 from core.basic_data import (
     get_days,
     get_periods,
@@ -91,7 +92,7 @@ from core.basic_data import (
     sublessons,
     timeslot2index,
 )
-from core.classes import atomic_maps
+from core.classes import atomic_maps, atoms2groups
 from timetable.activities import Courses
 
 
@@ -156,10 +157,11 @@ def get_teachers_fet() -> list[dict[str,str]]:
 
 def get_classes_fet() -> list[dict]: # the structure of the <dict> is not simple
     """Build the structure for the classes definition.
-    Return this as a list of tuples (one pre class):
+    Return this as a list of tuples (one per class):
         1) class tag (short name)
         2) fet class entry – <dict> representing XML structure
         3) {teaching group -> [atom, ...] (list of "minimal subgroups".
+        4) {(atom, ...) -> [group, ...]
     """
     classes = get_classes()
     fet_classes = []
@@ -172,7 +174,11 @@ def get_classes_fet() -> list[dict]: # the structure of the <dict> is not simple
         # print("$$$", klass, atoms, group_map)
         group2atomlist = atomic_maps(atoms, list(group_map))
         # print(" -->", group2atomlist)
-
+        atoms2grouplist = atoms2groups(
+            group_info["INDEPENDENT_DIVISIONS"],
+            group2atomlist
+        )
+        # print(" -->", atoms2grouplist)
         # Try with just 0 or 1 category.
         # The groups are all the "elemental" groups plus any dotted groups
         # which are used, excluding any "atomic" groups already defined
@@ -224,7 +230,14 @@ def get_classes_fet() -> list[dict]: # the structure of the <dict> is not simple
                 "Division": atoms,
             }
             year_entry["Group"] = _groups
-        fet_classes.append((klass, year_entry, group2atomlist))
+        fet_classes.append(
+            (
+                klass,
+                year_entry,
+                group2atomlist,
+                atoms2grouplist
+            )
+        )
     return fet_classes
 
 
@@ -238,21 +251,14 @@ class TimetableCourses(Courses):
         "__virtual_rooms",
         "time_constraints",
         "space_constraints",
-        "lid2aids",
         "class2sid2ag2aids",
     )
 
-#TODO: copied from asc_data ...
     def read_class_lessons(self):
-#TODO: ???
-        """Organize the data according to classes.
-        Produce a list of aSc-lesson items with item identifiers
-        including the class of the lesson – to aid sorting and searching.
-        Lessons involving more than one class are collected under the
-        class "tag" <MULTICLASS>.
+        """Produce a list of fet-activity (lesson) items with a
+        reference to the id of the source line in the LESSONS table.
         Any blocks with no sublessons are ignored.
-        Any sublessons which have (time) placements are added to a list
-        of aSc-card items.
+        Constraints for time and rooms are added as appropriate.
         """
         # Collect teachers and subjects with timetable entries:
         self.timetable_teachers = set()
@@ -268,15 +274,19 @@ class TimetableCourses(Courses):
         # lessons in the various subjects, collect the "atomic" pupil
         # groups and their activity ids for each subject, divided by class:
         self.class2sid2ag2aids: Dict[str, Dict[str, Dict[str, List[int]]]] = {}
-        self.lid2aids: Dict[int, List[int]] = {}
 
         group2atoms = {}
+        atoms2grouplist = {}
         self.timetable_classes = []
-        for klass, year_entry, g2atoms in get_classes_fet():
+        for klass, year_entry, g2atoms, a2glist in get_classes_fet():
             group2atoms[klass] = g2atoms
+            atoms2grouplist[klass] = a2glist
             self.timetable_classes.append(year_entry)
 
-        lesson_index: int = -1  # index of the current "lesson"
+#        lesson_index: int = -1  # index of the current "lesson"
+
+#        self.days = get_days().key_set()
+#        self.periods = get_periods().key_set()
         # tag2entries: {block-tag -> [BlockInfo, ... ]}
         for tag, blocklist in self.tag2entries.items():
             lessons = sublessons(tag)
@@ -309,6 +319,26 @@ class TimetableCourses(Courses):
                     rl[-1] = CONFIG["EXTRA_ROOM"]
                 if rl and rl not in roomlists:
                     roomlists.append(rl)
+            # Get "usable" groups
+            groups = []
+            for klass, aset in group_sets.items():
+                a2glist = atoms2grouplist[klass]
+                try:
+                    key = tuple(sorted(aset))
+                    for g in a2glist[key]:
+                        groups.append(f'{klass}.{g}')
+                except KeyError:
+                    REPORT(
+                        "ERROR",
+                        T["INVALID_GROUP_LIST"].format(
+                            tag=tag,
+                            groups=",".join(key)
+                        )
+                    )
+            # Get the subject-id from the block-tag, if it has a
+            # subject, otherwise from the course (of which there
+            # should be only one!)
+            sid = blockinfo.block.sid or course.sid
             # Simplify room lists and check for room conflicts
             singles = []
             roomlists0 = []
@@ -331,7 +361,9 @@ class TimetableCourses(Courses):
                     REPORT(
                         "ERROR",
                         T["ROOM_BLOCK_CONFLICT"].format(
-                            course=course, rooms=repr(roomlists)
+                            classes = ",".join(class_set),
+                            tag=tag,
+                            rooms=repr(roomlists)
                         )
                     )
             for sl in singles:
@@ -342,15 +374,53 @@ class TimetableCourses(Courses):
                 rooms = [self.virtual_room(roomlists1)]
             else:
                 rooms = []
-#TODO --
-            print("§§§", tag, class_set)
-            print("   +++", teacher_set, group_sets)
-            print("   ---", rooms)
-            if len(roomlists1) > 1:
-                print(roomlists1)
-                print(self.__virtual_rooms[rooms[0]])
+#            print("§§§", tag, class_set)
+#            print("   +++", teacher_set, groups)
+#            print("   ---", rooms)
+#            if len(roomlists1) > 1:
+#                print(roomlists1)
+#                print(self.__virtual_rooms[rooms[0]])
 
-        return
+            ## Generate the activity or activities
+            if teacher_set:
+                if len(teacher_set) == 1:
+                    activity0 = {"Teacher": teacher_set.pop()}
+                else:
+                    activity0 = {"Teacher": sorted(teacher_set)}
+            else:
+                activity0 = {}
+            if groups:
+                activity0["Students"] = (
+                    groups[0] if len(groups) == 1 else groups
+                )
+            activity0["Subject"] = sid
+            activity0["Active"] = "true"
+            # Divide lessons up according to duration
+            durations = {}
+            total_duration = 0
+            for sl in lessons:
+                l = sl.LENGTH
+                total_duration += l
+                try:
+                    durations[l].append(sl)
+                except KeyError:
+                    durations[l] = [sl]
+            activity0["Total_Duration"] = str(total_duration)
+            id0 = self.next_activity_id()
+            activity0["Activity_Group_Id"] = str(id0 if len(lessons) > 1 else 0)
+            for l in sorted(durations):
+                dstr = str(l)
+                for sl in durations[l]:
+                    id_str = str(sl.id)
+                    activity = activity0.copy()
+                    activity["Id"] = id_str
+                    activity["Duration"] = dstr
+                    activity["Comments"] = id_str
+                    self.add_placement(id_str, sl, rooms)
+                    self.activities.append(activity)
+                    self.subject_group_activity(sid, groups, id_str)
+                    id0 += 1
+
         """
         Defining a set of lessons as an "Activity_Group" / subactivities:
         This might not be much help because the time constraint won't cover
@@ -415,124 +485,59 @@ class TimetableCourses(Courses):
         </ConstraintMinDaysBetweenActivities>
         """
 
-        if x:
-            # Get the subject-id from the block-tag, if it has a
-            # subject, otherwise from the course
-            sid = blockinfo.block.sid or course.sid
-            # Divide lessons up according to duration
-            durations = {}
-            for sl in lessons:
-                l = sl.LENGTH
-                try:
-                    durations[l].append(sl)
-                except KeyError:
-                    durations[l] = [sl]
-            # Build aSc lesson items
-            for l in sorted(durations):
-                self.aSc_lesson(
-                    classes=class_set,
-                    sid=idsub(sid),
-                    groups=group_set,
-                    tids=teacher_set,
-                    sl_list=durations[l],
-                    duration=l,
-                    rooms=room_list,
-                )
-
-
-#???
-        self.asc_lesson_list.sort(key=lambda x: x["@id"])
-        # TODO: ? extend sorting?
-        # Am I doing this right with multiple items? Should it be just one card?
-        self.asc_card_list.sort(key=lambda x: x["@lessonid"])
-
-
-
-
-
-
-# old ...
-        # Collect aSc-lesson items and aSc-card items
-        self.asc_lesson_list = []
-        self.asc_card_list = []
-        # For counting items within the classes:
-        self.class_counter = {}  # {class -> number}
-
-        # tag2entries: {block-tag -> [BlockInfo, ... ]}
-        for tag, blocklist in self.tag2entries.items():
-            lessons = sublessons(tag)
-            if not lessons:
-                continue
-            class_set = set()
-            group_set = set()
-            teacher_set = set()
-            room_list = []
-            extra_room = False
-            for blockinfo in blocklist:
-                course = blockinfo.course
-                class_set.add(course.klass)
-                kgroup = full_group(course.klass, course.group)
-                group_set.update(kgroup)
-                teacher_set.add(course.tid)
-                # Add rooms, retaining order
-                for room in blockinfo.rooms:
-                    if room == "+":
-                        extra_room = True
-                    elif room not in room_list:
-                        room_list.append(room)
-            # Get the subject-id from the block-tag, if it has a
-            # subject, otherwise from the course
-            sid = blockinfo.block.sid or course.sid
-            if extra_room:
-                room_list.append(CONFIG["EXTRA_ROOM"])
-            # Divide lessons up according to duration
-            durations = {}
-            for sl in lessons:
-                l = sl.LENGTH
-                try:
-                    durations[l].append(sl)
-                except KeyError:
-                    durations[l] = [sl]
-            # Build aSc lesson items
-            for l in sorted(durations):
-                self.aSc_lesson(
-                    classes=class_set,
-                    sid=idsub(sid),
-                    groups=group_set,
-                    tids=teacher_set,
-                    sl_list=durations[l],
-                    duration=l,
-                    rooms=room_list,
-                )
-        self.asc_lesson_list.sort(key=lambda x: x["@id"])
-        # TODO: ? extend sorting?
-        # Am I doing this right with multiple items? Should it be just one card?
-        self.asc_card_list.sort(key=lambda x: x["@lessonid"])
-
-
-
-    def combine_atomic_groups(self, groups):
-        """Given a set of atomic groups, possibly from more than one
-        class,try to reduce it to elemental groups (as used in the data
-        input).
-        Return the possibly "simplified" groups as a set.
-        """
-        kgroups = {}
-        for g in groups:
-            k, group = class_group_split(g)
-            try:
-                kgroups[k].append(g)
-            except KeyError:
-                kgroups[k] = [g]
-        _groups = set()
-        for k, glist in kgroups.items():
-            try:
-                gmap = self.groupsets_class[k]
-                _groups.add(gmap[frozenset(glist)])
-            except:
-                _groups.update(glist)
-        return _groups
-
+    def add_placement(self, id_str, sublesson, rooms):
+        t = sublesson.TIME
+        if t:
+            ## Lesson starting time
+            timeslot2index(t)
+            if t[0] == '?':
+                locked = "false"
+                t_ = t[1:]
+            else:
+                locked = "true"
+                t_ = t
+            d, p = t_.split('.', 1)
+            # Fix day and period
+            add_constraint(
+                self.time_constraints,
+                "ConstraintActivityPreferredStartingTime",
+                {
+                    "Weight_Percentage": "100",
+                    "Activity_Id": id_str,
+                    "Preferred_Day": d,
+                    "Preferred_Hour": p,
+                    "Permanently_Locked": locked,
+                    "Active": "true",
+                    "Comments": None,
+                }
+            )
+        ## Lesson room
+        n = len(rooms)
+        if n > 1:
+            # Choice of rooms available
+            r_c = "ConstraintActivityPreferredRooms"
+            s_c = {
+                "Weight_Percentage": "100",
+                "Activity_Id": id_str,
+                "Number_of_Preferred_Rooms": str(n),
+                "Preferred_Room": rooms,
+                "Active": "true",
+                "Comments": None,
+            }
+        elif n == 1:
+            # Either simple room, or "virtual" room for multiple rooms
+            r_c = "ConstraintActivityPreferredRoom"
+            s_c = {
+                "Weight_Percentage": "100",
+                "Activity_Id": id_str,
+                "Room": rooms[0],
+                "Permanently_Locked": "true",
+                "Active": "true",
+                "Comments": None,
+            }
+        else:
+            return
+        add_constraint(self.space_constraints, r_c, s_c)
 
 
 #########################################################
@@ -658,165 +663,6 @@ class TimetableCourses(Courses):
     def next_activity_id(self):
         return len(self.activities) + 1
 
-    def get_lessons(self):
-        """Build list of lessons for fet-timetables."""
-
-        def make_room_constraint(aid: int, rlist: List[str]) -> None:
-            """Make a room constraint for the given activity id and room
-            list.
-            """
-            n = len(rlist)
-            if n > 1:
-                r_c = "ConstraintActivityPreferredRooms"
-                s_c = {
-                    "Weight_Percentage": "100",
-                    "Activity_Id": str(aid),
-                    "Number_of_Preferred_Rooms": str(n),
-                    "Preferred_Room": rlist,
-                    "Active": "true",
-                    "Comments": None,
-                }
-            elif n == 1:
-                r_c = "ConstraintActivityPreferredRoom"
-                s_c = {
-                    "Weight_Percentage": "100",
-                    "Activity_Id": str(aid),
-                    "Room": rlist[0],
-                    "Permanently_Locked": "true",
-                    "Active": "true",
-                    "Comments": None,
-                }
-            else:
-                raise Bug("No room(s) passed to 'make_room_constraint'")
-            add_constraints(self.space_constraints, r_c, [s_c])
-
-        self.time_constraints = {}
-        self.space_constraints = {}
-        self.activities: List[dict] = []  # fet activities
-        # Used for managing "virtual" rooms:
-        self.__virtual_room_map: Dict[str, str] = {}  # rooms hash -> room id
-        self.__virtual_rooms: Dict[str, dict] = {}  # room id -> fet room
-        # For constraints concerning relative placement of individual
-        # lessons in the various subjects, collect the "atomic" pupil
-        # groups and their activity ids for each subject, divided by class:
-        self.class2sid2ag2aids: Dict[str, Dict[str, Dict[str, List[int]]]] = {}
-        self.lid2aids: Dict[int, List[int]] = {}
-
-        lesson_index: int = -1  # index of the current "lesson"
-
-
-#?
-        for lesson in self.lesson_list:
-            lesson_index += 1
-            if lesson.BLOCK == "--":
-                continue  # not a timetabled lesson
-            sid: str = lesson.SID
-            klass: str = lesson.CLASS
-            groups: FrozenSet[str] = lesson.GROUPS
-            activity_groups: List[str]
-            if groups:
-                # "Simplify" the groups, building a list of groups
-                activity_groups = sorted(self.combine_atomic_groups(groups))
-                # print("*****", groups, "-->", activity_groups)
-            else:
-                REPORT("WARNING", _LESSON_NO_GROUP.format(klass=klass, sid=sid))
-                activity_groups = []
-
-            tids = sorted(lesson.TIDS)
-            if (not tids) and (not lesson.REALTIDS):
-                REPORT(
-                    "WARNING", _LESSON_NO_TEACHER.format(klass=klass, sid=sid)
-                )
-                continue
-
-            ### Add room constraint(s) for lesson
-            # Keep it as simple as possible. I don't think fet has list-
-            # order prioritization, so don't even try. Some post-processing
-            # may be able to improve the situation, otherwise manual
-            # editing will be necessary.
-            rooms: List[str]
-            roomlists: List[List[str]] = []
-            ignore_rooms: List[List[str]] = []
-            if lesson.ROOMLIST:
-                roomlists.append(lesson.ROOMLIST)
-            try:
-                for bc in self.block2courselist[lesson_index]:
-                    _rlist = bc.ROOMLIST
-                    if _rlist:
-                        if _rlist[0] == "-":
-                            ignore_rooms.append(_rlist[1:])
-                        else:
-                            roomlists.append(_rlist)
-            except KeyError:
-                # No additional rooms
-                pass
-            if len(roomlists) == 1:
-                rooms = roomlists[0]
-            elif len(roomlists) > 1:
-                rooms = [self.virtual_room(roomlists)]
-            else:
-                rooms = []
-
-            ### Generate the activity or activities
-            if tids:
-                if len(tids) == 1:
-                    activity0 = {"Teacher": tids[0]}
-                else:
-                    activity0 = {"Teacher": tids}
-            else:
-                activity0 = {}
-            if activity_groups:
-                activity0["Students"] = (
-                    activity_groups[0]
-                    if len(activity_groups) == 1
-                    else activity_groups
-                )
-            # Split off possible "+" extension on subject id
-            sid0 = sid.split("+", 1)[0]
-            activity0["Subject"] = sid0
-            activity0["Activity_Group_Id"] = "0"
-            activity0["Active"] = "true"
-            durations: List[int] = lesson.LENGTHS
-            if len(durations) == 1:
-                d = durations[0]
-                dstr = str(d)
-                activity_id = self.next_activity_id()
-                self.lid2aids[lesson_index] = [activity_id]
-                activity0.update(
-                    {
-                        "Duration": dstr,
-                        "Total_Duration": dstr,
-                        "Id": str(activity_id),
-                        "Comments": f"{lesson_index}",
-                    }
-                )
-                self.activities.append(activity0)
-                if rooms:
-                    make_room_constraint(activity_id, rooms)
-                self.subject_group_activity(sid0, groups, activity_id)
-            else:
-                i = 0
-                aids: List[int] = []
-                self.lid2aids[lesson_index] = aids
-                for d in durations:
-                    i += 1
-                    dstr = str(d)
-                    activity_id = self.next_activity_id()
-                    aids.append(activity_id)
-                    activity = activity0.copy()
-                    activity.update(
-                        {
-                            "Duration": dstr,
-                            "Total_Duration": dstr,
-                            "Id": str(activity_id),
-                            "Comments": f"{lesson_index}.{i}",
-                        }
-                    )
-                    self.activities.append(activity)
-                    if rooms:
-                        make_room_constraint(activity_id, rooms)
-                    self.subject_group_activity(sid0, groups, activity_id)
-
     def lunch_breaks(self):
         """Add activities and constraints for lunch breaks.
         There needs to be a lunch-break activity for every sub-group of
@@ -879,7 +725,7 @@ class TimetableCourses(Courses):
         )
 
     def subject_group_activity(
-        self, sid: str, groups: FrozenSet[str], activity_id: int
+        self, sid: str, groups: list[str], activity_id: int
     ) -> None:
         """Add the activity/groups to the collection for the appropriate
         class and subject.
@@ -1514,6 +1360,17 @@ class Placements_fet:#(TT_Placements):
         )
 
 
+def add_constraint(constraints, ctype, constraint):
+    """Add a constraint of type <ctype> to the master constraint
+    list-mapping <constraints> (either time or space constraints).
+    """
+    try:
+        constraints[ctype].append(constraint)
+    except KeyError:
+        constraints[ctype] = [constraint]
+
+
+
 def add_constraints(constraints, ctype, constraint_list):
     """Add a (possibly empty) list of constraints, of type <ctype>, to
     the master constraint list-mapping <constraints> (either time or
@@ -1597,7 +1454,7 @@ if __name__ == "__main__":
     fet_classes = get_classes_fet()
     if _TEST:
         print("\nCLASSES:")
-        for klass, year_entry, g2atoms in fet_classes:
+        for klass, year_entry, g2atoms, a2glist in fet_classes:
             glist = year_entry.get("Group") or []
             print()
             for k, v in year_entry.items():
@@ -1610,6 +1467,9 @@ if __name__ == "__main__":
                     for sg in g.get("Subgroup") or []:
                         print("     +", sg["Name"])
             print("Group -> Atoms:", g2atoms)
+            print("Atoms -> Groups:", a2glist)
+
+    # quit(0)
 
     courses = TimetableCourses()
     courses.read_class_lessons()

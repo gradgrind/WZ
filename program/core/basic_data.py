@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-07-24
+core/basic_data.py - last updated 2022-07-27
 
 Handle caching of the basic data sources
 
@@ -374,10 +374,10 @@ def timeslot2index(timeslot):
         if timeslot[0] == "?":
             # Remove "unfixed" flag
             timeslot = timeslot[1:]
-        d, p = timeslot.split(".")  # Can raise <ValueError>
         try:
+            d, p = timeslot.split(".")  # Can raise <ValueError>
             return (get_days().index(d), get_periods().index(p))
-        except KeyError:
+        except (KeyError, ValueError):
             raise ValueError(T["INVALID_TIMESLOT"].format(val=timeslot))
     return -1, -1
 

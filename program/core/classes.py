@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-07-25
+core/classes.py - last updated 2022-07-27
 
 Manage class data.
 
@@ -40,6 +40,7 @@ T = TRANSLATIONS("core.classes")
 ### +++++
 
 from typing import NamedTuple, Optional
+from itertools import combinations
 
 from core.db_access import open_database, db_read_fields, read_pairs
 
@@ -73,7 +74,10 @@ class Classes(dict):
                     if groups:
                         divlist.append(groups)
                     else:
-                        SHOW_ERROR(T["INVALID_GROUP_FIELD"].format(klass=klass))
+                        REPORT(
+                            "ERROR",
+                            T["INVALID_GROUP_FIELD"].format(klass=klass)
+                        )
             self[klass] = ClassData(
                 klass=klass,
                 name=name,
@@ -102,7 +106,13 @@ class Classes(dict):
             return self.__group_info[klass]
         except KeyError:
             pass
-        info = build_group_data(self[klass].divisions)
+        try:
+            info = build_group_data(self[klass].divisions)
+        except ValueError as e:
+            REPORT(
+                "ERROR",
+                T["GROUP_INFO_ERROR"].format(klass=klass, e=e)
+            )
         self.__group_info[klass] = info
         return info
 
@@ -230,13 +240,20 @@ def build_group_data(divisions):
                 gmap[g] = ll
         __independent_divs.append([gmod.get(g) or g for g in d])
         # print(" +++", __independent_divs)
-    idivs = [groups2stringlist(groups) for groups in __independent_divs]
-    idivs.sort()
-    gmapl = [
-        (group2string(g), groups2stringlist(groups))
-        for g, groups in gmap.items()
-    ]
+    gmapl = []
+    for g, mgroups in gmap.items():
+        g_str = group2string(g)
+        for g_ in mgroups:
+            if g_ not in groups:
+                raise ValueError(
+                    T["INDEPENDENT_GROUPS_MISMATCH"].format(
+                        group=group2string(g_)
+                    )
+                )
+        gmapl.append((group2string(g), groups2stringlist(mgroups)))
     gmapl.sort()
+    idivs = [groups2stringlist(igroups) for igroups in __independent_divs]
+    idivs.sort()
     basic_groups = set()
     for g, glist in gmapl:
         basic_groups.update(glist)
@@ -268,6 +285,33 @@ def atomic_maps(atoms, groups):
         return {'': []}
 
 
+def atoms2groups(divisions, group2atoms):
+    """Build a "reverse" mapping {atom-list -> [group, ... ]} which
+    reduces a collection of atomic groups to as short a list of "usable"
+    groups (those defined for the class in the database) as possible.
+    """
+    a2glist = {}
+    for g, alist in group2atoms.items():
+        key = tuple(alist)
+        try:
+            g0 = a2glist[key]
+            raise Bug(f"Group {g} is the same as group {g0}")
+        except KeyError:
+            a2glist[key] = g
+    # Add other subsets of divisions, if their atom lists are new
+    for div in divisions:
+        for l in range(2, len(div)):
+            for combi in combinations(div, l):
+                # Get atom list
+                aset = set()
+                for g in combi:
+                    aset.update(group2atoms[g])
+                key = tuple(sorted(aset))
+                if key not in a2glist:
+                    a2glist[key] = combi
+    return a2glist
+
+
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
@@ -291,20 +335,34 @@ if __name__ == "__main__":
     # _divs = [("A", "M"), ("A.X", "N"), ("G", "R")]
     # _divs = [("A", "B.X"), ("P", "B.Y")]
     # _divs = [("A", "B", "C"), ("A", "X", "Y", "Z")]
+    # _divs = [("G", "R"), ("A", "B"), ("I", "II", "III")]
+    # _divs = [("G", "R"), ("A.G", "A.R", "B.G", "B.R"), ("A", "B"), ("I", "II", "III")]
     # _divs = [("G", "R"), ("A", "B.G", "B.R"), ("A", "B"), ("I", "II", "III")]
     _divs = [("G", "R"), ("A", "B.G", "R"), ("A", "B"), ("I", "II", "III")]
 
     print("\nGROUP DIVISIONS:", _divs, "->")
     res = build_group_data(_divs)
     print("\n ... Independent divisions:")
-    for d in res["INDEPENDENT_DIVISIONS"]:
+    divisions = res["INDEPENDENT_DIVISIONS"]
+    for d in divisions:
         print("  ", d)
     print("\n ... Group-map:")
-    for g, l in res["GROUP_MAP"].items():
+    group_map = res["GROUP_MAP"]
+    for g, l in group_map.items():
         print(f"  {str(g):20}: {l}")
 #    print("\n ... Groups:", res["GROUPS"])
     print("\n ... Basic:", res["BASIC"])
-    print("\n ... Atoms:", res["MINIMAL_SUBGROUPS"])
+    atoms = res["MINIMAL_SUBGROUPS"]
+    print("\n ... Atoms:", atoms)
+
+    group2atoms = atomic_maps(atoms, list(group_map))
+    print("\n ... group -> atoms:")
+    for g, a in group2atoms.items():
+        print("       ::", g, "->", a)
+    a2glist = atoms2groups(divisions, group2atoms)
+    print("\n ... atoms -> groups:")
+    for a, g in a2glist.items():
+        print("       ::", a, "->", g)
 
     print("\n -------------------------------\n")
     print("\nCLASS DATA:")
@@ -326,11 +384,23 @@ if __name__ == "__main__":
     print("\n -------------------------------\nGROUP INFO for class", _klass)
     res = _classes.group_info(_klass)
     print("\n ... Independent divisions:")
-    for d in res["INDEPENDENT_DIVISIONS"]:
+    divisions = res["INDEPENDENT_DIVISIONS"]
+    for d in divisions:
         print("  ", d)
     print("\n ... Group-map:")
-    for g, l in res["GROUP_MAP"].items():
+    group_map = res["GROUP_MAP"]
+    for g, l in group_map.items():
         print(f"  {str(g):20}: {l}")
 #    print("\n ... Groups:", res["GROUPS"])
     print("\n ... Basic:", res["BASIC"])
-    print("\n ... Atoms:", res["MINIMAL_SUBGROUPS"])
+    atoms = res["MINIMAL_SUBGROUPS"]
+    print("\n ... Atoms:", atoms)
+
+    group2atoms = atomic_maps(atoms, list(group_map))
+    print("\n ... group -> atoms:", group2atoms)
+    for g, a in group2atoms.items():
+        print("       ::", g, "->", a)
+    a2glist = atoms2groups(divisions, group2atoms)
+    print("\n ... atoms -> groups:")
+    for a, g in a2glist.items():
+        print("       ::", a, "->", g)

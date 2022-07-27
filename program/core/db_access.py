@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-07-15
+Last updated:  2022-07-27
 
 Helper functions for accessing the database.
 
@@ -146,6 +146,9 @@ class KeyValueList(list):
 
     def map(self, key):
         return self[self.__map[key]][1]
+
+    def key_set(self):
+        return set(self.__map)
 
 
 def db_read_table(

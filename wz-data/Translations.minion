@@ -23,6 +23,8 @@ core.basic_data: {
 
 core.classes: {
     INVALID_GROUP_FIELD: "Die Gruppenangabe (Feld DIVISIONS) für Klasse {klass} ist fehlerhaft"
+    GROUP_INFO_ERROR: "Klasse {klass}, Gruppenangabe (Feld DIVISIONS): {e}"
+    INDEPENDENT_GROUPS_MISMATCH: "Untergruppe {group} fehlt"
 }
 
 ui.ui_base: {
@@ -272,7 +274,7 @@ timetable.fet_data: {
     WHOLE_CLASS:    alle  # name for a "group" comprising the whole class
     BAD_PLAIN_BLOCK: "{course}: für Kennzeichen {tag} muss es genau einen Kurs geben"
     ROOM_TODO:      "Raum muss noch festgelegt werden"
-    ROOM_BLOCK_CONFLICT: "Raumangaben für {course}, Räume nicht unabhängig: {rooms}"
+    ROOM_BLOCK_CONFLICT: "Räume nicht unabhängig für Kurs(e) mit Kennzeichen {tag}, Klasse(n) {classes}: {rooms}"
 
     
     # Entries probably "aSc"-specific
@@ -281,6 +283,7 @@ timetable.fet_data: {
 
     # Entries possibly "fet"-specific
     LUNCH_BREAK:    "mp:Mittagspause"
+    INVALID_GROUP_LIST: "Kurs mit Kennzeichen {tag}, Gruppenkombination nicht möglich: {groups}"
 }
 
 timetable.constraints_teacher: {
