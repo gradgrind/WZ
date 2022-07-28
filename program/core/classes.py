@@ -297,7 +297,7 @@ def atoms2groups(divisions, group2atoms):
             g0 = a2glist[key]
             raise Bug(f"Group {g} is the same as group {g0}")
         except KeyError:
-            a2glist[key] = g
+            a2glist[key] = [g]
     # Add other subsets of divisions, if their atom lists are new
     for div in divisions:
         for l in range(2, len(div)):

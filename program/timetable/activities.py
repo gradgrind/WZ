@@ -1,7 +1,7 @@
 """
 timetable/activities.py
 
-Last updated:  2022-07-24
+Last updated:  2022-07-28
 
 Collect information on "activities" – from the BLOCKS and COURSES db tables.
 
@@ -111,6 +111,14 @@ def lesson_rooms(room: str, course: CourseData, lesson_id: int) -> list[str]:
 
 
 class Courses:
+    __slots__ = (
+        # "paydata",
+        "tid2paydata",
+        "tag2entries",
+        "tid2tags",
+        "klass2tags",
+    )
+
     def __init__(self):
         ### First read the COURSES table.
         course2data = {}
@@ -147,7 +155,7 @@ class Courses:
         ### Now read the BLOCKS table.
 
         # TODO: Is this really needed? At present it is not used.
-        self.paydata = []  # [(CourseData, PaymentData), ... ]
+        # self.paydata = []  # [(CourseData, PaymentData), ... ]
 
         self.tid2paydata = {}  # {tid -> [(CourseData, PaymentData), ... ]}
         tag2entries = {}  # {block-tag -> [BlockInfo, ... ]}
@@ -245,7 +253,7 @@ class Courses:
                         ),
                     )
                 pd = (coursedata, payment_data)
-                self.paydata.append(pd)
+                # self.paydata.append(pd)
 
                 # Add to teacher mapping
                 tid = coursedata.tid

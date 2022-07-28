@@ -284,6 +284,7 @@ timetable.fet_data: {
     # Entries possibly "fet"-specific
     LUNCH_BREAK:    "mp:Mittagspause"
     INVALID_GROUP_LIST: "Kurs mit Kennzeichen {tag}, Gruppenkombination nicht möglich: {groups}"
+    INVALID_CLASS_CONSTRAINT: "Klasse {klass}: ungültige Wert für Bedingung {constraint}"
 }
 
 timetable.constraints_teacher: {

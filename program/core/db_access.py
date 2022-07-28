@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-07-27
+Last updated:  2022-07-28
 
 Helper functions for accessing the database.
 
@@ -147,8 +147,8 @@ class KeyValueList(list):
     def map(self, key):
         return self[self.__map[key]][1]
 
-    def key_set(self):
-        return set(self.__map)
+    def key_list(self):
+        return list(self.__map)
 
 
 def db_read_table(
@@ -449,17 +449,4 @@ if __name__ == "__main__":
     for row in values:
         print("  ", row)
 
-    table = "LESSONS"
-    # print("\nExtent of table {table}:")
-    # table_extent(table)
-    #    fields, values = db_read_full_table(table, 'course > 2')
-    fields, values = db_read_full_table(table, "course IS NULL")
-    print(f"\n{table} table: {fields}")
-    for row in values[:10]:
-        print("  ", row)
-
 # It seems that null entries are read as empty strings ...
-
-# print("\nUNIQUE FIELDS")
-# for table in "CLASSES", "TEACHERS", "COURSES", "LESSONS":
-#    print(f"  {table}:", db_unique_fields(table))

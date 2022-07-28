@@ -1,5 +1,5 @@
 """
-timetable/fet_data.py - last updated 2022-07-27
+timetable/fet_data.py - last updated 2022-07-28
 
 Prepare fet-timetables input from the database ...
 
@@ -21,12 +21,11 @@ Copyright 2022 Michael Towers
 
 _TEST = False
 _TEST = True
+_TEST1 = False
 
 FET_VERSION = "6.2.7"
 
 WEIGHTS = [None, "50", "67", "80", "88", "93", "95", "97", "98", "99", "100"]
-
-_MAX_GAPS_PER_WEEK = 10  # maximum value for max. gaps per week (for classes)
 
 
 ### Messages
@@ -48,9 +47,6 @@ _TAG_TOO_MANY_TIMES = (
     "Tabelle der festen Stunden: Kennung {tag} gibt"
     " mehr Zeiten an, als es dafür Unterrichtsstunden gibt"
 )
-_INVALID_CLASS_CONSTRAINT = (
-    "Klasse {klass}: ungültige Wert für Bedingung {constraint}"
-)
 _UNKNOWN_CONSTRAINT = "Klassenbedingung „{name}“ unbekannt"
 
 
@@ -71,9 +67,10 @@ if __name__ == "__main__":
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-from typing import Dict, List, Set, FrozenSet, Tuple
+from typing import Optional
 
 T = TRANSLATIONS("timetable.fet_data")
+Tc = TRANSLATIONS("timetable.constraints_class")
 
 ### +++++
 
@@ -241,11 +238,56 @@ def get_classes_fet() -> list[dict]: # the structure of the <dict> is not simple
     return fet_classes
 
 
+def timeoff_fet(tt_data: dict) -> list[dict[str,str]]:
+    """Build "not available" entries for the given <tt_data> field.
+    Also collect possible (lunch) break times, sorted by day.
+    Return: (
+        [{"Day": day, "Hour": period}, ... ]
+        {day -> [period, ... ]}
+    )
+    """
+    try:
+        day_periods = tt_data["AVAILABLE"].split("_")
+    except KeyError:
+        day_periods = ""
+    days = get_days().key_list()
+    periods = get_periods().key_list()
+    blocked_periods = []
+    possible_breaks = {}
+    i = 0
+    for d in days:
+        try:
+            ddata = day_periods[i]
+        except IndexError:
+            ddata = ""
+        i += 1
+        j = 0
+        pval = '+'  # default value
+        for p in periods:
+            try:
+                pval = ddata[j]
+            except IndexError:
+                # No value, use last available (or default), but not '*'
+                if pval == '*':
+                    pval = '+'
+            j += 1
+            if pval == '-':
+                blocked_periods.append({"Day": d, "Hour": p})
+            elif pval == '*':
+                try:
+                    possible_breaks[d].append(p)
+                except KeyError:
+                    possible_breaks[d] = [p]
+    return blocked_periods, possible_breaks
+
+
 class TimetableCourses(Courses):
     __slots__ = (
+        "TT_CONFIG",
         "timetable_teachers",
         "timetable_subjects",
         "timetable_classes",
+        "group2atoms",
         "activities",
         "__virtual_room_map",
         "__virtual_rooms",
@@ -254,15 +296,20 @@ class TimetableCourses(Courses):
         "class2sid2ag2aids",
     )
 
-    def read_class_lessons(self):
+    def __init__(self):
+        super().__init__()
+        self.TT_CONFIG = MINION(DATAPATH("CONFIG/TIMETABLE"))
+
+    def read_class_lessons(self, fet_classes):
         """Produce a list of fet-activity (lesson) items with a
         reference to the id of the source line in the LESSONS table.
         Any blocks with no sublessons are ignored.
         Constraints for time and rooms are added as appropriate.
         """
         # Collect teachers and subjects with timetable entries:
-        self.timetable_teachers = set()
-        self.timetable_subjects = set()
+#TODO?
+#        self.timetable_teachers = set()
+#        self.timetable_subjects = set()
 
         self.time_constraints = {}
         self.space_constraints = {}
@@ -275,18 +322,14 @@ class TimetableCourses(Courses):
         # groups and their activity ids for each subject, divided by class:
         self.class2sid2ag2aids: Dict[str, Dict[str, Dict[str, List[int]]]] = {}
 
-        group2atoms = {}
+        self.group2atoms = {}
         atoms2grouplist = {}
         self.timetable_classes = []
-        for klass, year_entry, g2atoms, a2glist in get_classes_fet():
-            group2atoms[klass] = g2atoms
+        for klass, year_entry, g2atoms, a2glist in fet_classes:
+            self.group2atoms[klass] = g2atoms
             atoms2grouplist[klass] = a2glist
             self.timetable_classes.append(year_entry)
 
-#        lesson_index: int = -1  # index of the current "lesson"
-
-#        self.days = get_days().key_set()
-#        self.periods = get_periods().key_set()
         # tag2entries: {block-tag -> [BlockInfo, ... ]}
         for tag, blocklist in self.tag2entries.items():
             lessons = sublessons(tag)
@@ -306,7 +349,7 @@ class TimetableCourses(Courses):
                     # group and a (real) class
                     if g == '*':
                         g = ''
-                    gatoms = group2atoms[klass][g]
+                    gatoms = self.group2atoms[klass][g]
                     try:
                         group_sets[klass].update(gatoms)
                     except KeyError:
@@ -326,7 +369,8 @@ class TimetableCourses(Courses):
                 try:
                     key = tuple(sorted(aset))
                     for g in a2glist[key]:
-                        groups.append(f'{klass}.{g}')
+                        groups.append(f'{klass}.{g}' if g else klass)
+                        # print("$$$", klass, g, key, a2glist)
                 except KeyError:
                     REPORT(
                         "ERROR",
@@ -418,6 +462,7 @@ class TimetableCourses(Courses):
                     activity["Comments"] = id_str
                     self.add_placement(id_str, sl, rooms)
                     self.activities.append(activity)
+                    # print("$$$$$", sid, groups, id_str)
                     self.subject_group_activity(sid, groups, id_str)
                     id0 += 1
 
@@ -594,38 +639,38 @@ class TimetableCourses(Courses):
         return {"fet": fet_dict}
 
 
-    def constraint_blocked_periods(self):
-        """Constraint: students set not available ..."""
+    def constraint_classes_timeoff(self):
+        """Constraint: students set not available ...
+        Also handle possible (lunch) break periods.
+        """
         constraints = []
-        for klass, daylist in self.available.items():
-            tlist = []
-            i = 0
-            for d in self.daytags:
-                pblist = daylist[i]
-                i += 1
-                j = 0
-                for p in self.periodtags:
-                    if not pblist[j]:
-                        tlist.append({"Day": d, "Hour": p})
-                    j += 1
-            if tlist:
+        classes = get_classes()
+        for klass, _ in classes.get_class_list():
+            data = classes[klass]
+            blocked_periods, possible_breaks = timeoff_fet(data.tt_data)
+            if blocked_periods:
                 constraints.append(
                     {
                         "Weight_Percentage": "100",
                         "Students": klass,
-                        "Number_of_Not_Available_Times": str(len(tlist)),
-                        "Not_Available_Time": tlist,
+                        "Number_of_Not_Available_Times": str(
+                            len(blocked_periods)
+                        ),
+                        "Not_Available_Time": blocked_periods,
                         "Active": "true",
                         "Comments": None,
                     }
                 )
+            # Lunch breaks
+            if possible_breaks:
+                self.class_lunch_breaks(klass, possible_breaks)
         add_constraints(
             self.time_constraints,
             "ConstraintStudentsSetNotAvailableTimes",
             constraints,
         )
 
-    def virtual_room(self, roomlists: List[List[str]]) -> str:
+    def virtual_room(self, roomlists: list[list[str]]) -> str:
         """Return a virtual room id for the given list of room lists.
         These virtual rooms are cached so that they can be reused, should
         the <roomlists> argument be repeated.
@@ -663,66 +708,106 @@ class TimetableCourses(Courses):
     def next_activity_id(self):
         return len(self.activities) + 1
 
-    def lunch_breaks(self):
+    def class_lunch_breaks(self, klass, possible_breaks):
         """Add activities and constraints for lunch breaks.
         There needs to be a lunch-break activity for every sub-group of
-        the class, to be on the safe side.
+        a class, to be on the safe side.
+        Note that the number of periods offered should be at least two,
+        because if only one period is possible it would probably be
+        better to set the class as "not available" in that period.
         """
+        lb_sid = T["LUNCH_BREAK"].split(':', 1)[0]
         constraints = []
-        for klass in self.classes:
-            try:
-                weekdata = self.lunch_periods[klass]
-            except KeyError:
-                continue
-            atomic_groups = self.class_groups[klass]["*"]
-            groupsets = self.groupsets_class[klass]
-            # print(f"??? {klass}", atomic_groups)
-            d = -1
-            for periods in weekdata:
-                d += 1
-                if periods:
-                    nperiods = str(len(periods))
-                    day = self.daytags[d]
-                    # print(f"LUNCH {klass}, {day}: {periods}")
-                    # Add lunch-break activity
-                    for g in atomic_groups:
-                        aid_s = str(self.next_activity_id())
-                        activity = {
-                            # "Teacher": {},
-                            "Subject": LUNCH_BREAK[0],
-                            "Students": groupsets.get(frozenset([g])) or g,
-                            "Duration": "1",
-                            "Total_Duration": "1",
-                            "Id": aid_s,
-                            "Activity_Group_Id": "0",
-                            "Active": "true",
-                            "Comments": None,
-                        }
-                        self.activities.append(activity)
-                        # Add constraint
-                        constraints.append(
+        atomic_groups = self.group2atoms[klass]['']
+        # This is a list of groups (without class), which can be empty
+        # print(f"??? {klass}", atomic_groups)
+        for day, periods in possible_breaks.items():
+            nperiods = str(len(periods))
+            # Add lunch-break activity
+            for g in atomic_groups:
+                aid_s = str(self.next_activity_id())
+                activity = {
+                    # no teacher
+                    "Subject": lb_sid,
+                    "Students": g,
+                    "Duration": "1",
+                    "Total_Duration": "1",
+                    "Id": aid_s,
+                    "Activity_Group_Id": "0",
+                    "Active": "true",
+                    "Comments": None,
+                }
+                self.activities.append(activity)
+                # Add constraint
+                constraints.append(
+                    {
+                        "Weight_Percentage": "100",
+                        "Activity_Id": aid_s,
+                        "Number_of_Preferred_Starting_Times": nperiods,
+                        "Preferred_Starting_Time": [
                             {
-                                "Weight_Percentage": "100",
-                                "Activity_Id": aid_s,
-                                "Number_of_Preferred_Starting_Times": nperiods,
-                                "Preferred_Starting_Time": [
-                                    {
-                                        "Preferred_Starting_Day": day,
-                                        "Preferred_Starting_Hour": self.periodtags[
-                                            p
-                                        ],
-                                    }
-                                    for p in periods
-                                ],
-                                "Active": "true",
-                                "Comments": None,
+                                "Preferred_Starting_Day": day,
+                                "Preferred_Starting_Hour": p,
                             }
-                        )
+                            for p in periods
+                        ],
+                        "Active": "true",
+                        "Comments": None,
+                    }
+                )
         add_constraints(
             self.time_constraints,
             "ConstraintActivityPreferredStartingTimes",
             constraints,
         )
+
+    def teacher_lunch_breaks(self, tid, possible_breaks):
+        """Add activities and constraints for lunch breaks.
+        Note that the number of periods offered should be at least two,
+        because if only one period is possible it would probably be
+        better to set the teacher as "not available" in that period.
+        """
+        lb_sid = T["LUNCH_BREAK"].split(':', 1)[0]
+        constraints = []
+        for day, periods in possible_breaks.items():
+            nperiods = str(len(periods))
+            # Add lunch-break activity
+            aid_s = str(self.next_activity_id())
+            activity = {
+                "Teacher": tid,
+                "Subject": lb_sid,
+                # no students
+                "Duration": "1",
+                "Total_Duration": "1",
+                "Id": aid_s,
+                "Activity_Group_Id": "0",
+                "Active": "true",
+                "Comments": None,
+            }
+            self.activities.append(activity)
+            # Add constraint
+            constraints.append(
+                {
+                    "Weight_Percentage": "100",
+                    "Activity_Id": aid_s,
+                    "Number_of_Preferred_Starting_Times": nperiods,
+                    "Preferred_Starting_Time": [
+                        {
+                            "Preferred_Starting_Day": day,
+                            "Preferred_Starting_Hour": p,
+                        }
+                        for p in periods
+                    ],
+                    "Active": "true",
+                    "Comments": None,
+                }
+            )
+        add_constraints(
+            self.time_constraints,
+            "ConstraintActivityPreferredStartingTimes",
+            constraints,
+        )
+
 
     def subject_group_activity(
         self, sid: str, groups: list[str], activity_id: int
@@ -753,6 +838,7 @@ class TimetableCourses(Courses):
             except KeyError:
                 ag2aids[group] = [activity_id]
 
+#TODO: Possibly remove constraints where all activities are locked?
     def constraint_day_separation(self):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
@@ -763,7 +849,7 @@ class TimetableCourses(Courses):
         ag2aids: Dict[str, List[int]]
         aids: List[int]
         aidset_map: Dict[int, Set[FrozenSet[int]]] = {}
-        for klass in self.classes:
+        for klass in sorted(self.class2sid2ag2aids):
             try:
                 sid2ag2aids = self.class2sid2ag2aids[klass]
             except KeyError:
@@ -812,14 +898,15 @@ class TimetableCourses(Courses):
 
     ############### FURTHER CONSTRAINTS ###############
 
+#TODO
     # Add weighting (ignored here)?
-    def constraints_MIN_PERIODS_DAILY(self, t_constraint):
+    def constraints_MINDAILY(self, default):
         clist: List[dict] = []
-        # TODO: Get default from somewhere?
-        default = "4"
-        for klass in self.classes:
+        classes = get_classes()
+        for klass, _ in classes.get_class_list():
+            data = classes[klass]
             try:
-                n = self.class_constraints[klass]["MIN_PERIODS_DAILY"]
+                n = data.tt_data["MINDAILY"]
             except KeyError:
                 # If the constraint is not present, don't add it for
                 # this class
@@ -835,8 +922,8 @@ class TimetableCourses(Courses):
                     except ValueError:
                         REPORT(
                             "ERROR",
-                            _INVALID_CLASS_CONSTRAINT.format(
-                                klass=klass, constraint=t_constraint
+                            T["INVALID_CLASS_CONSTRAINT"].format(
+                                klass=klass, constraint=Tc["MINDAILY"]
                             ),
                         )
                         return
@@ -864,41 +951,41 @@ class TimetableCourses(Courses):
     #        }
     #    ]
 
-    def constraints_MAX_GAPS_WEEKLY(self, t_constraint):
+    def constraints_MAXGAPSWEEKLY(self, default):
         """Maximum gaps per week for the specified classes.
         If the constraint is not specified for a class, that class will
-        not have the constraint. The default value ("*") is "0" (no gaps).
+        not have the constraint.
         """
+        MAX_GAPS_PER_WEEK = int(self.TT_CONFIG["MAX_GAPS_PER_WEEK"])
         clist: List[dict] = []
-        for klass in self.classes:
+        classes = get_classes()
+        for klass, _ in classes.get_class_list():
+            data = classes[klass]
             try:
-                n = self.class_constraints[klass]["MAX_GAPS_WEEKLY"]
+                n = data.tt_data["MAXGAPSWEEKLY"]
             except KeyError:
                 # If the constraint is not present, don't add it for
                 # this class
                 continue
             if n:
                 if n == "*":
-                    # default is "0"
-                    n = "0"
-                else:
-                    try:
-                        i = int(n)
-                        if i < 0 or i > _MAX_GAPS_PER_WEEK:
-                            raise ValueError
-                    except ValueError:
-                        REPORT(
-                            "ERROR",
-                            _INVALID_CLASS_CONSTRAINT.format(
-                                klass=klass, constraint=t_constraint
-                            ),
-                        )
-                        continue
-                    n = str(i)
+                    n = default
+                try:
+                    i = int(n)
+                    if i < 0 or i > MAX_GAPS_PER_WEEK:
+                        raise ValueError
+                except ValueError:
+                    REPORT(
+                        "ERROR",
+                        T["INVALID_CLASS_CONSTRAINT"].format(
+                            klass=klass, constraint=Tc["MAXGAPSWEEKLY"]
+                        ),
+                    )
+                    continue
                 clist.append(
                     {
                         "Weight_Percentage": "100",  # necessary!
-                        "Max_Gaps": n,
+                        "Max_Gaps": str(i),
                         "Students": klass,
                         "Active": "true",
                         "Comments": None,
@@ -907,9 +994,10 @@ class TimetableCourses(Courses):
                 # print(f"++ ConstraintStudentsSetMaxGapsPerWeek {klass}: {n}")
         return "ConstraintStudentsSetMaxGapsPerWeek", clist
 
+#TODO
     def pair_constraint(
         self, klass, pairs, t_constraint
-    ) -> List[Tuple[Set[Tuple[int, int]], str]]:
+    ) -> list[tuple[set[tuple[int, int]], str]]:
         """Find pairs of activity ids of activities which link two
         subjects (subject tags) for a constraint.
         The returned pairs share at least one "atomic" group.
@@ -919,7 +1007,7 @@ class TimetableCourses(Courses):
         The result is a list of pairs, (set of activity ids, fet-weighting).
         fet-weighting is a string in the range "0" to "100".
         """
-        result: List[Tuple[Set[Tuple[int, int]], str]] = []
+        result: list[tuple[set[tuple[int, int]], str]] = []
         sid2ag2aids = self.class2sid2ag2aids[klass]
         for wpair in pairs.split():
             try:
@@ -932,7 +1020,7 @@ class TimetableCourses(Courses):
                 except ValueError:
                     REPORT(
                         "ERROR",
-                        _INVALID_CLASS_CONSTRAINT.format(
+                        T["INVALID_CLASS_CONSTRAINT"].format(
                             klass=klass, constraint=t_constraint
                         ),
                     )
@@ -945,7 +1033,7 @@ class TimetableCourses(Courses):
             except ValueError:
                 REPORT(
                     "ERROR",
-                    _INVALID_CLASS_CONSTRAINT.format(
+                    T["INVALID_CLASS_CONSTRAINT"].format(
                         klass=klass, constraint=t_constraint
                     ),
                 )
@@ -963,14 +1051,15 @@ class TimetableCourses(Courses):
             result.append((aidpairs, percent))
         return result
 
-    def constraints_NOT_AFTER(self, t_constraint):
+#TODO
+    def constraints_NOTAFTER(self, default):
         """Two subjects should NOT be in the given order, if on the same day."""
-        aidmap: Dict[
-            Tuple[str, str],
-        ] = {}
-        for klass in self.classes:
+        aidmap: dict[tuple[str, str],str] = {}
+        classes = get_classes()
+        for klass, _ in classes.get_class_list():
+            data = classes[klass]
             try:
-                pairs = self.class_constraints[klass]["NOT_AFTER"]
+                n = data.tt_data["NOTAFTER"]
             except KeyError:
                 # If the constraint is not present, don't add it for
                 # this class
@@ -1002,14 +1091,15 @@ class TimetableCourses(Courses):
             #    f" {a1}/{aidpair[0]} {a2}/{aidpair[1]}")
         return "ConstraintTwoActivitiesOrderedIfSameDay", clist
 
-    def constraints_PAIR_GAP(self, t_constraint):
+#TODO
+    def constraints_PAIRGAP(self, default):
         """Two subjects should have at least one lesson in between."""
-        aidmap: Dict[
-            Tuple[str, str],
-        ] = {}
-        for klass in self.classes:
+        aidmap: dict[tuple[str, str],str] = {}
+        classes = get_classes()
+        for klass, _ in classes.get_class_list():
+            data = classes[klass]
             try:
-                pairs = self.class_constraints[klass]["PAIR_GAP"]
+                n = data.tt_data["PAIRGAP"]
             except KeyError:
                 # If the constraint is not present, don't add it for
                 # this class
@@ -1044,174 +1134,184 @@ class TimetableCourses(Courses):
             #    f" {a1}/{aidpair[0]} {a2}/{aidpair[1]}")
         return "ConstraintMinGapsBetweenActivities", clist
 
+#TODO
     def add_class_constraints(self):
         """Add time constraints according to the "info" entries in the
         timetable data files for each class.
         """
-        # Get "local" names of constraints, call handlers
-        for name, t_name in self.class_constraints["__INFO_NAMES__"].items():
+
+
+#MINDAILY:4
+#MAXGAPSWEEKLY:1
+#NOTAFTER:Sp+Eu:10
+#PAIRGAP:En+Fr:2 Eu+Sp:5
+##AVAILABLE ...
+
+        # Get names and default values of constraints, call handlers
+        for name, val in self.TT_CONFIG["CLASS_CONSTRAINTS"].items():
             try:
                 func = getattr(self, f"constraints_{name}")
             except AttributeError:
-                raise TT_Error(_UNKNOWN_CONSTRAINT.format(name=t_name))
-            cname, clist = func(t_name)
+                raise Bug(f"Unknown class constraint: {name}")
+            cname, clist = func(val)
             add_constraints(self.time_constraints, cname, clist)
 
+#TODO ...
+# Lunch break: Wenn alle angegebenen Stunden möglich sind, muss eine
+# frei sein (Mittagspause)
 
-def add_teacher_constraints(classes):
-    ### Not-available times
-    days = classes.daytags
-    periods = classes.periodtags
-    blocked = []
-    for tid in classes.teacher_tags():
-        dlist = classes.TEACHERS.available[tid]
-        tlist = []
-        i = 0
-        for d in days:
-            pblist = dlist[i]
-            i += 1
-            j = 0
-            for p in periods:
-                if not pblist[j]:
-                    tlist.append({"Day": d, "Hour": p})
-                j += 1
-        if tlist:
-            blocked.append(
-                {
-                    "Weight_Percentage": "100",
-                    "Teacher": tid,
-                    "Number_of_Not_Available_Times": str(len(tlist)),
-                    "Not_Available_Time": tlist,
-                }
-            )
-    add_constraints(
-        classes.time_constraints, "ConstraintTeacherNotAvailableTimes", blocked
-    )
+#TODO: default values for teachers
+#   MINPERDAY: 2      # min. Unterrichtsstunden pro Tag (außer an freien Tagen)
+#   MAXGAPSPERDAY: 2  # max. Lücken pro Tag (0 – 10?)
+#   MAXGAPSPERWEEK: 4 # max. Lücken pro Woche (0 – 10)
+#   MAXBLOCK: 6@5     # max. nacheinanderfolgende Unterrichtsstunden,
+#                       Stundenzahl@Gewichtung (0 – 10)
+# Normalerweise sollte ein Lehrer nur MAXBLOCK angeben, wenn er keine
+# Mittagspause hat.
+# Check all these values, at present the teacher editor doesn't!
 
-    ### Lunch breaks
-    # Add a special activity on the days with specified lunch breaks.
-    # Also add a constraint to limit the activity to the lunch times.
-    constraints_lb = []
-    for tid in classes.teacher_tags():
-        d = 0
-        for daylist in classes.TEACHERS.lunch_periods[tid]:
-            if daylist:
-                aid = classes.next_activity_id()
-                activity = {
-                    "Teacher": tid,
-                    "Subject": LUNCH_BREAK[0],
-                    #'Students': {},
-                    "Duration": "1",
-                    "Total_Duration": "1",
-                    "Id": aid,
-                    "Activity_Group_Id": "0",
-                    "Active": "true",
-                    "Comments": None,
-                }
-                classes.activities.append(activity)
-                # Add constraint
-                plist = [
-                    {
-                        "Preferred_Starting_Day": days[d],
-                        "Preferred_Starting_Hour": periods[p],
-                    }
-                    for p in daylist
-                ]
-                constraints_lb.append(
+    def add_teacher_constraints(self):
+        blocked = []            # AVAILABLE
+        constraints_m = []      # MINPERDAY
+        constraints_gd = []     # MAXGAPSPERDAY
+        constraints_gw = []     # MAXGAPSPERWEEK
+        constraints_u = []      # MAXBLOCK
+        ### Not-available times
+        for tid, data in get_teachers().items():
+            ttdata = data.tt_data
+            blocked_periods, possible_breaks = timeoff_fet(ttdata)
+            if blocked_periods:
+                blocked.append(
                     {
                         "Weight_Percentage": "100",
-                        "Activity_Id": aid,
-                        "Number_of_Preferred_Starting_Times": str(len(plist)),
-                        "Preferred_Starting_Time": plist,
+                        "Teacher": tid,
+                        "Number_of_Not_Available_Times": str(
+                            len(blocked_periods)
+                        ),
+                        "Not_Available_Time": blocked_periods,
                         "Active": "true",
                         "Comments": None,
                     }
                 )
-            d += 1
-
-    ### Constraints in the "info" part of the teacher's data
-    constraints_m = []  # MINPERDAY
-    constraints_gd = []  # MAXGAPSPERDAY
-    constraints_gw = []  # MAXGAPSPERWEEK
-    constraints_u = []  # MAXBLOCK
-    for tid in classes.teacher_tags():
-        # The constraint values are <None> or a (number, weight) pair
-        # (integers, though the weight may be <None>)
-        cdata = classes.TEACHERS.constraints[tid]
-        minl = cdata["MINPERDAY"]
-        if minl:
-            constraints_m.append(
-                {
-                    "Weight_Percentage": "100",  # necessary!
-                    "Teacher_Name": tid,
-                    "Minimum_Hours_Daily": str(minl[0]),
-                    "Allow_Empty_Days": "true",
-                    "Active": "true",
-                    "Comments": None,
-                }
-            )
-        gd = cdata["MAXGAPSPERDAY"]
-        if gd != None:
-            constraints_gd.append(
-                {
-                    "Weight_Percentage": "100",  # necessary!
-                    "Teacher_Name": tid,
-                    "Max_Gaps": str(gd[0]),
-                    "Active": "true",
-                    "Comments": None,
-                }
-            )
-        gw = cdata["MAXGAPSPERWEEK"]
-        if gw != None:
-            constraints_gw.append(
-                {
-                    "Weight_Percentage": "100",  # necessary!
-                    "Teacher_Name": tid,
-                    "Max_Gaps": str(gw[0]),
-                    "Active": "true",
-                    "Comments": None,
-                }
-            )
-        u = cdata["MAXBLOCK"]
-        if u:
-            n, w = u
-            if w:
-                constraints_u.append(
+            # Lunch breaks
+            if possible_breaks:
+                self.teacher_lunch_breaks(tid, possible_breaks)
+            # The constraint values in the following are <None> or a
+            # (number, weight) pair (integers, though the weight may be
+            # <None>)
+            minl = self.teacher_periods_constraint(tid, ttdata, "MINPERDAY")
+            if minl:
+                # print("$$$$$ MINPERDAY", tid, minl)
+                constraints_m.append(
                     {
-                        "Weight_Percentage": WEIGHTS[w],
+                        "Weight_Percentage": "100",  # necessary!
                         "Teacher_Name": tid,
-                        "Maximum_Hours_Continuously": str(n),
+                        "Minimum_Hours_Daily": str(minl[0]),
+                        "Allow_Empty_Days": "true",
                         "Active": "true",
                         "Comments": None,
                     }
                 )
-    add_constraints(
-        classes.time_constraints,
-        "ConstraintTeacherMinHoursDaily",
-        constraints_m,
-    )
-    add_constraints(
-        classes.time_constraints,
-        "ConstraintTeacherMaxGapsPerDay",
-        constraints_gd,
-    )
-    add_constraints(
-        classes.time_constraints,
-        "ConstraintTeacherMaxGapsPerWeek",
-        constraints_gw,
-    )
-    add_constraints(
-        classes.time_constraints,
-        "ConstraintTeacherMaxHoursContinuously",
-        constraints_u,
-    )
-    add_constraints(
-        classes.time_constraints,
-        "ConstraintActivityPreferredStartingTimes",
-        constraints_lb,
-    )
+            gd = self.teacher_periods_constraint(tid, ttdata, "MAXGAPSPERDAY")
+            if gd:
+                # print("$$$$$ MAXGAPSPERDAY", tid, gd)
+                constraints_gd.append(
+                    {
+                        "Weight_Percentage": "100",  # necessary!
+                        "Teacher_Name": tid,
+                        "Max_Gaps": str(gd[0]),
+                        "Active": "true",
+                        "Comments": None,
+                    }
+                )
+            gw = self.teacher_periods_constraint(tid, ttdata, "MAXGAPSPERWEEK")
+            if gw:
+                # print("$$$$$ MAXGAPSPERWEEK", tid, gw)
+                constraints_gw.append(
+                    {
+                        "Weight_Percentage": "100",  # necessary!
+                        "Teacher_Name": tid,
+                        "Max_Gaps": str(gw[0]),
+                        "Active": "true",
+                        "Comments": None,
+                    }
+                )
+            u = self.teacher_periods_constraint(tid, ttdata, "MAXBLOCK")
+            if u:
+                n, w = u
+                # print("$$$$$ MAXBLOCK", tid, u, WEIGHTS[w])
+                if w:
+                    constraints_u.append(
+                        {
+                            "Weight_Percentage": WEIGHTS[w],
+                            "Teacher_Name": tid,
+                            "Maximum_Hours_Continuously": str(n),
+                            "Active": "true",
+                            "Comments": None,
+                        }
+                    )
+        add_constraints(
+            self.time_constraints,
+            "ConstraintTeacherNotAvailableTimes",
+            blocked,
+        )
+        add_constraints(
+            self.time_constraints,
+            "ConstraintTeacherMinHoursDaily",
+            constraints_m,
+        )
+        add_constraints(
+            self.time_constraints,
+            "ConstraintTeacherMaxGapsPerDay",
+            constraints_gd,
+        )
+        add_constraints(
+            self.time_constraints,
+            "ConstraintTeacherMaxGapsPerWeek",
+            constraints_gw,
+        )
+        add_constraints(
+            self.time_constraints,
+            "ConstraintTeacherMaxHoursContinuously",
+            constraints_u,
+        )
+
+#TODO: do the same sort of thing for class constraints
+    def teacher_periods_constraint(
+        self,
+        tid: str,
+        ttdata: dict[str, str],
+        constraint: str
+    ) -> Optional[tuple[int, int]]:
+        val = ttdata.get(constraint)
+        if not val:
+            return None
+        if val == '*':
+            val = self.TT_CONFIG[f"TEACHER_{constraint}"]
+        try:
+            v, w = val.split('@', 1)
+        except ValueError:
+            v = val
+            w = -1
+        try:
+            number = int(v)
+            weight = int(w)
+            if number >= 0 and number <= 10 and weight >= -1 and weight <= 10:
+                return number, weight
+        except ValueError:
+            pass
+        REPORT(
+            "ERROR",
+            T["INVALID_TEACHER_CONDITION_VALUE"].format(
+                tid=tid, val=val, constraint=constraint
+            )
+        )
 
 
+
+#TODO: Do I still need some of this? It might be useful if there are
+# lessons-start-at-same-time constraints ... At present, the front end
+# provides no interface for such constraints.
 class Placements_fet:#(TT_Placements):
     def placements(self):
         days = self.classes.daytags
@@ -1356,7 +1456,9 @@ class Placements_fet:#(TT_Placements):
             constraints_multi,
         )
         add_constraints(
-            time_constraints, "ConstraintActivityEndsStudentsDay", constraints_l
+            time_constraints,
+            "ConstraintActivityEndsStudentsDay",
+            constraints_l
         )
 
 
@@ -1370,7 +1472,6 @@ def add_constraint(constraints, ctype, constraint):
         constraints[ctype] = [constraint]
 
 
-
 def add_constraints(constraints, ctype, constraint_list):
     """Add a (possibly empty) list of constraints, of type <ctype>, to
     the master constraint list-mapping <constraints> (either time or
@@ -1381,6 +1482,9 @@ def add_constraints(constraints, ctype, constraint_list):
             constraints[ctype] += constraint_list
         except KeyError:
             constraints[ctype] = constraint_list
+
+
+
 
 
 # Taken from old asc-handler ...
@@ -1472,52 +1576,41 @@ if __name__ == "__main__":
     # quit(0)
 
     courses = TimetableCourses()
-    courses.read_class_lessons()
-
-    quit(0)
-
     if _TEST:
         print("\n ********** READ LESSON DATA **********\n")
-    classes = Classes_fet()
-
-    # Generate the fet activities
-    classes.get_lessons()
-
-    c_list = classes.classes
-    print("\n ... read data for:", c_list)
-
-    add_teacher_constraints(classes)
+    courses.read_class_lessons(fet_classes)
 
     # Classes' not-available times
-    classes.constraint_blocked_periods()
+    courses.constraint_classes_timeoff()
 
-    # Fixed placements for activities
-    cards = Placements_fet(classes)
-    cards.placements()
+    # Teacher-specific constraints
+    courses.add_teacher_constraints()
 
-    classes.lunch_breaks()
+    # quit(0)
 
-    if _TEST:
+    if _TEST1:
         print("\nSubject – activity mapping")
-        for klass in classes.classes:
-            if klass.startswith("XX"):
-                continue
+        for klass in sorted(courses.class2sid2ag2aids):
+            data = courses.class2sid2ag2aids[klass]
             print(f"\n **** Class {klass}")
-            for sid, ag2aids in classes.class2sid2ag2aids[klass].items():
+            for sid, ag2aids in data.items():
+                print(f" ... {sid}: {ag2aids}")
                 for ag, aids in ag2aids.items():
                     print(f"     {sid:8}: {ag:10} --> {aids}")
 
     print("\nSubject day-separation constraints ...")
-    classes.constraint_day_separation()
+    courses.constraint_day_separation()
 
     print("\nClass constraints ...")
-    classes.add_class_constraints()
+    courses.add_class_constraints()
+
+    quit(0)
 
     # Activity info is available thus:
     for _aid in (550,):
-        print(f"\n???? {_aid}:", classes.activities[_aid - 1])
+        print(f"\n???? {_aid}:", courses.activities[_aid - 1])
 
-    classes.gen_fetdata()
+    courses.gen_fetdata()
 
     # quit(0)
 
@@ -1538,7 +1631,7 @@ if __name__ == "__main__":
 
     xml_fet = xmltodict.unparse(classes.gen_fetdata(), pretty=True)
 
-    outpath = os.path.join(outdir, "tt_out.fet")
+    outpath = os.path.join(outdir, "tt_out_test.fet")
     with open(outpath, "w", encoding="utf-8") as fh:
         fh.write(xml_fet.replace("\t", "   "))
     print("\nTIMETABLE XML ->", outpath)
