@@ -270,21 +270,22 @@ timetable.asc_data: {
 }
 
 timetable.fet_data: {
-    # Entries probably valid not just for "aSc"
+    # Entries probably valid not just for "aSc" or "fet"
     WHOLE_CLASS:    alle  # name for a "group" comprising the whole class
     BAD_PLAIN_BLOCK: "{course}: für Kennzeichen {tag} muss es genau einen Kurs geben"
     ROOM_TODO:      "Raum muss noch festgelegt werden"
     ROOM_BLOCK_CONFLICT: "Räume nicht unabhängig für Kurs(e) mit Kennzeichen {tag}, Klasse(n) {classes}: {rooms}"
-
-    
+    INVALID_TEACHER_CONDITION_VALUE: "Lehrer {tid}, ungültiger Wert für Bedingung {constraint}: '{val}'"
+    INVALID_CLASS_CONDITION_VALUE: "Klasse {klass}, ungültiger Wert für Bedingung {constraint}: '{val}'"
+    INVALID_GROUP_LIST: "Kurs mit Kennzeichen {tag}, Gruppenkombination nicht möglich: {groups}"
+    INVALID_CLASS_CONSTRAINT: "Klasse {klass}: ungültige Wert für Bedingung {constraint}"
+   
     # Entries probably "aSc"-specific
     INVALID_PLACE:  "Im Kurs (Gruppe {klass}.{group}, Fach-id {sid}, Lehrer {tid}), unbekannter Raum (Ort): '{rid}'"
     BAD_TIME:       "Ungültige Zeitangabe: '{time}' (lesson-id {id})"
 
     # Entries possibly "fet"-specific
     LUNCH_BREAK:    "mp:Mittagspause"
-    INVALID_GROUP_LIST: "Kurs mit Kennzeichen {tag}, Gruppenkombination nicht möglich: {groups}"
-    INVALID_CLASS_CONSTRAINT: "Klasse {klass}: ungültige Wert für Bedingung {constraint}"
 }
 
 timetable.constraints_teacher: {

@@ -1,5 +1,5 @@
 """
-timetable/fet_data.py - last updated 2022-07-28
+timetable/fet_data.py - last updated 2022-07-29
 
 Prepare fet-timetables input from the database ...
 
@@ -27,27 +27,16 @@ FET_VERSION = "6.2.7"
 
 WEIGHTS = [None, "50", "67", "80", "88", "93", "95", "97", "98", "99", "100"]
 
-
-### Messages
-
-#TODO ...
-_LESSON_NO_GROUP = "Klasse {klass}, Fach {sid}: „Unterricht“ ohne Gruppe"
-_LESSON_NO_TEACHER = (
-    "Klasse {klass}, Fach {sid}: „Unterricht“ ohne"
-    " Lehrer.\nDieser Unterricht wird NICHT im Stundenplan erscheinen."
-)
-# _SUBJECT_PAIR_INVALID = (
-#    "Ungültiges Fach-Paar ({item}) unter den „weiteren Bedingungen“"
-# )
-_NO_LESSON_WITH_TAG = (
-    "Tabelle der festen Stunden: Kennung {tag} hat keine"
-    " entsprechenden Unterrichtsstunden"
-)
-_TAG_TOO_MANY_TIMES = (
-    "Tabelle der festen Stunden: Kennung {tag} gibt"
-    " mehr Zeiten an, als es dafür Unterrichtsstunden gibt"
-)
-_UNKNOWN_CONSTRAINT = "Klassenbedingung „{name}“ unbekannt"
+#TODO --
+### Messages ... referred to in class Placements_fet
+#_NO_LESSON_WITH_TAG = (
+#    "Tabelle der festen Stunden: Kennung {tag} hat keine"
+#    " entsprechenden Unterrichtsstunden"
+#)
+#_TAG_TOO_MANY_TIMES = (
+#    "Tabelle der festen Stunden: Kennung {tag} gibt"
+#    " mehr Zeiten an, als es dafür Unterrichtsstunden gibt"
+#)
 
 
 ########################################################################
@@ -104,7 +93,7 @@ def get_periods_fet() -> list[dict[str,str]]:
     return [{"Name": p[0]} for p in get_periods()]
 
 
-def get_rooms_fet() -> list[dict[str,str]]:
+def get_rooms_fet(virtual_rooms: list[dict]) -> list[dict[str,str]]:
     # Build an ordered list of fet elements for the rooms
     rlist = [
         {
@@ -125,21 +114,21 @@ def get_rooms_fet() -> list[dict[str,str]]:
             "Comments": T["ROOM_TODO"],
         }
     )
-#TODO ???
-#    fet_rooms += self.__virtual_rooms.values()
-    return rlist
+    return rlist + virtual_rooms
 
 
-#TODO: This might need a list of subjects which are actually used (see aSc version)
-def get_subjects_fet() -> list[dict[str,str]]:
-    slist = [{"Name": sid, "Comments": name} for sid, name in get_subjects()]
+def get_subjects_fet(used_set) -> list[dict[str,str]]:
+    slist = [
+        {"Name": sid, "Comments": name}
+        for sid, name in get_subjects()
+        if sid in used_set
+    ]
     sid, name = T["LUNCH_BREAK"].split(':', 1)
     slist.append({"Name": sid, "Comments": name})
     return slist
 
 
-#TODO: This might need a list of teachers who are actually used (see aSc version)
-def get_teachers_fet() -> list[dict[str,str]]:
+def get_teachers_fet(used_set) -> list[dict[str,str]]:
     teachers = get_teachers()
     return [
         {
@@ -149,6 +138,7 @@ def get_teachers_fet() -> list[dict[str,str]]:
             "Comments": teachers.name(tid),
         }
         for tid in teachers
+        if tid in used_set
     ]
 
 
@@ -300,16 +290,15 @@ class TimetableCourses(Courses):
         super().__init__()
         self.TT_CONFIG = MINION(DATAPATH("CONFIG/TIMETABLE"))
 
-    def read_class_lessons(self, fet_classes):
+    def read_lessons(self, fet_classes):
         """Produce a list of fet-activity (lesson) items with a
         reference to the id of the source line in the LESSONS table.
         Any blocks with no sublessons are ignored.
         Constraints for time and rooms are added as appropriate.
         """
         # Collect teachers and subjects with timetable entries:
-#TODO?
-#        self.timetable_teachers = set()
-#        self.timetable_subjects = set()
+        self.timetable_teachers = set()
+        self.timetable_subjects = set()
 
         self.time_constraints = {}
         self.space_constraints = {}
@@ -415,7 +404,11 @@ class TimetableCourses(Courses):
             if len(roomlists1) == 1:
                 rooms = roomlists1[0]
             elif len(roomlists1) > 1:
-                rooms = [self.virtual_room(roomlists1)]
+                vroom = self.virtual_room(roomlists1)
+                if isinstance(vroom, list):
+                    rooms = vroom
+                else:
+                    rooms = [vroom]
             else:
                 rooms = []
 #            print("§§§", tag, class_set)
@@ -425,6 +418,9 @@ class TimetableCourses(Courses):
 #                print(roomlists1)
 #                print(self.__virtual_rooms[rooms[0]])
 
+            # Add to "used" teachers and subjects
+            self.timetable_teachers.update(teacher_set)
+            self.timetable_subjects.add(sid)
             ## Generate the activity or activities
             if teacher_set:
                 if len(teacher_set) == 1:
@@ -455,11 +451,11 @@ class TimetableCourses(Courses):
             for l in sorted(durations):
                 dstr = str(l)
                 for sl in durations[l]:
-                    id_str = str(sl.id)
+                    id_str = str(id0)
                     activity = activity0.copy()
                     activity["Id"] = id_str
                     activity["Duration"] = dstr
-                    activity["Comments"] = id_str
+                    activity["Comments"] = str(sl.id)
                     self.add_placement(id_str, sl, rooms)
                     self.activities.append(activity)
                     # print("$$$$$", sid, groups, id_str)
@@ -572,30 +568,25 @@ class TimetableCourses(Courses):
         elif n == 1:
             # Either simple room, or "virtual" room for multiple rooms
             r_c = "ConstraintActivityPreferredRoom"
+            room = rooms[0]
             s_c = {
                 "Weight_Percentage": "100",
                 "Activity_Id": id_str,
-                "Room": rooms[0],
+                "Room": room,
                 "Permanently_Locked": "true",
-                "Active": "true",
+                "Active": "false" if room == CONFIG["EXTRA_ROOM"] else "true",
                 "Comments": None,
             }
         else:
             return
         add_constraint(self.space_constraints, r_c, s_c)
 
-
-#########################################################
-
-#TODO
     def gen_fetdata(self):
         fet_days = get_days_fet()
         fet_periods = get_periods_fet()
-        fet_rooms = get_rooms_fet()
-#TODO: This might need a list of subjects which are actually used
-        fet_subjects = get_subjects_fet()
-#TODO: This might need a list of teachers who are actually used
-        fet_teachers = get_teachers_fet()
+        fet_rooms = get_rooms_fet(self.virtual_room_list())
+        fet_subjects = get_subjects_fet(self.timetable_subjects)
+        fet_teachers = get_teachers_fet(self.timetable_teachers)
 
         fet_dict = {
             "@version": f"{FET_VERSION}",
@@ -633,7 +624,51 @@ class TimetableCourses(Courses):
             }
         }
         tc_dict.update(self.time_constraints)
+#TODO: Comment this out to remove room constraints.
+# It might be better to eliminate virtual room entries with only EXTRA_ROOM
+# or maybe all entries with EXTRA_ROOM.
         sc_dict.update(self.space_constraints)
+#TODO ...
+        # Prepare for filtering
+        print("\nTIME CONSTRAINTS:")
+        tc_block = {
+            ### TIME CONSTRAINTS:
+            ##"ConstraintBasicCompulsoryTime",
+            #"ConstraintActivityPreferredStartingTime",
+            #"ConstraintActivityPreferredStartingTimes",
+            #"ConstraintStudentsSetNotAvailableTimes",
+            #"ConstraintTeacherNotAvailableTimes",
+            #"ConstraintTeacherMinHoursDaily",
+            #"ConstraintTeacherMaxGapsPerDay",
+            #"ConstraintTeacherMaxGapsPerWeek",
+            #"ConstraintTeacherMaxHoursContinuously",
+            #"ConstraintMinDaysBetweenActivities",
+            #"ConstraintStudentsSetMinHoursDaily",
+            #"ConstraintStudentsSetMaxGapsPerWeek",
+            #"ConstraintTwoActivitiesOrderedIfSameDay",
+            #"ConstraintMinGapsBetweenActivities",
+        }
+        for c in tc_block:
+            print(" ... blocking", c)
+            try:
+                del(tc_dict[c])
+            except KeyError:
+                pass
+
+        print("\nSPACE CONSTRAINTS:")
+        sc_block = {
+            ### SPACE CONSTRAINTS:
+            ##"ConstraintBasicCompulsorySpace",
+            #"ConstraintActivityPreferredRoom",
+            "ConstraintActivityPreferredRooms",
+        }
+        for c in sc_block:
+            print(" ... blocking", c)
+            try:
+                del(sc_dict[c])
+            except KeyError:
+                pass
+
         fet_dict["Time_Constraints_List"] = tc_dict
         fet_dict["Space_Constraints_List"] = sc_dict
         return {"fet": fet_dict}
@@ -676,34 +711,49 @@ class TimetableCourses(Courses):
         the <roomlists> argument be repeated.
         """
         # First need a hashable representation of <roomlists>, use a string.
-        hashable = "&".join(["|".join(rooms) for rooms in roomlists])
+        hashable = "+".join(["|".join(rooms) for rooms in roomlists])
         # print("???????", hashable)
         try:
             return self.__virtual_room_map[hashable]
         except KeyError:
             pass
         # Construct a new virtual room
-        name = f"v{len(self.__virtual_rooms) + 1:03}"
         roomlist = []
+        EXTRA_ROOM = CONFIG["EXTRA_ROOM"]
         for rooms in roomlists:
+            # skip "only EXTRA_ROOM"
+            if len(rooms) == 1 and rooms[0] == EXTRA_ROOM:
+                continue
+            roomlist.append(rooms)
+        if roomlist:
+            if len(roomlist) == 1:
+                return roomlist[0]
+        else:
+            return []
+        vrlist = []
+        for rooms in roomlist:
             nrooms = len(rooms)
-            roomlist.append(
+            vrlist.append(
                 {
                     "Number_of_Real_Rooms": str(nrooms),
                     "Real_Room": rooms[0] if nrooms == 1 else rooms,
                 }
             )
+        name = f"v{len(self.__virtual_rooms) + 1:03}"
         self.__virtual_rooms[name] = {
             "Name": name,
             "Building": None,
             "Capacity": "30000",
             "Virtual": "true",
-            "Number_of_Sets_of_Real_Rooms": str(len(roomlists)),
-            "Set_of_Real_Rooms": roomlist,
-            "Comments": None,
+            "Number_of_Sets_of_Real_Rooms": str(len(vrlist)),
+            "Set_of_Real_Rooms": vrlist,
+            "Comments": hashable,
         }
         self.__virtual_room_map[hashable] = name
         return name
+
+    def virtual_room_list(self):
+        return list(self.__virtual_rooms.values())
 
     def next_activity_id(self):
         return len(self.activities) + 1
@@ -729,7 +779,7 @@ class TimetableCourses(Courses):
                 activity = {
                     # no teacher
                     "Subject": lb_sid,
-                    "Students": g,
+                    "Students": f"{klass}.{g}" if g else klass,
                     "Duration": "1",
                     "Total_Duration": "1",
                     "Id": aid_s,
@@ -898,8 +948,6 @@ class TimetableCourses(Courses):
 
     ############### FURTHER CONSTRAINTS ###############
 
-#TODO
-    # Add weighting (ignored here)?
     def constraints_MINDAILY(self, default):
         clist: List[dict] = []
         classes = get_classes()
@@ -914,31 +962,22 @@ class TimetableCourses(Courses):
             if n:
                 if n == "*":
                     n = default
-                else:
-                    try:
-                        i = int(n)
-                        if i < 1 or i > len(self.periodtags):
-                            raise ValueError
-                    except ValueError:
-                        REPORT(
-                            "ERROR",
-                            T["INVALID_CLASS_CONSTRAINT"].format(
-                                klass=klass, constraint=Tc["MINDAILY"]
-                            ),
-                        )
-                        return
-                    n = str(i)
-                clist.append(
-                    {
-                        "Weight_Percentage": "100",  # necessary!
-                        "Minimum_Hours_Daily": n,
-                        "Students": klass,
-                        "Allow_Empty_Days": "false",
-                        "Active": "true",
-                        "Comments": None,
-                    }
-                )
-                # print(f"++ ConstraintStudentsSetMinHoursDaily {klass}: {n}")
+                val = self.class_periods_constraint(n, klass, "MAXGAPSWEEKLY")
+                if val and val[1] != 0:
+                    clist.append(
+                        {
+                            "Weight_Percentage": "100",  # necessary!
+                            "Minimum_Hours_Daily": str(val[0]),
+                            "Students": klass,
+#TODO:
+                            "Allow_Empty_Days": "false",
+                            # "Allow_Empty_Days": "true",
+
+                            "Active": "true",
+                            "Comments": None,
+                        }
+                    )
+                    # print(f"++ ConstraintStudentsSetMinHoursDaily {klass}: {n}")
         return "ConstraintStudentsSetMinHoursDaily", clist
 
     # Version for all classes:
@@ -970,31 +1009,20 @@ class TimetableCourses(Courses):
             if n:
                 if n == "*":
                     n = default
-                try:
-                    i = int(n)
-                    if i < 0 or i > MAX_GAPS_PER_WEEK:
-                        raise ValueError
-                except ValueError:
-                    REPORT(
-                        "ERROR",
-                        T["INVALID_CLASS_CONSTRAINT"].format(
-                            klass=klass, constraint=Tc["MAXGAPSWEEKLY"]
-                        ),
+                val = self.class_periods_constraint(n, klass, "MAXGAPSWEEKLY")
+                if val and val[1] != 0:
+                    clist.append(
+                        {
+                            "Weight_Percentage": "100",  # necessary!
+                            "Max_Gaps": str(val[0]),
+                            "Students": klass,
+                            "Active": "true",
+                            "Comments": None,
+                        }
                     )
-                    continue
-                clist.append(
-                    {
-                        "Weight_Percentage": "100",  # necessary!
-                        "Max_Gaps": str(i),
-                        "Students": klass,
-                        "Active": "true",
-                        "Comments": None,
-                    }
-                )
-                # print(f"++ ConstraintStudentsSetMaxGapsPerWeek {klass}: {n}")
+                    # print(f"++ ConstraintStudentsSetMaxGapsPerWeek {klass}: {n}")
         return "ConstraintStudentsSetMaxGapsPerWeek", clist
 
-#TODO
     def pair_constraint(
         self, klass, pairs, t_constraint
     ) -> list[tuple[set[tuple[int, int]], str]]:
@@ -1003,7 +1031,7 @@ class TimetableCourses(Courses):
         The returned pairs share at least one "atomic" group.
         The subject pairs are supplied as parameter <pairs>. There can
         be multiple pairs (space separated) and each pair can have a
-        weighting (0-10) after a ":" separator, e.g. "En+Fr:8 Eu+Sp".
+        weighting (0-10) after a "@" separator, e.g. "En+Fr@8 Eu+Sp".
         The result is a list of pairs, (set of activity ids, fet-weighting).
         fet-weighting is a string in the range "0" to "100".
         """
@@ -1011,20 +1039,22 @@ class TimetableCourses(Courses):
         sid2ag2aids = self.class2sid2ag2aids[klass]
         for wpair in pairs.split():
             try:
-                pair, _w = wpair.split(":", 1)
+                pair, w_ = wpair.split("@", 1)
             except ValueError:
-                pair, w = wpair, 10
+                pair, w = wpair, -1
             else:
                 try:
-                    w = weight_value(_w)
+                    w = int(w_)
                 except ValueError:
+                    w = -1
+                if w < 0 or w > 10:
                     REPORT(
                         "ERROR",
                         T["INVALID_CLASS_CONSTRAINT"].format(
-                            klass=klass, constraint=t_constraint
+                            klass=klass, constraint=t_constraint, val=wpair
                         ),
                     )
-                    return
+                    return []
             percent = WEIGHTS[w]
             if not percent:
                 continue
@@ -1034,7 +1064,7 @@ class TimetableCourses(Courses):
                 REPORT(
                     "ERROR",
                     T["INVALID_CLASS_CONSTRAINT"].format(
-                        klass=klass, constraint=t_constraint
+                        klass=klass, constraint=t_constraint, val=wpair
                     ),
                 )
                 return []
@@ -1051,7 +1081,6 @@ class TimetableCourses(Courses):
             result.append((aidpairs, percent))
         return result
 
-#TODO
     def constraints_NOTAFTER(self, default):
         """Two subjects should NOT be in the given order, if on the same day."""
         aidmap: dict[tuple[str, str],str] = {}
@@ -1059,13 +1088,13 @@ class TimetableCourses(Courses):
         for klass, _ in classes.get_class_list():
             data = classes[klass]
             try:
-                n = data.tt_data["NOTAFTER"]
+                pairs = data.tt_data["NOTAFTER"]
             except KeyError:
                 # If the constraint is not present, don't add it for
                 # this class
                 continue
             for aidpairs, percent in self.pair_constraint(
-                klass, pairs, t_constraint
+                klass, pairs, "NOTAFTER"
             ):
                 for aidpair in aidpairs:
                     ap = (aidpair[1], aidpair[0])
@@ -1091,7 +1120,6 @@ class TimetableCourses(Courses):
             #    f" {a1}/{aidpair[0]} {a2}/{aidpair[1]}")
         return "ConstraintTwoActivitiesOrderedIfSameDay", clist
 
-#TODO
     def constraints_PAIRGAP(self, default):
         """Two subjects should have at least one lesson in between."""
         aidmap: dict[tuple[str, str],str] = {}
@@ -1099,13 +1127,13 @@ class TimetableCourses(Courses):
         for klass, _ in classes.get_class_list():
             data = classes[klass]
             try:
-                n = data.tt_data["PAIRGAP"]
+                pairs = data.tt_data["PAIRGAP"]
             except KeyError:
                 # If the constraint is not present, don't add it for
                 # this class
                 continue
             for aidpairs, percent in self.pair_constraint(
-                klass, pairs, t_constraint
+                klass, pairs, "PAIRGAP"
             ):
                 for aidpair in aidpairs:
                     # Order the pair elements
@@ -1170,7 +1198,7 @@ class TimetableCourses(Courses):
 # Mittagspause hat.
 # Check all these values, at present the teacher editor doesn't!
 
-    def add_teacher_constraints(self):
+    def add_teacher_constraints(self, used):
         blocked = []            # AVAILABLE
         constraints_m = []      # MINPERDAY
         constraints_gd = []     # MAXGAPSPERDAY
@@ -1178,6 +1206,8 @@ class TimetableCourses(Courses):
         constraints_u = []      # MAXBLOCK
         ### Not-available times
         for tid, data in get_teachers().items():
+            if tid not in used:
+                continue
             ttdata = data.tt_data
             blocked_periods, possible_breaks = timeoff_fet(ttdata)
             if blocked_periods:
@@ -1276,7 +1306,6 @@ class TimetableCourses(Courses):
             constraints_u,
         )
 
-#TODO: do the same sort of thing for class constraints
     def teacher_periods_constraint(
         self,
         tid: str,
@@ -1306,6 +1335,35 @@ class TimetableCourses(Courses):
                 tid=tid, val=val, constraint=constraint
             )
         )
+        return None
+
+    def class_periods_constraint(
+        self,
+        val: str,
+        klass: str,
+        constraint: str
+    ) -> Optional[tuple[int, int]]:
+        if not val:
+            return None
+        try:
+            v, w = val.split('@', 1)
+        except ValueError:
+            v = val
+            w = -1
+        try:
+            number = int(v)
+            weight = int(w)
+            if number >= 0 and number <= 10 and weight >= -1 and weight <= 10:
+                return number, weight
+        except ValueError:
+            pass
+        REPORT(
+            "ERROR",
+            T["INVALID_CLASS_CONDITION_VALUE"].format(
+                klass=klass, val=val, constraint=constraint
+            )
+        )
+        return None
 
 
 
@@ -1537,24 +1595,6 @@ if __name__ == "__main__":
         print("\n    ... for fet ...\n   ", fet_periods)
         print("\n  ==================================================")
 
-    fet_rooms = get_rooms_fet()
-    if _TEST:
-        print("\nROOMS:")
-        for rdata in fet_rooms:
-            print("   ", rdata)
-
-    fet_subjects = get_subjects_fet()
-    if _TEST:
-        print("\nSUBJECTS:")
-        for sdata in fet_subjects:
-            print("   ", sdata)
-
-    fet_teachers = get_teachers_fet()
-    if _TEST:
-        print("\nTEACHERS:")
-        for tdata in fet_teachers:
-            print("   ", tdata)
-
     fet_classes = get_classes_fet()
     if _TEST:
         print("\nCLASSES:")
@@ -1578,13 +1618,31 @@ if __name__ == "__main__":
     courses = TimetableCourses()
     if _TEST:
         print("\n ********** READ LESSON DATA **********\n")
-    courses.read_class_lessons(fet_classes)
+    courses.read_lessons(fet_classes)
+
+    fet_subjects = get_subjects_fet(courses.timetable_subjects)
+    if _TEST:
+        print("\nSUBJECTS:")
+        for sdata in fet_subjects:
+            print("   ", sdata)
+
+    fet_teachers = get_teachers_fet(courses.timetable_teachers)
+    if _TEST:
+        print("\nTEACHERS:")
+        for tdata in fet_teachers:
+            print("   ", tdata)
+
+    fet_rooms = get_rooms_fet(courses.virtual_room_list())
+    if _TEST:
+        print("\nROOMS:")
+        for rdata in fet_rooms:
+            print("   ", rdata)
 
     # Classes' not-available times
     courses.constraint_classes_timeoff()
 
     # Teacher-specific constraints
-    courses.add_teacher_constraints()
+    courses.add_teacher_constraints(courses.timetable_teachers)
 
     # quit(0)
 
@@ -1604,32 +1662,16 @@ if __name__ == "__main__":
     print("\nClass constraints ...")
     courses.add_class_constraints()
 
-    quit(0)
-
     # Activity info is available thus:
     for _aid in (550,):
         print(f"\n???? {_aid}:", courses.activities[_aid - 1])
-
-    courses.gen_fetdata()
 
     # quit(0)
 
     outdir = DATAPATH("TIMETABLE/out")
     os.makedirs(outdir, exist_ok=True)
 
-    # Check-lists for teachers
-    tcl = classes.teacher_check_list()
-    from timetable.tt_check_list import teacher_class_subjects
-
-    pdfbytes = teacher_class_subjects(tcl)
-    pdffile = os.path.join(outdir, f"Lehrer-Stunden-Kontrolle_{SCHOOLYEAR}.pdf")
-    with open(pdffile, "wb") as fh:
-        fh.write(pdfbytes)
-    print("\nTEACHER CHECK-LIST ->", pdffile)
-
-    # quit(0)
-
-    xml_fet = xmltodict.unparse(classes.gen_fetdata(), pretty=True)
+    xml_fet = xmltodict.unparse(courses.gen_fetdata(), pretty=True)
 
     outpath = os.path.join(outdir, "tt_out_test.fet")
     with open(outpath, "w", encoding="utf-8") as fh:
