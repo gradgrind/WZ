@@ -576,6 +576,11 @@ class TimetableCourses(Courses):
             # Either simple room, or "virtual" room for multiple rooms
             r_c = "ConstraintActivityPreferredRoom"
             room = rooms[0]
+
+#TODO --
+            if room != "rSp":
+                return
+
             s_c = {
                 "Weight_Percentage": "100",
                 "Activity_Id": id_str,
@@ -652,26 +657,25 @@ class TimetableCourses(Courses):
             # "ConstraintTwoActivitiesOrderedIfSameDay",
             # "ConstraintMinGapsBetweenActivities",
         }
-        for c in tc_block:
-            print(" ... blocking", c)
-            try:
+        for c in list(tc_dict):
+            if c in tc_block:
+                print(f"  – {c:42} ... blocked")
                 del tc_dict[c]
-            except KeyError:
-                pass
-
+            else:
+                print(f"  – {c:42}")
         print("\nSPACE CONSTRAINTS:")
         sc_block = {
             ### SPACE CONSTRAINTS:
             ##"ConstraintBasicCompulsorySpace",
             # "ConstraintActivityPreferredRoom",
-            "ConstraintActivityPreferredRooms",
+            # "ConstraintActivityPreferredRooms",
         }
-        for c in sc_block:
-            print(" ... blocking", c)
-            try:
+        for c in list(sc_dict):
+            if c in sc_block:
+                print(f"  – {c:42} ... blocked")
                 del sc_dict[c]
-            except KeyError:
-                pass
+            else:
+                print(f"  – {c:42}")
 
         fet_dict["Time_Constraints_List"] = tc_dict
         fet_dict["Space_Constraints_List"] = sc_dict
