@@ -1,7 +1,9 @@
 ### Translations
 
-core.db_management: {
+core.db_access: {
     # Messages
+    BACKUP_TO:          "Sicherungskopie der Daten: {f}\n"
+    REMOVE_OLD_BACKUP:  "Alte Sicherungskopie entfernt: {f}"
     BAD_KEY_VALUE_LIST: "Ungültige Schlüssel-Wert-Liste,\nein Paar pro Zeile, Trennung durch ':':\n{text}"
 }
 

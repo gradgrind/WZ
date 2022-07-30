@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-07-28
+Last updated:  2022-07-30
 
 Helper functions for accessing the database.
 
@@ -41,9 +41,13 @@ if __name__ == "__main__":
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-T = TRANSLATIONS("core.db_management")
+T = TRANSLATIONS("core.db_access")
 
 ### +++++
+
+from datetime import datetime
+from shutil import copyfile
+from glob import glob
 
 from ui.ui_base import (
     ### QtSql:
@@ -84,6 +88,19 @@ def open_database():
     if not QSqlQuery(foreign_keys_on).isActive():
         raise Bug(f"Failed: {foreign_keys_on}")
     return con
+
+
+def db_backup(suffix=""):
+    dbpath = DATAPATH(DATABASE)
+    stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    newfile = f"{dbpath}{suffix}_{stamp}"
+    copyfile(dbpath, newfile)
+    existing = sorted(glob(dbpath + "_*"))
+    msg = [T["BACKUP_TO"].format(f=newfile)]
+    for f in existing[:-5]:
+        msg.append(T["REMOVE_OLD_BACKUP"].format(f=f))
+        os.remove(f)
+    REPORT("INFO", "\n".join(msg))
 
 
 """
@@ -421,6 +438,9 @@ def enter_classes():
 
 if __name__ == "__main__":
     #    enter_classes()
+
+    db_backup()
+    quit(0)
 
     l = KeyValueList([("a", 1), ("b", 2), ("c", 3)])
     l.append(("d", 4))
