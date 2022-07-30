@@ -1,5 +1,5 @@
 """
-timetable/fet_data.py - last updated 2022-07-29
+timetable/fet_data.py - last updated 2022-07-30
 
 Prepare fet-timetables input from the database ...
 
@@ -22,6 +22,7 @@ Copyright 2022 Michael Towers
 _TEST = False
 _TEST = True
 _TEST1 = False
+#_TEST1 = True
 
 FET_VERSION = "6.2.7"
 
@@ -277,6 +278,7 @@ class TimetableCourses(Courses):
         "timetable_teachers",
         "timetable_subjects",
         "timetable_classes",
+        "locked_aids",
         "group2atoms",
         "activities",
         "__virtual_room_map",
@@ -306,6 +308,8 @@ class TimetableCourses(Courses):
         # Collect teachers and subjects with timetable entries:
         self.timetable_teachers = set()
         self.timetable_subjects = set()
+        # Collect locked placements:
+        self.locked_aids: set[str] = set()
 
         self.time_constraints = {}
         self.space_constraints = {}
@@ -544,6 +548,7 @@ class TimetableCourses(Courses):
             else:
                 locked = "true"
                 t_ = t
+                self.locked_aids.add(id_str)
             d, p = t_.split(".", 1)
             # Fix day and period
             add_constraint(
@@ -866,25 +871,24 @@ class TimetableCourses(Courses):
         sid2ag2aids: dict[str, dict[str, list[int]]]
 
         for group in groups:
-            klass, _ = class_group_split(group)
+            klass, g = class_group_split(group)
             try:
                 sid2ag2aids = self.class2sid2ag2aids[klass]
             except KeyError:
                 sid2ag2aids = {}
-                self.class2sid2ag2aids[klass] = {sid: {group: [activity_id]}}
-                continue
+                self.class2sid2ag2aids[klass] = sid2ag2aids
             try:
                 ag2aids = sid2ag2aids[sid]
             except KeyError:
                 ag2aids = {}
-                sid2ag2aids[sid] = {group: [activity_id]}
-                continue
-            try:
-                ag2aids[group].append(activity_id)
-            except KeyError:
-                ag2aids[group] = [activity_id]
+                sid2ag2aids[sid] = ag2aids
+            for ag in (self.group2atoms[klass][g] or [None]):
+                kg = f"{klass}.{ag}" if ag else klass
+                try:
+                    ag2aids[kg].append(activity_id)
+                except KeyError:
+                    ag2aids[kg] = [activity_id]
 
-    # TODO: Possibly remove constraints where all activities are locked?
     def constraint_day_separation(self):
         """Add constraints to ensure that multiple lessons in any subject
         are not placed on the same day.
@@ -925,17 +929,20 @@ class TimetableCourses(Courses):
         ### Sort the sets
         aids_list = sorted([sorted(s) for s in newsets])
         for aids in aids_list:
-            constraints.append(
-                {
-                    "Weight_Percentage": "100",
-                    "Consecutive_If_Same_Day": "true",
-                    "Number_of_Activities": str(len(aids)),
-                    "Activity_Id": [str(a) for a in aids],
-                    "MinDays": "1",
-                    "Active": "true",
-                    "Comments": None,
-                }
-            )
+            for a in aids:
+                if a not in self.locked_aids:
+                    constraints.append(
+                        {
+                            "Weight_Percentage": "100",
+                            "Consecutive_If_Same_Day": "true",
+                            "Number_of_Activities": str(len(aids)),
+                            "Activity_Id": aids,
+                            "MinDays": "1",
+                            "Active": "true",
+                            "Comments": None,
+                        }
+                    )
+                    break
         add_constraints(
             self.time_constraints,
             "ConstraintMinDaysBetweenActivities",
@@ -1599,6 +1606,8 @@ if __name__ == "__main__":
         print("\n ********** READ LESSON DATA **********\n")
     courses.read_lessons(fet_classes, N_EXTRA_ROOMS)
 
+    # quit(0)
+
     fet_subjects = get_subjects_fet(courses.timetable_subjects)
     if _TEST:
         print("\nSUBJECTS:")
@@ -1634,6 +1643,10 @@ if __name__ == "__main__":
                 print(f" ... {sid}: {ag2aids}")
                 for ag, aids in ag2aids.items():
                     print(f"     {sid:8}: {ag:10} --> {aids}")
+
+    # quit(0)
+
+    # print("\n§§§ locked_aids:", sorted(courses.locked_aids))
 
     print("\nSubject day-separation constraints ...")
     courses.constraint_day_separation()
