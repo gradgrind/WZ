@@ -1,7 +1,7 @@
 """
 ui/modules/course_editor.py
 
-Last updated:  2022-07-24
+Last updated:  2022-07-31
 
 Edit course and blocks+lessons data.
 
@@ -415,12 +415,30 @@ class CourseEditor(QSplitter):
         # course = self.editors["course"].text()
         index = self.coursetable.currentIndex()
         row = index.row()
+
+        ## The BLOCKS table should have its "course" field (foreign
+        ## key) defined as "ON DELETE CASCADE" to ensure that when
+        ## a course is deleted also the associated activities are
+        ## removed. Unfortunately this cannot propagate to the
+        ## LESSONS table as the tags (LESSON_TAG) are not unique
+        ## (so a foreign key constraint can't be used).
+        ## This is handled by a "clean-up" function.
+        # Get lesson tags:
+        tags = set()
+        for r in range(self.blockmodel.rowCount()):
+            tag = self.blockmodel.record(r).value("LESSON_TAG")
+            if tag:
+                tags.add(tag)
+
         model.removeRow(row)
         if model.submitAll():
-            # The LESSONS table should have its "course" field (foreign
-            # key) defined as "ON DELETE CASCADE" to ensure that when
-            # a course is deleted also the lessons are removed.
             # print("DELETED:", course)
+
+            # Clean up LESSONS table
+            for tag in tags:
+                clean_lessons_table(tag)
+
+            # Select a new row
             if row >= model.rowCount():
                 row = model.rowCount() - 1
             self.coursetable.selectRow(row)
@@ -615,10 +633,21 @@ class CourseEditor(QSplitter):
         if lesson_tag:
             # If there are no other lesson-blocks sharing the lesson-tag,
             # remove any sublessons
-            if not courses_with_lessontag(lesson_tag):
-                # Delete sublessons
-                for sl in sublessons(lesson_tag):
-                    db_delete_rows("LESSONS", id=sl.id)
+            clean_lessons_table(lesson_tag)
+
+
+def clean_lessons_table(tag=None):
+    """Clean up LESSONS table by removing entries with tags which have
+    no corresponding entries in the BLOCKS table.
+    By passing in a tag, just this can be checked (and its entries deleted).
+    """
+    if tag:
+        tags = [tag]
+    else:
+        tags = db_values("LESSONS", "TAG")
+    for tag in tags:
+        if not courses_with_lessontag(tag):
+            db_delete_rows("LESSONS", TAG=tag)
 
 
 class BlockLesson(QWidget):
