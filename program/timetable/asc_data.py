@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-07-25
+timetable/asc_data.py - last updated 2022-07-31
 
 Prepare aSc-timetables input from the database ...
 
@@ -146,11 +146,12 @@ def get_rooms_aSc() -> list[dict]:
 
 def get_subjects_aSc(subjects) -> list[dict]:
     """Return an ordered list of aSc elements for the subjects."""
-    return [
-        {"@id": idsub(sid), "@short": sid, "@name": name}
-        for sid, name in get_subjects()
-        if sid in subjects
-    ]
+    slist = []
+    for sid, name in get_subjects():
+        sid_ = idsub(sid)
+        if sid_ in subjects:
+            slist.append({"@id": sid_, "@short": sid, "@name": name})
+    return slist
 
 
 def get_classes_aSc():

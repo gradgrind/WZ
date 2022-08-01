@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-07-30
+Last updated:  2022-08-01
 
 Helper functions for accessing the database.
 
@@ -28,8 +28,10 @@ DATABASE = "wz.sqlite"
 
 ########################################################################
 
+import os
+
 if __name__ == "__main__":
-    import sys, os
+    import sys
 
     this = sys.path[0]
     appdir = os.path.dirname(this)
@@ -90,10 +92,13 @@ def open_database():
     return con
 
 
-def db_backup(suffix=""):
+def db_backup(name=""):
     dbpath = DATAPATH(DATABASE)
-    stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    newfile = f"{dbpath}{suffix}_{stamp}"
+    if name:
+        newfile = DATAPATH(name) + ".sqlite"
+    else:
+        stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        newfile = f"{dbpath}_{stamp}"
     copyfile(dbpath, newfile)
     existing = sorted(glob(dbpath + "_*"))
     msg = [T["BACKUP_TO"].format(f=newfile)]
