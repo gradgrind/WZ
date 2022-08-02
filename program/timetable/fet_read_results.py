@@ -2,6 +2,7 @@
 timetable/fet_read_results.py - last updated 2022-08-01
 
 Fetch the placements after a fet run and update the database accordingly.
+There is also a function to generate an aSc-file.
 
 ==============================
 Copyright 2022 Michael Towers
@@ -46,6 +47,7 @@ from typing import Optional
 import xmltodict
 
 from core.db_access import db_backup, db_update_fields
+from ui.ui_base import QFileDialog
 
 ### -----
 
@@ -109,11 +111,6 @@ def read_placements(fet_file, placement_file):
 
 
 def getActivities(working_folder):
-    from qtpy.QtWidgets import QApplication, QFileDialog
-    app = QApplication.instance()
-    if app is None:
-        # if it does not exist then a QApplication is created
-        app = QApplication(sys.argv)
 #TODO: T ...
     d = QFileDialog(None, "Open fet 'activities' file", "", "'Activities' Files (*_activities.xml)")
     d.setFileMode(QFileDialog.ExistingFile)
@@ -135,6 +132,48 @@ def getActivities(working_folder):
     return None
 
 
+def make_asc_file(asc_file):
+    from timetable.asc_data import (
+        TimetableCourses,
+        get_subjects_aSc,
+        get_teachers_aSc,
+        get_days_aSc,
+        get_periods_aSc,
+        get_rooms_aSc,
+        get_classes_aSc,
+        get_groups_aSc,
+        build_dict,
+    )
+    days = get_days_aSc()
+    periods = get_periods_aSc()
+    allrooms = get_rooms_aSc()
+    classes = get_classes_aSc()
+    groups = get_groups_aSc()
+    courses = TimetableCourses()
+    courses.read_class_lessons()
+    allsubjects = get_subjects_aSc(courses.timetable_subjects)
+    teachers = get_teachers_aSc(courses.timetable_teachers)
+    xml_aSc = xmltodict.unparse(
+        build_dict(
+            ROOMS=allrooms,
+            PERIODS=periods,
+            TEACHERS=teachers,
+            SUBJECTS=allsubjects,
+            CLASSES=classes,
+            GROUPS=groups,
+            LESSONS=courses.asc_lesson_list,
+            CARDS=courses.asc_card_list,
+            # CARDS = [],
+        ),
+        pretty=True,
+    )
+
+    with open(asc_file, "w", encoding="utf-8") as fh:
+        fh.write(xml_aSc.replace("\t", "   "))
+#TODO: T ...
+    REPORT("INFO", f"TIMETABLE XML -> {asc_file}")
+
+
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
@@ -151,14 +190,35 @@ if __name__ == "__main__":
         if placements.endswith(ending):
             pfile = os.path.basename(placements)
             pbase = pfile[:-(len(ending))]
-            db_backup()
-            fet_file = os.path.join(outdir, pbase + ".fet")
-            pxfile = os.path.join(outdir, pfile)
-            if pxfile != placements:
-                copyfile(placements, pxfile)
-            # print(f"Reading from\n  {fet_file} and\n  {placements}")
-            read_placements(fet_file, pxfile)
-            db_backup(pbase)
+            if True:
+                db_backup()
+                fet_file = os.path.join(outdir, pbase + ".fet")
+                pxfile = os.path.join(outdir, pfile)
+                if pxfile != placements:
+                    copyfile(placements, pxfile)
+                # print(f"Reading from\n  {fet_file} and\n  {placements}")
+                read_placements(fet_file, pxfile)
+                db_backup(pbase)
+
+            # Generate asc-file
+            ascfile_redirect = os.path.join(outdir, "ascdir")
+            if os.path.isfile(ascfile_redirect):
+                with open(ascfile_redirect, "r", encoding="utf-8") as fh:
+                    odir = fh.read().strip()
+            else:
+                odir = QFileDialog.getExistingDirectory(
+                    None,
+#TODO: T ...
+                    "Open Directory",
+                    options = (
+                        QFileDialog.DontUseNativeDialog
+                        #| QFileDialog.ShowDirsOnly
+                    )
+                )
+                with open(ascfile_redirect, "w", encoding="utf-8") as fh:
+                    fh.write(odir)
+            asc_file = os.path.join((odir or outdir), pbase + "_asc.xml")
+            make_asc_file(asc_file)
         else:
 #TODO: T ...
             REPORT("ERROR", f"Placements file-name must end with '{ending}'")

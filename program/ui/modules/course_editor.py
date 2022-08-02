@@ -1,7 +1,7 @@
 """
 ui/modules/course_editor.py
 
-Last updated:  2022-07-31
+Last updated:  2022-08-02
 
 Edit course and blocks+lessons data.
 
@@ -502,6 +502,7 @@ class CourseEditor(QSplitter):
         text = self.note_editor.text()
         # print("§§§ NOTES CHANGED:", text)
         db_update_field("BLOCKS", "NOTES", text, id=self.block_id)
+        self.redisplay()
 
     def block_add_plain(self):
         """Add a new "lesson", copying the current one if possible."""
