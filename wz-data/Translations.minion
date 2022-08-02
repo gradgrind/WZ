@@ -63,6 +63,7 @@ ui.ui_base: {
 
 ui.modules.teachers: {
     # Messages
+    INVALID_AVAILABILITY:   "Gültig sind '+', '-' und '*', nicht '{val}'"
     INVALID_PERIOD_VALUES:  "Die Verfügbarkeitsdaten mussten {n}-mal angepasst werden.\n  Ursprünglich:\n{val}"
     UNIQUE_FIELDS:  "Die Hauptfelder müssen einmalig sein."
     
@@ -85,13 +86,19 @@ ui.modules.teachers: {
 
     # Constraints
     AVAILABILITY:   Verfügbarkeit
+    MINPERDAY:      "Stunden pro Tag – mind."
+    MAXGAPSPERDAY:  "Lücken pro Tag – max."
+    MAXGAPSPERWEEK: "Lücken pro Woche – max."
+    MAXBLOCK:       "aufeinanderfolgende Stunden – max."
+    AVAILABLE:      "Verfügbarkeit"
 }
 
 ui.modules.classes: {
     # Messages
     INVALID_PERIOD_VALUES:  "Die Verfügbarkeitsdaten mussten {n}-mal angepasst werden.\n  Ursprünglich:\n{val}"
     UNIQUE_FIELDS:  "Die Hauptfelder müssen einmalig sein."
-    
+    INVALID_AVAILABILITY:   "Gültig sind '+', '-' und '*', nicht '{val}'"
+
     # Labels
     MODULE_NAME:    Klassen
     MODULE_TITLE:   "Klassendaten verwalten"
@@ -110,6 +117,12 @@ ui.modules.classes: {
 
     # Constraints
     AVAILABILITY:   Verfügbarkeit
+    MINDAILY:       "Stunden pro Tag – mind."
+    MAXGAPSWEEKLY:  "Lücken pro Woche – max."
+    NOTAFTER:       "Fach B nicht nach Fach A"
+    PAIRGAP:        "Lücke zwischen Fach A und Fach B"
+    AVAILABLE:      "Verfügbarkeit"
+    
 }
 
 ui.modules.course_lessons: {
@@ -288,28 +301,4 @@ timetable.fet_data: {
 
     # Entries possibly "fet"-specific
     LUNCH_BREAK:    "mp:Mittagspause"
-}
-
-timetable.constraints_teacher: {
-    #MESSAGES
-    INVALID_AVAILABILITY:   "Gültig sind '+', '-' und '*', nicht '{val}'"
-
-    # CONSTRAINT_FIELDS
-    MINPERDAY:      "Stunden pro Tag – mind."
-    MAXGAPSPERDAY:  "Lücken pro Tag – max."
-    MAXGAPSPERWEEK: "Lücken pro Woche – max."
-    MAXBLOCK:       "aufeinanderfolgende Stunden – max."
-    AVAILABLE:      "Verfügbarkeit"
-}
-
-timetable.constraints_class: {
-    #MESSAGES
-    INVALID_AVAILABILITY:   "Gültig sind '+', '-' und '*', nicht '{val}'"
-
-    # CONSTRAINT_FIELDS
-    MINDAILY:       "Stunden pro Tag – mind."
-    MAXGAPSWEEKLY:  "Lücken pro Woche – max."
-    NOTAFTER:       "Fach B nicht nach Fach A"
-    PAIRGAP:        "Lücke zwischen Fach A und Fach B"
-    AVAILABLE:      "Verfügbarkeit"
 }

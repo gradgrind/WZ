@@ -1,5 +1,5 @@
 """
-timetable/fet_data.py - last updated 2022-07-31
+timetable/fet_data.py - last updated 2022-08-02
 
 Prepare fet-timetables input from the database ...
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
 from typing import Optional
 
 T = TRANSLATIONS("timetable.fet_data")
-Tc = TRANSLATIONS("timetable.constraints_class")
+Tc = TRANSLATIONS("ui.modules.classes")
 
 ### +++++
 
@@ -1620,10 +1620,12 @@ if __name__ == "__main__":
 
     outdir = DATAPATH("TIMETABLE/out")
     os.makedirs(outdir, exist_ok=True)
-    xmlfile = getActivities(outdir)
-    if xmlfile:
-        courses.placements_extern(xmlfile)
-    else:
+#    xmlfile = getActivities(outdir)
+#    if xmlfile:
+#        courses.placements_extern(xmlfile)
+#    else:
+    if True:
+
         xml_fet = xmltodict.unparse(courses.gen_fetdata(), pretty=True)
 
         outpath = os.path.join(outdir, "tt_out_test.fet")

@@ -1,7 +1,7 @@
 """
 ui/modules/classes.py
 
-Last updated:  2022-07-10
+Last updated:  2022-08-02
 
 Edit classes' data.
 
@@ -75,7 +75,21 @@ from ui.editable import EdiTableWidget
 # Class table fields
 CLASS_COLS = [(f, T[f]) for f in ("CLASS", "NAME", "DIVISIONS", "CLASSROOM", "TT_DATA")]
 
-from timetable.constraints_class import CONSTRAINT_FIELDS, period_validator
+CONSTRAINT_FIELDS = [(f, T[f]) for f in (
+        "MINDAILY",
+        "MAXGAPSWEEKLY",
+        "NOTAFTER",
+        "PAIRGAP",
+        "AVAILABLE"
+    )
+]
+
+def period_validator(value):
+    """Validator for class period availability table.
+    """
+    if value in ("+", "-", "*"):
+        return None
+    return T["INVALID_AVAILABILITY"].format(val=value)
 
 ### -----
 

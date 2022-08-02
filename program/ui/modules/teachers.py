@@ -1,7 +1,7 @@
 """
 ui/modules/teachers.py
 
-Last updated:  2022-07-21
+Last updated:  2022-08-02
 
 Edit teachers' data.
 
@@ -76,7 +76,22 @@ TEACHER_COLS = [
     (f, T[f]) for f in ("TID", "FIRSTNAMES", "LASTNAMES", "SIGNED", "SORTNAME", "TT_DATA")
 ]
 
-from timetable.constraints_teacher import CONSTRAINT_FIELDS, period_validator
+def period_validator(value):
+    """Validator for teacher period availabilöity table.
+    """
+    if value in ("+", "-", "*"):
+        return None
+    return T["INVALID_AVAILABILITY"].format(val=value)
+
+
+CONSTRAINT_FIELDS = [(f, T[f]) for f in (
+        "MINPERDAY",
+        "MAXGAPSPERDAY",
+        "MAXGAPSPERWEEK",
+        "MAXBLOCK",
+        "AVAILABLE"
+    )
+]
 
 ### -----
 
