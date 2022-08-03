@@ -1,7 +1,7 @@
 """
 ui/modules/timetable.py
 
-Last updated:  2022-04-23
+Last updated:  2022-08-03
 
 The timetable "main" window.
 
@@ -53,6 +53,7 @@ from ui.ui_base import (
     QGraphicsLineItem,
     QGraphicsSimpleTextItem,
     QGraphicsView,
+    QMenu,
     # QtCore
     Qt,
     # QtGui
@@ -64,6 +65,15 @@ from ui.ui_base import (
     QPainter,
     QTransform
 )
+
+from core.basic_data import (
+    get_sublessons,
+    get_subjects,
+    get_classes,
+    timeslot2index
+)
+from core.classes import atomic_maps
+from timetable.activities import Courses
 
 ### +++++
 
@@ -391,7 +401,7 @@ class GridPeriodsDays(QGraphicsScene):
         if items:
             if event.button() == Qt.LeftButton:
 #TODO ...
-                kbdmods = QApplication.keyboardModifiers()
+                kbdmods = APP.keyboardModifiers()
                 shift = " + SHIFT" if kbdmods & Qt.ShiftModifier else ""
                 alt = " + ALT" if kbdmods & Qt.AltModifier else ""
                 ctrl = " + CTRL" if kbdmods & Qt.ControlModifier else ""
@@ -430,23 +440,26 @@ class GridPeriodsDays(QGraphicsScene):
                 # with the topmost. An item can break the chain by
                 # returning a false value.
                 try:
-                    if not item.contextmenu():
+#TODO: Pass event.screenPos() instead (for pop-up menu)?
+                    if not item.contextmenu(event):
                         return
                 except AttributeError:
                     pass
-                print (f"Cell – context menu @ {item.cell}")
 
     def new_tile(self, tag, duration, nmsg, offset, total, text, colour=None):
-        t = Tile(duration, nmsg, offset, total, text, colour)
+        t = Tile(tag, duration, nmsg, offset, total, text, colour)
         self.addItem(t)
         self.tiles[tag] = t
         return t
 
     def place_tile(self, tag, cell):
         tile = self.tiles[tag]
-        x = self.xslots[cell[0] + 1]    # first cell is header
-        y = self.yslots[cell[1] + 1]    # first cell is header
+        col, row = cell
+        x = self.xslots[col + 1]    # first cell is header
+        y = self.yslots[row + 1]    # first cell is header
         tile.set_cell(x, y)
+#TODO: It might be useful for a tile to know where it is placed.
+#        tile.cell = cell
 
     def select_cell(self, cell):
         x = self.xslots[cell[0] + 1]    # first cell is header
@@ -459,7 +472,7 @@ class Tile(QGraphicsRectItem):
     font_centre = StyleCache.getFont(fontSize=FONT_CENTRE_SIZE)
     font_corner = StyleCache.getFont(fontSize=FONT_CORNER_SIZE)
 
-    def __init__(self, duration, nmsg, offset, total, text, colour):
+    def __init__(self, tag, duration, nmsg, offset, total, text, colour):
         #   duration: number of periods
         #   nmsg: number of "minimal subgroups"
         #   total: number of all "minimal subgroups"
@@ -468,6 +481,7 @@ class Tile(QGraphicsRectItem):
         # Thus offset + nmsg must be smaller than or equal to total.
         #   text: the text for the central position
         #   colour: the box background colour (<None> => white)
+        self.tag = tag
         self.duration = duration
 #        self.width = SIZES["BOXWIDTH"] * nmsg / total - SIZES["SIZES["LINEWIDTH"]"]
         self.width = (SIZES["BOXWIDTH"] - SIZES["LINEWIDTH"]) * nmsg / total
@@ -570,6 +584,28 @@ class Tile(QGraphicsRectItem):
                     self.height - SIZES["LINEWIDTH"] - right_height
                 )
 
+#TODO
+    def contextmenu(self, event):
+        menu = QMenu ("Context Menu")
+        # menu = QMenu()
+        Action = menu.addAction("I am a context Action")
+        Action.triggered.connect(self.printName)
+
+        menu.exec_(event.screenPos())
+        return True # propagate down (probably shouldn't)
+
+#TODO: May be useful (to get screen coordinates)?
+#def get_pos(view, item, point):
+#        scenePos = item.mapToScene(point)
+#        viewportPos = view.mapFromScene(scenePos)
+#        viewPos = view.viewport().mapToParent(viewportPos)
+#        globalViewPos = view.mapToGlobal(QPoint(0, 0))
+#        return globalViewPos.x + viewPos.x, globalViewPos.y + viewPos.y
+
+#TODO
+    def printName(self):
+        print("Action triggered from {}".format(self.tag))
+
 
 class Box(QGraphicsRectItem):
     """A rectangle with adjustable borderwidth.
@@ -649,6 +685,13 @@ class Cell(Box):
         self.setAcceptHoverEvents(True)
 #        print ("Cell", icol, irow, x, y)
 
+#TODO
+    def contextmenu(self, event):
+        print(f"CONTEXT MENU @ (col: {self.cell[0]} | row: {self.cell[1]})")
+        return True # propagate down (though a <Cell> should be the lowest ...)
+
+#TODO: It may be more appropriate to have the hover events handled in
+# <Tile>.
     def hoverEnterEvent(self, event):
         print("Enter", self.cell)
 
@@ -730,6 +773,196 @@ class Tile0(QGraphicsRectItem):
         print("Action triggered from {}".format(self.id_))
 
 
+#class BlockInfo(NamedTuple):
+#    course: CourseData
+#    block: BlockTag
+#    rooms: list[str]
+#    payment_data: PaymentData
+#    notes: str
+#
+#class Sublesson(NamedTuple):
+#    id: int
+#    TAG: str
+#    LENGTH: int
+#    TIME: str
+#    ROOMS: str
+
+class Timetable:
+    def __init__(self, grid):
+        self.grid = grid
+        self.courses = Courses()
+        # {block-tag -> [Sublesson, ... ]}
+        self.tag2lessons = get_sublessons()     # not resetting cache
+        self.subjects = get_subjects()
+
+    def show_class(self, klass):
+        classes = get_classes()
+        group_info = classes.group_info(klass)
+        atoms = group_info["MINIMAL_SUBGROUPS"]
+        group_map = group_info["GROUP_MAP"]
+        group2atoms = atomic_maps(atoms, list(group_map))
+#TODO: How to calculate tile offsets ... maybe using independent-divisions?
+
+        # {block-tag -> [BlockInfo, ... ]}
+        tag2infolist = self.courses.klass2tags[klass]
+
+        alist = []
+        for tag, infolist in tag2infolist.items():
+            info_ = infolist[0]
+            sid = info_.block.sid or info_.course.sid
+            name = self.subjects.map(sid)
+            activity = Activity(sid, name, tag)
+
+            # Get tids and room lists (from which to choose)
+            tids_ = set()       # tids for just this class
+            groups_ = set()     # groups for just this class
+            allgroups = set()   # groups for the activity as a whole
+            alltids = set()     # tids for the activity as a whole
+            allroomlists_ = []  # rooms for the activity as a whole
+            # Room info for just this class is not really useful, it is
+            # possible that the actual rooms used for this class cannot
+            # be determined accurately.
+
+            for info_ in infolist:
+                tid_ = info_.course.tid
+                if tid_ != "--":
+                    tids_.add(tid_)
+                if info_.course.group:
+                    groups_.add(info_.course.group)
+            activity.set_tids(sorted(tids_))
+            activity.set_groups(sorted(groups_))
+
+            # For the other stuff, info from all classes is needed
+            for info_ in self.courses.tag2entries[tag]:
+                tid_ = info_.course.tid
+                if tid_ != "--":
+                    alltids.add(tid_)
+                if info_.course.group:
+                    allgroups.add(info_.course.group)
+                if info_.rooms:
+                    allroomlists_.append(info_.rooms)
+            activity.set_all_tids(alltids)
+            activity.set_all_rooms(
+                simplify_room_lists(allroomlists_, klass, tag)
+            )
+            alist.append(activity)
+# Sort lesson names?
+        alist.sort(key=lambda a: a.subject)
+
+        for a in alist:
+            print("§§§", a.groups, a.tag, a.sid, a.subject, a.tids, a.alltids)
+            print("         ", a.roomlists)
+            lessons = self.tag2lessons.get(a.tag)
+            if lessons:
+                for l in lessons:
+                    print("  +++", l)
+
+# just testing ...
+                    if len(a.groups) == 1:
+                        g = a.groups[0]
+                        if g == 'B':
+                            o = 1
+                            nmsg = 1
+                        elif g == 'A':
+                            o = 0
+                            nmsg = 1
+                        elif g == '*':
+                            o = 0
+                            nmsg = 2
+                        else:
+                            continue
+                        d, p = timeslot2index(l.TIME)
+                        print("   ---", a.sid, d, p)
+                        if d < 0:
+                            continue
+                        ltag = str(l.id)
+                        tile = self.grid.new_tile(
+                            ltag,
+                            duration=l.LENGTH,
+                            nmsg=nmsg,
+                            offset=o,
+                            total=2,
+                            text=a.sid
+                        )
+                        self.grid.place_tile(ltag, (d, p))
+
+
+            else:
+                print("NO LESSONS:", tag)
+
+
+
+#TODO: Will need to consider activities which cover more than one class!
+# Actually, there is one per tag ... or perhaps those details can be
+# left to the lessons/chips?
+class Activity:
+    #TODO: __slots__
+    def __init__(self, sid, subject, tag):
+        self.sid = sid
+        self.subject = subject
+        self.tag = tag
+
+    def set_tids(self, tids):
+        self.tids = tids
+
+    def set_groups(self, groups):
+        self.groups = groups
+
+    def set_all_rooms(self, roomlists):
+        self.roomlists = roomlists
+
+    def set_all_tids(self, tids):
+        self.alltids = tids
+
+
+def make_tile(grid):
+# Need a tag (lesson-id?), duration, number of atoms, total number of atoms,
+# offset???!!!, rooms, groups
+
+    tile = grid.new_tile(tag, duration=1, nmsg=1, offset=0, total=2, text="Ta")
+    tile.set_corner(0, "BMW")
+    tile.set_corner(1, "A")
+    tile.set_corner(2, "r10G")
+    tile.set_corner(3, "?")
+
+    grid.place_tile(tag, (3, 5))
+
+
+def simplify_room_lists(roomlists, klass, tag):
+    """Simplify room lists, check for room conflicts."""
+    # Collect single room "choices" and remove redundant entries
+    singles = set()
+    while True:
+        extra = False
+        singles1 = set()
+        roomlists1 = []
+        for rl in roomlists:
+            rl1 = [r for r in rl if r not in singles]
+            if rl1:
+                if len(rl1) == 1:
+                    if rl1[0] == '+':
+                        if not extra:
+                            roomlists1.append(rl1)
+                            extra = True
+                    else:
+                        singles1.add(rl1[0])
+                else:
+                    roomlists1.append(rl1)
+            else:
+                SHOW_ERROR(
+                    T["BLOCK_ROOM_CONFLICT"].format(
+                        klass=klass,
+                        sid=sid,
+                        tag=tag,
+                        rooms=repr(roomlists),
+                    ),
+                )
+        if roomlists1 == roomlists:
+            return [[s] for s in sorted(singles)] + roomlists
+        singles.update(singles1)
+        roomlists = roomlists1
+
+
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 def main(args):
@@ -769,6 +1002,8 @@ def main(args):
     return grid
 
 
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+
 if __name__ == '__main__':
     args = set(sys.argv[1:])
     try:
@@ -782,32 +1017,44 @@ if __name__ == '__main__':
     builtins.DEBUG = __debug
     DEBUG("sys.argv:", sys.argv)
 
+### TESTING
+    from core.db_access import open_database
+    open_database()
+
+    SHOW_EXAMPLE_TILES = False
+
     grid = main(set(sys.path[1:]))
 
-    t1 = grid.new_tile("T1", duration=1, nmsg=1, offset=1, total=4, text="De p1 xx", colour="FFFF44")
-    grid.place_tile("T1", (2, 3))
-    t2 = grid.new_tile("T2", duration=2, nmsg=1, offset=0, total=4, text="tg B", colour="FFE0F0")
-    t2.set_corner(0, "AB / CD / EF / GH / IJ")
-    t2.set_corner(1, "B")
-    grid.place_tile("T2", (0, 2))
-    t3 = grid.new_tile("T3", duration=2, nmsg=1, offset=0, total=4, text="---", colour="E0F0FF")
-    grid.place_tile("T3", (2, 3))
-    t4 = grid.new_tile("T4", duration=1, nmsg=2, offset=2, total=4, text="Ma")
-    t4.set_corner(0, "AB / CD / EF / GH / IJ")
-    t4.set_corner(1, "B")
-    grid.place_tile("T4", (2, 3))
-    t5 = grid.new_tile("T5", duration=2, nmsg=1, offset=0, total=1, text="Hu")
-    t5.set_corner(0, "BTH / WS\nAR / PQ")
-    t5.set_corner(1, "alle")
-    grid.place_tile("T5", (4, 0))
-    t6 = grid.new_tile("T6", duration=1, nmsg=1, offset=0, total=2, text="Ta")
-    t6.set_corner(0, "BMW")
-    t6.set_corner(1, "A")
-    t6.set_corner(2, "r10G")
-    t6.set_corner(3, "?")
-    grid.place_tile("T6", (3, 5))
+    tt = Timetable(grid)
+#    tt.show_class("09G")
+    tt.show_class("10G")
+#    tt.show_class("12K")
 
-    grid.select_cell((1,6))
+    if SHOW_EXAMPLE_TILES:
+        t1 = grid.new_tile("T1", duration=1, nmsg=1, offset=1, total=4, text="De p1 xx", colour="FFFF44")
+        grid.place_tile("T1", (2, 3))
+        t2 = grid.new_tile("T2", duration=2, nmsg=1, offset=0, total=4, text="tg B", colour="FFE0F0")
+        t2.set_corner(0, "AB / CD / EF / GH / IJ")
+        t2.set_corner(1, "B")
+        grid.place_tile("T2", (0, 2))
+        t3 = grid.new_tile("T3", duration=2, nmsg=1, offset=0, total=4, text="---", colour="E0F0FF")
+        grid.place_tile("T3", (2, 3))
+        t4 = grid.new_tile("T4", duration=1, nmsg=2, offset=2, total=4, text="Ma")
+        t4.set_corner(0, "AB / CD / EF / GH / IJ")
+        t4.set_corner(1, "B")
+        grid.place_tile("T4", (2, 3))
+        t5 = grid.new_tile("T5", duration=2, nmsg=1, offset=0, total=1, text="Hu")
+        t5.set_corner(0, "BTH / WS\nAR / PQ")
+        t5.set_corner(1, "alle")
+        grid.place_tile("T5", (4, 0))
+        t6 = grid.new_tile("T6", duration=1, nmsg=1, offset=0, total=2, text="Ta")
+        t6.set_corner(0, "BMW")
+        t6.set_corner(1, "A")
+        t6.set_corner(2, "r10G")
+        t6.set_corner(3, "?")
+        grid.place_tile("T6", (3, 5))
+
+        grid.select_cell((1,6))
 
     #for k, v in SIZES.items():
     #    print(f"SIZE (mm) {k:16}: {WINDOW.px2mm(v)}")

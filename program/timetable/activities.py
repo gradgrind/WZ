@@ -1,7 +1,7 @@
 """
 timetable/activities.py
 
-Last updated:  2022-07-28
+Last updated:  2022-08-03
 
 Collect information on "activities" – from the BLOCKS and COURSES db tables.
 
@@ -113,10 +113,10 @@ def lesson_rooms(room: str, course: CourseData, lesson_id: int) -> list[str]:
 class Courses:
     __slots__ = (
         # "paydata",
-        "tid2paydata",
-        "tag2entries",
-        "tid2tags",
-        "klass2tags",
+        "tid2paydata",  # {tid -> [(CourseData, PaymentData), ... ]}
+        "tag2entries",  # {block-tag -> [BlockInfo, ... ]}
+        "tid2tags",     # {tid -> {block-tag -> [BlockInfo, ... ]}}
+        "klass2tags",   # {klass -> {block-tag -> [BlockInfo, ... ]}}
     )
 
     def __init__(self):
@@ -157,12 +157,12 @@ class Courses:
         # TODO: Is this really needed? At present it is not used.
         # self.paydata = []  # [(CourseData, PaymentData), ... ]
 
-        self.tid2paydata = {}  # {tid -> [(CourseData, PaymentData), ... ]}
-        tag2entries = {}  # {block-tag -> [BlockInfo, ... ]}
+        self.tid2paydata = {}
+        tag2entries = {}
         self.tag2entries = tag2entries
-        tid2tags = {}  # {tid -> {block-tag -> [BlockInfo, ... ]}}
+        tid2tags = {}
         self.tid2tags = tid2tags
-        klass2tags = {}  # {klass -> {block-tag -> [BlockInfo, ... ]}}
+        klass2tags = {}
         self.klass2tags = klass2tags
         # Collect payment-only entries for courses (check for multiple entries):
         paycourses = set()

@@ -229,6 +229,10 @@ ui.modules.course_lessons: {
     PARALLEL_TEACHERS: "mit Lehrkräften"
 }
 
+ui.modules.timetable: {
+    BLOCK_ROOM_CONFLICT: "Räume nicht unabhängig für Kurs(e) mit Kennzeichen {tag}, Klasse {klass}, Fach {sid}: {rooms}"
+}
+
 timetable.activities: {
     CourseData:     "<Kurs: Klasse={klass}, Gruppe={group}, Fach={sid}, Lehrer={tid}>"
     NO_CLASSROOM:   "LESSONS-Tabelle, id={id}, {course}:\n  Klasse hat keinen Klassenraum, wird aber angegeben ($) im Raum-Feld"
