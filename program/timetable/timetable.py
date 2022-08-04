@@ -257,8 +257,6 @@ if __name__ == '__main__':
     from core.db_access import open_database
     open_database()
 
-    SHOW_EXAMPLE_TILES = False
-
     grid = main(set(sys.path[1:]))
 
     tt = Timetable(grid)

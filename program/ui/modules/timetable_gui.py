@@ -783,235 +783,6 @@ class Tile0(QGraphicsRectItem):
         print("Action triggered from {}".format(self.id_))
 
 
-#class BlockInfo(NamedTuple):
-#    course: CourseData
-#    block: BlockTag
-#    rooms: list[str]
-#    payment_data: PaymentData
-#    notes: str
-#
-#class Sublesson(NamedTuple):
-#    id: int
-#    TAG: str
-#    LENGTH: int
-#    TIME: str
-#    ROOMS: str
-
-class Timetable:
-    def __init__(self, grid):
-        self.grid = grid
-        self.courses = Courses()
-        # {block-tag -> [Sublesson, ... ]}
-        self.tag2lessons = get_sublessons()     # not resetting cache
-        self.subjects = get_subjects()
-
-    def show_class(self, klass):
-        classes = get_classes()
-        group_info = classes.group_info(klass)
-        divisions = group_info["INDEPENDENT_DIVISIONS"]
-        atoms = group_info["MINIMAL_SUBGROUPS"]
-        group_map = group_info["GROUP_MAP"]
-        group2atoms = atomic_maps(atoms, list(group_map))
-#TODO: How to calculate tile offsets ... maybe using independent-divisions?
-
-        # {block-tag -> [BlockInfo, ... ]}
-        tag2infolist = self.courses.klass2tags[klass]
-
-        alist = []
-        for tag, infolist in tag2infolist.items():
-            info_ = infolist[0]
-            sid = info_.block.sid or info_.course.sid
-            name = self.subjects.map(sid)
-            activity = Activity(sid, name, tag)
-
-            # Get tids and room lists (from which to choose)
-            tids_ = set()       # tids for just this class
-            groups_ = set()     # groups for just this class
-            allgroups = set()   # groups for the activity as a whole
-            alltids = set()     # tids for the activity as a whole
-            allroomlists_ = []  # rooms for the activity as a whole
-            # Room info for just this class is not really useful, it is
-            # possible that the actual rooms used for this class cannot
-            # be determined accurately.
-
-            for info_ in infolist:
-                tid_ = info_.course.tid
-                if tid_ != "--":
-                    tids_.add(tid_)
-                if info_.course.group:
-                    groups_.add(info_.course.group)
-            activity.set_tids(sorted(tids_))
-            activity.set_groups(sorted(groups_))
-
-            # For the other stuff, info from all classes is needed
-            for info_ in self.courses.tag2entries[tag]:
-                tid_ = info_.course.tid
-                if tid_ != "--":
-                    alltids.add(tid_)
-                if info_.course.group:
-                    allgroups.add(info_.course.group)
-                if info_.rooms:
-                    allroomlists_.append(info_.rooms)
-            activity.set_all_tids(alltids)
-            activity.set_all_rooms(
-                simplify_room_lists(allroomlists_, klass, tag)
-            )
-            alist.append(activity)
-# Sort lesson names?
-        alist.sort(key=lambda a: a.subject)
-
-        for a in alist:
-            print("§§§", a.groups, a.tag, a.sid, a.subject, a.tids, a.alltids)
-            print("         ", a.roomlists)
-            lessons = self.tag2lessons.get(a.tag)
-            if lessons:
-                for l in lessons:
-                    print("  +++", l)
-
-# just testing ...
-
-#    a2g = atoms2groups(divisions, group_map, with_divisions=True)
-# Maybe better to try to discover which of the original divisions
-# is relevant – but it might not be possible to be certain? Maybe in that
-# case it wouldn't matter which was chosen!
-# That would mean that a lesson can't be placed until all lessons sharing
-# the slots are known. The algorithm could be rather complicated, but it
-# should be able to prevent striping under certain circumstances.
-
-                    if len(a.groups) == 1:
-                        g = a.groups[0]
-                        if g == 'B':
-                            o = 1
-                            nmsg = 1
-                        elif g == 'A':
-                            o = 0
-                            nmsg = 1
-                        elif g == '*':
-                            o = 0
-                            nmsg = 2
-                        else:
-                            continue
-                        d, p = timeslot2index(l.TIME)
-                        print("   ---", a.sid, d, p)
-                        if d < 0:
-                            continue
-                        ltag = str(l.id)
-                        tile = self.grid.new_tile(
-                            ltag,
-                            duration=l.LENGTH,
-                            nmsg=nmsg,
-                            offset=o,
-                            total=2,
-                            text=a.sid
-                        )
-                        self.grid.place_tile(ltag, (d, p))
-
-
-            else:
-                print("NO LESSONS:", tag)
-
-
-def class_divisions(divisions, basic_groups):
-    """Divide the class according to <basic_groups>, returning a list
-    of (start-index, number-of-divisions, total-number-of-divisions)
-    tuples. The total-number-of-divisions will be the same for all
-    entries. Actually, ideally – and in most normal cases – there will
-    only be a single entry in the list.
-    """
-    bgroups = set(basic_groups)
-    collected = []
-    for div in divisions:
-        i = 0
-        count = 0
-        for g in div:
-            try:
-                bgroups.remove(g)
-                if count == 0:
-                    start = i
-                count += 1
-            except KeyError:
-                if count > 0:
-                    collected.append((start, count, len(div)))
-                    count = 0
-            i += 1
-        if collected:
-            if bgroups:
-                return None
-            return collected
-    return None
-
-
-#TODO: Will need to consider activities which cover more than one class!
-# Actually, there is one per tag ... or perhaps those details can be
-# left to the lessons/chips?
-class Activity:
-    #TODO: __slots__
-    def __init__(self, sid, subject, tag):
-        self.sid = sid
-        self.subject = subject
-        self.tag = tag
-
-    def set_tids(self, tids):
-        self.tids = tids
-
-    def set_groups(self, groups):
-        self.groups = groups
-
-    def set_all_rooms(self, roomlists):
-        self.roomlists = roomlists
-
-    def set_all_tids(self, tids):
-        self.alltids = tids
-
-
-def make_tile(grid):
-# Need a tag (lesson-id?), duration, number of atoms, total number of atoms,
-# offset???!!!, rooms, groups
-
-    tile = grid.new_tile(tag, duration=1, nmsg=1, offset=0, total=2, text="Ta")
-    tile.set_corner(0, "BMW")
-    tile.set_corner(1, "A")
-    tile.set_corner(2, "r10G")
-    tile.set_corner(3, "?")
-
-    grid.place_tile(tag, (3, 5))
-
-
-def simplify_room_lists(roomlists, klass, tag):
-    """Simplify room lists, check for room conflicts."""
-    # Collect single room "choices" and remove redundant entries
-    singles = set()
-    while True:
-        extra = False
-        singles1 = set()
-        roomlists1 = []
-        for rl in roomlists:
-            rl1 = [r for r in rl if r not in singles]
-            if rl1:
-                if len(rl1) == 1:
-                    if rl1[0] == '+':
-                        if not extra:
-                            roomlists1.append(rl1)
-                            extra = True
-                    else:
-                        singles1.add(rl1[0])
-                else:
-                    roomlists1.append(rl1)
-            else:
-                SHOW_ERROR(
-                    T["BLOCK_ROOM_CONFLICT"].format(
-                        klass=klass,
-                        sid=sid,
-                        tag=tag,
-                        rooms=repr(roomlists),
-                    ),
-                )
-        if roomlists1 == roomlists:
-            return [[s] for s in sorted(singles)] + roomlists
-        singles.update(singles1)
-        roomlists = roomlists1
-
-
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 def main(args):
@@ -1054,45 +825,35 @@ def main(args):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-### TESTING
     from core.db_access import open_database
     open_database()
 
-    SHOW_EXAMPLE_TILES = False
-
     grid = main(set(sys.path[1:]))
 
-    tt = Timetable(grid)
-#    tt.show_class("09G")
-    tt.show_class("10G")
-#    tt.show_class("12K")
+    t1 = grid.new_tile("T1", duration=1, nmsg=1, offset=1, total=4, text="De p1 xx", colour="FFFF44")
+    grid.place_tile("T1", (2, 3))
+    t2 = grid.new_tile("T2", duration=2, nmsg=1, offset=0, total=4, text="tg B", colour="FFE0F0")
+    t2.set_corner(0, "AB / CD / EF / GH / IJ")
+    t2.set_corner(1, "B")
+    grid.place_tile("T2", (0, 2))
+    t3 = grid.new_tile("T3", duration=2, nmsg=1, offset=0, total=4, text="---", colour="E0F0FF")
+    grid.place_tile("T3", (2, 3))
+    t4 = grid.new_tile("T4", duration=1, nmsg=2, offset=2, total=4, text="Ma")
+    t4.set_corner(0, "AB / CD / EF / GH / IJ")
+    t4.set_corner(1, "B")
+    grid.place_tile("T4", (2, 3))
+    t5 = grid.new_tile("T5", duration=2, nmsg=1, offset=0, total=1, text="Hu")
+    t5.set_corner(0, "BTH / WS\nAR / PQ")
+    t5.set_corner(1, "alle")
+    grid.place_tile("T5", (4, 0))
+    t6 = grid.new_tile("T6", duration=1, nmsg=1, offset=0, total=2, text="Ta")
+    t6.set_corner(0, "BMW")
+    t6.set_corner(1, "A")
+    t6.set_corner(2, "r10G")
+    t6.set_corner(3, "?")
+    grid.place_tile("T6", (3, 5))
 
-
-    if SHOW_EXAMPLE_TILES:
-        t1 = grid.new_tile("T1", duration=1, nmsg=1, offset=1, total=4, text="De p1 xx", colour="FFFF44")
-        grid.place_tile("T1", (2, 3))
-        t2 = grid.new_tile("T2", duration=2, nmsg=1, offset=0, total=4, text="tg B", colour="FFE0F0")
-        t2.set_corner(0, "AB / CD / EF / GH / IJ")
-        t2.set_corner(1, "B")
-        grid.place_tile("T2", (0, 2))
-        t3 = grid.new_tile("T3", duration=2, nmsg=1, offset=0, total=4, text="---", colour="E0F0FF")
-        grid.place_tile("T3", (2, 3))
-        t4 = grid.new_tile("T4", duration=1, nmsg=2, offset=2, total=4, text="Ma")
-        t4.set_corner(0, "AB / CD / EF / GH / IJ")
-        t4.set_corner(1, "B")
-        grid.place_tile("T4", (2, 3))
-        t5 = grid.new_tile("T5", duration=2, nmsg=1, offset=0, total=1, text="Hu")
-        t5.set_corner(0, "BTH / WS\nAR / PQ")
-        t5.set_corner(1, "alle")
-        grid.place_tile("T5", (4, 0))
-        t6 = grid.new_tile("T6", duration=1, nmsg=1, offset=0, total=2, text="Ta")
-        t6.set_corner(0, "BMW")
-        t6.set_corner(1, "A")
-        t6.set_corner(2, "r10G")
-        t6.set_corner(3, "?")
-        grid.place_tile("T6", (3, 5))
-
-        grid.select_cell((1,6))
+    grid.select_cell((1,6))
 
     #for k, v in SIZES.items():
     #    print(f"SIZE (mm) {k:16}: {WINDOW.px2mm(v)}")
