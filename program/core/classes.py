@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-07-27
+core/classes.py - last updated 2022-08-04
 
 Manage class data.
 
@@ -113,6 +113,7 @@ class Classes(dict):
                 "ERROR",
                 T["GROUP_INFO_ERROR"].format(klass=klass, e=e)
             )
+            info = {}
         self.__group_info[klass] = info
         return info
 
@@ -130,7 +131,7 @@ def build_group_data(divisions):
         return ".".join(sorted(group))
 
     def groups2stringlist(groups):
-        return sorted([group2string(g) for g in groups])
+        return tuple(sorted([group2string(g) for g in groups]))
 
     results = {}
     groups = set()
@@ -257,13 +258,92 @@ def build_group_data(divisions):
     basic_groups = set()
     for g, glist in gmapl:
         basic_groups.update(glist)
+    group_map = dict(gmapl)
     return {
         "INDEPENDENT_DIVISIONS": idivs,
-        "GROUP_MAP": dict(gmapl),
+        "GROUP_MAP": group_map,
 #        "GROUPS": groups2stringlist(groups),
         "BASIC": basic_groups,
         "MINIMAL_SUBGROUPS": groups2stringlist(cross_terms),
     }
+
+
+def eliminate_subsets(groups, group_map):
+    gsets = [(g, set(group_map[g])) for g in groups]
+    gsets1 = []
+    for g1 in gsets:
+        for g2 in gsets:
+            # If g1 represents a subset of g2, discard g1
+            if g1[1] < g2[1]:
+                break
+        else:
+            gsets1.append(g1)
+    return gsets1
+
+
+def independent_divisions(idivs, group_sets):
+    gset = set()
+    for g, gs in group_sets:
+        gset.update(gs)
+    gset0 = gset.copy()
+    divs = []
+    for d in idivs:
+        dlist = []
+        d0 = -1
+        i = -1
+        for g in d:
+            i += 1
+            try:
+                gset.remove(g)
+            except KeyError:
+                continue
+            dlist.append(g)
+            if d0 < 0:
+                d0 = i  # start index
+        if dlist:
+            divs.append((len(dlist), d0, len(d)))
+    if gset:
+        raise Bug(f"Groups {gset} not in any of the independent divisions")
+    return divs, gset0
+
+
+class ChipData(NamedTuple):
+    groups: list[str]       # should be ordered
+    basic_groups: set[str]
+    offset: int             # lowest possible start index
+    num: int                # number of "parts"
+    den: int                # total number of "parts"
+
+
+def class_divisions(groups, group_map, idivs):
+    """Determine the size – as a fraction of the whole class – and an
+    offset, for the given <groups>.
+    Trim the groups a bit first, removing subsets, so that the least of
+    groups doesn't get too long.
+    <groups> is a list or other iterable providing the initial groups.
+    <group_map> is the "GROUP_MAP" value of the class's group info.
+    <idivs> is the "INDEPENDENT_DIVISIONS" value of the class's group info.
+    Return the trimmed groups (ordered list) and the corresponding set
+    of "basic" groups.
+    Also return the information concerning the tile size and placement
+    for graphical display purposes.
+    The return value is a <ChipData> instance.
+    """
+    if '*' not in groups:
+        group_sets = eliminate_subsets(groups, group_map)
+        # print("\n§§§ ->", group_sets)
+        group_divs, group_set = independent_divisions(idivs, group_sets)
+        # print("\n%%%", group_divs, "-----", group_set)
+        if not group_divs:
+            raise Bug(f"No groups ... {groups}")
+        if len(group_divs) == 1:
+            num, offset, den = group_divs[0]
+            glist = [gs[0] for gs in group_sets]
+            # print(f"GROUPS: {glist}, MIN-OFFSET: {offset} @ {num}/{den}")
+            return ChipData(glist, group_set, offset, num, den)
+    # print("  ... whole class")
+#TODO?
+    return ChipData(['*'], {'*'}, 0, 1, 1)
 
 
 def atomic_maps(atoms, groups):
@@ -285,7 +365,7 @@ def atomic_maps(atoms, groups):
         return {'': []}
 
 
-def atoms2groups(divisions, group2atoms):
+def atoms2groups(divisions, group2atoms, with_divisions=False):
     """Build a "reverse" mapping {atom-list -> [group, ... ]} which
     reduces a collection of atomic groups to as short a list of "usable"
     groups (those defined for the class in the database) as possible.
@@ -309,6 +389,9 @@ def atoms2groups(divisions, group2atoms):
                 key = tuple(sorted(aset))
                 if key not in a2glist:
                     a2glist[key] = combi
+    if with_divisions:
+        for d in divisions:
+            a2glist[tuple(d)] = ['']
     return a2glist
 
 
@@ -363,6 +446,29 @@ if __name__ == "__main__":
     print("\n ... atoms -> groups:")
     for a, g in a2glist.items():
         print("       ::", a, "->", g)
+
+    print("\n ... basics -> groups:")
+    a2g = atoms2groups(divisions, group_map, with_divisions=True)
+    for a, g in a2g.items():
+        print("       ::", a, "->", g)
+
+
+    all_groups = list(group_map)
+    import random
+    ng = random.randint(1, len(all_groups))
+    groups = random.sample(all_groups, ng)
+    print("\n$$$ IN:", groups)
+
+    chipdata = class_divisions(
+        groups,
+        group_map,
+        divisions
+    )
+    print("    GROUPS:", chipdata.groups)
+    print("    SET:", chipdata.basic_groups)
+    print(f"    {chipdata.num}/{chipdata.den} @ {chipdata.offset}")
+
+    # quit(0)
 
     print("\n -------------------------------\n")
     print("\nCLASS DATA:")

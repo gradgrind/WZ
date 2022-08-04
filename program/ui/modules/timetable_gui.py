@@ -1,7 +1,7 @@
 """
-ui/modules/timetable.py
+ui/modules/timetable_gui.py
 
-Last updated:  2022-08-03
+Last updated:  2022-08-04
 
 The timetable "main" window.
 
@@ -38,10 +38,16 @@ if __name__ == '__main__':
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
-    from ui.ui_base import StandalonePage as Page
+    builtins.STANDALONE = True
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
+try:
+    standalone = STANDALONE
+except AttributeError:
+    standalone = False
+if standalone:
+    from ui.ui_base import StandalonePage as Page
 else:
     from ui.ui_base import StackPage as Page
 
@@ -467,6 +473,10 @@ class GridPeriodsDays(QGraphicsScene):
         self.select.setPos(x, y)
         self.select.show()
 
+    @staticmethod
+    def run_standalone():
+        sys.exit(APP.exec())
+
 
 class Tile(QGraphicsRectItem):
     font_centre = StyleCache.getFont(fontSize=FONT_CENTRE_SIZE)
@@ -798,6 +808,7 @@ class Timetable:
     def show_class(self, klass):
         classes = get_classes()
         group_info = classes.group_info(klass)
+        divisions = group_info["INDEPENDENT_DIVISIONS"]
         atoms = group_info["MINIMAL_SUBGROUPS"]
         group_map = group_info["GROUP_MAP"]
         group2atoms = atomic_maps(atoms, list(group_map))
@@ -858,6 +869,15 @@ class Timetable:
                     print("  +++", l)
 
 # just testing ...
+
+#    a2g = atoms2groups(divisions, group_map, with_divisions=True)
+# Maybe better to try to discover which of the original divisions
+# is relevant – but it might not be possible to be certain? Maybe in that
+# case it wouldn't matter which was chosen!
+# That would mean that a lesson can't be placed until all lessons sharing
+# the slots are known. The algorithm could be rather complicated, but it
+# should be able to prevent striping under certain circumstances.
+
                     if len(a.groups) == 1:
                         g = a.groups[0]
                         if g == 'B':
@@ -890,6 +910,35 @@ class Timetable:
             else:
                 print("NO LESSONS:", tag)
 
+
+def class_divisions(divisions, basic_groups):
+    """Divide the class according to <basic_groups>, returning a list
+    of (start-index, number-of-divisions, total-number-of-divisions)
+    tuples. The total-number-of-divisions will be the same for all
+    entries. Actually, ideally – and in most normal cases – there will
+    only be a single entry in the list.
+    """
+    bgroups = set(basic_groups)
+    collected = []
+    for div in divisions:
+        i = 0
+        count = 0
+        for g in div:
+            try:
+                bgroups.remove(g)
+                if count == 0:
+                    start = i
+                count += 1
+            except KeyError:
+                if count > 0:
+                    collected.append((start, count, len(div)))
+                    count = 0
+            i += 1
+        if collected:
+            if bgroups:
+                return None
+            return collected
+    return None
 
 
 #TODO: Will need to consider activities which cover more than one class!
@@ -1005,18 +1054,6 @@ def main(args):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
-    args = set(sys.argv[1:])
-    try:
-        args.remove('--debug')
-    except KeyError:
-        def __debug(*msg):
-            pass
-    else:
-        def __debug(*msg):
-            print("DEBUG:::", *msg)
-    builtins.DEBUG = __debug
-    DEBUG("sys.argv:", sys.argv)
-
 ### TESTING
     from core.db_access import open_database
     open_database()
@@ -1029,6 +1066,7 @@ if __name__ == '__main__':
 #    tt.show_class("09G")
     tt.show_class("10G")
 #    tt.show_class("12K")
+
 
     if SHOW_EXAMPLE_TILES:
         t1 = grid.new_tile("T1", duration=1, nmsg=1, offset=1, total=4, text="De p1 xx", colour="FFFF44")
