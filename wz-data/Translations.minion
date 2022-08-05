@@ -125,7 +125,7 @@ ui.modules.classes: {
     
 }
 
-ui.modules.course_lessons: {
+ui.modules.course_editor: {
     # Messages
 #    PAYMENT_ENTRY:  "Dieser Eintrag ist kein „Kurs“, gibt aber Deputatsstunden an, die keinen Unterrichtsstunden direkt entsprechen."
     NO_ENTRIES_FOR_COURSE: "Dieser Kurs hat keine Aktivitäten"
@@ -164,6 +164,9 @@ ui.modules.course_lessons: {
     SOME_ROOM:      "irgendein Raum"
     OTHER_ROOMS:    "auch andere Räume"
     TIME_FIXED:     "Feste Startzeit"
+
+    # Dialog buttons
+    Clear:          "Verwerfen"
 
     # Course field editor buttons
 #    EDIT_COURSE:    "Kursdaten bearbeiten"

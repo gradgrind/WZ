@@ -39,7 +39,7 @@ if __name__ == "__main__":
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-T = TRANSLATIONS("ui.modules.course_lessons")
+T = TRANSLATIONS("ui.modules.course_editor")
 
 ### +++++
 
@@ -160,6 +160,7 @@ class DayPeriodDialog(QDialog):
         bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
+        bt_clear.setText(T["Clear"])
 
         bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
@@ -307,6 +308,7 @@ class PartnersDialog(QDialog):
         self.bt_clear = buttonBox.addButton(
             QDialogButtonBox.StandardButton.Discard
         )
+        self.bt_clear.setText(T["Clear"])
         # vbox1.addStretch(1)
 
         self.bt_save.clicked.connect(self.do_accept)
@@ -979,7 +981,8 @@ class RoomDialog(QDialog):
         vboxm.addWidget(bt_right)
         bt_right.setIcon(
             self.style().standardIcon(
-                QStyle.StandardPixmap.SP_DialogDiscardButton
+#                QStyle.StandardPixmap.SP_DialogDiscardButton
+                QStyle.StandardPixmap.SP_TrashIcon
             )
         )
         bt_right.setToolTip(T["Remove_from_choices"])
@@ -1017,6 +1020,7 @@ class RoomDialog(QDialog):
         bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
+        bt_clear.setText(T["Clear"])
 
         bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
@@ -1392,6 +1396,7 @@ class PaymentDialog(QDialog):
         bt_save = buttonBox.addButton(QDialogButtonBox.StandardButton.Save)
         bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
         bt_clear = buttonBox.addButton(QDialogButtonBox.StandardButton.Discard)
+        bt_clear.setText(T["Clear"])
         bt_save.clicked.connect(self.do_accept)
         bt_cancel.clicked.connect(self.reject)
         bt_clear.clicked.connect(self.do_clear)

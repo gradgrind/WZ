@@ -1,7 +1,7 @@
 """
 ui/modules/course_editor.py
 
-Last updated:  2022-08-02
+Last updated:  2022-08-05
 
 Edit course and blocks+lessons data.
 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
 else:
     from ui.ui_base import StackPage as Page
 
-T = TRANSLATIONS("ui.modules.course_lessons")
+T = TRANSLATIONS("ui.modules.course_editor")
 
 ### +++++
 
@@ -327,7 +327,9 @@ class CourseEditor(QSplitter):
 
         self.coursemodel = QSqlTableModel()
         self.coursemodel.setTable("COURSES")
-        self.coursemodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
+        self.coursemodel.setEditStrategy(
+            QSqlTableModel.EditStrategy.OnManualSubmit
+        )
         # Set up the course view
         self.coursetable.setModel(self.coursemodel)
         self.coursetable.hideColumn(0)
@@ -360,7 +362,9 @@ class CourseEditor(QSplitter):
         # Set up the blocks model
         self.blockmodel = QSqlTableModel()
         self.blockmodel.setTable("BLOCKS")
-        self.blockmodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
+        self.blockmodel.setEditStrategy(
+            QSqlTableModel.EditStrategy.OnManualSubmit
+        )
         # Set up the blocks view
         self.blocktable.setModel(self.blockmodel)
         for f, t in BLOCK_COLS:

@@ -51,11 +51,21 @@ from qtpy.QtGui import *
 from qtpy.QtCore import *
 from qtpy.QtSql import *
 
+__locale = locale.setlocale(locale.LC_ALL, "")
+print("LOCALE:", __locale)
+
+#print("STYLES:", QStyleFactory.keys())
+#QApplication.setStyle('Fusion')
 APP = QApplication(sys.argv)
-print("LOCALE:", locale.setlocale(locale.LC_ALL, ""))
+
+qlocale = QLocale(__locale)
+QLocale.setDefault(qlocale)
+print("uiLanguages:", qlocale.uiLanguages())
+print("system uiLanguages:", QLocale.uiLanguages(QLocale.system()))
+
 path = QLibraryInfo.location(QLibraryInfo.TranslationsPath)
 translator = QTranslator(APP)
-if translator.load(QLocale.system(), "qtbase", "_", path):
+if translator.load(qlocale, "qtbase", "_", path):
     APP.installTranslator(translator)
 # ?
 SETTINGS = QSettings(QSettings.IniFormat, QSettings.UserScope, "MT", "WZ")
