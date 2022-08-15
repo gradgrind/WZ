@@ -166,10 +166,10 @@ BLOCKCOLS_SHOW = ("LESSON_TAG", "PAYMENT", "NOTES")
 
 
 def init():
-    MAIN_WIDGET.add_tab(Courses())
+    MAIN_WIDGET.add_tab(CourseEditorPage())
 
 
-class Courses(Page):
+class CourseEditorPage(Page):
     name = T["MODULE_NAME"]
     title = T["MODULE_TITLE"]
 
@@ -1014,7 +1014,7 @@ class CourseEditorForm(QDialog):
 if __name__ == "__main__":
     from ui.ui_base import run
 
-    widget = Courses()
+    widget = CourseEditorPage()
     widget.enter()
     widget.resize(1000, 550)
     run(widget)

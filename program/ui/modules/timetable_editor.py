@@ -1,9 +1,9 @@
 """
-timetable/timetable.py
+ui/modules/timetable_editor.py
 
-Last updated:  2022-08-04
+Last updated:  2022-08-15
 
-Manage timetable construction.
+Show a timetable grid and allow placement of lesson tiles.
 
 
 =+LICENCE=============================
@@ -24,6 +24,10 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
+#TODO --
+### Labels, etc.
+_TITLE = "WZ – Stundenplanung"
+
 #####################################################
 
 import sys, os, builtins
@@ -31,7 +35,7 @@ import sys, os, builtins
 if __name__ == '__main__':
     # Enable package import if running as module
     this = sys.path[0]
-    appdir = os.path.dirname(this)
+    appdir = os.path.dirname(os.path.dirname(this))
     sys.path[0] = appdir
     basedir = os.path.dirname(appdir)
     from core.base import start
@@ -39,20 +43,106 @@ if __name__ == '__main__':
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
+try:
+    standalone = STANDALONE
+except NameError:
+    standalone = False
+if standalone:
+    from ui.ui_base import StandalonePage as Page
+else:
+    from ui.ui_base import StackPage as Page
+
+T = TRANSLATIONS("ui.modules.timetable_editor")
 
 ### +++++
 
-from ui.modules.timetable_gui import main
+from ui.modules.timetable_gui import GridViewRescaling, GridPeriodsDays
+from core.db_access import open_database
 from core.basic_data import (
+    get_days,
+    get_periods,
+    get_classes,
     get_sublessons,
     get_subjects,
-    get_classes,
     timeslot2index
 )
 from core.classes import class_divisions
 from timetable.activities import Courses
+from ui.ui_base import (
+    QHBoxLayout,
+    QVBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QAbstractItemView,
+)
 
 ### -----
+
+def init():
+    MAIN_WIDGET.add_tab(TimetableEditor())
+
+
+class TimetableEditor(Page):
+    name = T["MODULE_NAME"]
+    title = T["MODULE_TITLE"]
+
+    def __init__(self):
+        super().__init__()
+        self.grid_view = GridViewRescaling()
+        hbox = QHBoxLayout(self)
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.addWidget(self.grid_view)
+        vbox = QVBoxLayout()
+        hbox.addLayout(vbox)
+#TODO: T ...
+        vbox.addWidget(QLabel("Klasse:"))
+        self.list1 = QListWidget()
+        # self.list1.setMinimumWidth(30)
+        self.list1.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        vbox.addWidget(self.list1)
+        self.list1.currentTextChanged.connect(self.change_class)
+        self.list2 = QListWidget()
+        self.list2.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        vbox.addWidget(self.list2)
+
+        # Set up grid
+        self.grid = self.grid_view.scene()
+
+    def enter(self):
+#TODO
+        open_database()
+
+        self.TT_CONFIG = MINION(DATAPATH("CONFIG/TIMETABLE"))
+        days = get_days().key_list()
+        periods = get_periods().key_list()
+        breaks = self.TT_CONFIG["BREAKS_BEFORE_PERIODS"]
+        self.grid = GridPeriodsDays(days, periods, breaks)
+        self.grid_view.setScene(self.grid)
+
+        self.timetable = Timetable(self.grid)
+
+        self.init_data()
+
+    def init_data(self):
+        for k, name in get_classes().get_class_list():
+            _item = QListWidgetItem(k)
+            _item.setToolTip(name)
+            self.list1.addItem(_item)
+
+    def change_class(self, klass):
+#TODO
+        print("§§§ SELECT CLASS:", klass)
+        self.grid.remove_tiles()
+        self.timetable.show_class(klass)
+
+
+# ++++++++++++++ The widget implementation ++++++++++++++
+
 
 #class BlockInfo(NamedTuple):
 #    course: CourseData
@@ -254,14 +344,24 @@ def simplify_room_lists(roomlists, klass, tag):
 if __name__ == '__main__':
 
 ### TESTING
-    from core.db_access import open_database
-    open_database()
+#    from core.db_access import open_database
+#    open_database()
 
-    grid = main(set(sys.path[1:]))
+#    grid = main(set(sys.path[1:]))
 
-    tt = Timetable(grid)
-#    tt.show_class("09G")
-    tt.show_class("11G")
-#    tt.show_class("12K")
+#    tt = Timetable(grid)
+##    tt.show_class("09G")
+#    tt.show_class("11G")
+##    tt.show_class("12K")
 
-    grid.run_standalone()
+#    grid.run_standalone()
+#    quit(0)
+
+### PROPER
+    from ui.ui_base import run
+
+    widget = TimetableEditor()
+    widget.enter()
+    widget.resize(1000, 550)
+    run(widget)
+

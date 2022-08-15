@@ -232,8 +232,13 @@ ui.modules.course_editor: {
     PARALLEL_TEACHERS: "mit Lehrkräften"
 }
 
-ui.modules.timetable: {
+ui.modules.timetable_editor: {
+    # Messages
     BLOCK_ROOM_CONFLICT: "Räume nicht unabhängig für Kurs(e) mit Kennzeichen {tag}, Klasse {klass}, Fach {sid}: {rooms}"
+
+    # Labels
+    MODULE_NAME:    "Stundenplan"
+    MODULE_TITLE:   "Stundenplan bearbeiten"
 }
 
 timetable.activities: {

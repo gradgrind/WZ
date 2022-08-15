@@ -1,7 +1,7 @@
 """
 timetable/list_activities.py
 
-Last updated:  2022-07-24
+Last updated:  2022-08-13
 
 Present information on activities for teachers and classes/groups in
 pdf documents.
@@ -342,7 +342,7 @@ class TeacherClassCourses(Courses):
                         else:
                             groups.update(group2basic[course.group])
                         payinfo = blockinfo.payment_data
-                        if payinfo.number:
+                        if payinfo.number and blockinfo.block.sid:
                             n = payinfo.number_val
                         else:
                             n = lesson_sum
@@ -364,7 +364,10 @@ class TeacherClassCourses(Courses):
 
             ### Add class data to list of all classes
             clist.append((klass, kname, tag2blocks, group_counts))
-            # print(f"$$$ {klass}:", group_counts)
+            # if klass == '07G':
+            #     print(f"$$$ {klass}:", group_counts)
+            #     for k, v in tag2blocks.items():
+            #         print(f"\n  +++ {k}:", v)
         return clist
 
 
@@ -667,7 +670,7 @@ def print_classes(class_data, tag2classes):
                 for blockinfo in blockinfolist:
                     course = blockinfo.course
                     sname = get_subjects().map(course.sid)
-                    group_periods = f"{blockinfo.periods:.2f}".replace(
+                    group_periods = f"{blockinfo.periods:.1f}".replace(
                         ".", DECIMAL_SEP
                     )
                     blocklist.append(
@@ -684,7 +687,7 @@ def print_classes(class_data, tag2classes):
                 ## Simple, plain lesson block
                 course = __blockinfo.course
                 sname = get_subjects().map(course.sid)
-                group_periods = f"{__blockinfo.periods:.2f}".replace(
+                group_periods = f"{__blockinfo.periods}".replace(
                     ".", DECIMAL_SEP
                 )
                 class_list.append(
@@ -931,18 +934,26 @@ if __name__ == "__main__":
         courses = TeacherClassCourses()
 
         tlist = courses.teacher_class_subjects()
-        pdfbytes = print_teachers(tlist, show_workload=True)
-        # pdfbytes = print_teachers(tlist)
+        pdfbytes = print_teachers(tlist)
+#TODO: T ...
         filepath = saveDialog("pdf-Datei (*.pdf)", "teachers_subjects")
         if filepath and os.path.isabs(filepath):
-            if not filepath.endswith(".pdf"):
-                filepath += ".pdf"
-            with open(filepath, "wb") as fh:
+            if filepath.endswith(".pdf"):
+                filepath = filepath[:-4]
+            fullpath = filepath + ".pdf"
+            with open(fullpath, "wb") as fh:
                 fh.write(pdfbytes)
-            print("  --->", filepath)
+            print("  --->", fullpath)
+            pdfbytes = print_teachers(tlist, show_workload=True)
+            fullpath = filepath + "_X.pdf"
+            with open(fullpath, "wb") as fh:
+                fh.write(pdfbytes)
+            print("  --->", fullpath)
+
 
         clist = courses.read_class_blocks()
         pdfbytes = print_classes(clist, courses.tag2classes)
+#TODO: T ...
         filepath = saveDialog("pdf-Datei (*.pdf)", "class_subjects")
         if filepath and os.path.isabs(filepath):
             if not filepath.endswith(".pdf"):

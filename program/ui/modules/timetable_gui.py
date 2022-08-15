@@ -1,7 +1,7 @@
 """
 ui/modules/timetable_gui.py
 
-Last updated:  2022-08-04
+Last updated:  2022-08-15
 
 The timetable "main" window.
 
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     start.setup(os.path.join(basedir, "DATA-2023"))
 try:
     standalone = STANDALONE
-except AttributeError:
+except NameError:
     standalone = False
 if standalone:
     from ui.ui_base import StandalonePage as Page
@@ -131,7 +131,7 @@ TILE_TOP_RIGHT = 1
 TILE_BOTTOM_RIGHT = 2
 TILE_BOTTOM_LEFT = 3
 
-#TODO: these should be in a config file:
+#TODO: these should be in a config file or database ...:
 DAYS = ('Mo', 'Di', 'Mi', 'Do', 'Fr')
 PERIODS = ('A', 'B', '1', '2', '3', '4', '5', '6', '7')
 BREAKS = ('1', '3', '5')
@@ -262,15 +262,16 @@ class GridView(QGraphicsView):
             self.pt2px(PAGE_SIZE[0]) - SIZES["MARGIN_LEFT"]
             - SIZES["MARGIN_RIGHT"]
         )
+        print("§TABLE SIZE (pixels):", SIZES["TABLEWIDTH"], SIZES["TABLEHEIGHT"])
 
     def pt2px(self, pt):
         px = self.ldpi * pt / 72.0
-        #print(f"pt2px: {pt} -> {px} (LDPI: {self.ldpi})")
+        print(f"pt2px: {pt} -> {px} (LDPI: {self.ldpi})")
         return px
 
     def px2mm(self, px):
         mm = px * 25.4 / self.ldpi
-        #print(f"px2mm: {px} -> {mm} (LDPI: {self.ldpi})")
+        print(f"px2mm: {px} -> {mm} (LDPI: {self.ldpi})")
         return mm
 
 
@@ -457,6 +458,11 @@ class GridPeriodsDays(QGraphicsScene):
         self.addItem(t)
         self.tiles[tag] = t
         return t
+
+    def remove_tiles(self):
+        for tag, tile in self.tiles.items():
+            self.removeItem(tile)
+        self.tiles.clear()
 
     def place_tile(self, tag, cell):
         tile = self.tiles[tag]
@@ -799,18 +805,21 @@ def main(args):
     # Persistent Settings:
 #    builtins.SETTINGS = QSettings(
 #            QSettings.IniFormat, QSettings.UserScope, 'MT', 'WZ')
-    #builtins.WINDOW = GridViewRescaling()
+    builtins.WINDOW = GridViewRescaling()
     #builtins.WINDOW = GridViewHFit()
-    builtins.WINDOW = GridView()
+    #builtins.WINDOW = GridView()
 
     # Set up grid
     grid = GridPeriodsDays(DAYS, PERIODS, BREAKS)
     WINDOW.setScene(grid)
 
-    # Scaling: only makes sense if using basic, unscaled GridView
-    scale = WINDOW.pdpi / WINDOW.ldpi
-    t = QTransform().scale(scale, scale)
-    WINDOW.setTransform(t)
+#### Actually, I'm not sure what sort of scaling makes sense ...
+#### Probably best to use GridViewRescaling
+#    # Scaling: only makes sense if using basic, unscaled GridView
+#    scale = WINDOW.pdpi / WINDOW.ldpi
+#    print("§SCALING", WINDOW.pdpi, WINDOW.ldpi, scale)
+#    t = QTransform().scale(scale, scale)
+##    WINDOW.setTransform(t)
 
 #TODO: Only standalone!
     APP.setWindowIcon(QIcon(APPDATAPATH("icons/tt.svg")))
