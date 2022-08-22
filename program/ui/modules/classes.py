@@ -1,7 +1,7 @@
 """
 ui/modules/classes.py
 
-Last updated:  2022-08-02
+Last updated:  2022-08-22
 
 Edit classes' data.
 
@@ -228,7 +228,9 @@ class ClassEditor(QSplitter):
         self.classtable.setModel(None)
         self.classmodel = QSqlTableModel()
         self.classmodel.setTable("CLASSES")
-        self.classmodel.setEditStrategy(QSqlTableModel.OnManualSubmit)
+        self.classmodel.setEditStrategy(
+			QSqlTableModel.EditStrategy.OnManualSubmit
+		)
         # Set up the class view
         self.classtable.setModel(self.classmodel)
         for f, t in CLASS_COLS:

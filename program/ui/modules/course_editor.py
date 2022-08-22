@@ -1,7 +1,7 @@
 """
 ui/modules/course_editor.py
 
-Last updated:  2022-08-05
+Last updated:  2022-08-22
 
 Edit course and blocks+lessons data.
 
@@ -58,6 +58,7 @@ from core.db_access import (
 from core.teachers import Teachers
 from core.classes import Classes
 from core.basic_data import (
+    clear_cache,
     get_payment_weights,
     get_subjects,
     sublessons,
@@ -181,7 +182,10 @@ class CourseEditorPage(Page):
         hbox.addWidget(self.course_editor)
 
     def enter(self):
+#TODO?
         open_database()
+        clear_cache()
+
         self.course_editor.init_data()
 
 

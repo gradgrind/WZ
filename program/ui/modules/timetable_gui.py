@@ -292,8 +292,10 @@ class GridViewRescaling(GridView):
 
     def rescale(self):
         #qrect = self._sceneRect
-        qrect = self.scene().sceneRect()
-        self.fitInView(qrect, Qt.KeepAspectRatio)
+        scene = self.scene()
+        if scene:
+            qrect = scene.sceneRect()
+            self.fitInView(qrect, Qt.KeepAspectRatio)
 
 
 # Experimental!
@@ -509,6 +511,8 @@ class Tile(QGraphicsRectItem):
             self.width,
             self.height - SIZES["LINEWIDTH"]
         )
+#TODO? Set "ffffff" for a white (opaque) background, which hides grid lines.
+# Leaving it as <None> would make the background transparent.
         if not colour:
             colour = "ffffff"
         self.setBrush(StyleCache.getBrush(colour))

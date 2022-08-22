@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-07-31
+timetable/asc_data.py - last updated 2022-08-19
 
 Prepare aSc-timetables input from the database ...
 
@@ -383,7 +383,11 @@ class TimetableCourses(Courses):
                     rl = sl.ROOMS
                 else:
                     rl = asc_rooms
-                d, p = timeslot2index(timeslot)
+                try:
+                    d, p = timeslot2index(timeslot)
+                except ValueError as e:
+                    REPORT("WARNING", str(e))
+                    continue
                 self.asc_card_list.append(
                     {
                         "@lessonid": asc_id,

@@ -1,7 +1,7 @@
 """
 timetable/activities.py
 
-Last updated:  2022-08-03
+Last updated:  2022-08-18
 
 Collect information on "activities" – from the BLOCKS and COURSES db tables.
 
@@ -174,7 +174,12 @@ class Courses:
             try:
                 coursedata = course2data[course]
             except KeyError:
-                # The error should have been reported earlier ...
+                #TODO: The error should have been reported earlier ...
+                REPORT(
+                    "ERROR",
+                    f"[Courses: repeat error?"
+                    f" Unknown course in BLOCKS table: {course}]"
+                )
                 continue
             try:
                 payment_data = read_payment(payment)

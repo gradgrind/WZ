@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-08-04
+core/classes.py - last updated 2022-08-18
 
 Manage class data.
 
@@ -318,7 +318,7 @@ class ChipData(NamedTuple):
 def class_divisions(groups, group_map, idivs):
     """Determine the size – as a fraction of the whole class – and an
     offset, for the given <groups>.
-    Trim the groups a bit first, removing subsets, so that the least of
+    Trim the groups a bit first, removing subsets, so that the list of
     groups doesn't get too long.
     <groups> is a list or other iterable providing the initial groups.
     <group_map> is the "GROUP_MAP" value of the class's group info.
