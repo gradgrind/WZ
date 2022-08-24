@@ -1,5 +1,5 @@
 """
-timetable/fet_read_results.py - last updated 2022-08-01
+timetable/fet_read_results.py - last updated 2022-08-24
 
 Fetch the placements after a fet run and update the database accordingly.
 There is also a function to generate an aSc-file.
@@ -93,7 +93,8 @@ def read_placements(fet_file, placement_file):
     for p in pos_list:
         aid = p["Id"]
         lesson_id = activity2lesson.get(aid)
-        if lesson_id:
+        if lesson_id and p['Day']:
+            # Non-placed activities have no day, they must be skipped.
             if aid in locked_activities:
                 ptime = f"{p['Day']}.{p['Hour']}"
             else:
@@ -191,13 +192,16 @@ if __name__ == "__main__":
             pfile = os.path.basename(placements)
             pbase = pfile[:-(len(ending))]
             if True:
-                db_backup()
+#                db_backup()
                 fet_file = os.path.join(outdir, pbase + ".fet")
                 pxfile = os.path.join(outdir, pfile)
                 if pxfile != placements:
                     copyfile(placements, pxfile)
                 # print(f"Reading from\n  {fet_file} and\n  {placements}")
                 read_placements(fet_file, pxfile)
+#
+                quit(0)
+
                 db_backup(pbase)
 
             # Generate asc-file

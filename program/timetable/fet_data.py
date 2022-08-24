@@ -1677,6 +1677,15 @@ if __name__ == "__main__":
             fh.write(xml_fet.replace("\t", "   "))
         print("\nTIMETABLE XML ->", outpath)
 
+        # Write unspecified room allocation info
+        outpath = os.path.join(outdir, "tt_out_extra_rooms")
+        with open(outpath, "w", encoding="utf-8") as fh:
+            for fr in courses.fancy_rooms:
+                __id = f"{fr[0]:15}   {fr[1]}"
+                __rlist = ' / '.join([','.join(rl) for rl in fr[2]])
+                fh.write(f"{__id:36}: [{len(fr[2])}] {__rlist}\n")
+        print("\nADDITIONAL ROOM DATA ->", outpath)
+
     quit(0)
 
     # ??? tag-lids are gone, and multirooms are now available as virtual rooms
