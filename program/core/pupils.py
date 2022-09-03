@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2022-01-03
+core/pupils.py - last updated 2022-09-03
 
 Manage pupil data.
 
@@ -18,7 +18,11 @@ Copyright 2022 Michael Towers
    See the License for the specific language governing permissions and
    limitations under the License.
 =-LICENCE=================================
+"""
 
+#TODO ... completely new, now based on database table "PUPILS"
+
+"""
 For each school class there is a DataTable containing the pupil data.
 The file is a direct representation of the form in which pupil data
 is read in and passed around, a mapping:
@@ -64,27 +68,26 @@ if __name__ == "__main__":
     from core.base import start
 
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
-    start.setup(os.path.join(basedir, "DATA"))
+    start.setup(os.path.join(basedir, "DATA-2023"))
+
+T = TRANSLATIONS("core.pupils")
 
 ### +++++
 
+from core.db_access import db_read_fields
+
+
+#? ...
 import re
 import tarfile
 from glob import glob
 
 from core.base import Dates
-from local.local_pupils import asciify, check_pid_valid, next_class
-from tables.spreadsheet import (
-    read_DataTable,
-    filter_DataTable,
-    make_DataTable,
-    make_DataTable_filetypes,
-    TableError,
+from local.local_pupils import (
+    check_pid_valid,
+    next_class,
+    read_pupils_source
 )
-
-class PupilError(Exception):
-    pass
-
 
 ### -----
 
@@ -94,6 +97,13 @@ class PupilError(Exception):
 # What about updating from file, with update selections?
 
 ### **************************************************************** ###
+
+
+
+def get_pupils(klass):
+    pass
+
+
 
 
 class PupilData(dict):
@@ -108,38 +118,9 @@ class PupilData(dict):
         items = ["{k}={v}".format(k=f, v=v) for f, v in self.items()]
         return "Pupil Data: <%s>" % "; ".join(items)
 
-    def lastname(self):
-        """A '|' may be present to separate a prefix ("tussenvoegsel")
-        from the main name (see method <sorting_name> below).
-        """
-        return self["LASTNAME"].replace("|", "")
-
     def name(self):
         """Return the short-name of the pupil."""
-        return f"{self['FIRSTNAME']} {self.lastname()}"
-
-    def sorting_name(self):
-        """In Dutch there is a word for those little last-name prefixes
-        like "van", "von" and "de": "tussenvoegsel". For sorting purposes
-        these can be a bit annoying because they should often be ignored,
-        e.g. "Vincent van Gogh" would be sorted primarily under "G".
-
-        A simple mechanism to handle this behaviour is provided by
-        allowing the separator '|' to appear in a last-name. Anything
-        before this separator is treated as a "tussenvoegsel". For
-        sorting, the name will be reordered as:
-            "last-name[_tussenvoegsel]_first-name"
-        where the "[_tussenvoegsel]" bit is only present if this
-        component is actually present.
-        In addition, non-ASCII characters are substituted.
-        """
-        _lastname = self["LASTNAME"]
-        try:
-            tv, _lastname = _lastname.split("|", 1)
-            tv, _lastname = tv.rstrip(), _lastname.lstrip()
-        except ValueError:
-            return asciify(f"{_lastname}_{self['FIRSTNAME']}")
-        return asciify(f"{_lastname}_{tv}_{self['FIRSTNAME']}")
+        return f"{self['FIRSTNAME']} {self['LASTNAME']}"
 
 
 def Pupils():
@@ -548,16 +529,17 @@ class __PupilsCache(dict):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    from local.local_pupils import new_pid, read_pupils_source
+    from core.db_access import open_database
+    open_database()
+
 #TODO: switch to test data ...
-    y2, pmap = read_pupils_source(
-        DATAPATH("Schülerdaten2022_2021-12-21.xlsx"),
-        PupilData)
-    if y2 != SCHOOLYEAR:
-        print("School year mismatch:", y2)
-        quit(1)
-    # print(y2, pmap)
-    # quit(0)
+    pupils_src = read_pupils_source(
+        DATAPATH("MISC/pupils_from_access"),
+    )
+
+    for p in pupils_src:
+        print(" +++", p)
+    quit(0)
 
     # ************** Start new year from raw data **************#
     # TODO
@@ -601,7 +583,7 @@ if __name__ == "__main__":
 
     #    pupils.update_classes(_delta)
 
-    pupils.migrate()
+#    pupils.migrate()
 
     print("\nNEW PID:", new_pid(pupils))
 

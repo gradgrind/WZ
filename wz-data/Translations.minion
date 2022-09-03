@@ -29,6 +29,16 @@ core.classes: {
     INDEPENDENT_GROUPS_MISMATCH: "Untergruppe {group} fehlt"
 }
 
+core.pupils: {
+    FILTER_ERROR: "Schülerdaten-Fehler: {msg}"
+    INVALID_CLASS: "Importierte Schülerdaten: Ungültige Klasse ({klass}) in Zeile\n  ... {row}\n ... in Datei\n {path}"
+    BAD_NAME:       "Ungültiger Schülername (Vornamen / Nachname): {name}"
+}
+
+core.report_courses: {
+    UNKNOWN_GROUP: "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
+}
+
 ui.ui_base: {
     # Messages
     UNKNOWN_KEY:    "Ungültige Selektion: '{key}'"

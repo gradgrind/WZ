@@ -1,13 +1,13 @@
 """
 ui/modules/pupils_manager.py
 
-Last updated:  2021-12-23
+Last updated:  2022-09-02
 
 Front-end for managing pupil data.
 
 
 =+LICENCE=============================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -34,22 +34,20 @@ _TITLE ="Schülerdaten verwalten"
 #####################################################
 
 if __name__ == "__main__":
-    import locale, sys, os, builtins
-    print("LOCALE:", locale.setlocale(locale.LC_ALL, ''))
+    import sys, os, builtins
+
     this = sys.path[0]
     appdir = os.path.dirname(os.path.dirname(this))
     sys.path[0] = appdir
-    try:
-        builtins.PROGRAM_DATA = os.environ["PROGRAM_DATA"]
-    except KeyError:
-        basedir = os.path.dirname(appdir)
-        builtins.PROGRAM_DATA = os.path.join(basedir, "wz-data")
-    from ui.ui_base import StandalonePage as Page
+    basedir = os.path.dirname(appdir)
     from core.base import start
-#    start.setup(os.path.join(basedir, 'TESTDATA'))
-    start.setup(os.path.join(basedir, 'DATA'))
+    from ui.ui_base import StandalonePage as Page
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    #    start.setup(os.path.join(basedir, 'DATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
 else:
     from ui.ui_base import StackPage as Page
+
 
 from ui.ui_base import QHBoxLayout, QVBoxLayout, QLabel, QPushButton, run
 from ui.editable import EdiTableWidget
@@ -104,6 +102,8 @@ class ManagePupils(Page):
 
 
 if __name__ == "__main__":
+    from ui.ui_base import run
+
     widget = ManagePupils()
     widget.class_label.setText("<b>Klasse 02G</b>")
     widget.modified_label.setText("zuletzt geändert: 2021-10-05_20:14")
@@ -114,3 +114,10 @@ if __name__ == "__main__":
             on_changed = None)
     widget.resize(600, 400)
     run(widget)
+
+
+#new?
+#    widget = ManagePupils()
+#    widget.enter()
+#    widget.resize(1000, 550)
+#    run(widget)

@@ -1,7 +1,7 @@
 """
 ui/modules/timetable_editor.py
 
-Last updated:  2022-08-19
+Last updated:  2022-08-29
 
 Show a timetable grid and allow placement of lesson tiles.
 
@@ -69,7 +69,7 @@ from core.basic_data import (
     timeslot2index
 )
 from core.classes import class_divisions
-from timetable.activities import Courses
+from timetable.activities import Courses, filter_roomlists
 from ui.ui_base import (
     QHBoxLayout,
     QVBoxLayout,
@@ -81,6 +81,7 @@ from ui.ui_base import (
     QTableWidget,
     QTableWidgetItem,
     QTableView,
+    QMenu,
 )
 
 ### -----
@@ -145,7 +146,7 @@ class TimetableEditor(Page):
         days = get_days().key_list()
         periods = get_periods().key_list()
         breaks = self.TT_CONFIG["BREAKS_BEFORE_PERIODS"]
-        self.grid = GridPeriodsDays(days, periods, breaks)
+        self.grid = WeekGrid(days, periods, breaks)
         self.grid_view.setScene(self.grid)
 
         self.timetable = Timetable(self)
@@ -197,7 +198,7 @@ class Activity(NamedTuple):
     sid: str
     subject: str
     tag: str
-    allgroups: set[str]
+    classgroups: list[tuple[str,set[str],set[str]]]
     roomlists: list[list[str]]
     alltids: set[str]
 
@@ -205,18 +206,26 @@ class Activity(NamedTuple):
         rooms = []
         for rl in self.roomlists:
             rooms.append('|'.join(rl))
+        cg = [
+            f"{k}:{','.join(gs)}/{','.join(gr) or '-'}"
+            for k, gs, gr in self.classgroups
+        ]
         return (
             f"<Activity {self.tag}: {self.sid} ({self.subject})"
-            f" {','.join(sorted(self.allgroups))}"
+            f" {'|'.join(sorted(cg))}"
             f" // {','.join(sorted(self.alltids))}"
             f" [{'&'.join(rooms)}]>"
-            f"\n ??? {self.roomlists}"
+#?
+#            f"\n ??? {self.roomlists}"
         )
 
 
 class Timetable:
     def __init__(self, gui):
         self.gui = gui
+
+# Do these structures really need to be retained? Couldn't they be
+# temporarily fetched at the point of use?
         self.courses = Courses()
         # {block-tag -> [Sublesson, ... ]}
         self.tag2lessons = get_sublessons()     # not resetting cache
@@ -227,22 +236,15 @@ class Timetable:
         tag2activity_index = {}
         self.activity_list = activity_list
         self.tag2activity_index = tag2activity_index
+        classes = get_classes()
         for tag, infolist in self.courses.tag2entries.items():
             info_ = infolist[0]
             sid = info_.block.sid or info_.course.sid
             name = self.subjects.map(sid)
-            allgroups = set()   # groups for the activity as a whole
+            a_classes = {}      # {class: {group, ...}} for the activity
             alltids = set()     # tids for the activity as a whole
-            allroomlists = []  # rooms for the activity as a whole
+            allroomlists = []   # rooms for the activity as a whole
             for info_ in infolist:
-#                tid_ = info_.course.tid
-#                if tid_ != "--":
-#                    tids_.add(tid_)
-#                if info_.course.group:
-#                    groups_.add(info_.course.group)
-#            activity.set_tids(sorted(tids_))
-#            activity.set_groups(sorted(groups_))
-
                 tid_ = info_.course.tid
                 if tid_ != "--":
                     alltids.add(tid_)
@@ -257,16 +259,36 @@ class Timetable:
                 # have been checked earlier).
 
                 if group and klass != "--":
-                    # pupils are involved
                     if group == '*':
-                        allgroups.add(klass)
+                        a_classes[klass] = None
                     else:
-                        allgroups.add(f"{klass}.{group}")
+                        try:
+                            a_classes[klass].add(group)
+                        except KeyError:
+                            # no entry for class yet
+                            a_classes[klass] = {group}
+                        except AttributeError:
+                            # whole class already entered
+                            pass
                 if info_.rooms:
                     allroomlists.append(info_.rooms)
-
+            class_groups = []
+            for k in sorted(a_classes):
+                gset = a_classes[k]
+                if gset:
+                    ginfo = classes.group_info(k)
+                    chipdata = class_divisions(
+                        gset,
+                        ginfo["GROUP_MAP"],
+                        ginfo["INDEPENDENT_DIVISIONS"]
+                    )
+                    class_groups.append(
+                        (k, chipdata.basic_groups, chipdata.rest_groups)
+                    )
+                else:
+                    class_groups.append((k, {'*'}, set()))
             try:
-                room_lists = simplify_room_lists(allroomlists)
+                room_lists = filter_roomlists(allroomlists)
             except ValueError:
                 SHOW_ERROR(
                     T["BLOCK_ROOM_CONFLICT"].format(
@@ -277,25 +299,25 @@ class Timetable:
                     ),
                 )
                 room_lists = [['+']]
-#TODO: The groups need to be adjusted for their intended usage. That
-# could depend on how the clash checking is done, or whether the display
-# is important ... either simplify or make divisions+basic groups or
-# atomic groups.
             activity = Activity(
                 sid=sid,
                 subject=name,
                 tag=tag,
-                allgroups=allgroups,
+                classgroups=class_groups,
                 roomlists=room_lists,
                 alltids=alltids,
             )
             ix = len(activity_list)
+# --
             print(f"§ACTIVITY {ix}:", activity)
             activity_list.append(activity)
             tag2activity_index[tag] = ix
 #TODO: also need lists for classes and teachers – with specialized
 # entries for groups, teachers and – somehow – rooms (because of the
 # simplification function, this could be a bit tricky).
+
+
+
 
 
 #TODO: At the moment this is just a collection of sketches ...
@@ -332,6 +354,95 @@ class Timetable:
 # time)
 # Perhaps it would also be worth considering a bitmap – on a class or
 # division basis.
+
+#TODO: A replacement for show_class?
+    def enter_class(self, klass):
+        grid = self.gui.grid
+        tile_list = self.gui.tile_list
+        tile_list.clearContents()
+#?
+        tiledata = []
+        tiles = []
+        tile_list_hidden = []
+        for a_index in self.klass2activities[klass]:
+            activity = self.activity_list[a_index]
+
+# ... I might want lesson placement info (time and rooms) from a
+# temporary store here, rather than directly from the database.
+            lessons = self.tag2lessons.get(activity.tag)
+            if lessons:
+                for l in lessons:
+                    print("  +++", l)
+
+                    d, p = timeslot2index(l.TIME)
+                    print("   ---", activity.sid, d, p)
+
+                    t_tids = ','.join(activity.tids)
+                    t_groups = '/'.join(activity.groups)
+                    t_rooms = l.ROOMS
+                    tiledata.append( # for the list of tiles, etc.
+                        (
+                            activity.sid,
+                            str(l.LENGTH),
+                            t_groups,
+                            t_tids,
+                            l.id,
+# The room list is probably needed as a list or set ...
+                            t_rooms.split(','),
+
+#?
+                            chipdata.groups,
+                            chipdata.basic_groups,
+                        )
+                    )
+
+                    tile_index = len(tiles)
+                    tile = make_tile(
+                        grid,
+                        tile_index,
+                        duration=l.LENGTH,
+#?
+                        n_parts=chipdata.num,
+                        n_all=chipdata.den,
+                        offset=chipdata.offset,
+
+                        text=activity.sid,
+# Might want to handle the placing of the corners in the configuration?
+# Rooms can perhaps only be added when placed, and even then not always ...
+                        tl=t_tids,
+                        tr=t_groups,
+                        br=t_rooms,
+                    )
+                    tiles.append(tile)
+                    if d >= 0:
+                        grid.place_tile(tile_index, (d, p))
+                        tile_list_hidden.append(True)
+                    else:
+                        tile_list_hidden.append(False)
+            else:
+                print("\nNO LESSONS:", a.tag)
+
+        tile_list.setRowCount(len(tiledata))
+        row = 0
+        for tdata in tiledata:
+            for col in range(4):
+                twi = QTableWidgetItem(tdata[col])
+                tile_list.setItem(row, col, twi)
+            if tile_list_hidden[row]:
+                tile_list.hideRow(row)
+            row += 1
+        tile_list.resizeColumnsToContents()
+        tile_list.resizeRowsToContents()
+        # Toggle the stretch on the last section here because of a
+        # possible bug in Qt, where the stretch can be lost when
+        # repopulating.
+        hh = tile_list.horizontalHeader()
+        hh.setStretchLastSection(False)
+        hh.setStretchLastSection(True)
+
+
+
+
 
     def show_class(self, klass):
         grid = self.gui.grid
@@ -386,6 +497,7 @@ class Timetable:
                     allroomlists_.append(info_.rooms)
             activity.set_all_tids(alltids)
             activity.set_all_groups(allgroups)
+#TODO: This was already done for the Activity!
             activity.set_all_rooms(
                 simplify_room_lists_(allroomlists_, klass, tag)
             )
@@ -397,51 +509,81 @@ class Timetable:
         tiles = []
         tile_list_hidden = []
         for a in alist:
-            print("§§§", a.groups, a.allgroups, a.tag, a.sid, a.subject, a.tids, a.alltids)
-            print("         ", a.roomlists)
+            print("\n§§§", a.groups, a.allgroups, a.tag, a.sid, a.subject, a.tids, a.alltids)
+# a.allgroups is a – possibly unoptimized – set of all groups, with class,
+# and is needed for clash checking. However, if group clash checking is
+# done on a class-by-class basis, I will probably need the groups as in
+# chipdata.basic_groups below, but for each involved class.
+# Perhaps as an ordered list of (class, group-set) pairs.
+
+
+# Shouldn't some of this Activity stuff be done just once for all classes?
+
+            chipdata = class_divisions(
+                    a.groups,
+                    group_map,
+                    divisions
+                )
+# The chipdata stuff covers only the current class
+            print("    GROUPS:", chipdata.groups)
+            print("    SET:", chipdata.basic_groups)
+            print(f"    {chipdata.num}/{chipdata.den} @ {chipdata.offset}")
+
+
+
+# a.alltids is a set of all tids and is needed for clash checking
+
+            print("    ALL ROOMS:", a.roomlists)
+# a.roomlists will be needed for allocating and reallocating rooms
+
             lessons = self.tag2lessons.get(a.tag)
             if lessons:
                 for l in lessons:
                     print("  +++", l)
 
-                    chipdata = class_divisions(
-                            a.groups,
-                            group_map,
-                            divisions
-                        )
-                    print("    GROUPS:", chipdata.groups)
-                    print("    SET:", chipdata.basic_groups)
-                    print(f"    {chipdata.num}/{chipdata.den} @ {chipdata.offset}")
-
                     d, p = timeslot2index(l.TIME)
                     print("   ---", a.sid, d, p)
 
-                    tiledata.append( # for the list of tiles
+                    t_tids = ','.join(a.tids)
+                    t_groups = '/'.join(a.groups)
+                    t_rooms = l.ROOMS
+                    tiledata.append( # for the list of tiles, etc.
                         (
                             a.sid,
                             str(l.LENGTH),
-                            '/'.join(a.groups),
-                            ','.join(a.tids)
+                            t_groups,
+                            t_tids,
+                            l.id,
+# The room list is probably needed as a list or set ...
+                            t_rooms.split(','),
+                            chipdata.groups,
+                            chipdata.basic_groups,
                         )
                     )
 
-                    ltag = str(l.id)
-                    tile = grid.new_tile(
-                        ltag,
+                    tile_index = len(tiles)
+                    tile = make_tile(
+                        grid,
+                        tile_index,
                         duration=l.LENGTH,
-                        nmsg=chipdata.num,
+                        n_parts=chipdata.num,
+                        n_all=chipdata.den,
                         offset=chipdata.offset,
-                        total=chipdata.den,
-                        text=a.sid
+                        text=a.sid,
+# Might want to handle the placing of the corners in the configuration?
+# Rooms can perhaps only be added when placed, and even then not always ...
+                        tl=t_tids,
+                        tr=t_groups,
+                        br=t_rooms,
                     )
                     tiles.append(tile)
                     if d >= 0:
-                        grid.place_tile(ltag, (d, p))
+                        grid.place_tile(tile_index, (d, p))
                         tile_list_hidden.append(True)
                     else:
                         tile_list_hidden.append(False)
             else:
-                print("NO LESSONS:", tag)
+                print("\nNO LESSONS:", a.tag)
 
         tile_list.setRowCount(len(tiledata))
         row = 0
@@ -500,17 +642,36 @@ class Activity_:
         self.alltids = tids
 
 
-def make_tile(grid):
-# Need a tag (lesson-id?), duration, number of atoms, total number of atoms,
-# offset???!!!, rooms, groups
-
-    tile = grid.new_tile(tag, duration=1, nmsg=1, offset=0, total=2, text="Ta")
-    tile.set_corner(0, "BMW")
-    tile.set_corner(1, "A")
-    tile.set_corner(2, "r10G")
-    tile.set_corner(3, "?")
-
-    grid.place_tile(tag, (3, 5))
+def make_tile(
+    grid,
+    tag,
+    duration,
+    n_parts,
+    n_all,
+    offset,
+    text,
+    tl=None,
+    tr=None,
+    br=None,
+    bl=None
+):
+    tile = grid.new_tile(
+        tag,
+        duration=duration,
+        nmsg=n_parts,
+        offset=offset,
+        total=n_all,
+        text=text
+    )
+    if tl:
+        tile.set_corner(0, tl)
+    if tr:
+        tile.set_corner(1, tr)
+    if br:
+        tile.set_corner(2, br)
+    if bl:
+        tile.set_corner(3, bl)
+    return tile
 
 
 def simplify_room_lists(roomlists):
@@ -576,6 +737,18 @@ def simplify_room_lists_(roomlists, klass, tag):
         roomlists = roomlists1
 
 
+class WeekGrid(GridPeriodsDays):
+    def make_context_menu(self):
+        self.context_menu = QMenu()
+#TODO:
+        Action = self.context_menu.addAction("Seek possible placements")
+        Action.triggered.connect(self.seek_slots)
+
+    def seek_slots(self):
+        print("seek_slots:", self.context_tag)
+        #tile = self.tiles[self.context_tag]
+
+
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == '__main__':
@@ -602,7 +775,7 @@ if __name__ == '__main__':
 
 #TODO --
     widget.timetable.gather_info()
-    quit(0)
+#    quit(0)
 
     widget.resize(1000, 550)
     run(widget)

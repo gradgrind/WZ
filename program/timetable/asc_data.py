@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-08-19
+timetable/asc_data.py - last updated 2022-08-27
 
 Prepare aSc-timetables input from the database ...
 
@@ -249,17 +249,6 @@ def get_teachers_aSc(teachers):
     ]
 
 
-# ?
-def aSc_block_lesson(lesson, length):
-    """Build an aSc lesson record for a block sublesson based on an
-    earlier record (cached).
-    """
-    l2 = lesson.copy()
-    l2["@durationperiods"] = length
-    l2["@periodsperweek"] = length
-    return l2
-
-
 class TimetableCourses(Courses):
     def read_class_lessons(self):
         """Organize the data according to classes.
@@ -399,126 +388,6 @@ class TimetableCourses(Courses):
                 )
 
 
-# TODO: deprecated, but keep it for now for reference:
-# I might still want to build some of the data structures here
-def get_lessons():
-    """Build list of lessons for aSc-timetables."""
-
-    def new_lesson(__klass, __sid, __lesson, __place):
-        """Add lesson item to <presorted> mapping."""
-        try:
-            classmap = presorted[__klass]
-        except KeyError:
-            classmap = {}
-            presorted[__klass] = classmap
-        try:
-            classmap[__sid].append(__lesson)
-        except KeyError:
-            classmap[__sid] = [__lesson]
-        # If time set, add lessondata.time as card.
-        # TODO: Would it make sense to include lessondata.id?
-        # Rooms are supplied as __place
-        if lessondata.time != "@?":
-            if lessondata.time.startswith("@"):
-                # Get 0-based indexes for day and period
-                try:
-                    d, p = timeslot2index(lessondata.time[1:])
-                except TimeSlotError:
-                    pass
-                else:
-                    place = __place or __lesson["@classroomids"]
-                    # print("$$$ CARDLIST +", __lesson, "\n ...", d+1, p+1, place)
-                    cardlist.append(
-                        (
-                            __lesson,
-                            d + 1,
-                            p + 1,
-                            place,
-                            "0" if lessondata.time[1] == "?" else "1",
-                        )
-                    )
-                    return
-            SHOW_ERROR(
-                T["BAD_TIME"].format(time=lessondata.time, id=lessondata.id)
-            )
-
-    def parse_rooms(lessondata):
-        rooms = lesson_rooms(lessondata)
-        if rooms and rooms[-1] == "+":
-            rooms[-1] = CONFIG["EXTRA_ROOM"]
-        return rooms
-
-    def block_lesson(ldata):
-        # TODO: use read_block_tag instead
-        blocksid = blocktag2blocksid(ldata.place)
-        try:
-            klass, blesson, place = block_cache[ldata.place]
-        except KeyError:
-            pass
-        else:
-            # Use the cached lesson item as a basis for the new one
-            lesson = aSc_block_lesson(blesson, ldata.length)
-            new_lesson(klass, blocksid, lesson, place)
-            return
-
-        # Accumulate the tids, groups and rooms ...
-        btids = set()
-        bgroups = set()
-        broomlist = set()  # Collect distinct room lists (text form)
-        brooms = set()  # Collect distinct rooms
-        bplaces = set()  # Collect used rooms
-        bclasses = set()
-        for id in block_members[ldata.place]:
-            bldata = lessons[id]
-            bcdata = bldata.course
-            bclasses.add(bcdata.klass)
-            # TODO: Null teacher possible?
-            btids.add(bcdata.tid)
-            bgroups.update(full_group(bcdata.klass, bcdata.group))
-            # As aSc doesn't support XML input of multiple rooms,
-            # the multiple rooms are collected independently – for
-            # manual intervention!
-            # For aSc all rooms and teachers can be lumped together
-            # as there are no features for handling the involved
-            # classes separately.
-            # TODO: It might in some cases be better to suppress the teachers and rooms?
-            # These could be taken out of circulation by some other means?
-            if bldata.room:
-                # Check rooms, replace "$"
-                ll = lesson_rooms(bldata)
-                llt = "/".join(ll)
-                if llt not in broomlist:
-                    brooms.update(ll)
-                    broomlist.add(llt)
-            if bldata.place:
-                __place = check_place(bldata)
-                if _place:
-                    bplaces.add(__place)
-
-        # The lesson data is cached for repeated instances of the
-        # same block tag (change length).
-        if "+" in brooms:
-            brooms.discard("+")
-            brooms.add(CONFIG["EXTRA_ROOM"])
-        klass, lesson = aSc_lesson(
-            bclasses, blocksid, bgroups, btids, ldata.length, sorted(brooms)
-        )
-        place = ",".join(sorted(bplaces))
-        block_cache[ldata.place] = (klass, lesson, place)
-        new_lesson(klass, blocksid, lesson, place)
-
-    # TODO: aSc can't cope with multiple rooms, so it might be best to make a
-    # list and emit this for the user ...
-
-    TIMETABLE_TEACHERS.clear()
-    TIMETABLE_SUBJECTS.clear()
-    courses = Courses()
-
-    ### Collect lesson items, grouping according to class. Items which
-    ### involve more than one class are collected separately, using a
-    ### special class name, <MULTICLASS>.
-
-
 def full_group(klass, group):
     """Return the group as a "full group" – also containing the class.
     As some groups need to be represented as "compounds", return the
@@ -532,26 +401,6 @@ def full_group(klass, group):
             groups = get_classes().group_info(klass)["GROUP_MAP"][group]
             return {asc_group(klass, g) for g in groups}
     return set()
-
-
-# ?
-def check_place(lessondata):
-    __place = lessondata.place
-    if __place:
-        try:
-            get_rooms().index(__place)
-            return __place
-        except KeyError:
-            SHOW_ERROR(
-                T["INVALID_PLACE"].format(
-                    rid=__place,
-                    klass=lessondata.course.klass,
-                    group=lessondata.course.group,
-                    sid=lessondata.course.sid,
-                    tid=lessondata.course.tid,
-                )
-            )
-    return ""
 
 
 ########################################################################

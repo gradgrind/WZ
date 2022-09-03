@@ -1,7 +1,7 @@
 """
 ui/modules/timetable_gui.py
 
-Last updated:  2022-08-15
+Last updated:  2022-08-27
 
 The timetable "main" window.
 
@@ -401,6 +401,13 @@ class GridPeriodsDays(QGraphicsScene):
         self.select.hide()
         self.addItem(self.select)
 
+        self.make_context_menu()
+
+    def make_context_menu(self):
+        self.context_menu = QMenu()
+        Action = self.context_menu.addAction("I am context Action 1")
+        Action.triggered.connect(self.context_1)
+
     def get_cell(self, row, col):
         return self.cell_matrix[row][col]
 
@@ -436,6 +443,7 @@ class GridPeriodsDays(QGraphicsScene):
                     print (f"Cell – left press{shift}{ctrl}{alt} @ {item.cell}")
 # Note that ctrl-click is for context menu on OSX ...
                     if shift:
+#???
                         self.place_tile("T2", cell)
                     if alt:
                         self.select_cell(cell)
@@ -445,15 +453,26 @@ class GridPeriodsDays(QGraphicsScene):
         items = self.items(point)
         if items:
             for item in items:
-                # Give all items at this point a chance to react, starting
-                # with the topmost. An item can break the chain by
-                # returning a false value.
                 try:
-#TODO: Pass event.screenPos() instead (for pop-up menu)?
-                    if not item.contextmenu(event):
-                        return
+                    # See if the topmost item is a tile
+                    self.context_tag = item.tag
                 except AttributeError:
-                    pass
+                    # Not a tile. Otherwise there should only be a cell,
+                    # but give all items a chance to react. An item can
+                    # break the chain by returning a false value.
+                    try:
+                        fn = item.contextmenu
+                    except AttributeError:
+                        continue
+                    if not fn(event.screenPos()):
+                        return
+                else:
+                    self.context_menu.exec(event.screenPos())
+#                    self.tile_context_menu(event.screenPos())
+                    return
+
+    def context_1(self):
+        print(self.context_tag)
 
     def new_tile(self, tag, duration, nmsg, offset, total, text, colour=None):
         t = Tile(tag, duration, nmsg, offset, total, text, colour)
@@ -487,6 +506,14 @@ class GridPeriodsDays(QGraphicsScene):
 
 
 class Tile(QGraphicsRectItem):
+    __slots__ = (
+        "tag",
+        "duration",
+        "width",
+        "height",
+        "x",
+        "text_item",
+    )
     font_centre = StyleCache.getFont(fontSize=FONT_CENTRE_SIZE)
     font_corner = StyleCache.getFont(fontSize=FONT_CORNER_SIZE)
 
@@ -532,10 +559,10 @@ class Tile(QGraphicsRectItem):
             self.text_item.setScale(1 / part)
             text_rect = self.text_item.mapRectToParent(text_rect)
             text_width = text_rect.width()
-        self.text_height = text_rect.height()
-        self.xshift = self.x + (self.width - text_width) / 2
-        yshift = (self.height - self.text_height) / 2
-        self.text_item.setPos(self.xshift, yshift)
+        text_height = text_rect.height()
+        xshift = self.x + (self.width - text_width) / 2
+        yshift = (self.height - text_height) / 2
+        self.text_item.setPos(xshift, yshift)
 
     def set_cell(self, x, y):
         self.setPos(x, y)
@@ -604,16 +631,6 @@ class Tile(QGraphicsRectItem):
                     self.height - SIZES["LINEWIDTH"] - right_height
                 )
 
-#TODO
-    def contextmenu(self, event):
-        menu = QMenu ("Context Menu")
-        # menu = QMenu()
-        Action = menu.addAction("I am a context Action")
-        Action.triggered.connect(self.printName)
-
-        menu.exec_(event.screenPos())
-        return True # propagate down (probably shouldn't)
-
 #TODO: May be useful (to get screen coordinates)?
 #def get_pos(view, item, point):
 #        scenePos = item.mapToScene(point)
@@ -623,8 +640,8 @@ class Tile(QGraphicsRectItem):
 #        return globalViewPos.x + viewPos.x, globalViewPos.y + viewPos.y
 
 #TODO
-    def printName(self):
-        print("Action triggered from {}".format(self.tag))
+#    def printName(self):
+#        print("Action triggered from {}".format(self.tag))
 
 
 class Box(QGraphicsRectItem):
@@ -633,6 +650,9 @@ class Box(QGraphicsRectItem):
     this origin to the <QGraphicsRectItem> constructor.
     The box is then moved to the desired location using <setPos>.
     """
+    __slots__ = (
+        "text_item",
+    )
     def __init__(self, x, y, w, h, width=None, colour=None):
         super().__init__(0, 0, w, h)
         self.setPos(x, y)
@@ -673,6 +693,11 @@ class Cell(Box):
     It is a <Box> whose background colour is settable and which supports
     hover events.
     """
+    __slots__ = (
+        "x0",
+        "y0",
+        "cell",
+    )
 #TODO: highlighting by emphasizing the border:
 #    selected = None
 
@@ -702,7 +727,7 @@ class Cell(Box):
         self.x0 = x
         self.y0 = y
         self.cell = (icol, irow)
-        self.setAcceptHoverEvents(True)
+#        self.setAcceptHoverEvents(True)
 #        print ("Cell", icol, irow, x, y)
 
 #TODO
@@ -712,11 +737,11 @@ class Cell(Box):
 
 #TODO: It may be more appropriate to have the hover events handled in
 # <Tile>.
-    def hoverEnterEvent(self, event):
-        print("Enter", self.cell)
+#    def hoverEnterEvent(self, event):
+#        print("Enter", self.cell)
 
-    def hoverLeaveEvent(self, event):
-        print("Leave", self.cell)
+#    def hoverLeaveEvent(self, event):
+#        print("Leave", self.cell)
 
 ###---------------------------------------------------
 
@@ -780,17 +805,15 @@ class Tile0(QGraphicsRectItem):
     def hide(self):
         self.setVisible(False)
 
-#?
-    def contextMenuEvent(self, event):
-        #        menu = QMenu ("Context Menu")
-        menu = QMenu()
-        Action = menu.addAction("I am a context Action")
-        Action.triggered.connect(self.printName)
+#    def contextMenuEvent(self, event):
+#        #        menu = QMenu ("Context Menu")
+#        menu = QMenu()
+#        Action = menu.addAction("I am a context Action")
+#        Action.triggered.connect(self.printName)
+#        menu.exec_(event.screenPos())
 
-        menu.exec_(event.screenPos())
-#?
-    def printName(self):
-        print("Action triggered from {}".format(self.id_))
+#    def printName(self):
+#        print("Action triggered from {}".format(self.id_))
 
 
 #--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
