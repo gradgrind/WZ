@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-08-01
+Last updated:  2022-09-04
 
 Helper functions for accessing the database.
 
@@ -234,7 +234,7 @@ def db_read_unique_field(table, field, *wheres, **keys):
 
 
 def db_read_full_table(table, *wheres, sort_field=None, **keys):
-    return db_read_table(table, None, *wheres, sort_field=None, **keys)
+    return db_read_table(table, None, *wheres, sort_field=sort_field, **keys)
 
 
 def db_values(table, value_field, *wheres, **keys):
@@ -262,8 +262,7 @@ def db_read_fields(table, fields, sort_field=None):
     """Read all records from the given table.
     Return a list of tuples containing these fields in the given order.
     """
-    fields, value_list = db_read_table(table, fields, sort_field=sort_field)
-    return value_list
+    return db_read_table(table, fields, sort_field=sort_field)[1]
 
 
 def db_update_fields(table, field_values, *wheres, **keys):

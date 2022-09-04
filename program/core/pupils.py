@@ -74,8 +74,9 @@ T = TRANSLATIONS("core.pupils")
 
 ### +++++
 
-from core.db_access import db_read_fields
-
+from core.db_access import db_read_table
+from core.base import class_group_split
+from core.basic_data import SHARED_DATA
 
 #? ...
 import re
@@ -91,7 +92,7 @@ from local.local_pupils import (
 
 ### -----
 
-# TODO: I suppose the program should start with the stored data? If there is
+# TODO???: I suppose the program should start with the stored data? If there is
 # none (or if it is dodgy) there can be a question dialog to load from
 # file.
 # What about updating from file, with update selections?
@@ -99,177 +100,88 @@ from local.local_pupils import (
 ### **************************************************************** ###
 
 
-
 def get_pupils(klass):
-    pass
-
-
-
-
-class PupilData(dict):
-    def __init__(self, fromdict, klass=None):
-        super().__init__()
-        self.update(fromdict)
-        if klass:
-            self["CLASS"] = klass
-
-    def __str__(self):
-        """A visual representation of a pupil-data mapping."""
-        items = ["{k}={v}".format(k=f, v=v) for f, v in self.items()]
-        return "Pupil Data: <%s>" % "; ".join(items)
-
-    def name(self):
-        """Return the short-name of the pupil."""
-        return f"{self['FIRSTNAME']} {self['LASTNAME']}"
-
-
-def Pupils():
-    return __PupilsCache._instance()
-
-
-class __PupilsCache(dict):
-    """Handler for pupil data.
-    The internal pupil data should be read and written only through this
-    interface.
-    An instance of this class is a <dict> holding the pupil data as a
-    mapping: {pid -> {field: value, ...}}.
-    The fields defined for a pupil are read from the configuration file
-    CONFIG/PUPIL_DATA. For convenience, a field CLASS is added
-    internally to each pupil record.
-    The list of pupil-data mappings for a class is available via the
-    method <class_pupils> (alphabetically ordered).
-    This is a "singleton" class, i.e. there should be only one instance,
-    which is accessible via the <_instance> method.
+    """Return a list of data mappings, one for each member of the given class.
+    This data is cached, so subsequent calls get the same instance.
     """
-    __instance = None
+    key = f"PUPILS_{klass}"
+    try:
+        return SHARED_DATA[key]
+    except KeyError:
+        pass
+    #fields = {
+    #    f[0]: (f[1], len(f) > 2)
+    #    for f in CONFIG["PUPILS_FIELDS"] + CONFIG["PUPILS_EXTRA_FIELDS"]
+    #}
+    field_list = [
+        f[0] for f in CONFIG["PUPILS_FIELDS"] + CONFIG["PUPILS_EXTRA_FIELDS"]
+    ]
+    l = len(field_list)
+    pupils = []
+    for row in db_read_table(
+        "PUPILS",
+        field_list,
+        sort_field="SORT_NAME",
+        CLASS=klass,
+    )[1]:
+        pupils.append({field_list[i]: row[i] for i in range(l)})
+    SHARED_DATA[key] = pupils
+    return pupils
 
-    @classmethod
-    def _clear_cache(cls):
-        cls.__instance = None
 
-    @classmethod
-    def _instance(cls):
-        """Fetch the cached instance of this class.
-        If the school-year has changed, reinitialize the instance.
-        """
-        try:
-            if cls.__instance.__schoolyear == SCHOOLYEAR:
-                return cls.__instance
-        except:
-            pass
-        cls.__instance = cls()
-        cls.__instance.__schoolyear = SCHOOLYEAR
-        return cls.__instance
-
-    def __init__(self):
-        self.__classes = {}
-        super().__init__()
-        # Fields:
-        config = MINION(DATAPATH("CONFIG/PUPIL_DATA"))
-        self.all_fields = {}
-        self.fields = {}
-        for f in config["INFO_FIELDS"]:
-            k = f["NAME"]
-            if k == "CLASS":
-                self.all_fields["CLASS"] = (
-                    f.get("DISPLAY_NAME") or k,
-                    bool(f.get("REQUIRED")),
-                )
-        for f in config["TABLE_FIELDS"]:
-            k = f["NAME"]
-            self.fields[k] = (
-                f.get("DISPLAY_NAME") or k,
-                bool(f.get("REQUIRED")),
-            )
-        self.all_fields.update(self.fields)
-        # Each class has a table-file (substitute {klass}):
-        self.class_path = DATAPATH(CONFIG["PUPIL_TABLE"])
-        for fpath in glob(self.class_path.format(klass="*")):
-            # print("READING", fpath)
-            class_table = read_DataTable(fpath)
-            try:
-                class_table = filter_DataTable(
-                    class_table, config, notranslate=True
-                )
-            except TableError as e:
-                raise PupilError(_FILTER_ERROR.format(msg=f"{e} in\n {fpath}"))
-
-            # The data should already be alphabetically ordered here.
-            info = class_table["__INFO__"]
-            if info["SCHOOLYEAR"] != SCHOOLYEAR:
-                raise PupilError(_SCHOOLYEAR_MISMATCH_DB.format(path=fpath))
-            klass = info["CLASS"]
-            if self.class_path.format(klass=klass) != fpath:
-                raise PupilError(_CLASS_MISMATCH_DB.format(path=fpath))
-            pdata_list = []
-            self.__classes[klass] = pdata_list
-            for row in class_table["__ROWS__"]:
-                pid = row["PID"]
-                if pid in self:
-                    raise PupilError(
-                        _DOUBLE_PID_DB.format(
-                            pid=pid, k1=self[pid]["CLASS"], k2=klass
-                        )
-                    )
-                pdata = PupilData(row, klass)
-                self[pid] = pdata
-                pdata_list.append(pdata)
-
-    def classes(self):
-        """Return a sorted list of class names."""
-        return sorted(self.__classes)
-
-    def class_pupils(self, klass, groups=None, date=None):
-        """Read the pupil data for the given school-class (possibly with
-        group filter).
-        Return a list of mappings {field -> value} (the table rows), the
-        pupils being ordered alphabetically.
-        The result also has the attribute <_pidmap>, which maps the pid
-        to the pupil data.
-        If a <date> is supplied, pupils who left the school before that
-        date will not be included.
-        If <groups> is provided, only pupils in one of these groups are
-        included, otherwise all pupils in the class. <groups> must be a
-        list/set of groups – '*' is not valid here.
-        """
-        plist = []
-        groupset = set(groups or [])
-        for pdata in self.__classes[klass]:
-            if date:
-                # Check exit date
-                exd = pdata.get("EXIT_D")
-                if exd and exd < date:
-                    continue
-            if groups and not (groupset & set(pdata.get("GROUPS"))):
-                continue
-            plist.append(pdata)
+def pupils_in_group(class_group, date=None):
+    """Read the pupil data for the given school-class (possibly with
+    group specifier, e.g. "12G.A").
+    Return a list of mappings {field -> value} (the table rows), the
+    pupils being ordered alphabetically.
+    If <date> is supplied, pupils who left the school before that
+    date will not be included.
+    """
+    k, g = class_group_split(class_group)
+    plist = get_pupils(k)
+    if g:
+        plist2 = []
+        for pdata in plist:
+            if g in pdata["GROUPS"].split():
+                if date:
+                    # Check exit date
+                    if exd := pdata.get("EXIT_D"):
+                        if exd < date:
+                            continue
+                plist2.append(pdata)
+        return plist2
+    else:
         return plist
 
-    def pid2name(self, pid):
-        return self[pid].name()
 
-    def final_year_pupils(self):
-        """Return lists of pupils in their final year:
-        {class: [(pid, name), ... ], ...}
-        """
-        collect = {}
-        for k, l in CONFIG["LEAVING_GROUPS"].items():
-            if l == "*":
-                plist = self.class_pupils(k)
-            else:
-                plist = self.class_pupils(k, groups=l)
-            collect[k] = [(pdata["PID"], pdata.name()) for pdata in plist]
-        return collect
+def pupil_name(pupil_data):
+    """Return the short-name of the pupil."""
+    return f"{pupil_data['FIRSTNAME']} {pupil_data['LASTNAME']}"
 
-    def sort_class(self, klass, nosave=False):
-        """Sort the pupil data items for the given class alphabetically.
-        This should only be necessary if names are changed, or if a pupil
-        is added to a class.
-        """
-        if nosave:
-            return sorted(self.__classes[klass], key=PupilData.sorting_name)
-        self.__classes[klass].sort(key=PupilData.sorting_name)
 
+def final_year_pupils():
+    """Return lists of pupils in their final year:
+    {class: [(pid, name), ... ], ...}
+    """
+    collect = {}
+    for k_g in CONFIG["LEAVING_GROUPS"]:
+        for pdata in pupils_in_group(k_g):
+            k = pdata["CLASS"]
+            item = (pdata["PID"], pupil_name(pdata))
+            try:
+                collect[k].append(item)
+            except KeyError:
+                collect[k] = [item]
+    return collect
+
+
+#########################################
+
+
+
+class X:
+
+#??
     def save(self, klass=None):
         """Save the data for the pupils in the given class to the
         pupil-database. If no class is supplied, save all classes.
@@ -304,26 +216,10 @@ class __PupilsCache(dict):
                 timestamp,
             )
 
-    def save_data(
-        self, klass, pupil_list, filepath, schoolyear, timestamp=None
-    ):
-        if not timestamp:
-            timestamp = Dates.timestamp()
-        data = {
-            "__FIELDS__": list(self.fields),
-            "__INFO__": {
-                "__TITLE__": _TITLE,
-                "SCHOOLYEAR": schoolyear,
-                "CLASS": klass,
-                "__MODIFIED__": timestamp,
-            },
-            "__ROWS__": pupil_list,
-        }
-        tsvbytes = make_DataTable(data, "tsv")
-        with open(filepath, "wb") as fh:
-            fh.write(tsvbytes)
 
-    def compare_update(self, newdata):
+
+
+    def compare_update(newdata):
         """Compare the new data with the existing data and compile a list
         of changes, grouped according to class. There are three types:
             - new pupil
@@ -533,6 +429,24 @@ if __name__ == "__main__":
     open_database()
 
 #TODO: switch to test data ...
+
+    # get_pupils("11G")
+
+    __k = "11G.R"
+    print(f"\nPupils in {__k}:")
+    for pdata in pupils_in_group(__k):
+        print("  +++", pdata)
+
+
+    print("\nFinal-year pupils:")
+    for k, pdata in final_year_pupils().items():
+        print("  +++", k)
+        for item in pdata:
+            print("        ::", item)
+
+    quit(0)
+
+
     pupils_src = read_pupils_source(
         DATAPATH("MISC/pupils_from_access"),
     )
