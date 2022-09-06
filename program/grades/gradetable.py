@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-09-03
+Last updated:  2022-09-06
 
 Access grade data, read and build grade tables.
 
@@ -94,26 +94,31 @@ if __name__ == "__main__":
     basedir = os.path.dirname(appdir)
     from core.base import start
 
-    start.setup(os.path.join(basedir, "TESTDATA"))
+#    start.setup(os.path.join(basedir, "TESTDATA"))
 #    start.setup(os.path.join(basedir, 'DATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
 
 ### +++++
 
-from core.report_courses import get_subjects
+from core.base import class_group_split
+from core.basic_data import get_classes
+from core.classes import atomic_maps
+from core.pupils import pupils_in_group
+from core.report_courses import get_class_subjects
 
 
 #? ...
 from typing import Dict, List, Optional, Any, Set, Tuple
 
-import datetime
+#import datetime
 
-from pydal import DAL, Field
+#from pydal import DAL, Field
 
-from core.base import Dates
-from core.courses import Subjects, NULL, UNCHOSEN
-from tables.spreadsheet import read_DataTable, filter_DataTable
-from tables.matrix import KlassMatrix
-from local.local_grades import GradeBase, GradeConfigError
+#from core.base import Dates
+#from core.courses import Subjects, NULL, UNCHOSEN
+#from tables.spreadsheet import read_DataTable, filter_DataTable
+#from tables.matrix import KlassMatrix
+#from local.local_grades import GradeBase, GradeConfigError
 
 
 class GradeTableError(Exception):
@@ -121,20 +126,6 @@ class GradeTableError(Exception):
 
 
 ### -----
-
-def make_db():
-    db = DAL('sqlite://db.sqlite', folder=DATAPATH(""))
-    if "Subjects" not in db._tables:
-        db.define_table("Subjects", Field("sid", "string"), Field('name','string'))
-
-        # Rewrite the Subjects table from the config file
-        sid2name = MINION(DATAPATH(CONFIG["SUBJECT_DATA"]))
-        db.Subjects.truncate()  # empty table
-        for sid, name in sid2name.items():
-            db.Subjects.insert(sid=sid, name=name)
-        db.commit()
-
-    return db
 
 """Grade tables.
 pid, "term", grades (json?), extra fields:
@@ -165,30 +156,9 @@ table would be irrelevant (only for information), maybe even superfluous.
 """
 
 
-def get_group_info(
-    group_info: Dict[str, Dict[str, Any]], group: str, key: str
-) -> Any:
-    """Read a value for a given group and key from a mapping with an
-    "inheritance" mechanism.
-    """
-    while True:
-        try:
-            mapping: Dict[str, Any] = group_info[group]
-        except KeyError:
-            raise GradeTableError(_NO_INFO_FOR_GROUP.format(group=group))
-        try:
-            return mapping[key]
-        except KeyError:
-            pass
-        try:
-            group = mapping["__INHERIT__"]
-        except KeyError:
-            raise GradeTableError(_MISSING_KEY.format(key=key))
-
-
 def makeGradeTable(
     term: str,
-    group: str,
+    class_group: str,
     ISSUE_D: str = "",
     GRADES_D: str = "",
     grades: Optional[Dict[str, Dict[str, str]]] = None,
@@ -198,6 +168,36 @@ def makeGradeTable(
     Existing grades can be included in the table by passing an appropriate
     structure as <grades>: {pid -> {sid -> grade}}
     """
+    # If I select the whole class, I want all courses (with pupils).
+    # If I select group B, I want all courses available to some pupils
+    # in group B.
+    # Non-participating pupils would get a '/' grade.
+    # Basically, a course should be included if it is possible for a
+    # pupil of the given group to take part. Thus a subject-group should
+    # only be excluded if it is empty or if it is in the same division
+    # as the pupil-group, but distinct from it. Here it might be easier
+    # working with sets of atomic groups ... so I'll do that.
+    klass, group = class_group_split(class_group)
+    group_info = get_classes().group_info(klass)
+    atoms = group_info["MINIMAL_SUBGROUPS"]
+    subjects_data = get_class_subjects(klass)
+    group2atoms = atomic_maps(atoms, list(group_info["GROUP_MAP"]))
+    tgroups = set(group2atoms[group])
+    sbjlist = []
+    for sdata in get_class_subjects(klass):
+        g = sdata.group
+        if g and (
+            (not group)
+            or g == '*'
+            or tgroups.intersection(group2atoms[g])
+        ):
+            sbjlist.append(sdata)
+#TODO ...
+            print(" §§", sdata)
+    return
+
+
+#?
     ### Get template file
     group_info = MINION(DATAPATH("CONFIG/GRADE_GROUP_INFO"))
     template = get_group_info(group_info, group, "GradeTableTemplate")
@@ -289,6 +289,27 @@ def makeGradeTable(
     ### Save file
     table.protectSheet()
     return table.save_bytes()
+
+
+def get_group_info(
+    group_info: Dict[str, Dict[str, Any]], group: str, key: str
+) -> Any:
+    """Read a value for a given group and key from a mapping with an
+    "inheritance" mechanism.
+    """
+    while True:
+        try:
+            mapping: Dict[str, Any] = group_info[group]
+        except KeyError:
+            raise GradeTableError(_NO_INFO_FOR_GROUP.format(group=group))
+        try:
+            return mapping[key]
+        except KeyError:
+            pass
+        try:
+            group = mapping["__INHERIT__"]
+        except KeyError:
+            raise GradeTableError(_MISSING_KEY.format(key=key))
 
 
 def rawGradeTableFile(filepath: str) -> Dict[str, Any]:
@@ -386,7 +407,7 @@ class PupilGradeData:
 
     def __init__(
         self,
-        gradeBase: GradeBase,
+        #gradeBase: GradeBase,
         pupilid: str,
         pupilname: str,
         pupilgroups: str,
@@ -567,13 +588,21 @@ def collate_grade_tables(
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
+    from core.db_access import open_database
+    open_database()
 #    db = make_db()
 #    print("DB:", db)
 #    print("Tables:", db._tables)
 #    quit(0)
 
     #_GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
-    _group = "12G.R"
+    __cg = "12G.R"
+
+    makeGradeTable("?", __cg)
+
+    quit(0)
+
+
     _filepath = DATAPATH(f"testing/Noten/NOTEN_1/Noten_{_group}_1")
     _gdata = readGradeFile(_filepath)
     for key, val in _gdata.items():

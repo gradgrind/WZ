@@ -1,7 +1,7 @@
 """
 core/report_courses.py
 
-Last updated:  2022-09-03
+Last updated:  2022-09-06
 
 Access course/subject data for reports.
 
@@ -43,11 +43,10 @@ T = TRANSLATIONS("core.report_courses")
 
 from typing import NamedTuple
 
-from core.db_access import db_read_fields
-from core.basic_data import get_classes
+from core.db_access import db_read_table#, db_read_fields
+from core.basic_data import get_classes, SHARED_DATA
 
 COURSE_FIELDS = (
-    "CLASS",
     "GRP",
     "SUBJECT",
     "TEACHER",
@@ -60,7 +59,9 @@ COURSE_FIELDS = (
 
 
 class ReportSubjectData(NamedTuple):
+#?
     klass: str
+
     group: str
     sid: str
     tid: str
@@ -69,7 +70,8 @@ class ReportSubjectData(NamedTuple):
     composite: str
 
 
-def get_subjects_data() -> dict[str,list[ReportSubjectData]]:
+#? Rather use class-bsed version below? And caching! ...
+'''def get_subjects_data() -> dict[str,list[ReportSubjectData]]:
     """Return subject information for all classes as a mapping.
     Each class has a list of <ReportSubjectData> instances.
     """
@@ -113,6 +115,55 @@ def get_subjects_data() -> dict[str,list[ReportSubjectData]]:
         except KeyError:
             class2subjects[klass] = [data]
     return class2subjects
+'''
+
+
+def get_class_subjects(klass):
+    """Return a list of data mappings, one for each "course" within the
+    given class.
+    This data is cached, so subsequent calls get the same instance.
+    """
+    key = f"SUBJECTS_{klass}"
+    try:
+        return SHARED_DATA[key]
+    except KeyError:
+        pass
+    # Get group info for checking groups
+    group_map = get_classes().group_info(klass)["GROUP_MAP"]
+    rsdata = []
+    for group, sid, tid, report, grade, composite in db_read_table(
+        "COURSES", COURSE_FIELDS, CLASS=klass
+    )[1]:
+        # CLASS, SUBJECT and TEACHER are foreign keys and should be
+        # automatically bound to appropriate entries in the database.
+        # GRP should be checked here ...
+        if group and (group != "*") and group not in group_map:
+            REPORT(
+                "ERROR",
+                T["UNKNOWN_GROUP"].format(
+                    klass=klass,
+                    group=group,
+                    sid=sid,
+                    tid=tid,
+                )
+            )
+            continue
+        rsdata.append(
+            ReportSubjectData(
+#?
+                klass=klass,
+
+                group=group,
+                sid=sid,
+                tid=tid,
+                report=report,
+                grade=grade,
+                composite=composite,
+            )
+        )
+    SHARED_DATA[key] = rsdata
+    return rsdata
+
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -121,8 +172,12 @@ if __name__ == "__main__":
     from core.db_access import open_database
     open_database()
 
-    data = get_subjects_data()
+    for rsdata in get_class_subjects("11G"):
+        print("  ---", rsdata)
+
+    '''data = get_subjects_data()
     for k in sorted(data):
         print("\nCLASS:", k)
         for rsdata in data[k]:
             print("  ---", rsdata)
+    '''
