@@ -39,6 +39,10 @@ core.report_courses: {
     UNKNOWN_GROUP: "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
 }
 
+grades.gradetable: {
+    PUPIL_HAS_MULTIPLE_SID: "In Klasse {klass}, {pupil} hat mehrere Zeugniseinträge im Fach {subject}"
+}
+
 ui.ui_base: {
     # Messages
     UNKNOWN_KEY:    "Ungültige Selektion: '{key}'"

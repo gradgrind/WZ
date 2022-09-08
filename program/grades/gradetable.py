@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-09-06
+Last updated:  2022-09-08
 
 Access grade data, read and build grade tables.
 
@@ -98,12 +98,14 @@ if __name__ == "__main__":
 #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
+T = TRANSLATIONS("grades.gradetable")
+
 ### +++++
 
 from core.base import class_group_split
-from core.basic_data import get_classes
+from core.basic_data import get_classes, get_subjects_with_sorting
 from core.classes import atomic_maps
-from core.pupils import pupils_in_group
+from core.pupils import pupils_in_group, pupil_name
 from core.report_courses import get_class_subjects
 
 
@@ -124,6 +126,7 @@ from typing import Dict, List, Optional, Any, Set, Tuple
 class GradeTableError(Exception):
     pass
 
+NO_GRADE = '/'
 
 ### -----
 
@@ -168,6 +171,11 @@ def makeGradeTable(
     Existing grades can be included in the table by passing an appropriate
     structure as <grades>: {pid -> {sid -> grade}}
     """
+#TODO: Some of this can be factored out and shared with the code for
+# text reports ...
+    text_reports = False
+    subject_map = get_subjects_with_sorting()
+
     # If I select the whole class, I want all courses (with pupils).
     # If I select group B, I want all courses available to some pupils
     # in group B.
@@ -175,26 +183,100 @@ def makeGradeTable(
     # Basically, a course should be included if it is possible for a
     # pupil of the given group to take part. Thus a subject-group should
     # only be excluded if it is empty or if it is in the same division
-    # as the pupil-group, but distinct from it. Here it might be easier
-    # working with sets of atomic groups ... so I'll do that.
+    # as the pupil-group, but distinct from it. The filtering is done by
+    # comparing "atomic" groups (minimal sub-groups).
     klass, group = class_group_split(class_group)
     group_info = get_classes().group_info(klass)
     atoms = group_info["MINIMAL_SUBGROUPS"]
     subjects_data = get_class_subjects(klass)
     group2atoms = atomic_maps(atoms, list(group_info["GROUP_MAP"]))
+
+    pupils = []
+    for pdata in pupils_in_group(class_group):
+        pgroups = pdata["GROUPS"]
+        if pgroups:
+            try:
+                atoms = set(group2atoms['']).intersection(
+                    *(group2atoms[g] for g in pgroups.split())
+                )
+                if not atoms:
+                    raise KeyError
+            except KeyError:
+                REPORT(
+                    "ERROR",
+                    T["INVALID_GROUPS_FIELD"].format(
+                        klass=klass,
+                        pupil=pupil_name(pdata),
+                        groups=pgroups
+                    )
+                )
+                continue
+        else:
+            atoms = set(group2atoms[''])
+        pupils.append((pdata, atoms, {}))
+#        print("%%%", pupils[-1])
+
     tgroups = set(group2atoms[group])
-    sbjlist = []
+    subject_set = set()
+
+
+
     for sdata in get_class_subjects(klass):
+        if text_reports:
+            if not sdata.report:
+                continue
+        elif not sdata.grade:
+            continue
+
         g = sdata.group
-        if g and (
-            (not group)
-            or g == '*'
-            or tgroups.intersection(group2atoms[g])
-        ):
-            sbjlist.append(sdata)
-#TODO ...
-            print(" §§", sdata)
+
+        if not g:
+            continue
+        if g == '*':
+            g = ''
+        s_atoms = set(group2atoms[g])
+        if (not group) or tgroups.intersection(s_atoms):
+            sid = sdata.sid
+            subject_set.add(sid)
+            sid0 = sid.split('.')[0]
+            for pdata, p_atoms, p_grade_map in pupils:
+                if s_atoms.intersection(p_atoms):
+                    # Check the suffix-stripped sid
+                    if sid0 in p_grade_map:
+                        REPORT(
+                            "ERROR",
+                            T["PUPIL_HAS_MULTIPLE_SID"].format(
+                                klass=klass,
+                                pupil=pupil_name(pdata),
+                                subject=subject_map[sid][2]
+                            )
+                        )
+                    else:
+                        if sid != sid0:
+                            # Dummy entry just for checking for duplicates
+                            p_grade_map[sid0] = None
+                        p_grade_map[sid] = sdata
+
+
+    #TODO: sort subjects
+    print("\nSUBJECTS:", " ".join(dorted(subject_set)))
+
+    for pdata, p_atoms, p_grade_map in pupils:
+        print("\n +++", pupil_name(pdata))
+        print("            ", p_grade_map)
+
+#TODO: This misses the significance of the exact course. That determines
+# the relevant report-fields of the subject, and thus the handling.
+# There should also be a check that there are no conflicting values from
+# different "courses" for the same subject.
+# For that it is probably helpful to distinguish between text and grade
+# reports here – otherwise they would be forced to share courses and
+# checking would be more difficult.
+# Text reports need the field 'report'.
+# Grade reports need the fields 'grade' and 'composite'.
+
     return
+
 
 
 #?
@@ -597,6 +679,7 @@ if __name__ == "__main__":
 
     #_GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
     __cg = "12G.R"
+    __cg = "12G"
 
     makeGradeTable("?", __cg)
 

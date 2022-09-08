@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-09-04
+Last updated:  2022-09-08
 
 Helper functions for accessing the database.
 
@@ -206,7 +206,11 @@ def db_read_table(
     else:
         where_clause = ""
     f = ", ".join([f'"{f}"' for f in fields]) if fields else "*"
-    o = f' ORDER BY "{sort_field}"' if sort_field else ""
+    if sort_field:
+        __sortlist = [f'"{__f}"' for __f in sort_field.split(',')]
+        o = f" ORDER BY {','.join(__sortlist)}"
+    else:
+        o = ""
     d = " DISTINCT" if distinct else ""
     qtext = f"SELECT{d} {f} FROM {table}{where_clause}{o}"
     # print("§§§", qtext)
@@ -260,7 +264,8 @@ def db_key_value_list(
 
 def db_read_fields(table, fields, sort_field=None):
     """Read all records from the given table.
-    Return a list of tuples containing these fields in the given order.
+    Return a list of records, each record being a list of the field
+    values in the given field order.
     """
     return db_read_table(table, fields, sort_field=sort_field)[1]
 
@@ -443,8 +448,8 @@ def enter_classes():
 if __name__ == "__main__":
     #    enter_classes()
 
-    db_backup()
-    quit(0)
+    #db_backup()
+    #quit(0)
 
     l = KeyValueList([("a", 1), ("b", 2), ("c", 3)])
     l.append(("d", 4))
@@ -471,6 +476,14 @@ if __name__ == "__main__":
     fields, values = db_read_full_table("COURSES", CLASS="10G")
     print("\nCOURSES in 10G:", fields)
     for row in values:
+        print("  ", row)
+
+    print("\nSUBJECTS:")
+    for row in db_read_fields(
+        "SUBJECTS",
+        ("SID", "NAME", "SORTING"),
+        "SORTING,NAME"
+    ):
         print("  ", row)
 
 # It seems that null entries are read as empty strings ...
