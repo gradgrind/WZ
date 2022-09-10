@@ -1,7 +1,7 @@
 """
 tables/matrix.py
 
-Last updated:  2022-01-04
+Last updated:  2022-09-10
 
 Edit a table template (xlsx).
 
@@ -66,6 +66,8 @@ class Table:
         return get_column_letter(i + 1)
 
     def __init__(self, filepath: str) -> None:
+        if not filepath.endswith(".xlsx"):
+            filepath += ".xlsx"
         self.template: str = filepath
         self._wb = load_workbook(self.template)
         self.rows: List[List[str]] = []

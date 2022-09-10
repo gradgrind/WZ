@@ -37,10 +37,13 @@ core.pupils: {
 
 core.report_courses: {
     UNKNOWN_GROUP: "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
+    PUPIL_HAS_MULTIPLE_SID: "In Klasse {klass}, {pupil} hat mehrere Zeugniseinträge im Fach {subject}"
 }
 
 grades.gradetable: {
-    PUPIL_HAS_MULTIPLE_SID: "In Klasse {klass}, {pupil} hat mehrere Zeugniseinträge im Fach {subject}"
+    TITLE:          "Notentabelle, erstellt {time}"
+    AMBIGUOUS_TEMPLATE_GROUP: "Für Gruppe {group} ist keine eindeutige Zuordnung einer Vorlage für die Noteneingabetabelle möglich"
+    NO_TEMPLATE_GROUP: "Für Gruppe {group} ist keine Zuordnung einer Vorlage für die Noteneingabetabelle möglich"
 }
 
 ui.ui_base: {
@@ -203,8 +206,6 @@ ui.modules.course_editor: {
     SUBJECT:        Fach
     TEACHER:        Lehrkraft
     REPORT:         Zeugnis
-    GRADE:          Note
-    COMPOSITE:      Sammelfach
 
     # Lesson table
     LESSONS:        "Unterricht usw."

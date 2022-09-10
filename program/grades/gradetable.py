@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-09-08
+Last updated:  2022-09-10
 
 Access grade data, read and build grade tables.
 
@@ -76,9 +76,6 @@ _COMPOSITE_COMPONENT = (
     " anderen Sammelfaches ({comp}) sein"
 )
 
-### Fields
-_TITLE = "Notentabelle, erstellt {time}"
-
 ###############################################################
 
 import sys, os
@@ -102,24 +99,24 @@ T = TRANSLATIONS("grades.gradetable")
 
 ### +++++
 
-from core.base import class_group_split
-from core.basic_data import get_classes, get_subjects_with_sorting
+#? ...
+from typing import Optional, Any
+import datetime, fnmatch
+
+#?
+from core.base import class_group_split, Dates
+from core.basic_data import get_classes, get_subjects_with_sorting, SHARED_DATA
 from core.classes import atomic_maps
 from core.pupils import pupils_in_group, pupil_name
-from core.report_courses import get_class_subjects
-
+from core.report_courses import get_class_subjects, get_pupil_grade_matrix
+from tables.spreadsheet import read_DataTable
+from tables.matrix import KlassMatrix
 
 #? ...
-from typing import Dict, List, Optional, Any, Set, Tuple
-
-#import datetime
-
-#from pydal import DAL, Field
 
 #from core.base import Dates
 #from core.courses import Subjects, NULL, UNCHOSEN
 #from tables.spreadsheet import read_DataTable, filter_DataTable
-#from tables.matrix import KlassMatrix
 #from local.local_grades import GradeBase, GradeConfigError
 
 
@@ -158,178 +155,118 @@ is set in the pupil record. In that case the value in a spreadsheet
 table would be irrelevant (only for information), maybe even superfluous.
 """
 
+def get_grade_entry_tables():
+    try:
+        return SHARED_DATA["GRADE_ENTRY_TABLES"]
+    except KeyError:
+        pass
+    data = MINION(DATAPATH("CONFIG/GRADE_ENTRY_TABLES"))
+    group_data = []
+    data["GROUP_DATA"] = group_data
+    for key in list(data):
+        if key.startswith("__"):
+            val = data.pop(key)
+            group_data.append((val.pop("GROUPS"), val))
+    SHARED_DATA["GRADE_ENTRY_TABLES"] = data
+    return data
+
 
 def makeGradeTable(
-    term: str,
+    occasion: str,
     class_group: str,
-    ISSUE_D: str = "",
-    GRADES_D: str = "",
-    grades: Optional[Dict[str, Dict[str, str]]] = None,
+    DATE_ISSUE: str = "",
+    DATE_GRADES: str = "",
+    grades: Optional[dict[str, dict[str, str]]] = None,
 ) -> bytes:
     """Build a basic pupil/subject table for grade input using a
     template appropriate for the given group.
     Existing grades can be included in the table by passing an appropriate
     structure as <grades>: {pid -> {sid -> grade}}
     """
-#TODO: Some of this can be factored out and shared with the code for
-# text reports ...
-    text_reports = False
-    subject_map = get_subjects_with_sorting()
+    ### Get subject and pupil information
+    subjects, pupils = get_pupil_grade_matrix(class_group, text_reports=False)
 
-    # If I select the whole class, I want all courses (with pupils).
-    # If I select group B, I want all courses available to some pupils
-    # in group B.
-    # Non-participating pupils would get a '/' grade.
-    # Basically, a course should be included if it is possible for a
-    # pupil of the given group to take part. Thus a subject-group should
-    # only be excluded if it is empty or if it is in the same division
-    # as the pupil-group, but distinct from it. The filtering is done by
-    # comparing "atomic" groups (minimal sub-groups).
-    klass, group = class_group_split(class_group)
-    group_info = get_classes().group_info(klass)
-    atoms = group_info["MINIMAL_SUBGROUPS"]
-    subjects_data = get_class_subjects(klass)
-    group2atoms = atomic_maps(atoms, list(group_info["GROUP_MAP"]))
-
-    pupils = []
-    for pdata in pupils_in_group(class_group):
-        pgroups = pdata["GROUPS"]
-        if pgroups:
-            try:
-                atoms = set(group2atoms['']).intersection(
-                    *(group2atoms[g] for g in pgroups.split())
-                )
-                if not atoms:
-                    raise KeyError
-            except KeyError:
-                REPORT(
-                    "ERROR",
-                    T["INVALID_GROUPS_FIELD"].format(
-                        klass=klass,
-                        pupil=pupil_name(pdata),
-                        groups=pgroups
-                    )
-                )
-                continue
+    ### Get information pertaining to the grade entry table.
+    # Select the template, etc. on the basis of the group and "occasion".
+    entry_tables_info = get_grade_entry_tables()
+    group_data_count = 0
+    group_data = None
+    for glist, gdata in entry_tables_info["GROUP_DATA"]:
+        # print(" ???", glist, gdata)
+        group_data_exact = False
+        for g in glist:
+            if g == class_group:
+                # Exact match – this has priority
+                group_data_exact = True
+                break
+            if fnmatch.fnmatchcase(class_group, g):
+                group_data_count += 1
+                break
         else:
-            atoms = set(group2atoms[''])
-        pupils.append((pdata, atoms, {}))
-#        print("%%%", pupils[-1])
-
-    tgroups = set(group2atoms[group])
-    subject_set = set()
-
-
-
-    for sdata in get_class_subjects(klass):
-        if text_reports:
-            if not sdata.report:
-                continue
-        elif not sdata.grade:
+            # No match, seek further
             continue
-
-        g = sdata.group
-
-        if not g:
+        # Check <occasion>
+        for o in gdata["OCCASION"]:
+            if fnmatch.fnmatchcase(occasion, o):
+                break
+        else:
+            # No match, seek further
             continue
-        if g == '*':
-            g = ''
-        s_atoms = set(group2atoms[g])
-        if (not group) or tgroups.intersection(s_atoms):
-            sid = sdata.sid
-            subject_set.add(sid)
-            sid0 = sid.split('.')[0]
-            for pdata, p_atoms, p_grade_map in pupils:
-                if s_atoms.intersection(p_atoms):
-                    # Check the suffix-stripped sid
-                    if sid0 in p_grade_map:
-                        REPORT(
-                            "ERROR",
-                            T["PUPIL_HAS_MULTIPLE_SID"].format(
-                                klass=klass,
-                                pupil=pupil_name(pdata),
-                                subject=subject_map[sid][2]
-                            )
-                        )
-                    else:
-                        if sid != sid0:
-                            # Dummy entry just for checking for duplicates
-                            p_grade_map[sid0] = None
-                        p_grade_map[sid] = sdata
+        # Matched group and occasion
+        group_data = gdata
+        if group_data_exact:
+            break
+    else:
+        if group_data_count != 1:
+            if group_data_count == 0:
+                raise GradeTableError(
+                    T["NO_TEMPLATE_GROUP"].format(group=class_group)
+                )
+            raise GradeTableError(
+                T["AMBIGUOUS_TEMPLATE_GROUP"].format(group=class_group)
+            )
 
-
-    #TODO: sort subjects
-    print("\nSUBJECTS:", " ".join(dorted(subject_set)))
-
-    for pdata, p_atoms, p_grade_map in pupils:
-        print("\n +++", pupil_name(pdata))
-        print("            ", p_grade_map)
-
-#TODO: This misses the significance of the exact course. That determines
-# the relevant report-fields of the subject, and thus the handling.
-# There should also be a check that there are no conflicting values from
-# different "courses" for the same subject.
-# For that it is probably helpful to distinguish between text and grade
-# reports here – otherwise they would be forced to share courses and
-# checking would be more difficult.
-# Text reports need the field 'report'.
-# Grade reports need the fields 'grade' and 'composite'.
-
-    return
-
-
-
-#?
     ### Get template file
-    group_info = MINION(DATAPATH("CONFIG/GRADE_GROUP_INFO"))
-    template = get_group_info(group_info, group, "GradeTableTemplate")
-    template_path = RESOURCEPATH(f"templates/{template}.xlsx")
+    template_path = RESOURCEPATH(group_data["TEMPLATE"])
     table = KlassMatrix(template_path)
 
     ### Set title line
     table.setTitle(
-        _TITLE.format(
+        T["TITLE"].format(
             time=datetime.datetime.now().isoformat(sep=" ", timespec="minutes")
         )
     )
+
     ### Gather general info
-    group_data: dict = MINION(DATAPATH("CONFIG/GRADE_DATA"))
-    if not ISSUE_D:
-        ISSUE_D = Dates.today()
-    if not GRADES_D:
-        GRADES_D = ISSUE_D
-    info_transl: Dict[str, str] = {}
+    if not DATE_ISSUE:
+        DATE_ISSUE = Dates.today()
+    if not DATE_GRADES:
+        DATE_GRADES = DATE_ISSUE
+    info_transl: dict[str, str] = {}
     info_item: dict
-    for info_item in group_data["INFO_FIELDS"]:
-        f = info_item["NAME"]
-        t = info_item["DISPLAY_NAME"]
+    for f, t in entry_tables_info["INFO_FIELDS"]:
         info_transl[f] = t
     info: Dict[str, str] = {
         info_transl["SCHOOLYEAR"]: SCHOOLYEAR,
-        info_transl["GROUP"]: group,
-        # TODO:
-        info_transl["TERM"]: term,
-        info_transl["GRADES_D"]: GRADES_D,
-        info_transl["ISSUE_D"]: ISSUE_D,
+        info_transl["CLASS_GROUP"]: class_group,
+        info_transl["OCCASION"]: occasion,
+        info_transl["DATE_GRADES"]: DATE_GRADES,
+        info_transl["DATE_ISSUE"]: DATE_ISSUE,
     }
     table.setInfo(info)
 
-    ### Get subjects for grade reports
-    subjects = Subjects()
-    class_subjects: List[Tuple[str, str]]
-    class_pupils: List[Tuple[str, str, str, dict]]
-    class_subjects, class_pupils = subjects.filter_pupil_group(
-        group, date=GRADES_D
-    )
-
     ### Go through the template columns and check if they are needed:
-    rowix: List[int] = table.header_rowindex  # indexes of header rows
+    rowix: list[int] = table.header_rowindex  # indexes of header rows
     if len(rowix) != 2:
-        raise GradeTableError(_TEMPLATE_HEADER_WRONG.format(path=template_path))
-    sidcol: List[Tuple[str, int]] = []
+        raise GradeTableError(
+            T["TEMPLATE_HEADER_WRONG"].format(path=template_path)
+        )
+    sidcol: list[tuple[str, int]] = []
     sid: str
-    sname: str
-    for sid, sname in class_subjects:
+    sdata: list
+    for sdata in sorted(subjects.values()):
+        sid = sdata[1]
+#TODO: Should special subjects at all be present?
         if sid[0] == "$":
             # Skipping "special" subjects
             continue
@@ -337,7 +274,7 @@ def makeGradeTable(
         col: int = table.nextcol()
         sidcol.append((sid, col))
         table.write(rowix[0], col, sid)
-        table.write(rowix[1], col, sname)
+        table.write(rowix[1], col, sdata[2])
     # Enforce minimum number of columns
     while col < 18:
         col = table.nextcol()
@@ -345,25 +282,24 @@ def makeGradeTable(
     # Delete excess columns
     table.delEndCols(col + 1)
 
-    ### Add pupils
-    for pid, pname, pgroups, sdata in class_pupils:
-        pgrades: Dict[str, str]
+    ### Add pupils and grades
+    for pdata, p_atoms, p_grade_tids in pupils:
+        pid = pdata["PID"]
+        pgrades: dict[str, str]
         try:
             pgrades = grades[pid]
         except:
             pgrades = {}
         row = table.nextrow()
         table.write(row, 0, pid)
-        table.write(row, 1, pname)
-        table.write(row, 2, pgroups)
+        table.write(row, 1, pupil_name(pdata))
+        table.write(row, 2, pdata["GROUPS"])
         for sid, col in sidcol:
-            if sid in sdata:
-                # Get existing value
-                g = pgrades.get(sid)
-                if g:
+            if p_grade_tids.get(sid):
+                if (g := pgrades.get(sid)):
                     table.write(row, col, g)
             else:
-                table.write(row, col, "X", protect=True)
+                table.write(row, col, NO_GRADE, protect=True)
     # Delete excess rows
     row = table.nextrow()
     table.delEndRows(row)
@@ -374,14 +310,14 @@ def makeGradeTable(
 
 
 def get_group_info(
-    group_info: Dict[str, Dict[str, Any]], group: str, key: str
+    group_info: dict[str, dict[str, Any]], group: str, key: str
 ) -> Any:
     """Read a value for a given group and key from a mapping with an
     "inheritance" mechanism.
     """
     while True:
         try:
-            mapping: Dict[str, Any] = group_info[group]
+            mapping: dict[str, Any] = group_info[group]
         except KeyError:
             raise GradeTableError(_NO_INFO_FOR_GROUP.format(group=group))
         try:
@@ -394,45 +330,39 @@ def get_group_info(
             raise GradeTableError(_MISSING_KEY.format(key=key))
 
 
-def rawGradeTableFile(filepath: str) -> Dict[str, Any]:
+def readGradeTableFile(filepath: str) -> tuple[
+    dict[str, str], dict[str, dict[str, str]]
+]:
     """Read the header info and pupils' grades from the given grade
     table (file).
     The "spreadsheet" module is used as backend so .ods, .xlsx and .tsv
     formats are possible. The filename may be passed without extension –
     <Spreadsheet> then looks for a file with a suitable extension.
-    Return a "DataTable" structure.
+    Return mappings for header-info and pupil-grades.
     """
-    dbt = read_DataTable(filepath)
-    return filter_DataTable(
-        dbt, MINION(DATAPATH("CONFIG/GRADE_DATA")), matrix=True, extend=False
-    )
+    grade_entry_info = get_grade_entry_tables()
+    header_map = {t: f for f, t in grade_entry_info["HEADERS"]}
+    info_map = {t: f for f, t in grade_entry_info["INFO_FIELDS"]}
+    datatable = read_DataTable(filepath)
+    info = {
+        (info_map.get(k) or k): v
+        for k, v in datatable["__INFO__"].items()
+    }
+    ### Get the rows as mappings
+    # fields = datatable["__FIELDS__"]
+    # print("\nFIELDS:", fields)
+    gdata: dict[str, dict[str, str]] = {}
+    for pdata in datatable["__ROWS__"]:
+        pinfo = [pdata.pop(h) for h in header_map]
+        pid: str = pinfo[0]
+        grades: dict[str, str] = {}
+        if pid != "$":
+            gdata[pid] = pdata
+    return info, gdata
 
 
-def readGradeFile(filepath: str) -> Dict[str, Any]:
-    """Use <rawGradeTableFile> to read a grade table, then extract the
-    subject names and the grade data as dictionaries.
-        Attribute "__SUBJECT_NAMES__": {sid: subject-name}
-        Attribute "__GRADEMAP__": {pid: {sid: grade}}
-    """
-    dtable = rawGradeTableFile(filepath)
-    subject_tags = dtable["__XFIELDS__"]
-    #    print("info:", dtable["__INFO__"])
-    #    print("subject_tags:", subject_tags)
-    # Map pupil to grade-mapping
-    gdata: Dict[str, Dict[str, str]] = {}
-    for pdata in dtable["__ROWS__"]:
-        pid: str = pdata["PID"]
-        grades: Dict[str, str] = {}
-        if pid == "$":
-            dtable["__SUBJECT_NAMES__"] = grades
-        else:
-            gdata[pid] = grades
-        for sid in subject_tags:
-            g = pdata[sid]
-            grades[sid] = g
-    dtable["__GRADEMAP__"] = gdata
-    return dtable
 
+#####################################
 
 class GradeTable:
     """Manage the grade data for one group in one "term" – corresponding
@@ -493,8 +423,8 @@ class PupilGradeData:
         pupilid: str,
         pupilname: str,
         pupilgroups: str,
-        subjectdata: Dict[str, Dict[str, str]],
-        grades: Dict[str, str],
+        subjectdata: dict[str, dict[str, str]],
+        grades: dict[str, str],
     ):
         """Extract and process the subject data needed for grade reports.
         The dependencies of composite and calculated fields are determined.
@@ -504,18 +434,18 @@ class PupilGradeData:
         self.name = pupilname
         self.groups = pupilgroups.split()
         self.grades = grades
-        components: Dict[str, List[Tuple[str, int]]] = {}
-        specials: Set[str] = set()
-        self.pupil_subjects: Dict[str, Dict[str, str]] = {}
+        components: dict[str, list[tuple[str, int]]] = {}
+        specials: set[str] = set()
+        self.pupil_subjects: dict[str, dict[str, str]] = {}
         for sid, smap in subjectdata.items():
-            psmap: Dict[str, Any] = {
+            psmap: dict[str, Any] = {
                 "TIDS": smap["TIDS"],
                 "GROUP": smap["GROUP"],
                 "SGROUP": smap["SGROUP"],
             }
             self.pupil_subjects[sid] = psmap
             cmpst = smap["COMPOSITE"]
-            dependers: List[str] = cmpst.split() if cmpst else []
+            dependers: list[str] = cmpst.split() if cmpst else []
             if dependers:
                 for _d in dependers:
                     if _d[0] != "$":
@@ -601,25 +531,26 @@ class PupilGradeData:
             except GradeConfigError as e:
                 REPORT("ERROR", f"{self.name}: {e}")
 
+
+#TODO
 def collate_grade_tables(
-    files: List[str],
+    files: list[str],
     term: str,
     group: str,
-) -> Dict[str, Dict[str, str]]:
-    """Use <readGradeFile> to collect the grades from a set of grade
+) -> dict[str, dict[str, str]]:
+    """Use <readGradeTableFile> to collect the grades from a set of grade
     tables – passed as <files>.
     Return the collated grades: {pid: {sid: grade}}.
     Only grades that have actually been given (i.e. no empty grades or
     grades for unchosen or unavailable subject) will be included.
-    If a grade for a pupil/subject pair is given in separate tables,
+    If a grade for a pupil/subject pair is given in multiple input tables,
     an exception will only be raised if the grades are different.
     """
-    grades: Dict[str, Dict[str, str]] = {}
+    grades: dict[str, dict[str, str]] = {}
     # For error tracing, retain file containing first definition of a grade.
-    fmap: Dict[Tuple[str, str], str] = {}  # {(pid, sid): filepath}
+    fmap: dict[tuple[str, str], str] = {}  # {(pid, sid): filepath}
     for filepath in files:
-        table = readGradeFile(filepath)
-        info = table["__INFO__"]
+        info, table = readGradeTableFile(filepath)
         if info["SCHOOLYEAR"] != SCHOOLYEAR:
             raise GradeTableError(
                 _TABLE_YEAR_MISMATCH.format(
@@ -672,16 +603,27 @@ def collate_grade_tables(
 if __name__ == "__main__":
     from core.db_access import open_database
     open_database()
-#    db = make_db()
-#    print("DB:", db)
-#    print("Tables:", db._tables)
-#    quit(0)
 
-    #_GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
     __cg = "12G.R"
-    __cg = "12G"
+    __cg = "11G"
+#    __cg = "12G.G"
 
-    makeGradeTable("?", __cg)
+    tbytes = makeGradeTable("1. Halbjahr", __cg)
+
+    tpath = DATAPATH(f"testing/tmp/GradeInput-{__cg}.xlsx")
+    tdir = os.path.dirname(tpath)
+    if not os.path.isdir(tdir):
+        os.makedirs(tdir)
+    with open(tpath, "wb") as _fh:
+        _fh.write(tbytes)
+    print(f"\nWROTE GRADE TABLE TO {tpath}\n")
+
+    print("\n *************************************************\n")
+
+    info, gdata = rawGradeTableFile(tpath)
+    print("\nINFO:", info)
+    for pid, pdata in gdata.items():
+        print(f" --- {pid}:", pdata)
 
     quit(0)
 
