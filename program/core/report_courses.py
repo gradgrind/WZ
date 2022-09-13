@@ -1,7 +1,7 @@
 """
 core/report_courses.py
 
-Last updated:  2022-09-09
+Last updated:  2022-09-11
 
 Access course/subject data for reports.
 
@@ -207,6 +207,7 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
 #        print("%%%", pupils[-1])
     tgroups = set(group2atoms[group])
     subject_set = {}
+    subsubjects = {}    # for checking for double entries (see below)
     for sdata in get_class_subjects(klass):
         report_flags = sdata.report.split('/', 1)[0]
         if text_reports:
@@ -223,18 +224,17 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
         if (not group) or tgroups.intersection(s_atoms):
             sid = sdata.sid
             subject_set[sid] = subject_map[sid]
-            sid0 = '#' + sid.split('.')[0]
+            sid0 = sid.split('.')[0]    # for checking for double entries
             for pdata, p_atoms, p_grade_tids in pupils:
                 if s_atoms.intersection(p_atoms):
                     # Check for subjects with multiple entries (same
                     # sid/subject, but different sid-qualifiers).
-                    # To this end there are "dummy" entries in
-                    # <p_grade_tids> (key <sid0>) whose value is the
-                    # first <sid> used for the subject.
+                    # The first use of a subject is recorded in
+                    # <subsubjects> (stem -> full subject tag).
                     try:
-                        sid1 = p_grade_tids[sid0]
+                        sid1 = subsubjects[sid0]
                     except KeyError:
-                        p_grade_tids[sid0] = sid
+                        subsubjects[sid0] = sid
                     else:
                         if sid1 != sid:
                             REPORT(
@@ -272,6 +272,7 @@ if __name__ == "__main__":
     '''
 
     kg = "12G.R"
+    #kg = "13"
     subjects, pupils = get_pupil_grade_matrix(kg, text_reports=False)
     print("\n SUBJECTS FOR GROUP", kg)
     for s in sorted(subjects.values()):
@@ -279,6 +280,6 @@ if __name__ == "__main__":
 
     print("\n PUPILS:")
     for pdata, p_atoms, p_grade_tids in pupils:
-        print(" +++", pupil_name(pdata))
+        print("\n +++", pupil_name(pdata))
         print("            ", p_grade_tids)
 

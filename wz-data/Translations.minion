@@ -44,6 +44,11 @@ grades.gradetable: {
     TITLE:          "Notentabelle, erstellt {time}"
     AMBIGUOUS_TEMPLATE_GROUP: "Für Gruppe {group} ist keine eindeutige Zuordnung einer Vorlage für die Noteneingabetabelle möglich"
     NO_TEMPLATE_GROUP: "Für Gruppe {group} ist keine Zuordnung einer Vorlage für die Noteneingabetabelle möglich"
+    TABLE_CLASS_MISMATCH: "Falsche Klasse/Gruppe in Notentabelle:\n  erwartet '{group}' ... Datei:\n    {filepath}"
+    TABLE_TERM_MISMATCH: "Falscher 'Anlass' in Notentabelle:\n  erwartet '{term}' ... Datei:\n    {filepath}"
+    TABLE_YEAR_MISMATCH: "Falsches Schuljahr in Notentabelle:\n  erwartet '{year}' ... Datei:\n    {filepath}"
+    GRADE_CONFLICT: "Widersprüchliche Noten für Schüler {pid} im Fach {sid}\n  {path1}\n  {path2}"
+    INVALID_GRADE: "In {filepath}:\n  Die Note für {pupil} im Fach {sid} ist ungültig: {grade}"
 }
 
 ui.ui_base: {
@@ -245,6 +250,12 @@ ui.modules.course_editor: {
     FACTOR:         Gewichtungsfaktor
     PARALLEL_GROUPS: "mit Gruppen"
     PARALLEL_TEACHERS: "mit Lehrkräften"
+}
+
+ui.modules.grades_manager: {
+    # Labels
+    MODULE_NAME:    "Noten"
+    MODULE_TITLE:   "Noten verwalten"
 }
 
 ui.modules.timetable_editor: {

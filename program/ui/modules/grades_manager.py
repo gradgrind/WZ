@@ -1,0 +1,164 @@
+"""
+ui/modules/grades_manager.py
+
+Last updated:  2022-09-13
+
+Front-end for managing grade reports.
+
+
+=+LICENCE=============================
+Copyright 2022 Michael Towers
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+=-LICENCE========================================
+"""
+
+if __name__ == "__main__":
+    import sys, os, builtins
+
+    this = sys.path[0]
+    appdir = os.path.dirname(os.path.dirname(this))
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+    from core.base import start
+    from ui.ui_base import StandalonePage as Page
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    #    start.setup(os.path.join(basedir, 'DATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
+else:
+    from ui.ui_base import StackPage as Page
+
+T = TRANSLATIONS("ui.modules.grades_manager")
+
+### +++++
+
+#???
+from ui.ui_base import (
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QLabel,
+    QPushButton,
+    KeySelector,
+    run
+)
+from ui.editable import EdiTableWidget
+
+
+#from ui.ui_extra import QWidget, QLabel, QVBoxLayout, \
+#        QTreeWidget, QTreeWidgetItem, Qt
+
+### -----
+
+def init():
+    MAIN_WIDGET.add_tab(ManageGrades())
+
+
+class ManageGrades(Page):
+    name = T["MODULE_NAME"]
+    title = T["MODULE_TITLE"]
+
+    def __init__(self):
+        super().__init__()
+        self.grade_manager = GradeManager()
+        hbox = QHBoxLayout(self)
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.addWidget(self.grade_manager)
+
+    def enter(self):
+        open_database()
+#        self.grade_manager.init_data()
+
+    def is_modified(self):
+        return self.grade_manager.modified()
+
+
+# ++++++++++++++ The widget implementation ++++++++++++++
+
+
+class GradeManager(QWidget):
+    def __init__(self):
+        super().__init__()
+        hbox = QHBoxLayout(self)
+        vboxl = QVBoxLayout()
+        hbox.addLayout(vboxl)
+        vboxr = QVBoxLayout()
+        hbox.addLayout(vboxr)
+
+        # Class info
+        self.class_label = QLabel()
+        vboxl.addWidget(self.class_label)
+#TODO: Do I want this?
+        self.modified_label = QLabel()
+        vboxl.addWidget(self.modified_label)
+
+        # The class data table
+        self.pupil_data_table = EdiTableWidget()
+        vboxl.addWidget(self.pupil_data_table)
+
+        # Various "controls" in the panel on the right
+#TODO: Get the entries from config
+        occasion_selector = KeySelector(
+            (
+                ("1", "1. Halbjahr"),
+                ("2", "2. Halbjahr"),
+                ("A", "Abitur"),
+                ("K", "Kursnoten"),
+                ("E", "Einzelzeugnis"),
+            ),
+            self.changed_occasion
+        )
+        vboxr.addWidget(occasion_selector)
+#TODO: later? .... or use <selected> method
+        occasion_selector.trigger()
+
+        pb1 = QPushButton("Just testing")
+        vboxr.addWidget(pb1)
+        pb2 = QPushButton("Another button")
+        vboxr.addWidget(pb2)
+        vboxr.addStretch(1)
+        for i in range(15):
+            vboxr.addWidget(QPushButton(f"Button {i}"))
+
+    def modified(self):
+        """Return <True> if there are unsaved changes.
+        """
+#TODO: test whether there really are any changes?
+        return True
+
+    def changed_occasion(self, new_occasion: str) -> bool:
+        print("NEW OCCASION:", new_occasion)
+        return True # accept
+
+
+if __name__ == "__main__":
+    from ui.ui_base import run
+
+    widget = ManageGrades()
+    widget.grade_manager.class_label.setText("<b>Klasse 02G</b>")
+    widget.grade_manager.modified_label.setText("zuletzt geändert: 2021-10-05_20:14")
+# Actually this can be in the main code, using the fixed (translated)
+# column headers ... need to set up the data area.
+    widget.grade_manager.pupil_data_table.setup(colheaders = ["PID", "Name"],
+            undo_redo = True, paste = True,
+            on_changed = None)
+    widget.resize(600, 400)
+    run(widget)
+
+
+#new?
+#    widget = ManagePupils()
+#    widget.enter()
+#    widget.resize(1000, 550)
+#    run(widget)

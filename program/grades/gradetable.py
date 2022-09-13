@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-09-10
+Last updated:  2022-09-11
 
 Access grade data, read and build grade tables.
 
@@ -46,22 +46,6 @@ _NO_INFO_FOR_GROUP = (
 _TEMPLATE_HEADER_WRONG = "Fehler bei den Kopfzeilen der Vorlage:\n {path}"
 _MISSING_KEY = "Eintrag fehlt in Konfigurationsdatei: {key}"
 _GRADE_MISSING = "Leeres Notenfeld im Fach {sid}, Tabelle:\n  {path}"
-_GRADE_CONFLICT = (
-    "Widersprüchliche Noten für Schüler {pid} im Fach {sid}"
-    "\n  {path1}\n  {path2}"
-)
-_TABLE_CLASS_MISMATCH = (
-    "Falsche Klasse/Gruppe in Notentabelle:\n"
-    "  erwartet '{group}' ... Datei:\n    {filepath}"
-)
-_TABLE_TERM_MISMATCH = (
-    "Falscher 'Anlass' in Notentabelle:\n"
-    "  erwartet '{term}' ... Datei:\n    {filepath}"
-)
-_TABLE_YEAR_MISMATCH = (
-    "Falsches Schuljahr in Notentabelle:\n"
-    "  erwartet '{year}' ... Datei:\n    {filepath}"
-)
 _BAD_DEPENDER = "Ungültiges Sonderfach-Kürzel: {sid}"
 _BAD_WEIGHT = "Gewichtung des Faches ({sid}) muss eine Zahl sein: '{d}'"
 _NULL_COMPOSITE = "'$' ist nicht gültig als Fach-Kürzel"
@@ -171,23 +155,10 @@ def get_grade_entry_tables():
     return data
 
 
-def makeGradeTable(
-    occasion: str,
-    class_group: str,
-    DATE_ISSUE: str = "",
-    DATE_GRADES: str = "",
-    grades: Optional[dict[str, dict[str, str]]] = None,
-) -> bytes:
-    """Build a basic pupil/subject table for grade input using a
-    template appropriate for the given group.
-    Existing grades can be included in the table by passing an appropriate
-    structure as <grades>: {pid -> {sid -> grade}}
+def get_group_data(occasion: str, class_group: str):
+    """Get information pertaining to the grade table for the given
+    group and "occasion".
     """
-    ### Get subject and pupil information
-    subjects, pupils = get_pupil_grade_matrix(class_group, text_reports=False)
-
-    ### Get information pertaining to the grade entry table.
-    # Select the template, etc. on the basis of the group and "occasion".
     entry_tables_info = get_grade_entry_tables()
     group_data_count = 0
     group_data = None
@@ -225,6 +196,24 @@ def makeGradeTable(
             raise GradeTableError(
                 T["AMBIGUOUS_TEMPLATE_GROUP"].format(group=class_group)
             )
+    return group_data
+
+
+def make_grade_table(
+    occasion: str,
+    class_group: str,
+    DATE_ISSUE: str = "",
+    DATE_GRADES: str = "",
+    grades: Optional[dict[str, dict[str, str]]] = None,
+) -> bytes:
+    """Build a basic pupil/subject table for grade input using a
+    template appropriate for the given group.
+    Existing grades can be included in the table by passing an appropriate
+    structure as <grades>: {pid -> {sid -> grade}}
+    """
+    ### Get subject, pupil and group information
+    subjects, pupils = get_pupil_grade_matrix(class_group, text_reports=False)
+    group_data = get_group_data(occasion, class_group)
 
     ### Get template file
     template_path = RESOURCEPATH(group_data["TEMPLATE"])
@@ -244,6 +233,7 @@ def makeGradeTable(
         DATE_GRADES = DATE_ISSUE
     info_transl: dict[str, str] = {}
     info_item: dict
+    entry_tables_info = get_grade_entry_tables()
     for f, t in entry_tables_info["INFO_FIELDS"]:
         info_transl[f] = t
     info: Dict[str, str] = {
@@ -266,7 +256,7 @@ def makeGradeTable(
     sdata: list
     for sdata in sorted(subjects.values()):
         sid = sdata[1]
-#TODO: Should special subjects at all be present?
+#TODO: Should special subjects be present at all?
         if sid[0] == "$":
             # Skipping "special" subjects
             continue
@@ -309,6 +299,122 @@ def makeGradeTable(
     return table.save_bytes()
 
 
+def read_grade_table_file(filepath: str) -> tuple[
+    dict[str, str], dict[str, dict[str, str]]
+]:
+    """Read the header info and pupils' grades from the given grade
+    table (file).
+    <read_DataTable> in the "spreadsheet" module is used as backend, so
+    .ods, .xlsx and .tsv formats are possible. The filename may be
+    passed without extension – <Spreadsheet> then looks for a file with
+    a suitable extension.
+    Return mapping for pupil-grades. Include header info as special
+    entry.
+    """
+    grade_entry_info = get_grade_entry_tables()
+    header_map = {t: f for f, t in grade_entry_info["HEADERS"]}
+    info_map = {t: f for f, t in grade_entry_info["INFO_FIELDS"]}
+    datatable = read_DataTable(filepath)
+    info = {
+        (info_map.get(k) or k): v
+        for k, v in datatable["__INFO__"].items()
+    }
+    ### Get the rows as mappings
+    # fields = datatable["__FIELDS__"]
+    # print("\nFIELDS:", fields)
+    gdata: dict[str, dict[str, str]] = {"__INFO__": info}
+    group_data = get_group_data(info["OCCASION"], info["CLASS_GROUP"])
+    valid_grades = set(group_data["GRADES"])
+    for pdata in datatable["__ROWS__"]:
+        pinfo = [pdata.pop(h) for h in header_map]
+        pid: str = pinfo[0]
+        grades: dict[str, str] = {}
+        if pid != "$":
+            gdata[pid] = pdata
+            # Check validity of grades
+            for k, v in pdata.items():
+                if v and v not in valid_grades:
+                    REPORT(
+                        "ERROR",
+                        T["INVALID_GRADE"].format(
+                            filepath=info["__FILEPATH__"],
+                            pupil=pinfo[1],
+                            sid=k,
+                            grade=v
+                        )
+                    )
+                    pdata[k] = ""
+    return gdata
+
+
+def collate_grade_tables(
+    files: list[str],
+    occasion: str,
+    group: str,
+) -> dict[str, dict[str, str]]:
+    """Use <read_grade_table_file> to collect the grades from a set of grade
+    tables – passed as <files>.
+    Return the collated grades: {pid: {sid: grade}}.
+    Only grades that have actually been given (i.e. no empty grades or
+    grades for unchosen or unavailable subject) will be included.
+    If a grade for a pupil/subject pair is given in multiple input tables,
+    an exception will be raised if the grades are different.
+    """
+    grades: dict[str, dict[str, str]] = {}
+    # For error tracing, retain file containing first definition of a grade.
+    fmap: dict[tuple[str, str], str] = {}  # {(pid, sid): filepath}
+    for filepath in files:
+        table = read_grade_table_file(filepath)
+        info = table.pop("__INFO__")
+        if info["SCHOOLYEAR"] != SCHOOLYEAR:
+            raise GradeTableError(
+                T["TABLE_YEAR_MISMATCH"].format(
+                    year=SCHOOLYEAR, filepath=info["__FILEPATH__"]
+                )
+            )
+        if info["CLASS_GROUP"] != group:
+            raise GradeTableError(
+                T["TABLE_CLASS_MISMATCH"].format(
+                    group=group, path=info["__FILEPATH__"]
+                )
+            )
+        if info["OCCASION"] != occasion:
+            raise GradeTableError(
+                T["TABLE_TERM_MISMATCH"].format(
+                    term=term, path=info["__FILEPATH__"]
+                )
+            )
+        # print("\n$$$", filepath)
+        for pid, smap in table.items():
+            try:
+                smap0 = grades[pid]
+            except KeyError:
+                smap0 = {}
+                grades[pid] = smap0
+            for s, g in smap.items():
+                if g:
+                    if (not g) or g == NO_GRADE:
+                        continue
+                    g0 = smap0.get(s)
+                    if g0:
+                        if g0 != g:
+                            raise GradeTableError(
+                                T["GRADE_CONFLICT"].format(
+                                    pid=pid,
+                                    sid=s,
+                                    path1=fmap[(pid, s)],
+                                    path2=filepath,
+                                )
+                            )
+                    else:
+                        smap0[s] = g
+                        fmap[(pid, s)] = filepath
+    return grades
+
+
+#####################################
+
+#????
 def get_group_info(
     group_info: dict[str, dict[str, Any]], group: str, key: str
 ) -> Any:
@@ -329,40 +435,6 @@ def get_group_info(
         except KeyError:
             raise GradeTableError(_MISSING_KEY.format(key=key))
 
-
-def readGradeTableFile(filepath: str) -> tuple[
-    dict[str, str], dict[str, dict[str, str]]
-]:
-    """Read the header info and pupils' grades from the given grade
-    table (file).
-    The "spreadsheet" module is used as backend so .ods, .xlsx and .tsv
-    formats are possible. The filename may be passed without extension –
-    <Spreadsheet> then looks for a file with a suitable extension.
-    Return mappings for header-info and pupil-grades.
-    """
-    grade_entry_info = get_grade_entry_tables()
-    header_map = {t: f for f, t in grade_entry_info["HEADERS"]}
-    info_map = {t: f for f, t in grade_entry_info["INFO_FIELDS"]}
-    datatable = read_DataTable(filepath)
-    info = {
-        (info_map.get(k) or k): v
-        for k, v in datatable["__INFO__"].items()
-    }
-    ### Get the rows as mappings
-    # fields = datatable["__FIELDS__"]
-    # print("\nFIELDS:", fields)
-    gdata: dict[str, dict[str, str]] = {}
-    for pdata in datatable["__ROWS__"]:
-        pinfo = [pdata.pop(h) for h in header_map]
-        pid: str = pinfo[0]
-        grades: dict[str, str] = {}
-        if pid != "$":
-            gdata[pid] = pdata
-    return info, gdata
-
-
-
-#####################################
 
 class GradeTable:
     """Manage the grade data for one group in one "term" – corresponding
@@ -532,72 +604,6 @@ class PupilGradeData:
                 REPORT("ERROR", f"{self.name}: {e}")
 
 
-#TODO
-def collate_grade_tables(
-    files: list[str],
-    term: str,
-    group: str,
-) -> dict[str, dict[str, str]]:
-    """Use <readGradeTableFile> to collect the grades from a set of grade
-    tables – passed as <files>.
-    Return the collated grades: {pid: {sid: grade}}.
-    Only grades that have actually been given (i.e. no empty grades or
-    grades for unchosen or unavailable subject) will be included.
-    If a grade for a pupil/subject pair is given in multiple input tables,
-    an exception will only be raised if the grades are different.
-    """
-    grades: dict[str, dict[str, str]] = {}
-    # For error tracing, retain file containing first definition of a grade.
-    fmap: dict[tuple[str, str], str] = {}  # {(pid, sid): filepath}
-    for filepath in files:
-        info, table = readGradeTableFile(filepath)
-        if info["SCHOOLYEAR"] != SCHOOLYEAR:
-            raise GradeTableError(
-                _TABLE_YEAR_MISMATCH.format(
-                    year=SCHOOLYEAR, filepath=info["__FILEPATH__"]
-                )
-            )
-        if info["GROUP"] != group:
-            raise GradeTableError(
-                _TABLE_CLASS_MISMATCH.format(
-                    group=group, path=info["__FILEPATH__"]
-                )
-            )
-        if info["TERM"] != term:
-            raise GradeTableError(
-                _TABLE_TERM_MISMATCH.format(
-                    term=term, path=info["__FILEPATH__"]
-                )
-            )
-        newgrades = table["__GRADEMAP__"]
-        # print("\n$$$", filepath)
-        for pid, smap in newgrades.items():
-            try:
-                smap0 = grades[pid]
-            except KeyError:
-                smap0 = {}
-                grades[pid] = smap0
-            for s, g in smap.items():
-                if g:
-                    if g in (NULL, UNCHOSEN):
-                        continue
-                    g0 = smap0.get(s)
-                    if g0:
-                        if g0 != g:
-                            raise GradeTableError(
-                                _GRADE_CONFLICT.format(
-                                    pid=pid,
-                                    sid=s,
-                                    path1=fmap[(pid, s)],
-                                    path2=filepath,
-                                )
-                            )
-                    else:
-                        smap0[s] = g
-                        fmap[(pid, s)] = filepath
-    return grades
-
-
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
@@ -608,7 +614,7 @@ if __name__ == "__main__":
     __cg = "11G"
 #    __cg = "12G.G"
 
-    tbytes = makeGradeTable("1. Halbjahr", __cg)
+    tbytes = make_grade_table("1. Halbjahr", __cg)
 
     tpath = DATAPATH(f"testing/tmp/GradeInput-{__cg}.xlsx")
     tdir = os.path.dirname(tpath)
@@ -620,10 +626,22 @@ if __name__ == "__main__":
 
     print("\n *************************************************\n")
 
-    info, gdata = rawGradeTableFile(tpath)
-    print("\nINFO:", info)
+    gdata = read_grade_table_file(tpath)
     for pid, pdata in gdata.items():
-        print(f" --- {pid}:", pdata)
+        print(f"\n --- {pid}:", pdata)
+
+    print("\nCOLLATING ...")
+    from glob import glob
+    gtable = collate_grade_tables(
+        glob(os.path.join(tdir, "test?.xlsx")), "1. Halbjahr", "11G"
+    )
+    for p, pdata in gtable.items():
+        print("\n ***", p, pdata)
+
+    print("\n *************************************************\n")
+
+    test = MINION(DATAPATH("CONFIG/GRADE_ENTRY_TABLES"))
+    print("REPORTS:\n", test["REPORTS"])
 
     quit(0)
 
