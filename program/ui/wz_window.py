@@ -1,7 +1,7 @@
 """
 ui/wz_window.py
 
-Last updated:  2022-04-22
+Last updated:  2022-08-16
 
 The main window of the WZ GUI.
 
@@ -43,19 +43,41 @@ if __name__ == '__main__':
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-from ui.ui_base import QWidget, QVBoxLayout, QHBoxLayout, \
-        QLabel, QStackedWidget, QFrame, QPushButton, HLine, run
+from ui.ui_base import (
+    ## QtWidgets
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QStackedWidget,
+    QFrame,
+    QPushButton,
+    ## QtCore
+    Qt,
+    ## extra
+    HLine,
+    run,
+)
 
 ### -----
 
-class MainWindow(QWidget):
+class MainWindow(QMainWindow):
+    def __init__(self, main_widget):
+        super().__init__()
+        self.setWindowTitle(_TITLE)
+        self.statusbar = self.statusBar()
+        self.main_widget = MainWidget()
+        self.setCentralWidget(main_widget)
+
+
+class MainWidget(QWidget):
     def __init__(self):
 #?
         """Note that some of the initialization is done after a short
         delay: <init> is called using a single-shot timer.
         """
         super().__init__()
-        self.setWindowTitle(_TITLE)
         topbox = QVBoxLayout(self)
         # ---------- Title Box ---------- #
         titlebox = QHBoxLayout()
@@ -82,10 +104,6 @@ class MainWindow(QWidget):
         tab_box_layout.addWidget(self.widgetstack)
         self.tab_buttons = []
         self.index = -1
-
-
-# Add QStatusBar?
-
 
 #        for tab in TABS:
 #            self.tab_widget.add_page(tab)
@@ -174,6 +192,9 @@ class TabButton(QPushButton):
         self.setStyleSheet(self.__stylesheet)
         self.setCheckable(True)
         self.clicked.connect(self.selected)
+#TODO --
+        self.setToolTip(f"§§§ Tip for {label}")
+        self.setStatusTip(f"§§§ Tip for {label}")
 #
     def selected(self):
         MAIN_WIDGET.select_tab(self.index)
@@ -516,7 +537,7 @@ class MainWindowUI(QWidget):
 if __name__ == "__main__":
     from ui.ui_base import StackPage, APP
 
-    MAIN_WIDGET = MainWindow()
+    MAIN_WIDGET = MainWidget()
     builtins.MAIN_WIDGET = MAIN_WIDGET
     MAIN_WIDGET.add_tab(StackPage())
     import ui.modules   # Initialize the "pages"
@@ -526,8 +547,13 @@ if __name__ == "__main__":
 #    MAIN_WIDGET.widgetstack.setCurrentIndex(1)
     MAIN_WIDGET.select_tab(0)
     MAIN_WIDGET.year_term.setText("2022.1")
-    geometry = APP.primaryScreen().availableGeometry()
-    MAIN_WIDGET.resize(int(geometry.width() * 0.7), int(geometry.height() * 0.7))
-    run(MAIN_WIDGET)
+#    geometry = APP.primaryScreen().availableGeometry()
+#    MAIN_WIDGET.resize(int(geometry.width() * 0.7), int(geometry.height() * 0.7))
+
+#    run(MAIN_WIDGET)
 #    if SHOW_CONFIRM("Shall I do this?"):
 #        run(MAIN_WIDGET)
+
+    main_window = MainWindow(MAIN_WIDGET)
+    main_window.setWindowState(Qt.WindowMaximized)
+    run(main_window)

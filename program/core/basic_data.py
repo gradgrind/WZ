@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-07-27
+core/basic_data.py - last updated 2022-09-08
 
 Handle caching of the basic data sources
 
@@ -39,7 +39,7 @@ SHARED_DATA = {}
 DECIMAL_SEP = CONFIG["DECIMAL_SEP"]
 __FLOAT = f"[1-9]?[0-9](?:{DECIMAL_SEP}[0-9]{{1,3}})?"
 PAYMENT_FORMAT = QRegularExpression(f"^{__FLOAT}$")
-PAYMENT_MAX = 20.0
+PAYMENT_MAX = 30.0
 __TAG_CHAR = "[A-Za-z0-9_.]"
 TAG_FORMAT = QRegularExpression(f"^{__TAG_CHAR}+$")
 PAYMENT_TAG_FORMAT = QRegularExpression(f"^{__TAG_CHAR}*(?:/{__FLOAT})?$")
@@ -116,6 +116,25 @@ def get_subjects() -> KeyValueList:
     subjects = db_key_value_list("SUBJECTS", "SID", "NAME", sort_field="NAME")
     SHARED_DATA["SUBJECTS"] = subjects
     return subjects
+
+
+def get_subjects_with_sorting() -> dict:
+    try:
+        return SHARED_DATA["SUBJECTS_SORTED"]
+    except KeyError:
+        pass
+    sid2data = {}
+    i = 0
+    for row in db_read_fields(
+        "SUBJECTS",
+        ("SID", "NAME", "SORTING"),
+        "SORTING,NAME"
+    ):
+        row.insert(0, i)
+        sid2data[row[1]] = row
+        i += 1
+    SHARED_DATA["SUBJECTS_SORTED"] = sid2data
+    return sid2data
 
 
 def get_rooms() -> KeyValueList:

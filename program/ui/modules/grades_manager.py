@@ -1,9 +1,9 @@
 """
-ui/modules/pupils_manager.py
+ui/modules/grades_manager.py
 
-Last updated:  2022-09-02
+Last updated:  2022-09-13
 
-Front-end for managing pupil data.
+Front-end for managing grade reports.
 
 
 =+LICENCE=============================
@@ -24,15 +24,6 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
-#TODO ...
-_NAME = "Schüler"
-_TITLE ="Schülerdaten verwalten"
-
-
-### Messages
-
-#####################################################
-
 if __name__ == "__main__":
     import sys, os, builtins
 
@@ -48,8 +39,20 @@ if __name__ == "__main__":
 else:
     from ui.ui_base import StackPage as Page
 
+T = TRANSLATIONS("ui.modules.grades_manager")
 
-from ui.ui_base import QHBoxLayout, QVBoxLayout, QLabel, QPushButton, run
+### +++++
+
+#???
+from ui.ui_base import (
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QLabel,
+    QPushButton,
+    KeySelector,
+    run
+)
 from ui.editable import EdiTableWidget
 
 
@@ -59,13 +62,32 @@ from ui.editable import EdiTableWidget
 ### -----
 
 def init():
-    MAIN_WIDGET.add_tab(ManagePupils())
+    MAIN_WIDGET.add_tab(ManageGrades())
 
 
-class ManagePupils(Page):
-    name = _NAME
-    title = _TITLE
+class ManageGrades(Page):
+    name = T["MODULE_NAME"]
+    title = T["MODULE_TITLE"]
 
+    def __init__(self):
+        super().__init__()
+        self.grade_manager = GradeManager()
+        hbox = QHBoxLayout(self)
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.addWidget(self.grade_manager)
+
+    def enter(self):
+        open_database()
+#        self.grade_manager.init_data()
+
+    def is_modified(self):
+        return self.grade_manager.modified()
+
+
+# ++++++++++++++ The widget implementation ++++++++++++++
+
+
+class GradeManager(QWidget):
     def __init__(self):
         super().__init__()
         hbox = QHBoxLayout(self)
@@ -86,6 +108,21 @@ class ManagePupils(Page):
         vboxl.addWidget(self.pupil_data_table)
 
         # Various "controls" in the panel on the right
+#TODO: Get the entries from config
+        occasion_selector = KeySelector(
+            (
+                ("1", "1. Halbjahr"),
+                ("2", "2. Halbjahr"),
+                ("A", "Abitur"),
+                ("K", "Kursnoten"),
+                ("E", "Einzelzeugnis"),
+            ),
+            self.changed_occasion
+        )
+        vboxr.addWidget(occasion_selector)
+#TODO: later? .... or use <selected> method
+        occasion_selector.trigger()
+
         pb1 = QPushButton("Just testing")
         vboxr.addWidget(pb1)
         pb2 = QPushButton("Another button")
@@ -94,22 +131,26 @@ class ManagePupils(Page):
         for i in range(15):
             vboxr.addWidget(QPushButton(f"Button {i}"))
 
-        def is_modified(self):
-            """Return <True> if there are unsaved changes.
-            """
+    def modified(self):
+        """Return <True> if there are unsaved changes.
+        """
 #TODO: test whether there really are any changes?
-            return True
+        return True
+
+    def changed_occasion(self, new_occasion: str) -> bool:
+        print("NEW OCCASION:", new_occasion)
+        return True # accept
 
 
 if __name__ == "__main__":
     from ui.ui_base import run
 
-    widget = ManagePupils()
-    widget.class_label.setText("<b>Klasse 02G</b>")
-    widget.modified_label.setText("zuletzt geändert: 2021-10-05_20:14")
+    widget = ManageGrades()
+    widget.grade_manager.class_label.setText("<b>Klasse 02G</b>")
+    widget.grade_manager.modified_label.setText("zuletzt geändert: 2021-10-05_20:14")
 # Actually this can be in the main code, using the fixed (translated)
 # column headers ... need to set up the data area.
-    widget.pupil_data_table.setup(colheaders = ["PID", "Name"],
+    widget.grade_manager.pupil_data_table.setup(colheaders = ["PID", "Name"],
             undo_redo = True, paste = True,
             on_changed = None)
     widget.resize(600, 400)

@@ -1,7 +1,7 @@
 """
 timetable/activities.py
 
-Last updated:  2022-08-03
+Last updated:  2022-08-27
 
 Collect information on "activities" – from the BLOCKS and COURSES db tables.
 
@@ -174,7 +174,12 @@ class Courses:
             try:
                 coursedata = course2data[course]
             except KeyError:
-                # The error should have been reported earlier ...
+                #TODO: The error should have been reported earlier ...
+                REPORT(
+                    "ERROR",
+                    f"[Courses: repeat error?"
+                    f" Unknown course in BLOCKS table: {course}]"
+                )
                 continue
             try:
                 payment_data = read_payment(payment)
@@ -270,3 +275,36 @@ class Courses:
                     )
                 else:
                     paycourses.add(course)
+
+
+def filter_roomlists(roomlists: list[list[str]]) -> list[list[str]]:
+    """Simplify room lists, check for room conflicts. It is possible
+    that room allocations which must remain open (containing '+') are
+    not resolved during initial placement, but may be done manually later.
+    """
+    # Collect single room "choices" and remove redundant entries
+    singles = set()
+    extra = []
+    while True:
+        singles1 = set()
+        roomlists1 = []
+        for rl in roomlists:
+            rl1 = [r for r in rl if r not in singles]
+            if rl1:
+                if len(rl1) == 1:
+                    if rl1[0] == '+':
+                        extra = [['+']]
+                    else:
+                        singles1.add(rl1[0])
+                else:
+                    # This could be a duplicate, but as the initial
+                    # entry (before simplification) was different, this
+                    # is accepted as a separate room request
+                    roomlists1.append(rl1)
+            else:
+                raise ValueError
+        if singles1:
+            singles.update(singles1)
+            roomlists = roomlists1
+            continue
+        return [[s] for s in sorted(singles)] + extra + roomlists1

@@ -1,5 +1,5 @@
 """
-core/classes.py - last updated 2022-08-04
+core/classes.py - last updated 2022-08-18
 
 Manage class data.
 
@@ -282,6 +282,10 @@ def eliminate_subsets(groups, group_map):
 
 
 def independent_divisions(idivs, group_sets):
+    """Identify the independent division(s) in which the input groups
+    lie. Also find start index and fractional size for a graphical
+    representation based on which subgroups are in the input.
+    """
     gset = set()
     for g, gs in group_sets:
         gset.update(gs)
@@ -291,17 +295,19 @@ def independent_divisions(idivs, group_sets):
         dlist = []
         d0 = -1
         i = -1
+        grest = set()
         for g in d:
             i += 1
             try:
                 gset.remove(g)
             except KeyError:
+                grest.add(g)
                 continue
             dlist.append(g)
             if d0 < 0:
                 d0 = i  # start index
         if dlist:
-            divs.append((len(dlist), d0, len(d)))
+            divs.append((len(dlist), d0, len(d), grest))
     if gset:
         raise Bug(f"Groups {gset} not in any of the independent divisions")
     return divs, gset0
@@ -310,6 +316,7 @@ def independent_divisions(idivs, group_sets):
 class ChipData(NamedTuple):
     groups: list[str]       # should be ordered
     basic_groups: set[str]
+    rest_groups: set[str]   # the remaining groups in the division
     offset: int             # lowest possible start index
     num: int                # number of "parts"
     den: int                # total number of "parts"
@@ -318,7 +325,7 @@ class ChipData(NamedTuple):
 def class_divisions(groups, group_map, idivs):
     """Determine the size – as a fraction of the whole class – and an
     offset, for the given <groups>.
-    Trim the groups a bit first, removing subsets, so that the least of
+    Trim the groups a bit first, removing subsets, so that the list of
     groups doesn't get too long.
     <groups> is a list or other iterable providing the initial groups.
     <group_map> is the "GROUP_MAP" value of the class's group info.
@@ -331,19 +338,19 @@ def class_divisions(groups, group_map, idivs):
     """
     if '*' not in groups:
         group_sets = eliminate_subsets(groups, group_map)
-        # print("\n§§§ ->", group_sets)
+        # print("\n&&&&&&1 ->", group_sets)
         group_divs, group_set = independent_divisions(idivs, group_sets)
-        # print("\n%%%", group_divs, "-----", group_set)
+        # print("\n&&&&&&2", idivs, "||", group_divs, "-----", group_set)
         if not group_divs:
             raise Bug(f"No groups ... {groups}")
         if len(group_divs) == 1:
-            num, offset, den = group_divs[0]
+            num, offset, den, restset = group_divs[0]
             glist = [gs[0] for gs in group_sets]
             # print(f"GROUPS: {glist}, MIN-OFFSET: {offset} @ {num}/{den}")
-            return ChipData(glist, group_set, offset, num, den)
+            return ChipData(glist, group_set, restset, offset, num, den)
     # print("  ... whole class")
 #TODO?
-    return ChipData(['*'], {'*'}, 0, 1, 1)
+    return ChipData(['*'], {'*'}, set(), 0, 1, 1)
 
 
 def atomic_maps(atoms, groups):
@@ -467,6 +474,7 @@ if __name__ == "__main__":
     print("    GROUPS:", chipdata.groups)
     print("    SET:", chipdata.basic_groups)
     print(f"    {chipdata.num}/{chipdata.den} @ {chipdata.offset}")
+    print("    REST:", chipdata.rest_groups)
 
     # quit(0)
 

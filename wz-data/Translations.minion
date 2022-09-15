@@ -29,6 +29,28 @@ core.classes: {
     INDEPENDENT_GROUPS_MISMATCH: "Untergruppe {group} fehlt"
 }
 
+core.pupils: {
+    FILTER_ERROR: "Schülerdaten-Fehler: {msg}"
+    INVALID_CLASS: "Importierte Schülerdaten: Ungültige Klasse ({klass}) in Zeile\n  ... {row}\n ... in Datei\n {path}"
+    BAD_NAME:       "Ungültiger Schülername (Vornamen / Nachname): {name}"
+}
+
+core.report_courses: {
+    UNKNOWN_GROUP: "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
+    PUPIL_HAS_MULTIPLE_SID: "In Klasse {klass}, {pupil} hat mehrere Zeugniseinträge im Fach {subject}"
+}
+
+grades.gradetable: {
+    TITLE:          "Notentabelle, erstellt {time}"
+    AMBIGUOUS_TEMPLATE_GROUP: "Für Gruppe {group} ist keine eindeutige Zuordnung einer Vorlage für die Noteneingabetabelle möglich"
+    NO_TEMPLATE_GROUP: "Für Gruppe {group} ist keine Zuordnung einer Vorlage für die Noteneingabetabelle möglich"
+    TABLE_CLASS_MISMATCH: "Falsche Klasse/Gruppe in Notentabelle:\n  erwartet '{group}' ... Datei:\n    {filepath}"
+    TABLE_TERM_MISMATCH: "Falscher 'Anlass' in Notentabelle:\n  erwartet '{term}' ... Datei:\n    {filepath}"
+    TABLE_YEAR_MISMATCH: "Falsches Schuljahr in Notentabelle:\n  erwartet '{year}' ... Datei:\n    {filepath}"
+    GRADE_CONFLICT: "Widersprüchliche Noten für Schüler {pid} im Fach {sid}\n  {path1}\n  {path2}"
+    INVALID_GRADE: "In {filepath}:\n  Die Note für {pupil} im Fach {sid} ist ungültig: {grade}"
+}
+
 ui.ui_base: {
     # Messages
     UNKNOWN_KEY:    "Ungültige Selektion: '{key}'"
@@ -189,8 +211,6 @@ ui.modules.course_editor: {
     SUBJECT:        Fach
     TEACHER:        Lehrkraft
     REPORT:         Zeugnis
-    GRADE:          Note
-    COMPOSITE:      Sammelfach
 
     # Lesson table
     LESSONS:        "Unterricht usw."
@@ -232,8 +252,19 @@ ui.modules.course_editor: {
     PARALLEL_TEACHERS: "mit Lehrkräften"
 }
 
-ui.modules.timetable: {
+ui.modules.grades_manager: {
+    # Labels
+    MODULE_NAME:    "Noten"
+    MODULE_TITLE:   "Noten verwalten"
+}
+
+ui.modules.timetable_editor: {
+    # Messages
     BLOCK_ROOM_CONFLICT: "Räume nicht unabhängig für Kurs(e) mit Kennzeichen {tag}, Klasse {klass}, Fach {sid}: {rooms}"
+
+    # Labels
+    MODULE_NAME:    "Stundenplan"
+    MODULE_TITLE:   "Stundenplan bearbeiten"
 }
 
 timetable.activities: {

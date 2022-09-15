@@ -1,7 +1,7 @@
 """
 ui/modules/course_editor.py
 
-Last updated:  2022-08-05
+Last updated:  2022-08-22
 
 Edit course and blocks+lessons data.
 
@@ -58,6 +58,7 @@ from core.db_access import (
 from core.teachers import Teachers
 from core.classes import Classes
 from core.basic_data import (
+    clear_cache,
     get_payment_weights,
     get_subjects,
     sublessons,
@@ -166,10 +167,10 @@ BLOCKCOLS_SHOW = ("LESSON_TAG", "PAYMENT", "NOTES")
 
 
 def init():
-    MAIN_WIDGET.add_tab(Courses())
+    MAIN_WIDGET.add_tab(CourseEditorPage())
 
 
-class Courses(Page):
+class CourseEditorPage(Page):
     name = T["MODULE_NAME"]
     title = T["MODULE_TITLE"]
 
@@ -181,7 +182,10 @@ class Courses(Page):
         hbox.addWidget(self.course_editor)
 
     def enter(self):
+#TODO?
         open_database()
+        clear_cache()
+
         self.course_editor.init_data()
 
 
@@ -1014,7 +1018,7 @@ class CourseEditorForm(QDialog):
 if __name__ == "__main__":
     from ui.ui_base import run
 
-    widget = Courses()
+    widget = CourseEditorPage()
     widget.enter()
     widget.resize(1000, 550)
     run(widget)

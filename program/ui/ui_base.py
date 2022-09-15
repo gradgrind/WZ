@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-07-15
+Last updated:  2022-08-22
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -55,7 +55,7 @@ __locale = locale.setlocale(locale.LC_ALL, "")
 print("LOCALE:", __locale)
 
 #print("STYLES:", QStyleFactory.keys())
-#QApplication.setStyle('Fusion')
+QApplication.setStyle('Fusion')
 APP = QApplication(sys.argv)
 
 qlocale = QLocale(__locale)
@@ -707,8 +707,9 @@ class FormComboBox(QComboBox):
             self.text0 = self.keylist[0]
             self.setCurrentIndex(0)
 
+#TODO: This can get called with i == -1 (on page reentry), is that OK?
     def change_index(self, i):
-        if self.callback_enabled:
+        if self.callback_enabled and i >= 0:
             self.__modified(self.__field, self.keylist[i] != self.text0)
 
 

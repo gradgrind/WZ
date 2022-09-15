@@ -1,7 +1,7 @@
 """
 ui/editable.py
 
-Last updated:  2022-04-21
+Last updated:  2022-08-21
 
 An editable table widget using QTableWidget as base class. Only text
 cells are handled.
@@ -355,7 +355,7 @@ class EdiTableWidget(QTableWidget):
         self.select_all = self.new_action(
             text=_SELECT_ALL,
             tooltip=_TTSELECT_ALL,
-            shortcut=QKeySequence(Qt.CTRL + Qt.Key_A),
+            shortcut=QKeySequence(Qt.CTRL | Qt.Key_A),
             function=self.selectAll,
         )
 
@@ -363,7 +363,7 @@ class EdiTableWidget(QTableWidget):
         self.unselect = self.new_action(
             text=_UNSELECT,
             tooltip=_TTUNSELECT,
-            shortcut=QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_A),
+            shortcut=QKeySequence(Qt.CTRL | Qt.SHIFT | Qt.Key_A),
             function=self.clearSelection,
         )
 
@@ -373,7 +373,7 @@ class EdiTableWidget(QTableWidget):
         self.copyCellsAction = self.new_action(
             text=_COPYSELECTION,
             tooltip=_TTCOPYSELECTION,
-            shortcut=QKeySequence(Qt.CTRL + Qt.Key_C),
+            shortcut=QKeySequence(Qt.CTRL | Qt.Key_C),
             function=self.copyCellsToClipboard,
         )
 
@@ -381,7 +381,7 @@ class EdiTableWidget(QTableWidget):
         self.pasteCellsAction = self.new_action(
             text=_PASTE,
             tooltip=_TTPASTE,
-            shortcut=QKeySequence(Qt.CTRL + Qt.Key_V),
+            shortcut=QKeySequence(Qt.CTRL | Qt.Key_V),
             function=self.pasteCellFromClipboard,
         )
 
@@ -389,7 +389,7 @@ class EdiTableWidget(QTableWidget):
         self.cutCellsAction = self.new_action(
             text=_CUTSELECTION,
             tooltip=_TTCUTSELECTION,
-            shortcut=QKeySequence(Qt.CTRL + Qt.Key_X),
+            shortcut=QKeySequence(Qt.CTRL | Qt.Key_X),
             function=self.cutCellsToClipboard,
         )
 
@@ -399,7 +399,7 @@ class EdiTableWidget(QTableWidget):
         self.insertRowAction = self.new_action(
             text=_INSERTROW,
             tooltip=_TTINSERTROW,
-            shortcut=QKeySequence(Qt.CTRL + Qt.Key_N),
+            shortcut=QKeySequence(Qt.CTRL | Qt.Key_N),
             function=self.insert_row,
         )
 
@@ -407,7 +407,7 @@ class EdiTableWidget(QTableWidget):
         self.deleteRowsAction = self.new_action(
             text=_DELETEROWS,
             tooltip=_TTDELETEROWS,
-            shortcut=QKeySequence(Qt.CTRL + Qt.Key_U),
+            shortcut=QKeySequence(Qt.CTRL | Qt.Key_U),
             function=self.delete_rows,
         )
 
@@ -417,7 +417,7 @@ class EdiTableWidget(QTableWidget):
         self.insertColumnAction = self.new_action(
             text=_INSERTCOLUMN,
             tooltip=_TTINSERTCOLUMN,
-            shortcut=QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_N),
+            shortcut=QKeySequence(Qt.CTRL | Qt.SHIFT | Qt.Key_N),
             function=self.insert_column,
         )
 
@@ -425,7 +425,7 @@ class EdiTableWidget(QTableWidget):
         self.deleteColumnsAction = self.new_action(
             text=_DELETECOLUMNS,
             tooltip=_TTDELETECOLUMNS,
-            shortcut=QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_U),
+            shortcut=QKeySequence(Qt.CTRL | Qt.SHIFT | Qt.Key_U),
             function=self.delete_columns,
         )
 
@@ -436,7 +436,7 @@ class EdiTableWidget(QTableWidget):
         self.undoAction = self.new_action(
             text=_UNDO,
             tooltip=_TTUNDO,
-            shortcut=QKeySequence(Qt.CTRL + Qt.Key_Z),
+            shortcut=QKeySequence(Qt.CTRL | Qt.Key_Z),
             function=self.undoredo.undo,
         )
 
@@ -444,7 +444,7 @@ class EdiTableWidget(QTableWidget):
         self.redoAction = self.new_action(
             text=_REDO,
             tooltip=_TTREDO,
-            shortcut=QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_Z),
+            shortcut=QKeySequence(Qt.CTRL | Qt.SHIFT | Qt.Key_Z),
             function=self.undoredo.redo,
         )
 

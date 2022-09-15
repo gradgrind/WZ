@@ -1,10 +1,10 @@
 """
-local/local_pupils.py - last updated 2021-12-23
+local/local_pupils.py - last updated 2022-09-03
 
 Manage pupil data – school/location specific code.
 
 =+LICENCE=================================
-Copyright 2021 Michael Towers
+Copyright 2022 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -20,11 +20,16 @@ Copyright 2021 Michael Towers
 =-LICENCE=================================
 """
 
+T = TRANSLATIONS("core.pupils")
+
+### +++++
+
 import re
 
 from core.base import Dates
-from tables.spreadsheet import read_DataTable, filter_DataTable
+from tables.spreadsheet import read_DataTable, filter_DataTable, TableError
 
+### -----
 
 def next_class(pdata):
     """Adjust the pupil data to the next class.
@@ -47,7 +52,7 @@ def next_class(pdata):
     # Handle entry into "Qualifikationsphase"
     if k_new == 12 and "G" in pdata["GROUPS"].split():
         try:
-            pdata["QUALI_D"] = CALENDAR["~NEXT_FIRST_DAY"]
+            pdata["DATE_QPHASE"] = CALENDAR["~NEXT_FIRST_DAY"]
         except KeyError:
             pass
     return klass
@@ -148,32 +153,35 @@ ASCII_SUB = {
 }
 
 
-def read_pupils_source(filepath, pupildata_class):
+def read_pupils_source(filepath):
     """Read a spreadsheet file containing pupil data from an external
     "master" database.
     """
-    config = MINION(DATAPATH("CONFIG/PUPIL_DATA"))
-    info_fields = []
-    for f in config["INFO_FIELDS"]:
-        if f["NAME"] == "CLASS":
-            config["TABLE_FIELDS"].append(f)
-        else:
-            info_fields.append(f)
-    config["INFO_FIELDS"] = info_fields
+    field_list = [
+        {
+            'NAME': field[0],
+            'DISPLAY_NAME': field[1],
+            'REQUIRED': len(field) > 2,
+        }
+        for field in CONFIG["PUPILS_FIELDS"] + CONFIG["PUPILS_EXTRA_FIELDS"]
+    ]
+    fields = {
+        'INFO_FIELDS': [],
+        'TABLE_FIELDS': field_list}
     data = read_DataTable(filepath)
     try:
-        data = filter_DataTable(data, config, extend=False)
+        data = filter_DataTable(data, fields, extend=False)
     except TableError as e:
-        raise PupilError(
-            _FILTER_ERROR.format(msg=f"{e} \n ... in\n {filepath}")
+        raise ValueError(
+            T["FILTER_ERROR"].format(msg=f"{e} \n ... in\n {filepath}")
         )
     # Change class names, adjust pupil names ("tussenvoegsel")
-    year = data["__INFO__"]["SCHOOLYEAR"]
-    day1 = Dates.day1(year)
-    pmap = {}
+    day1 = CALENDAR["FIRST_DAY"]
+    pupils = []
     for row in data["__ROWS__"]:
-        if row["EXIT_D"] and row["EXIT_D"] < day1:
-            continue
+        if (x:=row.get("DAY_EXIT")):
+            if x < day1:
+                continue
         klass = row["CLASS"]
         try:
             if klass[-1] == "K":
@@ -181,35 +189,58 @@ def read_pupils_source(filepath, pupildata_class):
             elif klass != "13":
                 klass = f"{int(klass):02}G"
         except ValueError:
-            raise PupilError(
-                _INVALID_CLASS.format(klass=k, row=repr(row), path=filepath)
+            raise ValueError(
+                T["INVALID_CLASS"].format(
+                    klass=klass,
+                    row=repr(row),
+                    path=filepath
+                )
             )
         (
             row["FIRSTNAMES"],
             row["LASTNAME"],
             row["FIRSTNAME"],
+            sort_name
         ) = tussenvoegsel_filter(
             row["FIRSTNAMES"], row["LASTNAME"], row["FIRSTNAME"]
         )
-        pdata = pupildata_class(row, klass=klass)
-        pmap[row["PID"]] = pdata
-    return year, pmap
+        if not row.get("SORT_NAME"):
+            row["SORT_NAME"] = sort_name
+        pupils.append(row)
+    return pupils
 
 
 def tussenvoegsel_filter(firstnames, lastname, firstname):
-    """Given raw firstnames, lastname and short firstname,
-    ensure that any "tussenvoegsel" is at the beginning of the lastname
-    (and not at the end of the first name) and that spaces are normalized.
-    If there is a "tussenvoegsel", it will be separated from the rest of
-    the lastname by '|' (without spaces). This makes it easier for a
-    sorting algorithm to remove the prefix to generate a sorting key.
+    """In Dutch there is a word for those little last-name prefixes
+    like "van", "von" and "de": "tussenvoegsel". For sorting purposes
+    these can be a bit annoying because they should often be ignored,
+    e.g. "Vincent van Gogh" would be sorted primarily under "G".
+
+    This function accepts names which contain a "tussenvoegsel" as
+    a suffix to the first names or as a prefix to the last-name (the
+    normal case). Also a "sorting-name" is generated containing
+    only ASCII characters and no spaces.
+
+    Given raw firstnames, lastname and short firstname, ensure that any
+    "tussenvoegsel" is at the beginning of the lastname (and not at the
+    end of the first name) and that spaces are normalized.
+    Return a tuple: (
+            first names without "tussenvoegsel",
+            surname, potentially with "tussenvoegsel",
+            first name,
+            sorting name
+        ).
     """
     firstnames1, tv, lastname1 = tvSplit(firstnames, lastname)
     firstname1 = tvSplit(firstname, "X")[0]
     if tv:
-        lastname1 = tv + " |" + lastname1
-    return (firstnames1, lastname1, firstname1)
-
+        lastname1 = tv + lastname1
+    return (
+        firstnames1,
+        lastname1,
+        firstname1,
+        asciify(f"{lastname1}_{firstname1}")
+    )
 
 def tvSplit(firstnames, lastname):
     """Split off a "tussenvoegsel" from the end of the first-names,
@@ -232,10 +263,14 @@ def tvSplit(firstnames, lastname):
         if not len(tv):
             break
     if not fn:
-        raise ValueError(_BADNAME.format(name=f"{firstnames} / {lastname}"))
+        raise ValueError(
+            T["BAD_NAME"].format(name=f"{firstnames} / {lastname}")
+        )
     ln = lastname.split()
     while ln[0].islower():
         if len(ln) == 1:
             break
         tv.append(ln.pop(0))
-    return (" ".join(fn), " ".join(tv) or None, " ".join(ln))
+    # Add space to <tv> for prefixing to <lastname>
+    tv = (" ".join(tv) + " ") if tv else None
+    return (" ".join(fn), tv, " ".join(ln))
