@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-09-13
+Last updated:  2022-09-17
 
 Front-end for managing grade reports.
 
@@ -43,15 +43,26 @@ T = TRANSLATIONS("ui.modules.grades_manager")
 
 ### +++++
 
+from core.db_access import open_database
+from core.base import class_group_split
+from core.basic_data import check_group
+from core.pupils import pupils_in_group, pupil_name
+from grades.gradetable import get_grade_entry_tables
+
 #???
 from ui.ui_base import (
     QWidget,
     QHBoxLayout,
     QVBoxLayout,
+    QFormLayout,
     QLabel,
-    QPushButton,
+    QListWidget,
+    QAbstractItemView,
+#    QPushButton,
+    QComboBox,
     KeySelector,
-    run
+    HLine,
+    run,
 )
 from ui.editable import EdiTableWidget
 
@@ -78,7 +89,7 @@ class ManageGrades(Page):
 
     def enter(self):
         open_database()
-#        self.grade_manager.init_data()
+        self.grade_manager.init_data()
 
     def is_modified(self):
         return self.grade_manager.modified()
@@ -108,28 +119,38 @@ class GradeManager(QWidget):
         vboxl.addWidget(self.pupil_data_table)
 
         # Various "controls" in the panel on the right
-#TODO: Get the entries from config
-        occasion_selector = KeySelector(
-            (
-                ("1", "1. Halbjahr"),
-                ("2", "2. Halbjahr"),
-                ("A", "Abitur"),
-                ("K", "Kursnoten"),
-                ("E", "Einzelzeugnis"),
-            ),
-            self.changed_occasion
-        )
-        vboxr.addWidget(occasion_selector)
-#TODO: later? .... or use <selected> method
-        occasion_selector.trigger()
+        formbox = QFormLayout()
+        vboxr.addLayout(formbox)
+        self.occasion_selector = QComboBox()
+        self.occasion_selector.currentTextChanged.connect(self.changed_occasion)
+        formbox.addRow(T["Occasion"], self.occasion_selector)
+        self.class_selector = QComboBox()
+        self.class_selector.currentTextChanged.connect(self.changed_class)
+        formbox.addRow(T["Class_Group"], self.class_selector)
 
-        pb1 = QPushButton("Just testing")
-        vboxr.addWidget(pb1)
-        pb2 = QPushButton("Another button")
-        vboxr.addWidget(pb2)
-        vboxr.addStretch(1)
-        for i in range(15):
-            vboxr.addWidget(QPushButton(f"Button {i}"))
+        vboxr.addWidget(HLine())
+        vboxr.addWidget(QLabel(T["Pupils"]))
+        self.pupil_list = QListWidget()
+        # self.pupil_list.setMinimumWidth(30)
+        self.pupil_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        vboxr.addWidget(self.pupil_list)
+
+    def init_data(self):
+        self.__changes_enabled = False
+        # Set up "occasions" here, from config
+        self.occasion_selector.clear()
+        entry_tables_info = get_grade_entry_tables()
+        oinfo = entry_tables_info["OCCASIONS"]
+        self.occasion2data = {}
+        for o, odata in oinfo:
+            self.occasion2data[o] = odata
+            self.occasion_selector.addItem(o)
+        # Enable callbacks
+        self.__changes_enabled = True
+        self.class_group = None
+        self.changed_occasion(self.occasion_selector.currentText())
 
     def modified(self):
         """Return <True> if there are unsaved changes.
@@ -137,10 +158,61 @@ class GradeManager(QWidget):
 #TODO: test whether there really are any changes?
         return True
 
-    def changed_occasion(self, new_occasion: str) -> bool:
+    def changed_occasion(self, new_occasion: str):
+        if not self.__changes_enabled:
+            return
         print("NEW OCCASION:", new_occasion)
-        return True # accept
+        # A change of occasion should preserve the class-group, if this
+        # class-group is also available for the new occasion.
+        self.occasion = new_occasion
+        self.occasion_data = self.occasion2data[self.occasion]
+        groups = []
+        for g in self.occasion_data:
+            if g[0] == '_':
+                continue
+            klass, group = class_group_split(g)
+            if not check_group(klass, group):
+                REPORT(
+                    "ERROR",
+                    T["BAD_GROUP_IN_CONFIG"].format(
+                        group=g, occasion=new_occasion
+                    )
+                )
+                continue
+            groups.append(g)
+        groups.sort(reverse=True)
+        self.__changes_enabled = False
+        self.class_selector.clear()
+        self.class_selector.addItems(groups)
+        self.class_selector.setCurrentText(self.class_group) # no exception
+        # Enable callbacks
+        self.__changes_enabled = True
+        self.changed_class(self.class_selector.currentText())
 
+    def changed_class(self, new_class_group):
+        if not self.__changes_enabled:
+            return
+        print("NEW GROUP:", new_class_group)
+#        grade_table = self.get_grade_table(occasion, class_group)
+
+        self.class_group = new_class_group
+        self.group_data = self.occasion_data[new_class_group]
+
+        self.pupil_data_list = pupils_in_group(new_class_group, date=None)
+        self.pupil_list.clear()
+        self.pupil_list.addItems([pupil_name(p) for p in self.pupil_data_list])
+
+#TODO: If I am working from an old grade table, the odd pupil may have
+# changed class – I should probably get the pupil list from the grade
+# table. If I want to update the pupil list, there could be an update
+# button to do this?
+
+
+# What about a configuration item which allow the INITIAL level value
+# (Bewertungsmaßstab) to be set according to membership of particular
+# groups?
+
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
     from ui.ui_base import run
@@ -153,6 +225,9 @@ if __name__ == "__main__":
     widget.grade_manager.pupil_data_table.setup(colheaders = ["PID", "Name"],
             undo_redo = True, paste = True,
             on_changed = None)
+
+    widget.enter()
+
     widget.resize(600, 400)
     run(widget)
 

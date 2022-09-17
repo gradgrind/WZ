@@ -41,9 +41,11 @@ core.report_courses: {
 }
 
 grades.gradetable: {
+    
     TITLE:          "Notentabelle, erstellt {time}"
-    AMBIGUOUS_TEMPLATE_GROUP: "Für Gruppe {group} ist keine eindeutige Zuordnung einer Vorlage für die Noteneingabetabelle möglich"
-    NO_TEMPLATE_GROUP: "Für Gruppe {group} ist keine Zuordnung einer Vorlage für die Noteneingabetabelle möglich"
+    
+    # Messages
+    INVALID_OCCASION_GROUP: "Anlass {occasion}: für Klasse/Gruppe {group} gibt es keine Konfiguration" 
     TABLE_CLASS_MISMATCH: "Falsche Klasse/Gruppe in Notentabelle:\n  erwartet '{group}' ... Datei:\n    {filepath}"
     TABLE_TERM_MISMATCH: "Falscher 'Anlass' in Notentabelle:\n  erwartet '{term}' ... Datei:\n    {filepath}"
     TABLE_YEAR_MISMATCH: "Falsches Schuljahr in Notentabelle:\n  erwartet '{year}' ... Datei:\n    {filepath}"
@@ -256,6 +258,12 @@ ui.modules.grades_manager: {
     # Labels
     MODULE_NAME:    "Noten"
     MODULE_TITLE:   "Noten verwalten"
+    Pupils:         "Schüler(innen)"
+    Class_Group:    "Klasse/Gruppe"
+    Occasion:       "Anlass"
+
+    # Messages
+    BAD_GROUP_IN_CONFIG: "Konfiguration GRADE_ENTRY_TABLES: Ungültige Klasse/Gruppe ({group}) für Anlass „{occasion}“"
 }
 
 ui.modules.timetable_editor: {

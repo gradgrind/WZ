@@ -126,8 +126,8 @@ COURSE_COLS = [
         "SUBJECT",
         "TEACHER",
         "REPORT",
-        "GRADE",
-        "COMPOSITE",
+#        "GRADE",
+#        "COMPOSITE",
     )
 ]
 # SUBJECT, CLASS and TEACHER are foreign keys with:

@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-09-11
+Last updated:  2022-09-17
 
 Access grade data, read and build grade tables.
 
@@ -85,7 +85,7 @@ T = TRANSLATIONS("grades.gradetable")
 
 #? ...
 from typing import Optional, Any
-import datetime, fnmatch
+import datetime
 
 #?
 from core.base import class_group_split, Dates
@@ -145,12 +145,6 @@ def get_grade_entry_tables():
     except KeyError:
         pass
     data = MINION(DATAPATH("CONFIG/GRADE_ENTRY_TABLES"))
-    group_data = []
-    data["GROUP_DATA"] = group_data
-    for key in list(data):
-        if key.startswith("__"):
-            val = data.pop(key)
-            group_data.append((val.pop("GROUPS"), val))
     SHARED_DATA["GRADE_ENTRY_TABLES"] = data
     return data
 
@@ -158,45 +152,23 @@ def get_grade_entry_tables():
 def get_group_data(occasion: str, class_group: str):
     """Get information pertaining to the grade table for the given
     group and "occasion".
+    Return a tuple: (occasion name, group data)
     """
     entry_tables_info = get_grade_entry_tables()
-    group_data_count = 0
-    group_data = None
-    for glist, gdata in entry_tables_info["GROUP_DATA"]:
-        # print(" ???", glist, gdata)
-        group_data_exact = False
-        for g in glist:
-            if g == class_group:
-                # Exact match – this has priority
-                group_data_exact = True
-                break
-            if fnmatch.fnmatchcase(class_group, g):
-                group_data_count += 1
-                break
-        else:
-            # No match, seek further
-            continue
-        # Check <occasion>
-        for o in gdata["OCCASION"]:
-            if fnmatch.fnmatchcase(occasion, o):
-                break
-        else:
-            # No match, seek further
-            continue
-        # Matched group and occasion
-        group_data = gdata
-        if group_data_exact:
+    oinfo = entry_tables_info["OCCASIONS"]
+    for o, odata in oinfo:
+        if o == occasion:
             break
     else:
-        if group_data_count != 1:
-            if group_data_count == 0:
-                raise GradeTableError(
-                    T["NO_TEMPLATE_GROUP"].format(group=class_group)
-                )
-            raise GradeTableError(
-                T["AMBIGUOUS_TEMPLATE_GROUP"].format(group=class_group)
+        raise Bug(f'Invalid grade "occasion": {occasion}')
+    try:
+        return odata[class_group]
+    except KeyError:
+        raise GradeTableError(
+            T["INVALID_OCCASION_GROUP"].format(
+                occasion=o, group=class_group
             )
-    return group_data
+        )
 
 
 def make_grade_table(
@@ -216,7 +188,7 @@ def make_grade_table(
     group_data = get_group_data(occasion, class_group)
 
     ### Get template file
-    template_path = RESOURCEPATH(group_data["TEMPLATE"])
+    template_path = RESOURCEPATH(group_data["GRADE_ENTRY"])
     table = KlassMatrix(template_path)
 
     ### Set title line
@@ -638,10 +610,7 @@ if __name__ == "__main__":
     for p, pdata in gtable.items():
         print("\n ***", p, pdata)
 
-    print("\n *************************************************\n")
-
-    test = MINION(DATAPATH("CONFIG/GRADE_ENTRY_TABLES"))
-    print("REPORTS:\n", test["REPORTS"])
+#    print("\n *************************************************\n")
 
     quit(0)
 
