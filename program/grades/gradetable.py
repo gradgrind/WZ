@@ -171,6 +171,52 @@ def get_group_data(occasion: str, class_group: str):
         )
 
 
+#TODO: Construct whatever is needed for a full grade table.
+# The parameters should come from the class/group in the record (if there
+# is one). However, as the search is done based on a class/group, it
+# must be the same one as in the search criterium. The pupils in this
+# class/group could be different from the current members.
+
+# Use:
+# REPORT_TYPE
+# ?LEVEL: [Maßstab [Gym RS HS]]
+# ?Q12:   [Versetzung [X ""]]
+# COMPOSITE: [Ku]
+# AVERAGE: [(D  "Φ alle Fächer") (Ddem  "Φ De-En-Ma")]
+# MULTIPLE: ["Klausur 1" "Klausur 2" "Klausur 3"]
+#
+# Consider also:
+# __INDIVIDUAL__: True
+
+'''
+class ComboDelegate(QItemDelegate):
+    """
+    A delegate to add QComboBox in every cell of the given column
+    """
+
+    def __init__(self, parent):
+        super(ComboDelegate, self).__init__(parent)
+        self.parent = parent
+
+    def createEditor(self, parent, option, index):
+        combobox = QComboBox(parent)
+        version_list = []
+        for item in index.data():
+            if item not in version_list:
+                version_list.append(item)
+
+        combobox.addItems(version_list)
+        combobox.currentTextChanged.connect(lambda value: self.currentIndexChanged(index, value))
+        return combobox
+
+    def setEditorData(self, editor, index):
+        value = index.data()
+        if value:
+            maxval = len(value)
+            editor.setCurrentIndex(maxval - 1)
+'''
+
+
 def make_grade_table(
     occasion: str,
     class_group: str,
@@ -382,6 +428,42 @@ def collate_grade_tables(
                         smap0[s] = g
                         fmap[(pid, s)] = filepath
     return grades
+
+
+#?
+def list_grade_tables(occasion, class_group):
+    fields, rows = db_read_full_table(
+        "GRADE_REPORTS",
+        sort_field="DATE_ISSUE",
+        OCCASION=occasion,
+        CLASS_GROUP=class_group
+    )
+    items = []
+    for r in rows:
+        record = {}
+        items.append(record)
+        i = 0
+        for f in fields:
+            record[f] = r[i]
+            i += i
+    return items
+
+
+# fields?:
+# OCCASION, CLASS_GROUP, MULTIPLE, PID, GRADES, EXTRA, DATE_ISSUE
+
+
+#TODO
+def get_grade_table(occasion, class_group, year=None):
+# identifier instead of class_group? pupil?
+# date?
+# A cross-referencing with occasion might also be useful ...
+# Would a db table be helpful?
+    pass
+    if year and year != SCHOOLYEAR:
+        raise Bug("TODO")
+
+
 
 
 #####################################
