@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-09-17
+Last updated:  2022-09-21
 
 Access grade data, read and build grade tables.
 
@@ -92,7 +92,7 @@ from core.base import class_group_split, Dates
 from core.basic_data import get_classes, get_subjects_with_sorting, SHARED_DATA
 from core.classes import atomic_maps
 from core.pupils import pupils_in_group, pupil_name
-from core.report_courses import get_class_subjects, get_pupil_grade_matrix
+from core.report_courses import get_pupil_grade_matrix
 from tables.spreadsheet import read_DataTable
 from tables.matrix import KlassMatrix
 
@@ -152,7 +152,6 @@ def get_grade_entry_tables():
 def get_group_data(occasion: str, class_group: str):
     """Get information pertaining to the grade table for the given
     group and "occasion".
-    Return a tuple: (occasion name, group data)
     """
     entry_tables_info = get_grade_entry_tables()
     oinfo = entry_tables_info["OCCASIONS"]
@@ -174,7 +173,7 @@ def get_group_data(occasion: str, class_group: str):
 #TODO: Construct whatever is needed for a full grade table.
 # The parameters should come from the class/group in the record (if there
 # is one). However, as the search is done based on a class/group, it
-# must be the same one as in the search criterium. The pupils in this
+# must be the same one as in the search criterion. The pupils in this
 # class/group could be different from the current members.
 
 # Use:
@@ -188,7 +187,36 @@ def get_group_data(occasion: str, class_group: str):
 # Consider also:
 # __INDIVIDUAL__: True
 
+# Some of these entries are "expected", with built-in handlers.
+# Those starting with '?' are choices (from the given value list), but
+# they are not "expected".
+# COMPOSITE refers to a subject in the COURSES table (without teachers
+# and lessons). It generates an average of the grades in those subjects
+# (sids) which include the sid in their REPORT field. These "component"
+# subjects will need special handling when building the reports (to
+# ensure that they don't get "counted" twice).
+
+# I could have a collection of handler functions/methods for the built-in
+# key words, others could be handled by plug-ins? Those starting with '?'
+# would have a special handler. The question is, though, how much of that
+# needs to be handled here, and how much in the editor. Maybe the
+# primary handling of the details should be in the editor. It might be
+# enough here to simply read the fields from the database.
+
+# When making a table/editor for an occasion+group I would need
+#  - the identifier stuff: pupil-id, pupil-name, pupil-groups(?);
+#  - the subjects (separating out composites and components?);
+#  - (possibly the components);
+#  - (possibly the composites);
+#  - averages, etc.
+#  - evaluation fields, report type, ...
+# Each column would have an appropriate "item delegate", for example
+# a grade choice, or read-only for calculated cells.
+# Setting a background colour on the columns might help.
+
+
 '''
+# see also the example in test-itemdelegates.py
 class ComboDelegate(QItemDelegate):
     """
     A delegate to add QComboBox in every cell of the given column
@@ -215,6 +243,22 @@ class ComboDelegate(QItemDelegate):
             maxval = len(value)
             editor.setCurrentIndex(maxval - 1)
 '''
+
+#TODO
+class GradeTable:
+    def __init__(self, occasion: str, class_group: str):
+        pass
+
+        ### Get subject, pupil and group report-information
+        subjects, pupils = get_pupil_grade_matrix(
+            class_group, text_reports=False
+        )
+        group_data = get_group_data(occasion, class_group)
+
+
+
+
+
 
 
 def make_grade_table(
@@ -490,7 +534,7 @@ def get_group_info(
             raise GradeTableError(_MISSING_KEY.format(key=key))
 
 
-class GradeTable:
+class _GradeTable:
     """Manage the grade data for one group in one "term" – corresponding
     to the contents of a single grade table.
     """

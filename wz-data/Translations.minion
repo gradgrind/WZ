@@ -38,6 +38,7 @@ core.pupils: {
 core.report_courses: {
     UNKNOWN_GROUP: "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
     PUPIL_HAS_MULTIPLE_SID: "In Klasse {klass}, {pupil} hat mehrere Zeugniseinträge im Fach {subject}"
+    EXTRA_FLAGS_MISMATCH: "Gruppe {group}: Zeugnis-Info in Fach {subject} widersprüchlich"
 }
 
 grades.gradetable: {

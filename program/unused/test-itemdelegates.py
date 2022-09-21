@@ -9,8 +9,15 @@ from ui.ui_base import (
     QStyledItemDelegate, QTableWidget, QTableWidgetItem, run, QComboBox,
     Qt,
     QLineEdit, QCompleter, QTimer, QDialog,
-    QAbstractItemView
+    QAbstractItemView,
+    QColor
 )
+
+
+class ReadOnlyDelegate(QStyledItemDelegate):
+    def createEditor(self, *args):
+        return None
+
 
 class ComboBoxItemDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
@@ -31,8 +38,9 @@ class ComboBoxItemDelegate(QStyledItemDelegate):
         if cbIndex >= 0:
            editor.setCurrentIndex(cbIndex)
 
-    def setModelData(self, editor, model, index):
-        model.setData(index, editor.currentText(), Qt.EditRole)
+#    def setModelData(self, editor, model, index):
+#        model.setData(index, editor.currentText(), Qt.EditRole)
+
 
 class LineEdit(QLineEdit):
     def showEvent(self, event):
@@ -127,18 +135,31 @@ tw = TableWidget()
 cbid = ComboBoxItemDelegate(tw)
 cpid = CompleterItemDelegate(tw)
 myid = MyItemDelegate(tw)
+roid = ReadOnlyDelegate(tw)
 # ComboBox only in column 2
 tw.setItemDelegateForColumn(1, cbid)
 # Completer only in column 3
 tw.setItemDelegateForColumn(2, cpid)
 # My delegate only in column 4
 tw.setItemDelegateForColumn(3, myid)
-ncols, nrows = 4, 10
+# Column 5 is read-only
+tw.setItemDelegateForColumn(4, roid)
+ncols, nrows = 5, 10
 tw.setColumnCount(ncols)
 tw.setRowCount(nrows)
+colours = [
+    QColor(255, 200, 230),
+    QColor("#EEFFDD"),
+    QColor("#ffddee"),
+    QColor("#ddeeff"),
+    QColor("#eeddff"),
+]
 for r in range(nrows):
     for c in range(ncols):
         twi = QTableWidgetItem()
+        twi.setText(f"({r} | {c})")
+#???
+        twi.setBackground(colours[c])
         tw.setItem(r, c, twi)
 tw.resize(600,400)
 run(tw)
