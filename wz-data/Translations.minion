@@ -58,7 +58,7 @@ grades.gradetable: {
     GRADE_CONFLICT: "Widersprüchliche Noten für Schüler {pid} im Fach {sid}\n  {path1}\n  {path2}"
     INVALID_GRADE: "In {filepath}:\n  Die Note für {pupil} im Fach {sid} ist ungültig: {grade}"
     CALCULATION_WITH_COMPONENT: "Fach {subject} ist einem Sammelfach zugeordnet. Es darf zu keinen weiteren Berechnungen beitragen: Eintrag „{flags}“"
-    UNKNOWN_FLAG:   "Ungültiger Eintrag im Zeugnis-Feld, Fach {subject}: {flag}"
+    INVALID_FLAG:   "Ungültiger Eintrag im Zeugnis-Feld, Fach {subject}: {flag}"
 }
 
 ui.ui_base: {
