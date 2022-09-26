@@ -1,7 +1,7 @@
 """
 core/report_courses.py
 
-Last updated:  2022-09-21
+Last updated:  2022-09-23
 
 Access course/subject data for reports.
 
@@ -229,16 +229,23 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
         if (not group) or tgroups.intersection(s_atoms):
             sid = sdata.sid
             try:
-                if subject_set[sid][-1] != extra_flags:
+                old_data = subject_set[sid]
+                old_flags = old_data[-1]
+                if old_flags != extra_flags:
+                    if g == group:
+                        old_data[-1] = extra_flags
                     REPORT(
-                        "ERROR",
+                        "WARNING",
                         T["EXTRA_FLAGS_MISMATCH"].format(
-                            group=class_group, subject=subject_set[sid][2]
+                            group=class_group,
+                            subject=subject_set[sid][2],
+                            flags=old_data[-1]
                         )
                     )
+                    if g == group:
+                        old_data[-1] = extra_flags
             except KeyError:
-                pass
-            subject_set[sid] = subject_map[sid] + [extra_flags]
+                subject_set[sid] = subject_map[sid] + [extra_flags]
             sid0 = sid.split('.')[0]    # for checking for double entries
             for pdata, p_atoms, p_grade_tids in pupils:
                 if s_atoms.intersection(p_atoms):
@@ -287,7 +294,7 @@ if __name__ == "__main__":
     '''
 
     kg = "12G.R"
-    #kg = "12G.G"
+    kg = "12G.G"
     #kg = "13"
     subjects, pupils = get_pupil_grade_matrix(kg, text_reports=False)
     print("\n SUBJECTS FOR GROUP", kg)
@@ -296,6 +303,6 @@ if __name__ == "__main__":
 
     print("\n PUPILS:")
     for pdata, p_atoms, p_grade_tids in pupils:
-        print("\n +++", pupil_name(pdata))
+        print(f'\n +++ {pupil_name(pdata)} ({pdata["PID"]}) [{pdata["GROUPS"]}]')
         print("            ", p_grade_tids)
 

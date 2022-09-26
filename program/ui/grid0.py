@@ -2,7 +2,7 @@
 """
 ui/grid0.py
 
-Last updated:  2022-02-04
+Last updated:  2022-09-23
 
 Widget with tiles on grid layout (QGraphicsScene/QGraphicsView).
 
@@ -840,11 +840,12 @@ if __name__ == "__main__":
     titleheight = 25
     grid.init(rows, cols, titleheight)
 
-    t1 = grid.basic_tile(3, 0, text="Two Merged Cells", cspan=2, bg="ffff80")
-    grid.basic_tile(5, 3, text="I am")
+    t1 = grid.basic_tile(3, 0, tag="t1", text="Two Merged Cells", cspan=2, bg="ffff80")
+    grid.basic_tile(5, 3, tag="t2", text="I am")
     grid.basic_tile(
         0,
         2,
+        tag="t3",
         text="Rotated",
         rotate=True,
         font=GraphicsSupport.getFont("Serif", fontBold=True, fontItalic=False),

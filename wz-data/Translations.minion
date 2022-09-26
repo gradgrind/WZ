@@ -38,12 +38,17 @@ core.pupils: {
 core.report_courses: {
     UNKNOWN_GROUP: "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
     PUPIL_HAS_MULTIPLE_SID: "In Klasse {klass}, {pupil} hat mehrere Zeugniseinträge im Fach {subject}"
-    EXTRA_FLAGS_MISMATCH: "Gruppe {group}: Zeugnis-Info in Fach {subject} widersprüchlich"
+    EXTRA_FLAGS_MISMATCH: "Gruppe {group}: Zeugnis-Info in Fach {subject} widersprüchlich –\n  „{flags}“ gewählt"
 }
 
 grades.gradetable: {
     
     TITLE:          "Notentabelle, erstellt {time}"
+    REPORT_TYPE:    "Zeugnis-Art"
+    REMARKS:        "Bemerkungen"
+    PID:            "ID"
+    PUPIL:          "Schüler(in)"
+    GROUPS:         "Gruppen"
     
     # Messages
     INVALID_OCCASION_GROUP: "Anlass {occasion}: für Klasse/Gruppe {group} gibt es keine Konfiguration" 
@@ -52,6 +57,8 @@ grades.gradetable: {
     TABLE_YEAR_MISMATCH: "Falsches Schuljahr in Notentabelle:\n  erwartet '{year}' ... Datei:\n    {filepath}"
     GRADE_CONFLICT: "Widersprüchliche Noten für Schüler {pid} im Fach {sid}\n  {path1}\n  {path2}"
     INVALID_GRADE: "In {filepath}:\n  Die Note für {pupil} im Fach {sid} ist ungültig: {grade}"
+    CALCULATION_WITH_COMPONENT: "Fach {subject} ist einem Sammelfach zugeordnet. Es darf zu keinen weiteren Berechnungen beitragen: Eintrag „{flags}“"
+    UNKNOWN_FLAG:   "Ungültiger Eintrag im Zeugnis-Feld, Fach {subject}: {flag}"
 }
 
 ui.ui_base: {

@@ -10,8 +10,69 @@ from ui.ui_base import (
     Qt,
     QLineEdit, QCompleter, QTimer, QDialog,
     QAbstractItemView,
-    QColor
+    QColor,
+    QHeaderView,
+    QSize,
+    QRect,
 )
+
+
+class RotatedHeaderView(QHeaderView):
+    """Rotate header items by 90°.
+    I think the header texts must be set before assigning a header
+    instance to the table widget.
+    """
+    def __init__(self, parent=None):
+        super().__init__(Qt.Horizontal, parent)
+        #self.setDefaultAlignment(Qt.AlignLeft)
+        #self._font = QtGui.QFont("helvetica", 15)
+        #self._metrics = QtGui.QFontMetrics(self._font)
+        self._metrics = self.fontMetrics()
+        self._descent = self._metrics.descent()
+        self._margin = 10
+
+    def paintSection(self, painter, rect, index):
+        data = self._get_data(index)
+        painter.rotate(-90)
+        #painter.setFont(self._font)
+        painter.drawText(
+            - rect.height() + self._margin,
+            int(rect.left() + (rect.width() + self._descent) / 2),
+            data
+        )
+
+    def _paintSection(self, painter, rect, index):
+        painter.rotate(-90)
+        print("???1", rect)
+        rect2 = QRect(rect)
+        print("???2", rect2)
+        rect2.setY(int(rect.left()))
+        rect2.setX(- rect.height() + 2)
+        rect2.setWidth(rect.height())
+        rect2.setHeight(rect.width())
+        print("???2+", rect2)
+        super().paintSection(painter, rect2, index)
+#        painter.rotate(90)
+
+
+
+    def sizeHint(self):
+        return QSize(0, self._get_text_width() + 2 * self._margin)
+
+# Not used by resizeColumnsToContents?
+    def sectionSizeHint(self, column):
+        return self._metrics.height()
+
+    def _get_text_width(self):
+        return max([self._metrics.width(self._get_data(i))
+                    for i in range(0, self.model().columnCount())])
+
+    def _get_data(self, index):
+        return self.model().headerData(index, self.orientation())
+
+#You can use this class in your view as follows:
+# headerView = MyHeaderView()
+# tableView.setHorizontalHeader(headerView)
 
 
 class ReadOnlyDelegate(QStyledItemDelegate):
@@ -131,6 +192,7 @@ class TableWidget(QTableWidget):
 
 
 tw = TableWidget()
+headerView = RotatedHeaderView()
 
 cbid = ComboBoxItemDelegate(tw)
 cpid = CompleterItemDelegate(tw)
@@ -147,6 +209,10 @@ tw.setItemDelegateForColumn(4, roid)
 ncols, nrows = 5, 10
 tw.setColumnCount(ncols)
 tw.setRowCount(nrows)
+
+tw.setHorizontalHeaderLabels(("Column 100", "Column 2", "Col 3", "Column 4", "Column 5"))
+tw.setHorizontalHeader(headerView)
+
 colours = [
     QColor(255, 200, 230),
     QColor("#EEFFDD"),
@@ -161,6 +227,14 @@ for r in range(nrows):
 #???
         twi.setBackground(colours[c])
         tw.setItem(r, c, twi)
+
+tw.resizeColumnsToContents() # doesn't work – uses header text width?
+# Might need to get width of each cell in column (measure text)
+
+print("???", headerView._descent)
+for c in range(ncols):
+    print("COL", c, headerView.sectionSizeHint(c))
+
 tw.resize(600,400)
 run(tw)
 

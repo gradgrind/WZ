@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-09-21
+Last updated:  2022-09-26
 
 Access grade data, read and build grade tables.
 
@@ -247,16 +247,151 @@ class ComboDelegate(QItemDelegate):
 #TODO
 class GradeTable:
     def __init__(self, occasion: str, class_group: str):
-        pass
-
         ### Get subject, pupil and group report-information
         subjects, pupils = get_pupil_grade_matrix(
             class_group, text_reports=False
         )
         group_data = get_group_data(occasion, class_group)
+        print("??????", group_data)
+
+        composites = {
+            k: {"TYPE": "COMPOSITE", "FUNCTION": fn}
+            for k, fn in group_data["COMPOSITE"]
+        }
+        averages = {
+            k: {"TYPE": "CALCULATE", "NAME": n, "FUNCTION": fn}
+            for k, n, fn in group_data["CALCULATE"]
+        }
+        components = {}
+        normal_subjects = {}
+        for sdata in sorted(subjects.values()):
+            print("§§§§§§§§", sdata)
+            # A normal subject will get an immediate column.
+            # A "component" will be added to the components list.
+            # Subjects counting towards something else (composites,
+            # averages, ...) would need some sort of reference to their
+            # target – so that a change can trigger a recalculation.
+            sid = sdata[1]
+            sname = sdata[2]
+            zgroup = sdata[3]
+            flags = sdata[4].split('//')
+            if sid in composites:
+                composites[sid]["NAME"] = sname
+                for f in flags:
+                    if f in averages:
+                        try:
+                            composites[sid]["TARGET"].append(f)
+                        except KeyError:
+                            composites[sid]["TARGET"] = [f]
+                    else:
+                        raise Bug("ERROR TODO")
+                continue
+            # Otherwise it can be a "normal" subject or a "component"
+            value = {"NAME": sname, "TARGETS": []}
+            for f in flags:
+                if f in composites:
+                    if value["TARGETS"]:
+                        # For COMPONENTS no other calculations are supported.
+                        REPORT(
+                            "ERROR",
+                            T["CALCULATION_WITH_COMPONENT"].format(
+                                subject=sname, flags=sdata[4]
+                            )
+                        )
+                        break
+                    value["TARGETS"].append(f)
+                    value["TYPE"] = "COMPONENT"
+                    components[sid] = value
+                elif f in averages:
+                    if "TYPE" in value:
+                        # The sid has already been identified as a COMPONENT,
+                        # a further calculation is not supported.
+                        REPORT(
+                            "ERROR",
+                            T["CALCULATION_WITH_COMPONENT"].format(
+                                subject=sname, flags=sdata[4]
+                            )
+                        )
+                        break
+                    value["TARGETS"].append(f)
+                elif f:
+                    # An empty string is possible as a result of the
+                    # splitting operation, but no other flags are supported.
+                    REPORT(
+                        "ERROR",
+                        T["UNKNOWN_FLAG"].format(subject=sname, flag=f)
+                    )
+            if "TYPE" not in value:
+                value["TYPE"] = "SUBJECT"
+                normal_subjects[sid] = value
 
 
+        print("*** NORMAL", normal_subjects)
+        print("*** COMPONENTS", components)
+        print("*** COMPOSITES", composites)
+        print("*** AVERAGES", averages)
+        for k, v in group_data.items():
+            if k[0] == '?':
+                print("***", k, ":", v)
+        print("*** REPORT TYPES")
+        for rtype, rpath in group_data["REPORT_TYPES"]:
+            print(f"   --- {rtype:15}:", rpath)
+        print("*** GRADES", group_data["GRADES"])
 
+        h_headers = [T["PID"], T["PUPIL"], T["GROUPS"],]
+        h_extra = [None, None, None,]
+        columns = {"PID": 0, "NAME": 1, "GROUPS": 2,}
+        col_types = [(0, "PUPIL_INFO"), (len(h_headers), "SUBJECTS")]
+        for k, v in normal_subjects.items():
+            col = len(h_headers)
+            columns[k] = col
+            h_headers.append(v["NAME"])
+            h_extra.append(v)
+        col_types.append((len(h_headers), "COMPONENTS"))
+        for k, v in components.items():
+            col = len(h_headers)
+            columns[k] = col
+            h_headers.append(v["NAME"])
+            h_extra.append(v)
+        col_types.append((len(h_headers), "COMPOSITES"))
+        for k, v in composites.items():
+            col = len(h_headers)
+            columns[k] = col
+            h_headers.append(v["NAME"])
+            h_extra.append(v)
+        col_types.append((len(h_headers), "AVERAGES"))
+        for k, v in averages.items():
+            col = len(h_headers)
+            columns[k] = col
+            h_headers.append(v["NAME"])
+            h_extra.append(v)
+        col_types.append((len(h_headers), "RESULTS"))
+        for k, v in group_data.items():
+            if k[0] == '?':
+                columns[k[1:]] = len(h_headers)
+                h_headers.append(v[0])
+                h_extra.append(v)
+        columns["REPORT_TYPE"] = len(h_headers)
+        h_headers.append(T["REPORT_TYPE"])
+        h_extra.append(group_data["REPORT_TYPES"])
+        columns["REMARKS"] = len(h_headers)
+        h_headers.append(T["REMARKS"])
+        h_extra.append(None)
+
+        print("\nCOL_TYPES:", col_types)
+        for k, col in columns.items():
+            print(" §", col, k, h_headers[col])
+            print("        ", h_extra[col])
+# What would I actually need for each column?
+#  key: the database entry, in some (?) cases this would also appear in
+#       the column header?
+#  short: e.g. sid, probably mostly the same as key
+#  name: if it fits (sometimes rotated?) this could be the primary
+#        column header
+#  handler: what to do with changed values
+#  editor: what values are acceptable and how to input them
+#  type: maybe for selecting a background colour, could be coupled with
+#        the "handler" or "editor"
 
 
 
@@ -736,7 +871,9 @@ if __name__ == "__main__":
     for p, pdata in gtable.items():
         print("\n ***", p, pdata)
 
-#    print("\n *************************************************\n")
+    print("\n *************************************************\n")
+
+    gradetable = GradeTable("2. Halbjahr", "12G.R")
 
     quit(0)
 
