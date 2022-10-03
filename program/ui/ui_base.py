@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-08-22
+Last updated:  2022-10-03
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -74,6 +74,7 @@ SETTINGS = QSettings(QSettings.IniFormat, QSettings.UserScope, "MT", "WZ")
 # (presumably elsewhere as well?)
 APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
 
+QIcon.setFallbackSearchPaths([APPDATAPATH(f"icons")])
 
 def run(window):
     window.show()

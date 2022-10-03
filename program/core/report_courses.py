@@ -1,7 +1,7 @@
 """
 core/report_courses.py
 
-Last updated:  2022-09-23
+Last updated:  2022-10-03
 
 Access course/subject data for reports.
 
@@ -55,6 +55,9 @@ COURSE_FIELDS = (
     "SUBJECT",
     "TEACHER",
     "REPORT",
+    "GRADES",
+    "REPORT_SUBJECT",
+    "AUTHORS",
 )
 
 ### -----
@@ -68,6 +71,9 @@ class ReportSubjectData(NamedTuple):
     sid: str
     tid: str
     report: str
+    grade_report: str
+    text_report_subject: str
+    text_report_authors: str
 
 
 #? Rather use class-based version below? And caching! ...
@@ -131,7 +137,7 @@ def get_class_subjects(klass):
     # Get group info for checking groups
     group_map = get_classes().group_info(klass)["GROUP_MAP"]
     rsdata = []
-    for group, sid, tid, report in db_read_table(
+    for group, sid, tid, report, grade_report, snamex, tnamesx in db_read_table(
         "COURSES", COURSE_FIELDS, CLASS=klass
     )[1]:
         # CLASS, SUBJECT and TEACHER are foreign keys and should be
@@ -157,6 +163,9 @@ def get_class_subjects(klass):
                 sid=sid,
                 tid=tid,
                 report=report,
+                grade_report=grade_report,
+                text_report_subject=snamex,
+                text_report_authors=tnamesx,
             )
         )
     SHARED_DATA[key] = rsdata
@@ -211,14 +220,11 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
     subject_set = {}
     subsubjects = {}    # for checking for double entries (see below)
     for sdata in get_class_subjects(klass):
-        try:
-            report_flags, extra_flags = sdata.report.split('#', 1)
-        except ValueError:
-            report_flags, extra_flags = sdata.report, ''
+        # print("????????????", sdata)
         if text_reports:
-            if 'A' not in report_flags:
+            if not sdata.report:
                 continue
-        elif '1' not in report_flags:
+        elif not sdata.grade_report:
             continue
         g = sdata.group
         if not g:
@@ -228,24 +234,27 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
         s_atoms = set(group2atoms[g])
         if (not group) or tgroups.intersection(s_atoms):
             sid = sdata.sid
+            if sdata.text_report_subject or sdata.text_report_authors:
+                report_settings = (
+                    sdata.text_report_subject, sdata.text_report_authors
+                )
+            else:
+                report_settings = None
             try:
                 old_data = subject_set[sid]
-                old_flags = old_data[-1]
-                if old_flags != extra_flags:
-                    if g == group:
-                        old_data[-1] = extra_flags
-                    REPORT(
-                        "WARNING",
-                        T["EXTRA_FLAGS_MISMATCH"].format(
-                            group=class_group,
-                            subject=subject_set[sid][2],
-                            flags=old_data[-1]
+                if report_settings:
+                    if old_data[-1]:
+                        REPORT(
+                            "ERROR",
+                            T["MULTIPLE_REPORT_SETTINGS"].format(
+                                group=class_group,
+                                subject=subject_set[sid][2]
+                            )
                         )
-                    )
-                    if g == group:
-                        old_data[-1] = extra_flags
+                    else:
+                        old_data[-1] = report_settings
             except KeyError:
-                subject_set[sid] = subject_map[sid] + [extra_flags]
+                subject_set[sid] = subject_map[sid] + [report_settings]
             sid0 = sid.split('.')[0]    # for checking for double entries
             for pdata, p_atoms, p_grade_tids in pupils:
                 if s_atoms.intersection(p_atoms):

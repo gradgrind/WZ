@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-09-17
+core/basic_data.py - last updated 2022-10-03
 
 Handle caching of the basic data sources
 
@@ -127,7 +127,7 @@ def get_subjects_with_sorting() -> dict:
     i = 0
     for row in db_read_fields(
         "SUBJECTS",
-        ("SID", "NAME", "SORTING"),
+        ("SID", "NAME", "SORTING", "COMPOSITE"),
         "SORTING,NAME"
     ):
         row.insert(0, i)
