@@ -2,7 +2,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2022-10-13
+Last updated:  2022-10-14
 
 Base functions for grids using the QGraphicsView framework.
 
@@ -54,6 +54,12 @@ would need a transparent pen.
 GRID_COLOUR = "888800"  # rrggbb
 SELECT_COLOUR = "ff0000"
 FONT_SIZE_DEFAULT = 12
+BORDER_WIDTH = 1
+THICK_LINE_WIDTH = 3
+CELL_MARGIN = 2
+SELECT_WIDTH = 3
+SCENE_MARGIN = 10  # Margin around content in GraphicsView widgets
+TITLE_MARGIN = 15  # Left & right title margin (points)
 
 
 # ?
@@ -61,12 +67,7 @@ FONT_DEFAULT = "Droid Sans"
 FONT_COLOUR = "442222"  # rrggbb
 # MARK_COLOUR = 'E00000'      # rrggbb
 
-# Line width for borders
-# UNDERLINE_WIDTH = 3
-# BORDER_WIDTH = 1
 
-SCENE_MARGIN = 10  # Margin around content in GraphicsView widgets
-TITLE_MARGIN = 15  # Left & right title margin (points)
 #####################
 
 ### Messages
@@ -103,8 +104,6 @@ from qtpy.QtCore import Qt, QMarginsF, QRectF
 class GridError(Exception):
     pass
 
-
-LINEWIDTH = 2
 
 ### -----
 
@@ -217,8 +216,8 @@ class GridView(QGraphicsView):
         # self.pdpi = self.physicalDpiX()
         # self.MM2PT = self.ldpi / 25.4
 
-    def pt2px(self, pt):
-        px = self.ldpi * pt / 72.0
+    def pt2px(self, pt) -> int:
+        px = int(self.ldpi * pt / 72.0 + 0.5)
         # print(f"pt2px: {pt} -> {px}")
         return px
 
@@ -259,6 +258,8 @@ class GridView(QGraphicsView):
                     pass
 
     def mouseReleaseEvent(self, event):
+        if event.button() != Qt.LeftButton or not self.start_cell:
+            return
         try:
             point = event.position().toPoint()
         except:
@@ -267,7 +268,7 @@ class GridView(QGraphicsView):
         items = self.items(point)
 #TODO: A time test may be better?
         if (not self.end_cell) and delta < 2:
-            if items and event.button() == Qt.LeftButton:
+            if items:
                 for item in items:
                     # Give all items at this point a chance to react,
                     # starting with the topmost. An item can break the
@@ -373,6 +374,9 @@ class GridView(QGraphicsView):
         The widths/heights include grid lines and other bounding boxes.
         """
         self.titleheight = self.pt2px(titleheight)
+        self.border_width = self.pt2px(BORDER_WIDTH)
+        self.thick_line_width = self.pt2px(THICK_LINE_WIDTH)
+        self.cell_margin = self.pt2px(CELL_MARGIN)
         scene = QGraphicsScene()
         self.setScene(scene)
         self.xmarks = [0]
@@ -418,7 +422,7 @@ class GridView(QGraphicsView):
 
         self.select = QGraphicsRectItem()
         self.select.setPen(StyleCache.getPen(
-                int(self.pt2px(LINEWIDTH)*2 + 0.5), SELECT_COLOUR
+                self.pt2px(SELECT_WIDTH), SELECT_COLOUR
             )
         )
         self.select.setZValue(20)
@@ -450,6 +454,7 @@ class GridView(QGraphicsView):
         textItem.setPos(xshift, yshift)
         return textItem
 
+#deprecated?
     def basic_tile(self,
         row,
         col,
@@ -492,10 +497,9 @@ class GridView(QGraphicsView):
         except:
 #TODO
             raise
-#TODO: height, ...
         line = QGraphicsLineItem(self.xmarks[0], y, self.xmarks[-1], y)
-        line.setPen(StyleCache.getPen(3, GRID_COLOUR))
-        line.setZValue(20)
+        line.setPen(StyleCache.getPen(self.thick_line_width, GRID_COLOUR))
+        line.setZValue(10)
         self.scene().addItem(line)
 
     def grid_line_thick_v(self, col):
@@ -504,14 +508,10 @@ class GridView(QGraphicsView):
         except:
 #TODO
             raise
-#TODO: width, ...
         line = QGraphicsLineItem(x, self.ymarks[0], x, self.ymarks[-1])
-        line.setPen(StyleCache.getPen(3, GRID_COLOUR))
-        line.setZValue(20)
+        line.setPen(StyleCache.getPen(self.thick_line_width, GRID_COLOUR))
+        line.setZValue(10)
         self.scene().addItem(line)
-
-
-
 
     def grid_tile(self,
         row,
@@ -532,6 +532,7 @@ class GridView(QGraphicsView):
             or (row + rspan) >= len(self.ymarks)
             or (col + cspan) >= len(self.xmarks)
         ):
+#TODO
             raise GridError(
                 _TILE_OUT_OF_BOUNDS.format(row=row, col=col, cspan=cspan, rspan=rspan)
             )
@@ -773,7 +774,7 @@ class Tile(QGraphicsRectItem):
     It contains a simple text element. The cell has the peculiarity,
     however, that the text is shrunk automatically if it is too big to
     fit in the cell. This only works to a certain degree. If the text
-    would become ridiculously small, only '###' is displayed.
+    would become too small, only '###' is displayed.
     Both cell and text can be styled to a limited extent.
     """
 
@@ -797,7 +798,7 @@ class Tile(QGraphicsRectItem):
         self.style.update(style)
         self.halign = self.style["halign"]
         self.valign = self.style["valign"]
-        self.rotation = self.style["rotate"]
+        self.rotated = self.style["rotate"]
         bg = self.style["bg"]
         if bg:
             self.set_background(bg)
@@ -808,10 +809,10 @@ class Tile(QGraphicsRectItem):
             self.textItem.setFont(font)
         else:
             self.textItem.setFont(StyleCache.getFont())
-        self.setText(text)
+        self.set_text(text)
         self.set_textcolour(self.style["fg"])
         # Border
-        pen0 = StyleCache.getPen(1, self.style["border"])
+        pen0 = StyleCache.getPen(grid.border_width, self.style["border"])
         self.setPen(pen0)
 
     def set_background(self, colour):
@@ -822,33 +823,33 @@ class Tile(QGraphicsRectItem):
 
     def set_halign(self, halign):
         self.halign = halign
+        self.set_text(self.text)
+
+    def set_valign(self, valign):
+        self.valign = valign
+        self.set_text(self.text)
 
     def set_verticaltext(self, rot90=True):
-        self.rotation = rot90
-        self.setText(self.text)
+        self.rotated = rot90
+        self.set_text(self.text)
 
-    def margin(self):
-        #        return 0.4 * self._grid._gview.MM2PT
-        return self._grid.pt2px(1.5)
-
-    def value(self):
-        return self.text
-
-    def setText(self, text):
+    def set_text(self, text):
         if type(text) != str:
+#TODO
             raise GridError(_NOTSTRING.format(val=repr(text)))
         self.text = text
         self.textItem.setText(text)
         self.textItem.setScale(1)
-        w = self.textItem.boundingRect().width()
-        h = self.textItem.boundingRect().height()
-        margin = self.margin()
+        tbr = self.textItem.boundingRect()
+        w = tbr.width()
+        h = tbr.height()
+        margin = self._grid.cell_margin
+        scale = 1
+        yshift = 0
         if text:
-            scale = 1
             maxw = self.width0 - margin * 2
             maxh = self.height0 - margin * 2
-            if self.rotation:
-                maxh -= margin * 4
+            if self.rotated:
                 if w > maxh:
                     scale = maxh / w
                 if h > maxw:
@@ -857,13 +858,18 @@ class Tile(QGraphicsRectItem):
                         scale = _scale
                 if scale < 0.6:
                     self.textItem.setText("###")
-                    scale = maxh / self.textItem.boundingRect().width()
+                    tbr = self.textItem.boundingRect()
+                    w = tbr.width()
+                    h = tbr.height()
+                    scale = maxh / w
                 if scale < 1:
                     self.textItem.setScale(scale)
-                trf = QTransform().rotate(-90)
-                self.textItem.setTransform(trf)
+                self.textItem.setRotation(-90)
+                __h = h
+                h = w * scale
+                w = __h * scale
+                yshift = h
             else:
-                maxw -= margin * 4
                 if w > maxw:
                     scale = maxw / w
                 if h > maxh:
@@ -872,29 +878,26 @@ class Tile(QGraphicsRectItem):
                         scale = _scale
                 if scale < 0.6:
                     self.textItem.setText("###")
-                    scale = maxw / self.textItem.boundingRect().width()
+                    tbr = self.textItem.boundingRect()
+                    w = tbr.width()
+                    h = tbr.height()
+                    scale = maxw / w
                 if scale < 1:
                     self.textItem.setScale(scale)
-        # This print line can help find box size problems:
-        #            print("BOX-SCALE: %5.3f (%s) *** w: %6.2f / %6.2f *** h: %6.2f / %6.2f"
-        #                    % (scale, text, w, maxw, h, maxh))
-        bdrect = self.textItem.mapRectToParent(self.textItem.boundingRect())
-        yshift = -bdrect.top() if self.rotation else 0.0
-        w = bdrect.width()
-        h = bdrect.height()
-        xshift = 0.0
+                h = h * scale
+                w = w * scale
         if self.halign == "l":
-            xshift += margin
+            xshift = margin
         elif self.halign == "r":
-            xshift += self.width0 - margin - w
+            xshift = self.width0 - margin - w
         else:
-            xshift += (self.width0 - w) / 2
+            xshift = (self.width0 - w) / 2
         if self.valign == "t":
             yshift += margin
         elif self.valign == "b":
             yshift += self.height0 - margin - h
         else:
-            yshift += (self.height0 - h) / 2
+            yshift += self.height0 - (self.height0 + h) / 2
         self.textItem.setPos(xshift, yshift)
 
     def leftclick(self):
@@ -1008,7 +1011,7 @@ class PopupDate(QDialog):
         self.newDate(self.cal.selectedDate())
         self.move(self._grid.screen_coordinates(x, y))
         if self.exec_():
-            tile.setText(self.date)
+            tile.set_text(self.date)
             self._grid.value_changed(tile, self.date)
 
     def newDate(self, date):
@@ -1066,8 +1069,8 @@ class PopupLineEdit(QDialog):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    rows = (100, 6, 25, 25, 25, 25, 25)
-    cols = (80, 30, 25, 60, 25, 25, 350)
+    rows = (100, 30, 30, 30, 30, 30, 30, 30)
+    cols = (200, 50, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 40, 40, 40)
 
     from qtpy.QtWidgets import QApplication
 
@@ -1081,28 +1084,47 @@ if __name__ == "__main__":
 
 
 #TODO: Add grid_tiles
+    row_list = []
     for rx in range(len(rows)):
+        row = []
 
         for cx in range(len(cols)):
 
 #            grid.grid_tile(rx, cx, tag=f"({cx} | {rx})")
 #            grid.grid_tile(rx, cx, tag=f"({cx} | {rx})", border=None)
-            grid.grid_tile(rx, cx, tag=f"({cx} | {rx})", border=GRID_COLOUR)
+            rotate = False
+            cell_selectable = True
+            if len(row_list) == 0:
+                cell_selectable = False
+                if len(row) >= 2:
+                    rotate = True
+            row.append(
+                grid.grid_tile(
+                    rx, cx, tag=f"({cx} | {rx})",
+                    border=GRID_COLOUR,
+                    rotate=rotate,
+                    cell_selectable=cell_selectable,
+                    valign='b'
+                )
+            )
+        row_list.append(row)
 
     grid.grid_line_thick_v(2)
-    grid.grid_line_thick_h(3)
+    grid.grid_line_thick_h(1)
 
-    t1 = grid.basic_tile(3, 0, tag="t1", text="Two Merged Cells", cspan=2,
-        cell_selectable=True, bg="ffff80")
-    t2 = grid.basic_tile(5, 3, tag="t2", text="I am", cell_selectable=True)
-    grid.basic_tile(
-        0,
-        2,
-        tag="t3",
-        text="Rotated",
-        rotate=True,
-        font=StyleCache.getFont("Serif", fontBold=True, fontItalic=False),
-    )
+    row_list[0][0].set_text("Not rotated")
+    row_list[0][0].set_valign('m')
+    row_list[0][2].set_text("Rotated")
+    row_list[0][2].set_valign('m')
+    row_list[0][4].set_text("English")
+
+    grid.grid_tile(4, 3, tag="t2", text="A long entry")
+    grid.grid_tile(2, 0, tag="l", text="left", halign='l')
+    grid.grid_tile(3, 0, tag="r", text="right", halign='r')
+    grid.grid_tile(4, 0, tag="t", text="top", valign='t')
+    grid.grid_tile(5, 0, tag="b", text="bottom", valign='b')
+    tr = grid.grid_tile(2, 2, tag="B", text="B", valign='b')
+    tr.set_verticaltext()
 
     if titleheight:
         title = grid.add_title("Centre Title")
