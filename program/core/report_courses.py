@@ -1,7 +1,7 @@
 """
 core/report_courses.py
 
-Last updated:  2022-09-11
+Last updated:  2022-10-03
 
 Access course/subject data for reports.
 
@@ -55,6 +55,9 @@ COURSE_FIELDS = (
     "SUBJECT",
     "TEACHER",
     "REPORT",
+    "GRADES",
+    "REPORT_SUBJECT",
+    "AUTHORS",
 )
 
 ### -----
@@ -68,6 +71,9 @@ class ReportSubjectData(NamedTuple):
     sid: str
     tid: str
     report: str
+    grade_report: str
+    text_report_subject: str
+    text_report_authors: str
 
 
 #? Rather use class-based version below? And caching! ...
@@ -131,7 +137,7 @@ def get_class_subjects(klass):
     # Get group info for checking groups
     group_map = get_classes().group_info(klass)["GROUP_MAP"]
     rsdata = []
-    for group, sid, tid, report in db_read_table(
+    for group, sid, tid, report, grade_report, snamex, tnamesx in db_read_table(
         "COURSES", COURSE_FIELDS, CLASS=klass
     )[1]:
         # CLASS, SUBJECT and TEACHER are foreign keys and should be
@@ -157,6 +163,9 @@ def get_class_subjects(klass):
                 sid=sid,
                 tid=tid,
                 report=report,
+                grade_report=grade_report,
+                text_report_subject=snamex,
+                text_report_authors=tnamesx,
             )
         )
     SHARED_DATA[key] = rsdata
@@ -166,6 +175,9 @@ def get_class_subjects(klass):
 def get_pupil_grade_matrix(class_group, text_reports=True):
     """Return a list of report subjects for the given group and for each
     subject the relevant teachers for each pupil in the group.
+    <subject_set> is a mapping, {sid ->
+        [subject-index, sid, subject-name, subject-group, (extra-)report-flags]
+    }
     """
     subject_map = get_subjects_with_sorting()
     # If I select the whole class, I want all courses (with pupils).
@@ -179,7 +191,6 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
     klass, group = class_group_split(class_group)
     group_info = get_classes().group_info(klass)
     atoms = group_info["MINIMAL_SUBGROUPS"]
-    subjects_data = get_class_subjects(klass)
     group2atoms = atomic_maps(atoms, list(group_info["GROUP_MAP"]))
     pupils = []
     for pdata in pupils_in_group(class_group):
@@ -209,11 +220,11 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
     subject_set = {}
     subsubjects = {}    # for checking for double entries (see below)
     for sdata in get_class_subjects(klass):
-        report_flags = sdata.report.split('/', 1)[0]
+        # print("????????????", sdata)
         if text_reports:
-            if 'A' not in report_flags:
+            if not sdata.report:
                 continue
-        elif '1' not in report_flags:
+        elif not sdata.grade_report:
             continue
         g = sdata.group
         if not g:
@@ -223,7 +234,27 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
         s_atoms = set(group2atoms[g])
         if (not group) or tgroups.intersection(s_atoms):
             sid = sdata.sid
-            subject_set[sid] = subject_map[sid]
+            if sdata.text_report_subject or sdata.text_report_authors:
+                report_settings = (
+                    sdata.text_report_subject, sdata.text_report_authors
+                )
+            else:
+                report_settings = None
+            try:
+                old_data = subject_set[sid]
+                if report_settings:
+                    if old_data[-1]:
+                        REPORT(
+                            "ERROR",
+                            T["MULTIPLE_REPORT_SETTINGS"].format(
+                                group=class_group,
+                                subject=subject_set[sid][2]
+                            )
+                        )
+                    else:
+                        old_data[-1] = report_settings
+            except KeyError:
+                subject_set[sid] = subject_map[sid] + [report_settings]
             sid0 = sid.split('.')[0]    # for checking for double entries
             for pdata, p_atoms, p_grade_tids in pupils:
                 if s_atoms.intersection(p_atoms):
@@ -261,7 +292,7 @@ if __name__ == "__main__":
     from core.db_access import open_database
     open_database()
 
-    for rsdata in get_class_subjects("11G"):
+    for rsdata in get_class_subjects("12G"):
         print("  ---", rsdata)
 
     '''data = get_subjects_data()
@@ -272,6 +303,7 @@ if __name__ == "__main__":
     '''
 
     kg = "12G.R"
+    kg = "12G.G"
     #kg = "13"
     subjects, pupils = get_pupil_grade_matrix(kg, text_reports=False)
     print("\n SUBJECTS FOR GROUP", kg)
@@ -280,6 +312,6 @@ if __name__ == "__main__":
 
     print("\n PUPILS:")
     for pdata, p_atoms, p_grade_tids in pupils:
-        print("\n +++", pupil_name(pdata))
+        print(f'\n +++ {pupil_name(pdata)} ({pdata["PID"]}) [{pdata["GROUPS"]}]')
         print("            ", p_grade_tids)
 

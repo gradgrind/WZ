@@ -1,7 +1,7 @@
 """
 ui/modules/timetable_gui.py
 
-Last updated:  2022-08-27
+Last updated:  2022-10-08
 
 The timetable "main" window.
 
@@ -80,6 +80,7 @@ from core.basic_data import (
 )
 from core.classes import atomic_maps
 from timetable.activities import Courses
+from ui.grid_base import StyleCache
 
 ### +++++
 
@@ -139,82 +140,6 @@ BREAKS = ('1', '3', '5')
 SIZES = {}
 
 ### -----
-
-class StyleCache:
-    __pens = {}
-    __brushes = {}
-    __fonts = {}
-
-    @classmethod
-    def getPen(cls, width, colour):
-        """Manage a cache for pens of different width and colour.
-        <width> should be a small integer.
-        <colour> is a colour in the form 'RRGGBB'.
-        """
-        if width:
-            wc = (width, colour)
-            try:
-                return cls.__pens[wc]
-            except KeyError:
-                pass
-            pen = QPen(QColor('#FF' + wc[1]))
-            pen.setWidthF(wc[0])
-            cls.__pens[wc] = pen
-            return pen
-        else:
-            try:
-                return cls.__pens['*']
-            except KeyError:
-                noPen = QPen()
-                noPen.setStyle(Qt.NoPen)
-                cls.__pens['*'] = noPen
-                return noPen
-
-    @classmethod
-    def getBrush(cls, colour=None):
-        """Manage a cache for brushes of different colour.
-        <colour> is a colour in the form 'RRGGBB'.
-        """
-        try:
-            return cls.__brushes[colour or '*']
-        except KeyError:
-            pass
-        if colour:
-            brush = QBrush(QColor('#FF' + colour))
-            cls.__brushes[colour] = brush
-        else:
-            brush = QBrush()    # no fill
-            cls.__brushes['*'] = brush
-        return brush
-
-    @classmethod
-    def getFont(
-        cls,
-        fontFamily=FONT_DEFAULT,
-        fontSize=FONT_SIZE_DEFAULT,
-        fontBold=False,
-        fontItalic=False,
-    ):
-        """Manage a cache for fonts. The font parameters are passed as
-        arguments.
-        """
-        ftag = (fontFamily, fontSize, fontBold, fontItalic)
-        try:
-            return cls.__fonts[ftag]
-        except KeyError:
-            pass
-        font = QFont()
-        if fontFamily:
-            font.setFamily(fontFamily)
-        if fontSize:
-            font.setPointSizeF(fontSize)
-        if fontBold:
-            font.setBold(True)
-        if fontItalic:
-            font.setItalic(True)
-        cls.__fonts[ftag] = font
-        return font
-
 
 class GridView(QGraphicsView):
     """This is the "view" widget for the grid.

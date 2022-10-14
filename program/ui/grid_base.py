@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-ui/grid0.py
+ui/grid_base.py
 
-Last updated:  2022-09-23
+Last updated:  2022-10-14
 
-Widget with tiles on grid layout (QGraphicsScene/QGraphicsView).
+Base functions for grids using the QGraphicsView framework.
 
 =+LICENCE=============================
 Copyright 2022 Michael Towers
@@ -35,26 +35,39 @@ to adjust the coordinates of the tile so as not to paint over the grid.
 Alternatively, putting the grid lines on top might be an easier solution.
 
 "When rendering with a pen with an even number of pixels, the pixels will
-be rendered symetrically around the mathematical defined points, while
+be rendered symmetrically around the mathematically defined points, while
 rendering with a pen with an odd number of pixels, the spare pixel will
 be rendered to the right and below the mathematical point.
 "
 """
 
+"""The grid area can be covered by boxes of predefined width and height.
+I would suggest an optional box border of fixed width (but what does
+"fixed width" mean here, e.g fixed pixels or fixed points/mm? As I am
+aiming for a point/mm based specification, I would suggest the latter).
+If there is no border there will be an empty gap – thus making the
+geometry independent of the border. That would mean that "no border"
+would need a transparent pen.
+"""
+
 ##### Configuration #####################
-# ?
-FONT_DEFAULT = "Droid Sans"
+GRID_COLOUR = "888800"  # rrggbb
+SELECT_COLOUR = "ff0000"
 FONT_SIZE_DEFAULT = 12
-FONT_COLOUR = "442222"  # rrggbb
-GRID_COLOUR = "000088"  # rrggbb
-# MARK_COLOUR = 'E00000'      # rrggbb
-
-# Line width for borders
-# UNDERLINE_WIDTH = 3
-# BORDER_WIDTH = 1
-
+BORDER_WIDTH = 1
+THICK_LINE_WIDTH = 3
+CELL_MARGIN = 2
+SELECT_WIDTH = 3
 SCENE_MARGIN = 10  # Margin around content in GraphicsView widgets
 TITLE_MARGIN = 15  # Left & right title margin (points)
+
+
+# ?
+FONT_DEFAULT = "Droid Sans"
+FONT_COLOUR = "442222"  # rrggbb
+# MARK_COLOUR = 'E00000'      # rrggbb
+
+
 #####################
 
 ### Messages
@@ -83,6 +96,7 @@ from qtpy.QtGui import (
     QPainter,
     QPdfWriter,
     QPageLayout,
+    QPageSize,
 )
 from qtpy.QtCore import Qt, QMarginsF, QRectF
 
@@ -92,6 +106,94 @@ class GridError(Exception):
 
 
 ### -----
+
+
+class StyleCache:
+    """Manage allocation of style resources using caches."""
+
+    __fonts = {}  # cache for QFont items
+    __brushes = {}  # cache for QBrush items
+    __pens = {}  # cache for QPen items
+
+    @classmethod
+    def getPen(cls, width:int, colour:str="") -> QPen:
+        """Manage a cache for pens of different width and colour.
+        <width> should be a small integer.
+        <colour> is a colour in the form 'RRGGBB'.
+        """
+        if width:
+# A temporary bodge to allow a transparent border
+            if colour is None:
+                wc = (width, None)
+            else:
+
+                wc = (width, colour or GRID_COLOUR)
+            try:
+                return cls.__pens[wc]
+            except KeyError:
+                pass
+# A temporary bodge to allow a transparent border
+            if colour is None:
+                pen = QPen(QColor("#00FFFFFF"))
+            else:
+
+                pen = QPen(QColor("#FF" + wc[1]))
+            pen.setWidth(wc[0])
+            cls.__pens[wc] = pen
+            return pen
+        else:
+            try:
+                return cls.__pens['*']
+            except KeyError:
+                pen = QPen()
+                pen.setStyle(Qt.NoPen)
+                cls.__pens['*'] = pen
+                return pen
+
+    @classmethod
+    def getBrush(cls, colour:str="") -> QBrush:
+        """Manage a cache for brushes of different colour.
+        <colour> is a colour in the form 'RRGGBB'.
+        """
+        try:
+            return cls.__brushes[colour or '*']
+        except KeyError:
+            pass
+        if colour:
+            brush = QBrush(QColor("#FF" + colour))
+            cls.__brushes[colour] = brush
+        else:
+            brush = QBrush()    # no fill
+            cls.__brushes['*'] = brush
+        return brush
+
+    @classmethod
+    def getFont(
+        cls,
+        fontFamily:str="",
+        fontSize:int=12,
+        fontBold:bool=False,
+        fontItalic:bool=False,
+    ) -> QFont:
+        """Manage a cache for fonts. The font parameters are passed as
+        arguments.
+        """
+        ftag = (fontFamily, fontSize, fontBold, fontItalic)
+        try:
+            return cls.__fonts[ftag]
+        except KeyError:
+            pass
+        font = QFont()
+        if fontFamily:
+            font.setFamily(fontFamily)
+        if fontSize:
+            font.setPointSizeF(fontSize)
+        if fontBold:
+            font.setBold(True)
+        if fontItalic:
+            font.setItalic(True)
+        cls.__fonts[ftag] = font
+        return font
 
 
 class GridView(QGraphicsView):
@@ -111,37 +213,82 @@ class GridView(QGraphicsView):
         self.setRenderHints(QPainter.Antialiasing)
         # self.setRenderHints(QPainter.TextAntialiasing)
         self.ldpi = self.logicalDpiX()
-        #        self.pdpi = self.physicalDpiX()
-        #        self.MM2PT = self.ldpi / 25.4
-        self.scene = QGraphicsScene()
-        self.setScene(self.scene)
+        # self.pdpi = self.physicalDpiX()
+        # self.MM2PT = self.ldpi / 25.4
 
-    def pt2px(self, pt):
-        px = self.ldpi * pt / 72.0
+    def pt2px(self, pt) -> int:
+        px = int(self.ldpi * pt / 72.0 + 0.5)
         # print(f"pt2px: {pt} -> {px}")
         return px
 
     def px2mm(self, px):
         return px * 25.4 / self.ldpi
 
+
     def mousePressEvent(self, event):
+#Qt5
+#        print("POS:", event.pos())
+#        print("GLOBALPOS:", event.globalPos())
+#        print("SCREENPOS:", event.screenPos())
+#        print("WINDOWPOS:", event.windowPos())
+
+#Qt6
+#        print("POS:", event.position())
+#        print("GLOBALPOS:", event.globalPosition())
+#        print("SCENEPOS:", event.scenePosition())
+
         try:
             point = event.position().toPoint()
         except:
             point = event.pos()
+        self.point0 = point
+        self.end_cell = None
         # print("POS:", point, self.mapToGlobal(point), self.itemAt(point))
-        # The Tile may not be the top item.
+        # The sought <Tile> may not be the top item.
         items = self.items(point)
+        self.start_cell = None
+        self.select.hide()
         if items and event.button() == Qt.LeftButton:
+            # Select the topmost selectable cell
             for item in items:
-                # Give all items at this point a chance to react, starting
-                # with the topmost. An item can break the chain by
-                # returning a false value.
                 try:
-                    if not item.leftclick():
-                        return
+                    self.start_cell = item.selectable_cell
+                    break
                 except AttributeError:
                     pass
+
+    def mouseReleaseEvent(self, event):
+        if event.button() != Qt.LeftButton or not self.start_cell:
+            return
+        try:
+            point = event.position().toPoint()
+        except:
+            point = event.pos()
+        delta = (point - self.point0).manhattanLength()
+        items = self.items(point)
+#TODO: A time test may be better?
+        if (not self.end_cell) and delta < 2:
+            if items:
+                for item in items:
+                    # Give all items at this point a chance to react,
+                    # starting with the topmost. An item can break the
+                    # chain by returning a false value.
+                    try:
+                        if not item.leftclick():
+                            return
+                    except AttributeError:
+                        pass
+        else:
+            cell = None
+            for item in items:
+                try:
+                    cell = item.selectable_cell
+                    break
+                except AttributeError:
+                    pass
+            if cell and cell != self.end_cell:
+                self.end_cell = cell
+                self.draw_selection()
 
     def contextMenuEvent(self, event):
         try:
@@ -159,6 +306,50 @@ class GridView(QGraphicsView):
                         return
                 except AttributeError:
                     pass
+
+    def mouseMoveEvent(self, event):
+        try:
+            point = event.position().toPoint()
+        except:
+            point = event.pos()
+        # print("MOVE TEST", point - self.point0)
+        items = self.items(point)
+        coords = None
+        # Act only if the topmost selectable cell has changed
+        for item in items:
+            try:
+                coords = item.selectable_cell
+            except AttributeError:
+                pass
+            else:
+                if coords == self.end_cell:
+                    return
+        if coords:
+            # print("MOVE", coords)
+            if self.start_cell and self.end_cell != coords:
+                # Record new end of selection and redraw band
+                self.end_cell = coords
+                self.draw_selection()
+
+    def draw_selection(self):
+#TODO: This may work for the band coordinates, but it hasn't kept
+# track of the cell-matrix coordinates
+        x0 = self.start_cell[0]
+        x1 = self.end_cell[0]
+        if x0 > x1:
+            w = x0 + self.start_cell[2] - x1
+            x0 = x1
+        else:
+            w = x1 + self.end_cell[2] - x0
+        y0 = self.start_cell[1]
+        y1 = self.end_cell[1]
+        if y0 > y1:
+            h = y0 + self.start_cell[3] - y1
+            y0 = y1
+        else:
+            h = y1 + self.end_cell[3] - y0
+        self.select.setRect(x0, y0, w, h)
+        self.select.show()
 
     ### View scaling
     def scaleUp(self):
@@ -183,7 +374,11 @@ class GridView(QGraphicsView):
         The widths/heights include grid lines and other bounding boxes.
         """
         self.titleheight = self.pt2px(titleheight)
-        self.scene.clear()
+        self.border_width = self.pt2px(BORDER_WIDTH)
+        self.thick_line_width = self.pt2px(THICK_LINE_WIDTH)
+        self.cell_margin = self.pt2px(CELL_MARGIN)
+        scene = QGraphicsScene()
+        self.setScene(scene)
         self.xmarks = [0]
         xpt = 0
         x = 0
@@ -208,26 +403,36 @@ class GridView(QGraphicsView):
         # print("Y:", self.ymarks)
 
         # Draw grid
-        self.grid_pen = GraphicsSupport.getPen(1, GRID_COLOUR)
-        for i in range(len(self.xmarks)):
-            self.scene.addItem(GridLine(self, True, i))
-        for i in range(len(self.ymarks)):
-            self.scene.addItem(GridLine(self, False, i))
+#        self.grid_pen = StyleCache.getPen(1, GRID_COLOUR)
+#        for i in range(len(self.xmarks)):
+#            scene.addItem(GridLine(self, True, i))
+#        for i in range(len(self.ymarks)):
+#            scene.addItem(GridLine(self, False, i))
 
         # Allow a little margin
         margin = self.pt2px(SCENE_MARGIN)
+#? self?
         self._sceneRect = QRectF(
             -margin,
             -margin,
             self.grid_width + margin * 2,
             self.grid_height + margin * 2,
         )
-        self.scene.setSceneRect(self._sceneRect)
+        scene.setSceneRect(self._sceneRect)
+
+        self.select = QGraphicsRectItem()
+        self.select.setPen(StyleCache.getPen(
+                self.pt2px(SELECT_WIDTH), SELECT_COLOUR
+            )
+        )
+        self.select.setZValue(20)
+        self.select.hide()
+        scene.addItem(self.select)
 
     def add_title(self, text, halign="c"):
         textItem = QGraphicsSimpleTextItem()
-        self.scene.addItem(textItem)
-        font = QFont(GraphicsSupport.getFont())
+        self.scene().addItem(textItem)
+        font = QFont(StyleCache.getFont())
         if halign == "c":
             font.setPointSizeF(font.pointSizeF() * 1.2)
         font.setBold(True)
@@ -249,7 +454,15 @@ class GridView(QGraphicsView):
         textItem.setPos(xshift, yshift)
         return textItem
 
-    def basic_tile(self, row, col, cspan=1, rspan=1, **kargs):
+#deprecated?
+    def basic_tile(self,
+        row,
+        col,
+        cspan=1,
+        rspan=1,
+        cell_selectable=False,
+        **kargs
+    ):
         """Add a basic tile to the grid, checking coordinates and
         converting row + col to x + y point-coordinates for the
         <Tile> class.
@@ -264,12 +477,73 @@ class GridView(QGraphicsView):
             raise GridError(
                 _TILE_OUT_OF_BOUNDS.format(row=row, col=col, cspan=cspan, rspan=rspan)
             )
-        x = self.xmarks[col] + 0.5
-        y = self.ymarks[row] + 0.5
-        w = self.xmarks[col + cspan] - x - 0.5
-        h = self.ymarks[row + rspan] - y - 0.5
+        x0 = self.xmarks[col]
+        y0 = self.ymarks[row]
+        x = x0 + 0.5
+        y = y0 + 0.5
+        w0 = self.xmarks[col + cspan] - x0
+        h0 = self.ymarks[row + rspan] - y0
+        w = w0 - 1
+        h = h0 - 1
         t = Tile(self, x, y, w, h, **kargs)
-        self.scene.addItem(t)
+        if cell_selectable:
+            t.selectable_cell = (x0, y0, w0, h0)
+        self.scene().addItem(t)
+        return t
+
+    def grid_line_thick_h(self, row):
+        try:
+            y = self.ymarks[row]
+        except:
+#TODO
+            raise
+        line = QGraphicsLineItem(self.xmarks[0], y, self.xmarks[-1], y)
+        line.setPen(StyleCache.getPen(self.thick_line_width, GRID_COLOUR))
+        line.setZValue(10)
+        self.scene().addItem(line)
+
+    def grid_line_thick_v(self, col):
+        try:
+            x = self.xmarks[col]
+        except:
+#TODO
+            raise
+        line = QGraphicsLineItem(x, self.ymarks[0], x, self.ymarks[-1])
+        line.setPen(StyleCache.getPen(self.thick_line_width, GRID_COLOUR))
+        line.setZValue(10)
+        self.scene().addItem(line)
+
+    def grid_tile(self,
+        row,
+        col,
+        cspan=1,
+        rspan=1,
+        cell_selectable=True,
+        **kargs
+    ):
+        """Add a basic tile to the grid, checking coordinates and
+        converting row + col to x + y point-coordinates for the
+        <Tile> class.
+        """
+        # Check bounds
+        if (
+            row < 0
+            or col < 0
+            or (row + rspan) >= len(self.ymarks)
+            or (col + cspan) >= len(self.xmarks)
+        ):
+#TODO
+            raise GridError(
+                _TILE_OUT_OF_BOUNDS.format(row=row, col=col, cspan=cspan, rspan=rspan)
+            )
+        x = self.xmarks[col]
+        y = self.ymarks[row]
+        w = self.xmarks[col + cspan] - x
+        h = self.ymarks[row + rspan] - y
+        t = Tile(self, x, y, w, h, **kargs)
+        if cell_selectable:
+            t.selectable_cell = (x, y, w, h)
+        self.scene().addItem(t)
         return t
 
     def tile_left_clicked(self, tile):
@@ -311,7 +585,7 @@ class GridView(QGraphicsView):
         if not filepath.endswith(".pdf"):
             filepath += ".pdf"
         printer = QPdfWriter(filepath)
-        printer.setPageSize(printer.A4)
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
         margins = self.pdfMargins()
         # print("margins:", margins)
         printer.setPageMargins(QMarginsF(*margins), QPageLayout.Point)
@@ -354,18 +628,19 @@ class GridView(QGraphicsView):
         # Render the table to pdf
         painter = QPainter()
         painter.begin(printer)
+        scene = self.scene()
         if (self.grid_width < pdf_wpx) and (self.grid_height < pdf_hpx):
             # If both dimensions are smaller than the pdf area, expand the
             # scene rectangle to avoid the table being enlarged.
-            self.scene.setSceneRect(0, 0, pdf_wpx, pdf_hpx)
-            self.scene.render(painter)
-            # print("SR1:", self.scene.sceneRect())
-            self.scene.setSceneRect(self._sceneRect)
-            # print("SR2:", self.scene.sceneRect())
+            scene.setSceneRect(0, 0, pdf_wpx, pdf_hpx)
+            scene.render(painter)
+            # print("SR1:", scene.sceneRect())
+            scene.setSceneRect(self._sceneRect)
+            # print("SR2:", scene.sceneRect())
         else:
             # print("SRX:", pdf_wpx, pdf_hpx)
-            self.scene.render(painter)
-            # print("SR:", self.scene.sceneRect())
+            scene.render(painter)
+            # print("SR:", scene.sceneRect())
         painter.end()
         return filepath
 
@@ -404,7 +679,6 @@ class GridViewRescaling(GridView):
     """An QGraphicsView that automatically adjusts the scaling of its
     scene to fill the viewing window.
     """
-
     def __init__(self):
         super().__init__()
         # Apparently it is a good idea to disable scrollbars when using
@@ -421,6 +695,41 @@ class GridViewRescaling(GridView):
         if qrect == None:
             qrect = self._sceneRect
         self.fitInView(qrect, Qt.KeepAspectRatio)
+
+
+class GridViewAuto(GridView):
+    """An QGraphicsView that automatically adjusts the scaling of its
+    scene to fill the viewing window, up to max. scale factor 1.
+    """
+    def __init__(self):
+        super().__init__()
+        # Apparently it is a good idea to disable scrollbars when using
+        # this resizing scheme. With this resizing scheme they would not
+        # appear anyway, so this doesn't lose any features!
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+    def resizeEvent(self, event):
+        self.rescale()
+        return super().resizeEvent(event)
+
+    def rescale(self, qrect=None):
+        if qrect == None:
+            qrect = self._sceneRect
+        size = self.viewport().size()
+        w = size.width()
+        scale = w / qrect.width()
+        h = size.height()
+        scale1 = h / qrect.height()
+        if scale1 < scale:
+            if scale1 > 1:
+                scale = 1
+            else:
+                scale = scale1
+        elif scale > 1:
+            scale = 1
+        t = QTransform().scale(scale, scale)
+        self.setTransform(t)
 
 
 # Experimental!
@@ -465,7 +774,7 @@ class Tile(QGraphicsRectItem):
     It contains a simple text element. The cell has the peculiarity,
     however, that the text is shrunk automatically if it is too big to
     fit in the cell. This only works to a certain degree. If the text
-    would become ridiculously small, only '###' is displayed.
+    would become too small, only '###' is displayed.
     Both cell and text can be styled to a limited extent.
     """
 
@@ -484,11 +793,12 @@ class Tile(QGraphicsRectItem):
             "halign": "c",
             "valign": "m",
             "rotate": False,
+            "border": GRID_COLOUR,
         }
         self.style.update(style)
         self.halign = self.style["halign"]
         self.valign = self.style["valign"]
-        self.rotation = self.style["rotate"]
+        self.rotated = self.style["rotate"]
         bg = self.style["bg"]
         if bg:
             self.set_background(bg)
@@ -498,48 +808,48 @@ class Tile(QGraphicsRectItem):
         if font:
             self.textItem.setFont(font)
         else:
-            self.textItem.setFont(GraphicsSupport.getFont())
-        self.setText(text)
+            self.textItem.setFont(StyleCache.getFont())
+        self.set_text(text)
         self.set_textcolour(self.style["fg"])
         # Border
-        pen0 = GraphicsSupport.getPen(None)
+        pen0 = StyleCache.getPen(grid.border_width, self.style["border"])
         self.setPen(pen0)
 
     def set_background(self, colour):
-        self.setBrush(GraphicsSupport.getBrush(colour))
+        self.setBrush(StyleCache.getBrush(colour))
 
     def set_textcolour(self, colour):
-        self.textItem.setBrush(GraphicsSupport.getBrush(colour))
+        self.textItem.setBrush(StyleCache.getBrush(colour))
 
     def set_halign(self, halign):
         self.halign = halign
+        self.set_text(self.text)
+
+    def set_valign(self, valign):
+        self.valign = valign
+        self.set_text(self.text)
 
     def set_verticaltext(self, rot90=True):
-        self.rotation = rot90
-        self.setText(self.text)
+        self.rotated = rot90
+        self.set_text(self.text)
 
-    def margin(self):
-        #        return 0.4 * self._grid._gview.MM2PT
-        return self._grid.pt2px(1.5)
-
-    def value(self):
-        return self.text
-
-    def setText(self, text):
+    def set_text(self, text):
         if type(text) != str:
+#TODO
             raise GridError(_NOTSTRING.format(val=repr(text)))
         self.text = text
         self.textItem.setText(text)
         self.textItem.setScale(1)
-        w = self.textItem.boundingRect().width()
-        h = self.textItem.boundingRect().height()
-        margin = self.margin()
+        tbr = self.textItem.boundingRect()
+        w = tbr.width()
+        h = tbr.height()
+        margin = self._grid.cell_margin
+        scale = 1
+        yshift = 0
         if text:
-            scale = 1
             maxw = self.width0 - margin * 2
             maxh = self.height0 - margin * 2
-            if self.rotation:
-                maxh -= margin * 4
+            if self.rotated:
                 if w > maxh:
                     scale = maxh / w
                 if h > maxw:
@@ -548,13 +858,18 @@ class Tile(QGraphicsRectItem):
                         scale = _scale
                 if scale < 0.6:
                     self.textItem.setText("###")
-                    scale = maxh / self.textItem.boundingRect().width()
+                    tbr = self.textItem.boundingRect()
+                    w = tbr.width()
+                    h = tbr.height()
+                    scale = maxh / w
                 if scale < 1:
                     self.textItem.setScale(scale)
-                trf = QTransform().rotate(-90)
-                self.textItem.setTransform(trf)
+                self.textItem.setRotation(-90)
+                __h = h
+                h = w * scale
+                w = __h * scale
+                yshift = h
             else:
-                maxw -= margin * 4
                 if w > maxw:
                     scale = maxw / w
                 if h > maxh:
@@ -563,29 +878,26 @@ class Tile(QGraphicsRectItem):
                         scale = _scale
                 if scale < 0.6:
                     self.textItem.setText("###")
-                    scale = maxw / self.textItem.boundingRect().width()
+                    tbr = self.textItem.boundingRect()
+                    w = tbr.width()
+                    h = tbr.height()
+                    scale = maxw / w
                 if scale < 1:
                     self.textItem.setScale(scale)
-        # This print line can help find box size problems:
-        #            print("BOX-SCALE: %5.3f (%s) *** w: %6.2f / %6.2f *** h: %6.2f / %6.2f"
-        #                    % (scale, text, w, maxw, h, maxh))
-        bdrect = self.textItem.mapRectToParent(self.textItem.boundingRect())
-        yshift = -bdrect.top() if self.rotation else 0.0
-        w = bdrect.width()
-        h = bdrect.height()
-        xshift = 0.0
+                h = h * scale
+                w = w * scale
         if self.halign == "l":
-            xshift += margin
+            xshift = margin
         elif self.halign == "r":
-            xshift += self.width0 - margin - w
+            xshift = self.width0 - margin - w
         else:
-            xshift += (self.width0 - w) / 2
+            xshift = (self.width0 - w) / 2
         if self.valign == "t":
             yshift += margin
         elif self.valign == "b":
             yshift += self.height0 - margin - h
         else:
-            yshift += (self.height0 - h) / 2
+            yshift += self.height0 - (self.height0 + h) / 2
         self.textItem.setPos(xshift, yshift)
 
     def leftclick(self):
@@ -699,7 +1011,7 @@ class PopupDate(QDialog):
         self.newDate(self.cal.selectedDate())
         self.move(self._grid.screen_coordinates(x, y))
         if self.exec_():
-            tile.setText(self.date)
+            tile.set_text(self.date)
             self._grid.value_changed(tile, self.date)
 
     def newDate(self, date):
@@ -753,103 +1065,67 @@ class PopupLineEdit(QDialog):
         if self.exec_():
             self._grid.value_changed(tile, self.lineedit.text())
 
-#################################################
-
-class GraphicsSupport:
-    """Support functions for the grid."""
-
-    __fonts = {}  # cache for QFont items
-    __brushes = {}  # cache for QBrush items
-    __pens = {}  # cache for QPen items
-
-    @classmethod
-    def getFont(
-        cls,
-        fontFamily=FONT_DEFAULT,
-        fontSize=FONT_SIZE_DEFAULT,
-        fontBold=False,
-        fontItalic=False,
-    ):
-        ftag = (fontFamily, fontSize, fontBold, fontItalic)
-        try:
-            return cls.__fonts[ftag]
-        except KeyError:
-            pass
-        font = QFont()
-        if fontFamily:
-            font.setFamily(fontFamily)
-        if fontSize:
-            font.setPointSizeF(fontSize)
-        if fontBold:
-            font.setBold(True)
-        if fontItalic:
-            font.setItalic(True)
-        cls.__fonts[ftag] = font
-        return font
-
-    @classmethod
-    def getPen(cls, width, colour=None):
-        """Manage a cache for pens of different width and colour."""
-        if width:
-            wc = (width, colour or GRID_COLOUR)
-            try:
-                return cls.__pens[wc]
-            except KeyError:
-                pass
-            pen = QPen(QColor("#FF" + wc[1]))
-            pen.setWidthF(wc[0])
-            cls.__pens[wc] = pen
-            return pen
-        else:
-            try:
-                return cls.__pens[None]
-            except KeyError:
-                pen = QPen()
-                pen.setStyle(Qt.NoPen)
-                cls.__pens[None] = pen
-                return pen
-
-    @classmethod
-    def getBrush(cls, colour=None):
-        """Manage a cache for brushes of different colour.
-        <colour> is a colour in the form 'RRGGBB'.
-        """
-        try:
-            return cls.__brushes[colour]
-        except KeyError:
-            pass
-        if colour:
-            brush = QBrush(QColor("#FF" + (colour)))
-        else:
-            brush = QBrush()
-        cls.__brushes[colour] = brush
-        return brush
-
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    rows = (100, 6, 25, 25, 25, 25, 25)
-    cols = (80, 30, 25, 60, 25, 25, 350)
+    rows = (100, 30, 30, 30, 30, 30, 30, 30)
+    cols = (200, 50, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 40, 40, 40)
 
     from qtpy.QtWidgets import QApplication
 
     app = QApplication([])
-    grid = GridViewRescaling()
+    #grid = GridViewRescaling()
+    #grid = GridViewHFit() # buggy ...
     #grid = GridView()
+    grid = GridViewAuto()
     titleheight = 25
     grid.init(rows, cols, titleheight)
 
-    t1 = grid.basic_tile(3, 0, tag="t1", text="Two Merged Cells", cspan=2, bg="ffff80")
-    grid.basic_tile(5, 3, tag="t2", text="I am")
-    grid.basic_tile(
-        0,
-        2,
-        tag="t3",
-        text="Rotated",
-        rotate=True,
-        font=GraphicsSupport.getFont("Serif", fontBold=True, fontItalic=False),
-    )
+
+#TODO: Add grid_tiles
+    row_list = []
+    for rx in range(len(rows)):
+        row = []
+
+        for cx in range(len(cols)):
+
+#            grid.grid_tile(rx, cx, tag=f"({cx} | {rx})")
+#            grid.grid_tile(rx, cx, tag=f"({cx} | {rx})", border=None)
+            rotate = False
+            cell_selectable = True
+            if len(row_list) == 0:
+                cell_selectable = False
+                if len(row) >= 2:
+                    rotate = True
+            row.append(
+                grid.grid_tile(
+                    rx, cx, tag=f"({cx} | {rx})",
+                    border=GRID_COLOUR,
+                    rotate=rotate,
+                    cell_selectable=cell_selectable,
+                    valign='b'
+                )
+            )
+        row_list.append(row)
+
+    grid.grid_line_thick_v(2)
+    grid.grid_line_thick_h(1)
+
+    row_list[0][0].set_text("Not rotated")
+    row_list[0][0].set_valign('m')
+    row_list[0][2].set_text("Rotated")
+    row_list[0][2].set_valign('m')
+    row_list[0][4].set_text("English")
+
+    grid.grid_tile(4, 3, tag="t2", text="A long entry")
+    grid.grid_tile(2, 0, tag="l", text="left", halign='l')
+    grid.grid_tile(3, 0, tag="r", text="right", halign='r')
+    grid.grid_tile(4, 0, tag="t", text="top", valign='t')
+    grid.grid_tile(5, 0, tag="b", text="bottom", valign='b')
+    tr = grid.grid_tile(2, 2, tag="B", text="B", valign='b')
+    tr.set_verticaltext()
+
     if titleheight:
         title = grid.add_title("Centre Title")
         title_l = grid.add_title("Left Title", halign="l")

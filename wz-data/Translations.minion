@@ -38,11 +38,17 @@ core.pupils: {
 core.report_courses: {
     UNKNOWN_GROUP: "In Klasse {klass}: unbekannte Gruppe ({group}) für Fach {sid} bei Lehrer {tid}"
     PUPIL_HAS_MULTIPLE_SID: "In Klasse {klass}, {pupil} hat mehrere Zeugniseinträge im Fach {subject}"
+    MULTIPLE_REPORT_SETTINGS: "Gruppe {group}: Zeugnis-Info in Fach {subject} widersprüchlich"
 }
 
 grades.gradetable: {
     
     TITLE:          "Notentabelle, erstellt {time}"
+    REPORT_TYPE:    "Zeugnis-Art"
+    REMARKS:        "Bemerkungen"
+    PID:            "ID"
+    PUPIL:          "Schüler(in)"
+    GROUPS:         "Gruppen"
     
     # Messages
     INVALID_OCCASION_GROUP: "Anlass {occasion}: für Klasse/Gruppe {group} gibt es keine Konfiguration" 
@@ -51,6 +57,10 @@ grades.gradetable: {
     TABLE_YEAR_MISMATCH: "Falsches Schuljahr in Notentabelle:\n  erwartet '{year}' ... Datei:\n    {filepath}"
     GRADE_CONFLICT: "Widersprüchliche Noten für Schüler {pid} im Fach {sid}\n  {path1}\n  {path2}"
     INVALID_GRADE: "In {filepath}:\n  Die Note für {pupil} im Fach {sid} ist ungültig: {grade}"
+#    CALCULATION_WITH_COMPONENT: "Fach {subject} ist einem Sammelfach zugeordnet. Es darf zu keinen weiteren Berechnungen beitragen: Eintrag „{flags}“"
+#    INVALID_FLAG:   "Ungültiger Eintrag im Zeugnis-Feld, Fach {subject}: {flag}"
+    COMPOSITE_NO_REFERENCE: "Gruppe {group}: Sammelfach „{composite}“ hat keine Komponenten"
+    COMPOSITE_UNDECLARED: "Gruppe {group}: Sammelfach „{composite}“ wurde nicht angegeben"
 }
 
 ui.ui_base: {
@@ -190,13 +200,15 @@ ui.modules.course_editor: {
     TIME_FIXED:     "Feste Startzeit"
 
     # Dialog buttons
-    Clear:          "Verwerfen"
+#    Clear:          Verwerfen
 
     # Course field editor buttons
 #    EDIT_COURSE:    "Kursdaten bearbeiten"
     EDIT:           Bearbeiten
 #    DELETE_COURSE:  "Kurs löschen"
     DELETE:         Löschen
+    CANCEL:         Abbrechen
+    APPLY:          Anwenden
     NEW:            Hinzufügen
     NEW_PLAIN:      "Neue Unterrichtsstunde"
     NEW_BLOCK:      "Neues Blockfach bzw. Neue Epoche"
@@ -213,6 +225,9 @@ ui.modules.course_editor: {
     SUBJECT:        Fach
     TEACHER:        Lehrkraft
     REPORT:         Zeugnis
+    GRADES:         Noten
+    REPORT_SUBJECT: Fach-Überschrift
+    AUTHORS:        Verantwortliche
 
     # Lesson table
     LESSONS:        "Unterricht usw."

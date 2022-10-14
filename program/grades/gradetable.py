@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-09-17
+Last updated:  2022-10-03
 
 Access grade data, read and build grade tables.
 
@@ -89,10 +89,11 @@ import datetime
 
 #?
 from core.base import class_group_split, Dates
+from core.db_access import db_read_table
 from core.basic_data import get_classes, get_subjects_with_sorting, SHARED_DATA
 from core.classes import atomic_maps
 from core.pupils import pupils_in_group, pupil_name
-from core.report_courses import get_class_subjects, get_pupil_grade_matrix
+from core.report_courses import get_pupil_grade_matrix
 from tables.spreadsheet import read_DataTable
 from tables.matrix import KlassMatrix
 
@@ -139,23 +140,22 @@ is set in the pupil record. In that case the value in a spreadsheet
 table would be irrelevant (only for information), maybe even superfluous.
 """
 
-def get_grade_entry_tables():
+def get_grade_config():
     try:
-        return SHARED_DATA["GRADE_ENTRY_TABLES"]
+        return SHARED_DATA["GRADE_CONFIG"]
     except KeyError:
         pass
-    data = MINION(DATAPATH("CONFIG/GRADE_ENTRY_TABLES"))
-    SHARED_DATA["GRADE_ENTRY_TABLES"] = data
+    data = MINION(DATAPATH("CONFIG/GRADE_CONFIG"))
+    SHARED_DATA["GRADE_CONFIG"] = data
     return data
 
 
 def get_group_data(occasion: str, class_group: str):
     """Get information pertaining to the grade table for the given
     group and "occasion".
-    Return a tuple: (occasion name, group data)
     """
-    entry_tables_info = get_grade_entry_tables()
-    oinfo = entry_tables_info["OCCASIONS"]
+    grade_info = get_grade_config()
+    oinfo = grade_info["OCCASIONS"]
     for o, odata in oinfo:
         if o == occasion:
             break
@@ -174,7 +174,7 @@ def get_group_data(occasion: str, class_group: str):
 #TODO: Construct whatever is needed for a full grade table.
 # The parameters should come from the class/group in the record (if there
 # is one). However, as the search is done based on a class/group, it
-# must be the same one as in the search criterium. The pupils in this
+# must be the same one as in the search criterion. The pupils in this
 # class/group could be different from the current members.
 
 # Use:
@@ -188,7 +188,43 @@ def get_group_data(occasion: str, class_group: str):
 # Consider also:
 # __INDIVIDUAL__: True
 
+# Some of these entries are "expected", with built-in handlers.
+# Those starting with '?' are choices (from the given value list), but
+# they are not "expected".
+# COMPOSITE refers to a subject in the COURSES table (without teachers
+# and lessons). It generates an average of the grades in those subjects
+# (sids) which include the sid in their REPORT field. These "component"
+# subjects will need special handling when building the reports (to
+# ensure that they don't get "counted" twice).
+
+# I could have a collection of handler functions/methods for the built-in
+# key words, others could be handled by plug-ins? Those starting with '?'
+# would have a special handler. The question is, though, how much of that
+# needs to be handled here, and how much in the editor. Maybe the
+# primary handling of the details should be in the editor. It might be
+# enough here to simply read the fields from the database.
+
+# When making a table/editor for an occasion+group I would need
+#  - the identifier stuff: pupil-id, pupil-name, pupil-groups(?);
+#  - the subjects (separating out composites and components?);
+#  - (possibly the components);
+#  - (possibly the composites);
+#  - averages, etc.
+#  - evaluation fields, report type, ...
+# Each column would have an appropriate "item delegate", for example
+# a grade choice, or read-only for calculated cells.
+# Setting a background colour on the columns might help.
+
+# Note that special text-report fields (subject, signatories) and special
+# grade-report fields (composite, calculated fields) are set in the
+# course editor. The course editor is independent of particular report
+# "occasions", so these fields must also be independently specified for
+# a class/group. If groups are involved it might make sense to first
+# look for class specifications, which can then be extended (or even
+# overriden?) by group specifications.
+
 '''
+# see also the example in test-itemdelegates.py
 class ComboDelegate(QItemDelegate):
     """
     A delegate to add QComboBox in every cell of the given column
@@ -215,6 +251,206 @@ class ComboDelegate(QItemDelegate):
             maxval = len(value)
             editor.setCurrentIndex(maxval - 1)
 '''
+
+#TODO
+def read_grade_table(occasion: str, class_group: str, instance: str = ""):
+    ### Get subject, pupil and group report-information
+    subjects, pupils = get_pupil_grade_matrix(
+        class_group, text_reports=False
+    )
+    group_data = get_group_data(occasion, class_group)
+    print("??????", group_data)
+    klass, group = class_group_split(class_group)
+    try:
+        __extra_info = get_grade_config()["GRADE_FIELDS_EXTRA"][klass]
+    except KeyError:
+        composites = {}
+        averages = {}
+    else:
+        try:
+            __clist = __extra_info["COMPOSITE"]
+        except KeyError:
+            __clist = []
+        try:
+            __alist = __extra_info["CALCULATE"]
+        except KeyError:
+            __alist = []
+        try:
+            __ginfo = __extra_info[group]
+        except KeyError:
+            pass
+        else:
+            try:
+                __clist += __ginfo["COMPOSITE"]
+            except KeyError:
+                pass
+            try:
+                __alist += __ginfo["CALCULATE"]
+            except KeyError:
+                pass
+
+        composites = {}
+        composite_references = {}
+        for k, fn in __clist:
+            composites[k] = fn
+            composite_references[k] = 0
+
+#        composites = {k: fn for k, fn in __clist}
+        averages = {k: (n, fn) for k, n, fn in __alist}
+    header_list = []
+    for sdata in sorted(subjects.values()):
+        print("§§§§§§§§", sdata)
+#TODO
+        # Subjects counting towards something else (composites,
+        # averages, ...) need some sort of reference to their
+        # target – so that a change can trigger a recalculation.
+        sid = sdata[1]
+        sname = sdata[2]
+        zgroup = sdata[3]
+        composite = sdata[4]
+        # sdata[5] is the text-report custom settings, which are
+        # not relevant  here.
+        value = {"SID": sid, "NAME": sname, "GROUP":zgroup}
+        try:
+            value["FUNCTION"] = composites.pop(sid)
+            value["TYPE"] = "COMPOSITE"
+        except KeyError:
+            value["TYPE"] = "SUBJECT"
+        if composite:
+            if composite == "---":
+                value["TARGET"] = ""
+            else:
+                try:
+                    composite_references[composite] += 1
+                    value["TARGET"] = composite
+                except KeyError:
+                    # This composite is not configured, ignore it.
+                    pass
+        header_list.append(value)
+    # Check usage and declaration of composites
+    for c, n in composite_references.items():
+        if n == 0:
+            # No references, which suggests the composite should not be
+            # defined ...
+            if c not in composites:
+                REPORT(
+                    "ERROR",
+                    T["COMPOSITE_NO_REFERENCE"].format(
+                        group=class_group,
+                        composite=c
+                    )
+                )
+        else:
+            # Referenced, so it must be defined ...
+            if c in composites:
+                REPORT(
+                    "ERROR",
+                    T["COMPOSITE_UNDECLARED"].format(
+                        group=class_group,
+                        composite=c
+                    )
+                )
+    # Now all the extra fields
+#TODO: Should they really be added to the subjects?
+    for k, v in averages.items():
+        header_list.append(
+            {
+                "SID": k,
+                "NAME": v[0],
+                "TYPE": "CALCULATE",
+                "FUNCTION": v[1]
+            }
+        )
+    for k, v in group_data.items():
+        if k[0] == '?':
+            header_list.append(
+                {
+                    "SID": k[1:],
+                    "NAME": v[0],
+                    "TYPE": "CHOICE",
+                    "VALUES": v[1]
+                }
+            )
+    report_types = group_data.get("REPORT_TYPES")
+    if report_types:
+        header_list.append(
+            {
+                "SID": "REPORT_TYPE",
+                "NAME": T["REPORT_TYPE"],
+                "TYPE": "CHOICE_MAP",
+                "VALUES": report_types
+            }
+        )
+    header_list.append(
+        {
+            "SID": "REMARKS",
+            "NAME": T["REMARKS"],
+            "TYPE": "TEXT"
+        }
+    )
+
+    print("\n*** SUBJECTS")
+    for val in header_list:
+        print("    ---", val)
+#        print("*** COMPONENTS", components)
+#        print("*** COMPOSITES", composites)
+#        for k, v in group_data.items():
+#            if k[0] == '?':
+#                print("***", k, ":", v)
+    print("\n*** GRADES", group_data["GRADES"])
+
+    fields = [
+        "OCCASION",
+        "CLASS_GROUP",
+        "INSTANCE",
+        "PID",
+#?            "NAME",
+#?            "GROUPS",
+# The groups might have changed, making this field relevant?
+
+        "GRADE_MAP"
+    ]
+#TODO
+#        flist, rlist = db_read_table(
+#            "GRADES",
+#            fields,
+#            OCCASION=occasion,
+#            CLASS_GROUP=class_group,
+#            INSTANCE=instance
+#        )
+#TODO
+    # If there is a result, use the pupils in the list rather than
+    # the pupils from <pupils>, in case there have been changes.
+    # There should be an option in the GUI to reload the data, which
+    # would use the "current" pupil list (in <pupils>), but take
+    # any available data about grades from this database list.
+    # Additional pupil data needed for the reports would need to come
+    # from the "PUPILS" table. For those in <pupils>, it is already
+    # available, others must be read individually.
+
+    # It is not impossible that some other information about a pupil
+    # changes during a year (not just the groups). The most
+    # straightforward approach might be to forbid editing/regeneration
+    # of old reports after their date of issue – or at lest to warn
+    # strongly against it. A separate possibility to edit old data
+    # might be useful. However, consider a possible need to correct
+    # old data when a mistake is found only later. To preserve all
+    # the old data which might be needed to print a report, it would
+    # need to be stored with the grade data.
+
+    print("\n*** PUPILS")
+    pupil_map = {}
+    for pdata, p_atoms, p_grade_tids in pupils:
+        print(f'\n +++ {pupil_name(pdata)} ({pdata["PID"]}) [{pdata["GROUPS"]}]')
+        print("            ", p_grade_tids)
+
+        pupil_map[pdata["PID"]] = (pdata, p_grade_tids)
+
+#        return {
+#            "HEADERS": header_list,
+#            "PUPILS": pupil_map,
+#            "GRADES": grade_map
+#        }
 
 
 def make_grade_table(
@@ -251,8 +487,8 @@ def make_grade_table(
         DATE_GRADES = DATE_ISSUE
     info_transl: dict[str, str] = {}
     info_item: dict
-    entry_tables_info = get_grade_entry_tables()
-    for f, t in entry_tables_info["INFO_FIELDS"]:
+    grade_info = get_grade_config()
+    for f, t in grade_info["INFO_FIELDS"]:
         info_transl[f] = t
     info: Dict[str, str] = {
         info_transl["SCHOOLYEAR"]: SCHOOLYEAR,
@@ -329,9 +565,9 @@ def read_grade_table_file(filepath: str) -> tuple[
     Return mapping for pupil-grades. Include header info as special
     entry.
     """
-    grade_entry_info = get_grade_entry_tables()
-    header_map = {t: f for f, t in grade_entry_info["HEADERS"]}
-    info_map = {t: f for f, t in grade_entry_info["INFO_FIELDS"]}
+    grade_config = get_grade_config()
+    header_map = {t: f for f, t in grade_config["HEADERS"]}
+    info_map = {t: f for f, t in grade_config["INFO_FIELDS"]}
     datatable = read_DataTable(filepath)
     info = {
         (info_map.get(k) or k): v
@@ -490,7 +726,7 @@ def get_group_info(
             raise GradeTableError(_MISSING_KEY.format(key=key))
 
 
-class GradeTable:
+class _GradeTable:
     """Manage the grade data for one group in one "term" – corresponding
     to the contents of a single grade table.
     """
@@ -665,7 +901,7 @@ if __name__ == "__main__":
     open_database()
 
     __cg = "12G.R"
-    __cg = "11G"
+#    __cg = "11G"
 #    __cg = "12G.G"
 
     tbytes = make_grade_table("1. Halbjahr", __cg)
@@ -692,7 +928,9 @@ if __name__ == "__main__":
     for p, pdata in gtable.items():
         print("\n ***", p, pdata)
 
-#    print("\n *************************************************\n")
+    print("\n *************************************************\n")
+
+    gradetable = read_grade_table("2. Halbjahr", "12G.R")
 
     quit(0)
 

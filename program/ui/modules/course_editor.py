@@ -1,7 +1,7 @@
 """
 ui/modules/course_editor.py
 
-Last updated:  2022-08-22
+Last updated:  2022-10-02
 
 Edit course and blocks+lessons data.
 
@@ -89,6 +89,7 @@ from ui.ui_base import (
     QStackedLayout,
     QAbstractItemView,
     ### QtGui:
+    QIcon,
     ### QtCore:
     Qt,
     ### QtSql:
@@ -126,8 +127,9 @@ COURSE_COLS = [
         "SUBJECT",
         "TEACHER",
         "REPORT",
-#        "GRADE",
-#        "COMPOSITE",
+        "GRADES",
+        "REPORT_SUBJECT",
+        "AUTHORS",
     )
 ]
 # SUBJECT, CLASS and TEACHER are foreign keys with:
@@ -857,16 +859,19 @@ class CourseEditorForm(QDialog):
             if editwidget.__real:
                 form.addRow(t, editwidget)
         vbox0.addWidget(HLine())
-        buttonBox = QDialogButtonBox()
-        vbox0.addWidget(buttonBox)
-        bt_cancel = buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
-        self.course_update_button = buttonBox.addButton(
-            QDialogButtonBox.StandardButton.Apply
-        )
-        self.course_add_button = buttonBox.addButton(
-            QDialogButtonBox.StandardButton.Save
-        )
-        self.course_add_button.setText(T["NEW"])
+        buttonBox = QHBoxLayout()
+        vbox0.addLayout(buttonBox)
+        self.course_add_button = QPushButton(T["NEW"])
+        self.course_add_button.setIcon(QIcon.fromTheme("icon_new"))
+        buttonBox.addWidget(self.course_add_button)
+        buttonBox.addStretch(1)
+        self.course_update_button = QPushButton(T["APPLY"])
+        self.course_update_button.setIcon(QIcon.fromTheme("icon_ok"))
+        buttonBox.addWidget(self.course_update_button)
+        bt_cancel = QPushButton(T["CANCEL"])
+        bt_cancel.setIcon(QIcon.fromTheme("icon_cancel"))
+        bt_cancel.setDefault(True)
+        buttonBox.addWidget(bt_cancel)
         bt_cancel.clicked.connect(self.reject)
         self.course_update_button.clicked.connect(self.course_update)
         self.course_add_button.clicked.connect(self.course_add)
