@@ -200,7 +200,7 @@ ui.modules.course_editor: {
     TIME_FIXED:     "Feste Startzeit"
 
     # Dialog buttons
-#    Clear:          Verwerfen
+    Clear:          Verwerfen
 
     # Course field editor buttons
 #    EDIT_COURSE:    "Kursdaten bearbeiten"
