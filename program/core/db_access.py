@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-09-08
+Last updated:  2022-10-23
 
 Helper functions for accessing the database.
 
@@ -232,6 +232,15 @@ def db_read_unique_field(table, field, *wheres, **keys):
     flist, rlist = db_read_table(table, [field], *wheres, **keys)
     if len(rlist) == 1:
         return rlist[0][0]
+    if not rlist:
+        raise NoRecord
+    raise Bug("Record not unique")
+
+
+def db_read_unique_entry(table, *wheres, **keys):
+    flist, rlist = db_read_table(table, None, *wheres, **keys)
+    if len(rlist) == 1:
+        return flist, rlist[0]
     if not rlist:
         raise NoRecord
     raise Bug("Record not unique")

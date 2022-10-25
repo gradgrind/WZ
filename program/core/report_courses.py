@@ -1,7 +1,7 @@
 """
 core/report_courses.py
 
-Last updated:  2022-10-03
+Last updated:  2022-10-23
 
 Access course/subject data for reports.
 
@@ -176,8 +176,18 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
     """Return a list of report subjects for the given group and for each
     subject the relevant teachers for each pupil in the group.
     <subject_set> is a mapping, {sid ->
-        [subject-index, sid, subject-name, subject-group, (extra-)report-flags]
+        [
+            subject-index,  # for ordering
+            sid,
+            subject-name,
+            subject-group,
+            composite-sid or '',
+            (extra-)report-flags or None
+        ]
     }
+    <pupils is a list, [
+        pupil-data, "pupil-group-atoms", {tid, ...}
+    ]
     """
     subject_map = get_subjects_with_sorting()
     # If I select the whole class, I want all courses (with pupils).
@@ -215,7 +225,7 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
         else:
             atoms = set(group2atoms[''])
         pupils.append((pdata, atoms, {}))
-#        print("%%%", pupils[-1])
+        # print("%%%", pupils[-1])
     tgroups = set(group2atoms[group])
     subject_set = {}
     subsubjects = {}    # for checking for double entries (see below)
@@ -261,11 +271,12 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
                     # Check for subjects with multiple entries (same
                     # sid/subject, but different sid-qualifiers).
                     # The first use of a subject is recorded in
-                    # <subsubjects> (stem -> full subject tag).
+                    # <subsubjects>, {(pid, stem) -> full subject tag}.
+                    key = (pdata["PID"], sid0)
                     try:
-                        sid1 = subsubjects[sid0]
+                        sid1 = subsubjects[key]
                     except KeyError:
-                        subsubjects[sid0] = sid
+                        subsubjects[key] = sid
                     else:
                         if sid1 != sid:
                             REPORT(
@@ -304,7 +315,7 @@ if __name__ == "__main__":
 
     kg = "12G.R"
     kg = "12G.G"
-    #kg = "13"
+    kg = "13"
     subjects, pupils = get_pupil_grade_matrix(kg, text_reports=False)
     print("\n SUBJECTS FOR GROUP", kg)
     for s in sorted(subjects.values()):

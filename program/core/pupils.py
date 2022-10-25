@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2022-09-03
+core/pupils.py - last updated 2022-10-23
 
 Manage pupil data.
 
@@ -20,22 +20,7 @@ Copyright 2022 Michael Towers
 =-LICENCE=================================
 """
 
-#TODO ... completely new, now based on database table "PUPILS"
-
-"""
-For each school class there is a DataTable containing the pupil data.
-The file is a direct representation of the form in which pupil data
-is read in and passed around, a mapping:
-    {   '__INFO__':     {key: value, ... },
-        '__FIELDS__':   [field1, ... ],
-        '__ROWS__':     [{field: value, ... }, ... ]
-    }
-The info keys are, at present:
-    __TITLE__: 'Pupil Data' (for example, not used in code)
-    SCHOOLYEAR: '2016' (year in which the end of the school year falls)
-    CLASS: '02G' (name of the class)
-    __MODIFIED__: <date-time> (not used in code)
-"""
+#TODO ... T ...
 
 _TITLE = "Schülerdaten"
 
@@ -74,7 +59,7 @@ T = TRANSLATIONS("core.pupils")
 
 ### +++++
 
-from core.db_access import db_read_table
+from core.db_access import db_read_table, db_read_unique_entry
 from core.base import class_group_split
 from core.basic_data import SHARED_DATA
 
@@ -98,6 +83,13 @@ from local.local_pupils import (
 # What about updating from file, with update selections?
 
 ### **************************************************************** ###
+
+def pupil_data(pid):
+    """Return a mapping of the pupil-data for the given pupil-id.
+    This data is not cached.
+    """
+    flist, row = db_read_unique_entry("PUPILS", PID=pid)
+    return dict(zip(flist, row))
 
 
 def get_pupils(klass):
@@ -124,7 +116,7 @@ def get_pupils(klass):
         sort_field="SORT_NAME",
         CLASS=klass,
     )[1]:
-        pupils.append({field_list[i]: row[i] for i in range(l)})
+        pupils.append(dict(zip(field_list, row)))
     SHARED_DATA[key] = pupils
     return pupils
 
@@ -436,6 +428,7 @@ if __name__ == "__main__":
     print(f"\nPupils in {__k}:")
     for pdata in pupils_in_group(__k):
         print("  +++", pdata)
+        pid = pdata["PID"]
 
 
     print("\nFinal-year pupils:")
@@ -443,6 +436,9 @@ if __name__ == "__main__":
         print("  +++", k)
         for item in pdata:
             print("        ::", item)
+
+    print(f"\nDATA FOR PID={pid}:")
+    print(pupil_data(pid))
 
     quit(0)
 

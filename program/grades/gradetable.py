@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-10-03
+Last updated:  2022-10-23
 
 Access grade data, read and build grade tables.
 
@@ -89,10 +89,10 @@ import datetime
 
 #?
 from core.base import class_group_split, Dates
-from core.db_access import db_read_table
+from core.db_access import db_read_table, read_pairs
 from core.basic_data import get_classes, get_subjects_with_sorting, SHARED_DATA
 from core.classes import atomic_maps
-from core.pupils import pupils_in_group, pupil_name
+from core.pupils import pupils_in_group, pupil_name, pupil_data
 from core.report_courses import get_pupil_grade_matrix
 from tables.spreadsheet import read_DataTable
 from tables.matrix import KlassMatrix
@@ -253,18 +253,19 @@ class ComboDelegate(QItemDelegate):
 '''
 
 #TODO
-def read_grade_table(occasion: str, class_group: str, instance: str = ""):
+def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     ### Get subject, pupil and group report-information
     subjects, pupils = get_pupil_grade_matrix(
         class_group, text_reports=False
     )
     group_data = get_group_data(occasion, class_group)
-    print("??????", group_data)
+    # print("??????", group_data)
     klass, group = class_group_split(class_group)
     try:
         __extra_info = get_grade_config()["GRADE_FIELDS_EXTRA"][klass]
     except KeyError:
         composites = {}
+        composite_references = {}
         averages = {}
     else:
         try:
@@ -299,11 +300,9 @@ def read_grade_table(occasion: str, class_group: str, instance: str = ""):
         averages = {k: (n, fn) for k, n, fn in __alist}
     header_list = []
     for sdata in sorted(subjects.values()):
-        print("§§§§§§§§", sdata)
-#TODO
-        # Subjects counting towards something else (composites,
-        # averages, ...) need some sort of reference to their
-        # target – so that a change can trigger a recalculation.
+        # print("§§§§§§§§", sdata)
+        # Subjects counting towards composites need some sort of reference
+        # to their target – so that a change can trigger a recalculation.
         sid = sdata[1]
         sname = sdata[2]
         zgroup = sdata[3]
@@ -350,10 +349,13 @@ def read_grade_table(occasion: str, class_group: str, instance: str = ""):
                         composite=c
                     )
                 )
+    result = {"SUBJECTS": header_list}
     # Now all the extra fields
-#TODO: Should they really be added to the subjects?
+#TODO: Should they be added to the subjects?
+    extra_list = []
+    result["EXTRAS"] = extra_list
     for k, v in averages.items():
-        header_list.append(
+        extra_list.append(
             {
                 "SID": k,
                 "NAME": v[0],
@@ -363,7 +365,7 @@ def read_grade_table(occasion: str, class_group: str, instance: str = ""):
         )
     for k, v in group_data.items():
         if k[0] == '?':
-            header_list.append(
+            extra_list.append(
                 {
                     "SID": k[1:],
                     "NAME": v[0],
@@ -373,7 +375,7 @@ def read_grade_table(occasion: str, class_group: str, instance: str = ""):
             )
     report_types = group_data.get("REPORT_TYPES")
     if report_types:
-        header_list.append(
+        extra_list.append(
             {
                 "SID": "REPORT_TYPE",
                 "NAME": T["REPORT_TYPE"],
@@ -381,7 +383,7 @@ def read_grade_table(occasion: str, class_group: str, instance: str = ""):
                 "VALUES": report_types
             }
         )
-    header_list.append(
+    extra_list.append(
         {
             "SID": "REMARKS",
             "NAME": T["REMARKS"],
@@ -389,35 +391,45 @@ def read_grade_table(occasion: str, class_group: str, instance: str = ""):
         }
     )
 
-    print("\n*** SUBJECTS")
-    for val in header_list:
-        print("    ---", val)
-#        print("*** COMPONENTS", components)
-#        print("*** COMPOSITES", composites)
-#        for k, v in group_data.items():
-#            if k[0] == '?':
-#                print("***", k, ":", v)
-    print("\n*** GRADES", group_data["GRADES"])
+    result["GRADES"] = group_data["GRADES"]
+    result["GRADE_ENTRY"] = group_data["GRADE_ENTRY"]
 
+    pupil_map = {}
+    result["PUPILS"] = pupil_map
+    for pdata, p_atoms, p_grade_tids in pupils:
+        pupil_map[pdata["PID"]] = (pdata, p_grade_tids)
+
+    return result
+
+
+def read_stored_grades(occasion: str, class_group: str, instance: str = ""):
     fields = [
-        "OCCASION",
-        "CLASS_GROUP",
-        "INSTANCE",
+        # "OCCASION",
+        # "CLASS_GROUP",
+        # "INSTANCE",
         "PID",
-#?            "NAME",
-#?            "GROUPS",
-# The groups might have changed, making this field relevant?
-
+        "LEVEL",    # The level might have changed, so this field is relevant
         "GRADE_MAP"
     ]
-#TODO
-#        flist, rlist = db_read_table(
-#            "GRADES",
-#            fields,
-#            OCCASION=occasion,
-#            CLASS_GROUP=class_group,
-#            INSTANCE=instance
-#        )
+    flist, rlist = db_read_table(
+        "GRADES",
+        fields,
+        OCCASION=occasion,
+        CLASS_GROUP=class_group,
+        INSTANCE=instance
+    )
+    plist = []
+    for row in rlist:
+        pid = row["PID"]
+        pdata = pupil_data(pid) # this mapping is not cached => it is mutable
+        # Substitute the pupil fields which could differ in the grade data
+        pdata["CLASS"] = class_group_split(class_group)[0]
+        pdata["LEVEL"] = row["LEVEL"]
+        # Get grade (etc.) info as mapping
+        grade_map = read_pairs(row["GRADE_MAP"])
+        plist.append((pdata, grade_map))
+    return plist
+
 #TODO
     # If there is a result, use the pupils in the list rather than
     # the pupils from <pupils>, in case there have been changes.
@@ -438,20 +450,11 @@ def read_grade_table(occasion: str, class_group: str, instance: str = ""):
     # the old data which might be needed to print a report, it would
     # need to be stored with the grade data.
 
-    print("\n*** PUPILS")
-    pupil_map = {}
-    for pdata, p_atoms, p_grade_tids in pupils:
-        print(f'\n +++ {pupil_name(pdata)} ({pdata["PID"]}) [{pdata["GROUPS"]}]')
-        print("            ", p_grade_tids)
-
-        pupil_map[pdata["PID"]] = (pdata, p_grade_tids)
-
 #        return {
 #            "HEADERS": header_list,
 #            "PUPILS": pupil_map,
 #            "GRADES": grade_map
 #        }
-
 
 def make_grade_table(
     occasion: str,
@@ -466,11 +469,12 @@ def make_grade_table(
     structure as <grades>: {pid -> {sid -> grade}}
     """
     ### Get subject, pupil and group information
-    subjects, pupils = get_pupil_grade_matrix(class_group, text_reports=False)
-    group_data = get_group_data(occasion, class_group)
+    gtinfo = grade_table_info(occasion, class_group)
+    subjects = gtinfo["SUBJECTS"]
+    pupils = gtinfo["PUPILS"]
 
     ### Get template file
-    template_path = RESOURCEPATH(group_data["GRADE_ENTRY"])
+    template_path = RESOURCEPATH(gtinfo["GRADE_ENTRY"])
     table = KlassMatrix(template_path)
 
     ### Set title line
@@ -507,18 +511,16 @@ def make_grade_table(
         )
     sidcol: list[tuple[str, int]] = []
     sid: str
-    sdata: list
-    for sdata in sorted(subjects.values()):
-        sid = sdata[1]
-#TODO: Should special subjects be present at all?
-        if sid[0] == "$":
-            # Skipping "special" subjects
+    sdata: dict
+    for sdata in subjects:
+        if sdata["TYPE"] != "SUBJECT":
             continue
+        sid = sdata["SID"]
         # Add subject
         col: int = table.nextcol()
         sidcol.append((sid, col))
         table.write(rowix[0], col, sid)
-        table.write(rowix[1], col, sdata[2])
+        table.write(rowix[1], col, sdata["NAME"])
     # Enforce minimum number of columns
     while col < 18:
         col = table.nextcol()
@@ -527,8 +529,10 @@ def make_grade_table(
     table.delEndCols(col + 1)
 
     ### Add pupils and grades
-    for pdata, p_atoms, p_grade_tids in pupils:
-        pid = pdata["PID"]
+#    for pdata, p_atoms, p_grade_tids in pupils:
+#        pid = pdata["PID"]
+    for pid, pinfo in pupils.items():
+        pdata, p_grade_tids = pinfo
         pgrades: dict[str, str]
         try:
             pgrades = grades[pid]
@@ -537,7 +541,7 @@ def make_grade_table(
         row = table.nextrow()
         table.write(row, 0, pid)
         table.write(row, 1, pupil_name(pdata))
-        table.write(row, 2, pdata["GROUPS"])
+        table.write(row, 2, pdata["LEVEL"])
         for sid, col in sidcol:
             if p_grade_tids.get(sid):
                 if (g := pgrades.get(sid)):
@@ -900,19 +904,16 @@ if __name__ == "__main__":
     from core.db_access import open_database
     open_database()
 
-    __cg = "12G.R"
-#    __cg = "11G"
-#    __cg = "12G.G"
-
-    tbytes = make_grade_table("1. Halbjahr", __cg)
-
-    tpath = DATAPATH(f"testing/tmp/GradeInput-{__cg}.xlsx")
-    tdir = os.path.dirname(tpath)
-    if not os.path.isdir(tdir):
-        os.makedirs(tdir)
-    with open(tpath, "wb") as _fh:
-        _fh.write(tbytes)
-    print(f"\nWROTE GRADE TABLE TO {tpath}\n")
+    for __cg in ("13", "11G", "12G.G", "12G.R"):
+#    for __cg in ("11G", "12G.G", "12G.R"):
+        tbytes = make_grade_table("1. Halbjahr", __cg)
+        tpath = DATAPATH(f"testing/tmp/GradeInput-{__cg}.xlsx")
+        tdir = os.path.dirname(tpath)
+        if not os.path.isdir(tdir):
+            os.makedirs(tdir)
+        with open(tpath, "wb") as _fh:
+            _fh.write(tbytes)
+        print(f"\nWROTE GRADE TABLE TO {tpath}\n")
 
     print("\n *************************************************\n")
 
@@ -930,7 +931,22 @@ if __name__ == "__main__":
 
     print("\n *************************************************\n")
 
-    gradetable = read_grade_table("2. Halbjahr", "12G.R")
+    gtinfo = grade_table_info("2. Halbjahr", "12G.R")
+    print("\n*** SUBJECTS")
+    for val in gtinfo["SUBJECTS"]:
+        print("    ---", val)
+    print("\n*** EXTRA COLUMNS")
+    for val in gtinfo["EXTRAS"]:
+        print("    ---", val)
+    print("\n*** GRADES", gtinfo["GRADES"])
+    print("\n*** PUPILS")
+    for pid, pinfo in gtinfo["PUPILS"].items():
+        pdata, p_grade_tids = pinfo
+        print(f'\n +++ {pdata}')
+        print(" .........", p_grade_tids)
+
+    print("\n*** STORED GRADES")
+    stored_grades = read_stored_grades("2. Halbjahr", "12G.R")
 
     quit(0)
 
