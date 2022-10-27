@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-07-24
+Last updated:  2022-10-27
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -50,6 +50,7 @@ from core.db_access import (
     db_read_table,
     db_values,
     db_read_unique_field,
+    NoRecord,
 )
 from core.basic_data import (
     get_days,
@@ -96,6 +97,7 @@ from ui.ui_base import (
     QButtonGroup,
     QStyledItemDelegate,
     QCompleter,
+    QSpinBox,
     ### QtGui:
     QRegularExpressionValidator,
     ### QtCore:
@@ -153,7 +155,23 @@ class DayPeriodDialog(QDialog):
         hbox1.addWidget(self.periodlist)
 
         self.fixed_time = QCheckBox(T["TIME_FIXED"])
+        self.fixed_time.stateChanged.connect(self.fix_unfix)
         vbox0.addWidget(self.fixed_time)
+
+        pbox = QFormLayout()
+        vbox0.addLayout(pbox)
+        self.simultaneous_tag = QComboBox()
+        self.simultaneous_tag.setEditable(True)
+        self.simultaneous_tag.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.simultaneous_tag.currentTextChanged.connect(
+            self.select_simultaneous_tag
+        )
+        pbox.addRow(T["SIMULTANEOUS_TAG"], self.simultaneous_tag)
+        self.weighting = QSpinBox()
+        self.weighting.setMinimum(0)
+        self.weighting.setMaximum(10)
+        self.weighting.setValue(10)
+        pbox.addRow(T["WEIGHTING"], self.weighting)
 
         buttonBox = QDialogButtonBox()
         vbox0.addWidget(buttonBox)
@@ -166,12 +184,34 @@ class DayPeriodDialog(QDialog):
         bt_cancel.clicked.connect(self.reject)
         bt_clear.clicked.connect(self.do_clear)
 
+    def fix_unfix(self, state):
+        if state == Qt.CheckState.Unchecked:
+            self.daylist.setEnabled(False)
+            self.periodlist.setEnabled(False)
+            self.simultaneous_tag.setEnabled(True)
+            self.weighting.setEnabled(True)
+        else:
+            self.daylist.setEnabled(True)
+            self.periodlist.setEnabled(True)
+            self.simultaneous_tag.setEnabled(False)
+            self.simultaneous_tag.setCurrentIndex(-1)
+            self.weighting.setEnabled(False)
+            if self.daylist.currentRow() < 0:
+                self.daylist.setCurrentRow(0)
+                self.periodlist.setCurrentRow(0)
+
     def do_accept(self):
-        d = self.daylist.currentRow()
-        p = self.periodlist.currentRow()
-        self.result = index2timeslot((d, p))
-        if not self.fixed_time.isChecked():
-            self.result = "?" + self.result
+        if self.fixed_time.isChecked():
+            self.result = index2timeslot(
+                (self.daylist.currentRow(), self.periodlist.currentRow())
+            )
+        else:
+            self.result = self.simultaneous_tag.currentText()
+            if self.result:
+                if '.' in self.result or '@' in self.result:
+                    SHOW_WARNING(T["TAG_WITH_DOT_OR_AT"])
+                    return
+                self.result += f"@{self.weighting.value()}"
         self.accept()
 
     def do_clear(self):
@@ -187,20 +227,38 @@ class DayPeriodDialog(QDialog):
     def activate(self, start_value=None):
         self.result = None
         try:
-            if start_value:
-                fixed = start_value[0] != "?"
-                d, p = timeslot2index(start_value)
-            else:
-                d, p, fixed = 0, 0, True
+            d, p = timeslot2index(start_value)
+            fixed = True
+            if d < 0:
+                d, p = 0, 0
         except ValueError as e:
-            SHOW_ERROR(f"Bug: {e}")
-            self.result = ""
-            d, p, fixed = 0, 0, True
+            if '.' in start_value:
+                SHOW_ERROR(str(e))
+                d, p, fixed = 0, 0, True
+            else:
+                # <start_value> is a "simultaneous" tag
+                d, p, fixed = -1, -1, False
         self.daylist.setCurrentRow(d)
         self.periodlist.setCurrentRow(p)
+        # Enter "simultaneous" tags into combobox
+        self.simultaneous_tag.clear()
+        self.simultaneous_tag.addItems(
+            db_values("PARALLEL_LESSONS", "TAG", sort_field="TAG")
+        )
+        # Toggle "fixed" flag to ensure callback activated
+        self.fixed_time.setChecked(not fixed)
         self.fixed_time.setChecked(fixed)
+        if (not fixed) and start_value:
+            self.simultaneous_tag.setCurrentText(start_value)
         self.exec()
         return self.result
+
+    def select_simultaneous_tag(self, tag):
+        try:
+            w = db_read_unique_field("PARALLEL_LESSONS", "WEIGHTING", TAG=tag)
+        except NoRecord:
+            w = 10
+        self.weighting.setValue(w)
 
 
 class ListWidget(QListWidget):
@@ -636,7 +694,14 @@ class DayPeriodDelegate(QStyledItemDelegate):
         pos = self.__table.viewport().mapToGlobal(rect.bottomLeft())
         result = DayPeriodDialog.popup(old_value, pos=pos)
         if result is not None:
-            if (not self.__modified) or self.__modified(index.row(), result):
+#            if (not self.__modified) or self.__modified(index.row(), result):
+#                model.setData(index, result)
+
+            if self.__modified:
+                val = self.__modified(index.row(), result)
+                if val is not None:
+                    model.setData(index, val)
+            else:
                 model.setData(index, result)
         self.__table.setFocus()
 
@@ -1469,6 +1534,15 @@ if __name__ == "__main__":
     #    for p in partners("sp03"):
     #        print("??????", p)
 
+    widget = DayPeriodDialog()
+    widget.init()
+    #    widget.resize(1000, 550)
+    #    widget.exec()
+
+    print("----->", widget.activate(""))
+    print("----->", widget.activate("Di.4"))
+    print("----->", widget.activate("Di.9"))
+
     widget = PaymentDialog()
     print("----->", widget.activate(start_value="2*HuEp"))
     print("----->", widget.activate(start_value=""))
@@ -1489,15 +1563,6 @@ if __name__ == "__main__":
     #    print("----->", widget.activate("huO"))
 
     #    quit(0)
-
-    widget = DayPeriodDialog()
-    widget.init()
-    #    widget.resize(1000, 550)
-    #    widget.exec()
-
-    print("----->", widget.activate(""))
-    print("----->", widget.activate("Di.4"))
-    print("----->", widget.activate("Di.9"))
 
     widget = RoomDialog()
     widget.init()

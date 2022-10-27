@@ -200,7 +200,7 @@ if __name__ == "__main__":
                 # print(f"Reading from\n  {fet_file} and\n  {placements}")
                 read_placements(fet_file, pxfile)
 #
-                quit(0)
+#                quit(0)
 
                 db_backup(pbase)
 

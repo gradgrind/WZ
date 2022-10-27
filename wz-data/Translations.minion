@@ -17,7 +17,7 @@ core.basic_data: {
     BLOCKTAG_INVALID: "Block-Kennzeichen {tag} hat ungültige „Kennung“"
     BLOCKTAG_UNKNOWN_SUBJECT: "Block-Kennzeichen {tag} hat unbekanntes Fach: '{sid}'"
     NO_TIME_FOR_PARTNERS: "Zeitangabe für Partner-Kennzeichen '{tag}' fehlt in Datenbank"
-    INVALID_TIMESLOT: "Ungültige Zeitangabe ({val}) – sollte '[?][Tag.Stunde]' sein"
+    INVALID_TIMESLOT: "Ungültige Zeitangabe, sollte 'Tag.Stunde' sein: {val}"
     UNKNOWN_GROUP:  "In Klasse {klass}, unbekannte Gruppe: {group}"
     UNKNOWN_CLASS:  "Unbekannte Klasse: {klass}"
     BAD_NOTES_INFO: "„Notizen-Info ungültig, '{item}' in '{info}'"
@@ -186,6 +186,7 @@ ui.modules.course_editor: {
     BLOCK_WITH_NO_TAG: "Mit leerem Block-Kennzeichen kann es keine Unterrichtsstunden geben"
     PAYTAG_WITH_NO_NUMBER: "Ohne „Anzahl“ darf es keine Deputatskennung geben"
     NULL_FACTOR_NOT_CLEAN: "Faktor 0: Die anderen Felder müssen leer sein"
+    TAG_WITH_DOT_OR_AT: "Parallel-Kennung darf kein '.' oder '@' enthalten"
     
 #    PAYMENT_VALID_ENTRY: "* oder Dezimalzahl"
 #    INVALID_PAYMENT: "Ungültiger Wert"
@@ -198,6 +199,8 @@ ui.modules.course_editor: {
     SOME_ROOM:      "irgendein Raum"
     OTHER_ROOMS:    "auch andere Räume"
     TIME_FIXED:     "Feste Startzeit"
+    SIMULTANEOUS_TAG: "Parallel-Kennung"
+    WEIGHTING:      "Gewichtung"
 
     # Dialog buttons
     Clear:          Verwerfen
@@ -247,6 +250,7 @@ ui.modules.course_editor: {
     TAG:            Kennzeichen    # (siehe oben)
     LENGTH:         Dauer
     TIME:           Zeit
+    PLACEMENT:      Stunde
     ROOMS:          Räume
 
     Partners:       Partner-id

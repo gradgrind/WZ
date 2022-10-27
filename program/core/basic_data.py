@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-10-03
+core/basic_data.py - last updated 2022-10-27
 
 Handle caching of the basic data sources
 
@@ -155,6 +155,7 @@ class Sublesson(NamedTuple):
     TAG: str
     LENGTH: int
     TIME: str
+    PLACEMENT: str
     ROOMS: str
 
 
@@ -384,14 +385,10 @@ def read_payment(payment: str) -> Optional[PaymentData]:
 def timeslot2index(timeslot):
     """Convert a "timeslot" in the tag-form (e.g. "Mo.3") to a pair
     of 0-based indexes, (day, period).
-    There may be a "?"-prefix, indicating that the time is not fixed.
     A null value means "unspecified time", returning (-1, -1).
     Invalid values cause a <ValueError> exception.
     """
     if timeslot:
-        if timeslot[0] == "?":
-            # Remove "unfixed" flag
-            timeslot = timeslot[1:]
         try:
             d, p = timeslot.split(".")  # Can raise <ValueError>
             return (get_days().index(d), get_periods().index(p))

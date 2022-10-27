@@ -1,5 +1,5 @@
 """
-timetable/fet_data.py - last updated 2022-08-15
+timetable/fet_data.py - last updated 2022-10-26
 
 Prepare fet-timetables input from the database ...
 
@@ -254,6 +254,7 @@ class TimetableCourses(Courses):
         "timetable_teachers",
         "timetable_subjects",
         "timetable_classes",
+        "parallel_tags",
         "locked_aids",
         "group2atoms",
         "activities",
@@ -279,7 +280,9 @@ class TimetableCourses(Courses):
         self.timetable_teachers = set()
         self.timetable_subjects = set()
         # Collect locked placements:
-        self.locked_aids: set[str] = set()
+        self.locked_aids: dict[str, Optional[tuple[str,str]]] = {}
+        # Collect activities with "parallel" tags, {tag: [activity-id, ... ]}
+        self.parallel_tags: dict[str, list[str]] = {}
         # Collect more complex room allocations
         self.fancy_rooms = []
 
@@ -464,7 +467,7 @@ class TimetableCourses(Courses):
         # of lessons (such as English in group 10A for three lessons
         # per week). It is not of much significance for my usage of fet,
         # but it might be useful to have this coupling within the fet gui.
-        # Uncoupled activitities are given Activity_Group_Id = ''0',
+        # Uncoupled activitities are given Activity_Group_Id = '0',
         # a set of coupled activities is given as Activity_Group_Id the
         # (activity) Id of the first member of the set. The other
         # members of the set get the immediately following Id numbers,
@@ -473,25 +476,43 @@ class TimetableCourses(Courses):
 
     def add_placement(self, id_str, sublesson, rooms):
         t = sublesson.TIME
-        if t and t[0] != "?":
-            ## Lesson starting time, only include fixed times
-            timeslot2index(t)   # This is just a check
-            self.locked_aids.add(id_str)
-            d, p = t.split(".", 1)
-            # Fix day and period
-            add_constraint(
-                self.time_constraints,
-                "ConstraintActivityPreferredStartingTime",
-                {
-                    "Weight_Percentage": "100",
-                    "Activity_Id": id_str,
-                    "Preferred_Day": d,
-                    "Preferred_Hour": p,
-                    "Permanently_Locked": "true",
-                    "Active": "true",
-                    "Comments": None,
-                },
-            )
+        if t:
+            # Check for "parallel" tag
+            try:
+                t, ptag = t.split("#", 1)
+            except ValueError:
+                ptag = ""
+            if ptag:
+#TODO: new code, needs testing ...
+                try:
+                    # Split off weighting (0 - 10)
+                    ptag, w = ptag.split("@", 1)
+                except ValueError:
+                    w = "10" # default
+                val = (id_str, w)
+                try:
+                    self.parallel_tags[ptag].append(val)
+                except KeyError:
+                    self.parallel_tags[ptag] = [val]
+            if t[0] != "?":
+                ## Lesson starting time, only include fixed times
+                timeslot2index(t)   # This is just a check
+                d, p = t.split(".", 1)
+                self.locked_aids[id_str] = (d, p)
+                # Fix day and period
+                add_constraint(
+                    self.time_constraints,
+                    "ConstraintActivityPreferredStartingTime",
+                    {
+                        "Weight_Percentage": "100",
+                        "Activity_Id": id_str,
+                        "Preferred_Day": d,
+                        "Preferred_Hour": p,
+                        "Permanently_Locked": "true",
+                        "Active": "true",
+                        "Comments": None,
+                    },
+                )
         ## Lesson room
         n = len(rooms)
         if n > 1:
@@ -1267,6 +1288,44 @@ class TimetableCourses(Courses):
         )
         return None
 
+    def add_parallels(self):
+#TODO
+        print("TODO: ConstraintActivitiesSameStartingTime")
+        parallels = []
+        for ptag, aidlist in self.parallel_tags.items():
+            parallels.append(
+                {
+                    "Weight_Percentage": "100",
+                    "Number_of_Activities": str(len(aidlist)),
+                    "Activity_Id": aidlist,
+                    "Active": "true",
+                    "Comments": None,
+                }
+            )
+
+        """<ConstraintActivitiesSameStartingTime>
+            <Weight_Percentage>100</Weight_Percentage>
+            <Number_of_Activities>2</Number_of_Activities>
+            <Activity_Id>170</Activity_Id>
+            <Activity_Id>183</Activity_Id>
+            <Active>true</Active>
+            <Comments></Comments>
+        </ConstraintActivitiesSameStartingTime>
+        """
+        add_constraints(
+            self.time_constraints,
+            "ConstraintActivitiesSameStartingTime",
+            parallels,
+        )
+#TODO: It could be necessary to suppress some min-gap constraints ...
+# It might also be worth considering representing parallels as blocks
+# instead ... maybe without the subject prefix and different from the
+# plain lessons.
+# I am assuming only 100% weighting is implemented here (so that I
+# wouldn't need to specify a weighting), but actually fet seems to
+# support lower weightings, too.
+
+
     def add_further_constraints(self):
         """Add any further constraints to deal with particular local
         needs ... .
@@ -1651,6 +1710,9 @@ if __name__ == "__main__":
 
     print("\nClass constraints ...")
     courses.add_class_constraints()
+
+    print("\nParallel activity constraints")
+    courses.add_parallels()
 
     print("\nFurther constraints ...")
     courses.add_further_constraints()
