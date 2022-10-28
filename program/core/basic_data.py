@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-10-27
+core/basic_data.py - last updated 2022-10-28
 
 Handle caching of the basic data sources
 
@@ -28,7 +28,9 @@ from typing import Optional, NamedTuple
 from core.db_access import (
     db_read_fields,
     db_key_value_list,
-    KeyValueList
+    db_read_unique_field,
+    NoRecord,
+    KeyValueList,
 )
 from core.classes import Classes
 from core.teachers import Teachers
@@ -174,6 +176,16 @@ def get_sublessons(reset:bool=False) -> dict[str,list[Sublesson]]:
             slmap[sl.TAG] = [sl]
     SHARED_DATA["SUBLESSONS"] = slmap
     return slmap
+
+
+def get_simultaneous_weighting(tag, with_default=True):
+    try:
+        return db_read_unique_field("PARALLEL_LESSONS", "WEIGHTING", TAG=tag)
+    except NoRecord:
+        if with_default:
+            return 10
+        else:
+            raise
 
 
 def sublessons(tag:str, reset:bool=False) -> list[Sublesson]:
@@ -404,11 +416,3 @@ def index2timeslot(index):
     d = get_days()[index[0]][0]
     p = get_periods()[index[1]][0]
     return f"{d}.{p}"
-
-
-# TODO: deprecated
-def check_start_time(tag):
-    """Can raise a <ValueError>."""
-    raise Bug(f"$!$!$! deprecated: basic_data.check_start_time ({tag})")
-    # Do this instead:
-    timeslot2index(tag)

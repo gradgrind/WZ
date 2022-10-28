@@ -1,5 +1,5 @@
 """
-timetable/asc_data.py - last updated 2022-08-27
+timetable/asc_data.py - last updated 2022-08-28
 
 Prepare aSc-timetables input from the database ...
 
@@ -366,26 +366,38 @@ class TimetableCourses(Courses):
         # The rooms should be taken from the aSc-lesson item if the
         # sublesson has none.
         for sl in sl_list:
-            timeslot = sl.TIME
-            if timeslot:
-                if sl.ROOMS:
-                    rl = sl.ROOMS
-                else:
-                    rl = asc_rooms
+            timefield = sl.TIME
+            placement_field = sl.PLACEMENT
+            fixed_time = False
+            d, p = None, None
+            if placement_field:
                 try:
-                    d, p = timeslot2index(timeslot)
+                    d, p = timeslot2index(placement_field)
                 except ValueError as e:
-                    REPORT("WARNING", str(e))
-                    continue
-                self.asc_card_list.append(
-                    {
-                        "@lessonid": asc_id,
-                        "@period": str(p + 1),
-                        "@day": str(d + 1),
-                        "@classroomids": rl,
-                        "@locked": "0" if timeslot[0] == "?" else "1",
-                    }
-                )
+                    REPORT("ERROR", f"[PLACEMENT] {str(e)}")
+            if timefield:
+                try:
+                    d0, p0 = timeslot2index(timefield)
+                    if d is None:
+                        d, p = d0. p0
+                        fixed_time = True
+                    elif (d0 == d) and (p0 == p):
+                        fixed_time = True
+                    else:
+                        d, p = d0. p0
+                except ValueError:
+                    pass
+            if d is None:
+                continue
+            self.asc_card_list.append(
+                {
+                    "@lessonid": asc_id,
+                    "@period": str(p + 1),
+                    "@day": str(d + 1),
+                    "@classroomids": sl.ROOMS if sl.ROOMS else asc_rooms,
+                    "@locked": "1" if fixed_time else "0",
+                }
+            )
 
 
 def full_group(klass, group):

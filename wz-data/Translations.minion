@@ -343,7 +343,6 @@ timetable.asc_data: {
     BAD_PLAIN_BLOCK: "{course}: für Kennzeichen {tag} muss es genau einen Kurs geben"
     ROOM_TODO:      "Raum muss noch festgelegt werden"
 
-    
     # Entries probably "aSc"-specific
     INVALID_PLACE:  "Im Kurs (Gruppe {klass}.{group}, Fach-id {sid}, Lehrer {tid}), unbekannter Raum (Ort): '{rid}'"
     BAD_TIME:       "Ungültige Zeitangabe: '{time}' (lesson-id {id})"
@@ -359,6 +358,7 @@ timetable.fet_data: {
     INVALID_CLASS_CONDITION_VALUE: "Klasse {klass}, ungültiger Wert für Bedingung {constraint}: '{val}'"
     INVALID_GROUP_LIST: "Kurs mit Kennzeichen {tag}, Gruppenkombination nicht möglich: {groups}"
     INVALID_CLASS_CONSTRAINT: "Klasse {klass}: ungültige Wert für Bedingung {constraint}"
+    PARALLEL_SINGLE: "Parallel-Kennung {tag} hat nur eine Unterrichtsstunde"
    
     # Entries probably "aSc"-specific
     INVALID_PLACE:  "Im Kurs (Gruppe {klass}.{group}, Fach-id {sid}, Lehrer {tid}), unbekannter Raum (Ort): '{rid}'"

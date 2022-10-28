@@ -1,7 +1,7 @@
 """
 ui/modules/course_editor.py
 
-Last updated:  2022-10-02
+Last updated:  2022-10-28
 
 Edit course and blocks+lessons data.
 
@@ -54,6 +54,7 @@ from core.db_access import (
     db_new_row,
     db_delete_rows,
     db_values,
+    NoRecord,
 )
 from core.teachers import Teachers
 from core.classes import Classes
@@ -62,6 +63,7 @@ from core.basic_data import (
     get_payment_weights,
     get_subjects,
     sublessons,
+    get_simultaneous_weighting,
 )
 
 from ui.ui_base import (
@@ -689,9 +691,10 @@ class BlockLesson(QWidget):
         )
         #        self.lesson_table.cellChanged.connect(self.sublesson_table_changed)
 
-        self.lesson_table.setColumnCount(5)
+        self.lesson_table.setColumnCount(6)
         self.lesson_table.setHorizontalHeaderLabels(
-            (T["id"], T["TAG"], T["LENGTH"], T["TIME"], T["ROOMS"])
+#TODO: Do I really want to have PLACEMENT and ROOMS here?
+            (T["id"], T["TAG"], T["LENGTH"], T["TIME"], T["PLACEMENT"], T["ROOMS"])
         )
         self.lesson_table.hideColumn(0)
         self.lesson_table.hideColumn(1)
@@ -750,8 +753,14 @@ class BlockLesson(QWidget):
             ltable.setItem(r, 0, QTableWidgetItem(str(s.id)))
             ltable.setItem(r, 1, QTableWidgetItem(s.TAG))
             ltable.setItem(r, 2, QTableWidgetItem(str(s.LENGTH)))
-            ltable.setItem(r, 3, QTableWidgetItem(s.TIME))
-            ltable.setItem(r, 4, QTableWidgetItem(s.ROOMS))
+            t = s.TIME
+            if t and '.' not in t:
+                # Show weighting of "simultaneous" tag
+                t = f"{t}@{get_simultaneous_weighting(t)}"
+            ltable.setItem(r, 3, QTableWidgetItem(t))
+#TODO?
+            ltable.setItem(r, 4, QTableWidgetItem(s.PLACEMENT))
+            ltable.setItem(r, 5, QTableWidgetItem(s.ROOMS))
             r += 1
         self.bt_del.setEnabled(bool(slist))
         self.__ltable_ready = True
@@ -785,7 +794,33 @@ class BlockLesson(QWidget):
 
     def time_changed(self, row, new_value):
         sublesson_id = int(self.lesson_table.item(row, 0).text())
-        return db_update_field("LESSONS", "TIME", new_value, id=sublesson_id)
+        try:
+            tag, _weighting = new_value.split("@", 1)
+        except ValueError:
+            tag = new_value
+        else:
+            weighting = int(_weighting)
+            # A "simultaneous" tag
+            try:
+                w = get_simultaneous_weighting(tag, with_default=False)
+            except NoRecord:
+                # Add record
+                db_new_row(
+                    "PARALLEL_LESSONS", TAG=tag, WEIGHTING=weighting
+                )
+#TODO: There should be some cleaning of the table somewhere ...
+            else:
+                if w != int(weighting):
+                    # Update record
+                    db_update_field(
+                        "PARALLEL_LESSONS",
+                        "WEIGHTING",
+                        weighting,
+                        TAG=tag
+                    )
+        if db_update_field("LESSONS", "TIME", tag, id=sublesson_id):
+            return new_value
+        return None
 
     def block_add(self):
         row = self.lesson_table.currentRow()

@@ -1,5 +1,5 @@
 """
-timetable/fet_data.py - last updated 2022-10-26
+timetable/fet_data.py - last updated 2022-10-28
 
 Prepare fet-timetables input from the database ...
 
@@ -67,6 +67,7 @@ from core.basic_data import (
     get_subjects,
     get_rooms,
     sublessons,
+    get_simultaneous_weighting,
     timeslot2index,
 )
 from core.classes import atomic_maps, atoms2groups
@@ -477,42 +478,36 @@ class TimetableCourses(Courses):
     def add_placement(self, id_str, sublesson, rooms):
         t = sublesson.TIME
         if t:
-            # Check for "parallel" tag
             try:
-                t, ptag = t.split("#", 1)
-            except ValueError:
-                ptag = ""
-            if ptag:
-#TODO: new code, needs testing ...
-                try:
-                    # Split off weighting (0 - 10)
-                    ptag, w = ptag.split("@", 1)
-                except ValueError:
-                    w = "10" # default
-                val = (id_str, w)
-                try:
-                    self.parallel_tags[ptag].append(val)
-                except KeyError:
-                    self.parallel_tags[ptag] = [val]
-            if t[0] != "?":
-                ## Lesson starting time, only include fixed times
-                timeslot2index(t)   # This is just a check
                 d, p = t.split(".", 1)
-                self.locked_aids[id_str] = (d, p)
-                # Fix day and period
-                add_constraint(
-                    self.time_constraints,
-                    "ConstraintActivityPreferredStartingTime",
-                    {
-                        "Weight_Percentage": "100",
-                        "Activity_Id": id_str,
-                        "Preferred_Day": d,
-                        "Preferred_Hour": p,
-                        "Permanently_Locked": "true",
-                        "Active": "true",
-                        "Comments": None,
-                    },
-                )
+            except ValueError:
+                # "Parallel" tag
+                try:
+                    self.parallel_tags[t].append(id_str)
+                except KeyError:
+                    self.parallel_tags[t] = [id_str]
+            else:
+                # Fixed starting time
+                try:
+                    timeslot2index(t)   # This is just a check
+                except ValueError as e:
+                    REPORT("ERROR", str(e))
+                else:
+                    self.locked_aids[id_str] = (d, p)
+                    # Constraint to fix day and period
+                    add_constraint(
+                        self.time_constraints,
+                        "ConstraintActivityPreferredStartingTime",
+                        {
+                            "Weight_Percentage": "100",
+                            "Activity_Id": id_str,
+                            "Preferred_Day": d,
+                            "Preferred_Hour": p,
+                            "Permanently_Locked": "true",
+                            "Active": "true",
+                            "Comments": None,
+                        },
+                    )
         ## Lesson room
         n = len(rooms)
         if n > 1:
@@ -1289,41 +1284,32 @@ class TimetableCourses(Courses):
         return None
 
     def add_parallels(self):
-#TODO
-        print("TODO: ConstraintActivitiesSameStartingTime")
         parallels = []
         for ptag, aidlist in self.parallel_tags.items():
-            parallels.append(
-                {
-                    "Weight_Percentage": "100",
-                    "Number_of_Activities": str(len(aidlist)),
-                    "Activity_Id": aidlist,
-                    "Active": "true",
-                    "Comments": None,
-                }
-            )
-
-        """<ConstraintActivitiesSameStartingTime>
-            <Weight_Percentage>100</Weight_Percentage>
-            <Number_of_Activities>2</Number_of_Activities>
-            <Activity_Id>170</Activity_Id>
-            <Activity_Id>183</Activity_Id>
-            <Active>true</Active>
-            <Comments></Comments>
-        </ConstraintActivitiesSameStartingTime>
-        """
+            l = len(aidlist)
+            if l > 1:
+                w = WEIGHTS[get_simultaneous_weighting(ptag)]
+                if w:
+                    parallels.append(
+                        {
+                            "Weight_Percentage": w,
+                            "Number_of_Activities": str(l),
+                            "Activity_Id": aidlist,
+                            "Active": "true",
+                            "Comments": None,
+                        }
+                    )
+            else:
+                REPORT("WARNING", T["PARALLEL_SINGLE"].format(tag=ptag))
         add_constraints(
             self.time_constraints,
             "ConstraintActivitiesSameStartingTime",
             parallels,
         )
 #TODO: It could be necessary to suppress some min-gap constraints ...
-# It might also be worth considering representing parallels as blocks
-# instead ... maybe without the subject prefix and different from the
-# plain lessons.
-# I am assuming only 100% weighting is implemented here (so that I
-# wouldn't need to specify a weighting), but actually fet seems to
-# support lower weightings, too.
+# It would be possible to implement 100% weighting as a block (somehow ...)
+# but direct usage of the fet constraint is easier to implemented here,
+# so I've left it at that for the time being.
 
 
     def add_further_constraints(self):

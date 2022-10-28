@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-10-27
+Last updated:  2022-10-28
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -59,6 +59,7 @@ from core.basic_data import (
     get_rooms,
     get_payment_weights,
     sublessons,
+    get_simultaneous_weighting,
     read_payment,
     read_block_tag,
     SHARED_DATA,
@@ -249,16 +250,16 @@ class DayPeriodDialog(QDialog):
         self.fixed_time.setChecked(not fixed)
         self.fixed_time.setChecked(fixed)
         if (not fixed) and start_value:
-            self.simultaneous_tag.setCurrentText(start_value)
+            # If the tag has a weighting, strip this off (the weighting
+            # field will be fetched by callback <select_simultaneous_tag>)
+            self.simultaneous_tag.setCurrentText(
+                start_value.split('@', 1)[0]
+            )
         self.exec()
         return self.result
 
     def select_simultaneous_tag(self, tag):
-        try:
-            w = db_read_unique_field("PARALLEL_LESSONS", "WEIGHTING", TAG=tag)
-        except NoRecord:
-            w = 10
-        self.weighting.setValue(w)
+        self.weighting.setValue(get_simultaneous_weighting(tag))
 
 
 class ListWidget(QListWidget):
