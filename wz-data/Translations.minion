@@ -42,7 +42,6 @@ core.report_courses: {
 }
 
 grades.gradetable: {
-    
     TITLE:          "Notentabelle, erstellt {time}"
     REPORT_TYPE:    "Zeugnis-Art"
     REMARKS:        "Bemerkungen"
@@ -277,9 +276,10 @@ ui.modules.grades_manager: {
     # Labels
     MODULE_NAME:    "Noten"
     MODULE_TITLE:   "Noten verwalten"
-    Pupils:         "Schüler(innen)"
+    Pupils:         "Schülerinnen und Schüler"
     Class_Group:    "Klasse/Gruppe"
     Occasion:       "Anlass"
+    Instance:       "Kennzeichen"
 
     # Messages
     BAD_GROUP_IN_CONFIG: "Konfiguration GRADE_ENTRY_TABLES: Ungültige Klasse/Gruppe ({group}) für Anlass „{occasion}“"

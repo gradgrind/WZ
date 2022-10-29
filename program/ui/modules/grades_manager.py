@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-09-17
+Last updated:  2022-10-29
 
 Front-end for managing grade reports.
 
@@ -43,23 +43,37 @@ T = TRANSLATIONS("ui.modules.grades_manager")
 
 ### +++++
 
-from core.db_access import open_database
+from core.db_access import open_database, db_values
 from core.base import class_group_split
 from core.basic_data import check_group
 from core.pupils import pupils_in_group, pupil_name
-from grades.gradetable import get_grade_entry_tables
+from grades.gradetable import (
+    get_grade_config,
+    grade_table_info,
+    read_stored_grades,
+    make_grade_table,
+)
 
 #???
 from ui.ui_base import (
     QWidget,
+    QFormLayout,
+    QDialog,
+    QStyledItemDelegate,
+    QLineEdit,
     QHBoxLayout,
     QVBoxLayout,
-    QFormLayout,
+
+    QPushButton,
+    QLayout,
+
     QLabel,
     QListWidget,
     QAbstractItemView,
-#    QPushButton,
     QComboBox,
+    # QtCore
+    Qt,
+
     KeySelector,
     HLine,
     run,
@@ -98,6 +112,71 @@ class ManageGrades(Page):
 # ++++++++++++++ The widget implementation ++++++++++++++
 
 
+class InstanceSelector(QWidget):
+    def __init__(self):
+        super().__init__()
+        hbox = QHBoxLayout(self)
+        hbox.setContentsMargins(0, 0, 0, 0)
+        self.combobox = QComboBox()
+        hbox.addWidget(self.combobox)
+        label = "+"
+        self.addnew = QPushButton(label)
+        self.addnew.setToolTip("New Item")
+        width = self.addnew.fontMetrics().boundingRect(label).width() + 16
+        self.addnew.setMaximumWidth(width)
+        hbox.addWidget(self.addnew)
+        self.addnew.clicked.connect(self.do_addnew)
+
+#TODO: According to the "occasion" and class-group there can be different
+# sorts of "instance". The main report types don't cater for "instances",
+# so the combobox and button could be disabled. Where a list is supplied
+# in the configuration, no new values are possible, the current value
+# would come from the database entry. Perhaps dates might be permitted.
+# In that case a date-choice widget would be appropriate.
+# Single report types, and maybe some other types, would take any string.
+# In that case a line editor coulf be used.
+
+    def do_addnew(self):
+        result = InstanceDialog.popup(
+            pos=self.mapToGlobal(self.rect().bottomLeft())
+        )
+
+    def set_list(self, value_list: list[str], mutable: int):
+        self.value_list = value_list
+        self.combobox.clear()
+        self.combobox.addItems(value_list)
+        self.setEnabled(mutable >= 0)
+        self.addnew.setEnabled(mutable > 0)
+
+
+#TODO
+class InstanceDialog(QDialog):
+    @classmethod
+    def popup(cls, start_value="", parent=None, pos=None):
+        d = cls(parent)
+#        d.init()
+        if pos:
+            d.move(pos)
+        return d.activate(start_value)
+
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        #self.setWindowFlags(Qt.WindowType.Popup)
+        vbox0 = QVBoxLayout(self)
+        vbox0.setContentsMargins(0, 0, 0, 0)
+        #vbox0.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
+        self.ledit = QLineEdit()
+        vbox0.addWidget(self.ledit)
+
+    def activate(self, start_value):
+        self.result = None
+        self.ledit.setText(start_value)
+        self.exec()
+        print("DONE", self.result)
+        return self.result
+
+
 class GradeManager(QWidget):
     def __init__(self):
         super().__init__()
@@ -127,6 +206,15 @@ class GradeManager(QWidget):
         self.class_selector = QComboBox()
         self.class_selector.currentTextChanged.connect(self.changed_class)
         formbox.addRow(T["Class_Group"], self.class_selector)
+#        self.instance_selector = QComboBox()
+        self.instance_selector = InstanceSelector()
+#        delegate = InstanceDelegate(self)
+#        self.instance_selector.setEditable(True)
+#        self.instance_selector.setItemDelegate(delegate)
+#        self.instance_selector.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+#TODO: ? Rather index changed signal?
+#        self.instance_selector.currentTextChanged.connect(self.select_instance)
+        formbox.addRow(T["Instance"], self.instance_selector)
 
         vboxr.addWidget(HLine())
         vboxr.addWidget(QLabel(T["Pupils"]))
@@ -141,16 +229,18 @@ class GradeManager(QWidget):
         self.__changes_enabled = False
         # Set up "occasions" here, from config
         self.occasion_selector.clear()
-        entry_tables_info = get_grade_entry_tables()
-        oinfo = entry_tables_info["OCCASIONS"]
+        occasion_info = get_grade_config()["OCCASIONS"]
         self.occasion2data = {}
-        for o, odata in oinfo:
+        for o, odata in occasion_info:
             self.occasion2data[o] = odata
             self.occasion_selector.addItem(o)
         # Enable callbacks
         self.__changes_enabled = True
         self.class_group = None
         self.changed_occasion(self.occasion_selector.currentText())
+
+    def select_instance(self, instance):
+        print(f"TODO: Instance '{instance}'")
 
     def modified(self):
         """Return <True> if there are unsaved changes.
@@ -207,10 +297,25 @@ class GradeManager(QWidget):
 # table. If I want to update the pupil list, there could be an update
 # button to do this?
 
+        try:
+            instance_data = self.group_data["INSTANCE"]
+        except KeyError:
+            # No instances are allowed
+            self.instance_selector.set_list([], -1)
+        else:
+            if isinstance(instance_data, list):
+                self.instance_selector.set_list(instance_data, 0)
+            else:
+                # Get items from database
+                instances = db_values(
+                    "GRADES_INFO",
+                    "INSTANCE",
+                    sort_field="INSTANCE",
+                    CLASS_GROUP=self.class_group,
+                    OCCASION=self.occasion
+                )
+                self.instance_selector.set_list(instances, 1)
 
-# What about a configuration item which allow the INITIAL level value
-# (Bewertungsmaßstab) to be set according to membership of particular
-# groups?
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 

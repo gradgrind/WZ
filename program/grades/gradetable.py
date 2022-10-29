@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-10-23
+Last updated:  2022-10-29
 
 Access grade data, read and build grade tables.
 
@@ -38,28 +38,6 @@ Copyright 2022 Michael Towers
 # probably also group (or perhaps rather "stream"), at least for the
 # higher classes.
 
-
-### Messages
-_NO_INFO_FOR_GROUP = (
-    "Klasse/Gruppe {group}: Notenzeugnisse sind nicht" " vorgesehen"
-)
-_TEMPLATE_HEADER_WRONG = "Fehler bei den Kopfzeilen der Vorlage:\n {path}"
-_MISSING_KEY = "Eintrag fehlt in Konfigurationsdatei: {key}"
-_GRADE_MISSING = "Leeres Notenfeld im Fach {sid}, Tabelle:\n  {path}"
-_BAD_DEPENDER = "Ungültiges Sonderfach-Kürzel: {sid}"
-_BAD_WEIGHT = "Gewichtung des Faches ({sid}) muss eine Zahl sein: '{d}'"
-_NULL_COMPOSITE = "'$' ist nicht gültig als Fach-Kürzel"
-_BAD_COMPOSITE = "Ungültiges Fach-Kürzel: {sid}"
-_EMPTY_COMPOSITE = "Sammelfach {sid} hat keine Komponenten"
-_COMPOSITE_NOT_ALONE = (
-    "Fach-Kürzel {sid}: Sammelfach ({comp}) darf"
-    " nicht parallel zu anderen sein"
-)
-_COMPOSITE_COMPONENT = (
-    "Sammelfach ({sid}) darf nicht Komponente eines"
-    " anderen Sammelfaches ({comp}) sein"
-)
-
 ###############################################################
 
 import sys, os
@@ -84,26 +62,16 @@ T = TRANSLATIONS("grades.gradetable")
 ### +++++
 
 #? ...
-from typing import Optional, Any
+from typing import Optional
 import datetime
 
-#?
 from core.base import class_group_split, Dates
 from core.db_access import db_read_table, read_pairs
-from core.basic_data import get_classes, get_subjects_with_sorting, SHARED_DATA
-from core.classes import atomic_maps
-from core.pupils import pupils_in_group, pupil_name, pupil_data
+from core.basic_data import SHARED_DATA
+from core.pupils import pupil_name, pupil_data
 from core.report_courses import get_pupil_grade_matrix
 from tables.spreadsheet import read_DataTable
 from tables.matrix import KlassMatrix
-
-#? ...
-
-#from core.base import Dates
-#from core.courses import Subjects, NULL, UNCHOSEN
-#from tables.spreadsheet import read_DataTable, filter_DataTable
-#from local.local_grades import GradeBase, GradeConfigError
-
 
 class GradeTableError(Exception):
     pass
@@ -494,7 +462,7 @@ def make_grade_table(
     grade_info = get_grade_config()
     for f, t in grade_info["INFO_FIELDS"]:
         info_transl[f] = t
-    info: Dict[str, str] = {
+    info: dict[str, str] = {
         info_transl["SCHOOLYEAR"]: SCHOOLYEAR,
         info_transl["CLASS_GROUP"]: class_group,
         info_transl["OCCASION"]: occasion,
@@ -586,7 +554,6 @@ def read_grade_table_file(filepath: str) -> tuple[
     for pdata in datatable["__ROWS__"]:
         pinfo = [pdata.pop(h) for h in header_map]
         pid: str = pinfo[0]
-        grades: dict[str, str] = {}
         if pid != "$":
             gdata[pid] = pdata
             # Check validity of grades
@@ -639,7 +606,7 @@ def collate_grade_tables(
         if info["OCCASION"] != occasion:
             raise GradeTableError(
                 T["TABLE_TERM_MISMATCH"].format(
-                    term=term, path=info["__FILEPATH__"]
+                    term=occasion, path=info["__FILEPATH__"]
                 )
             )
         # print("\n$$$", filepath)
@@ -668,234 +635,6 @@ def collate_grade_tables(
                         smap0[s] = g
                         fmap[(pid, s)] = filepath
     return grades
-
-
-#?
-def list_grade_tables(occasion, class_group):
-    fields, rows = db_read_full_table(
-        "GRADE_REPORTS",
-        sort_field="DATE_ISSUE",
-        OCCASION=occasion,
-        CLASS_GROUP=class_group
-    )
-    items = []
-    for r in rows:
-        record = {}
-        items.append(record)
-        i = 0
-        for f in fields:
-            record[f] = r[i]
-            i += i
-    return items
-
-
-# fields?:
-# OCCASION, CLASS_GROUP, MULTIPLE, PID, GRADES, EXTRA, DATE_ISSUE
-
-
-#TODO
-def get_grade_table(occasion, class_group, year=None):
-# identifier instead of class_group? pupil?
-# date?
-# A cross-referencing with occasion might also be useful ...
-# Would a db table be helpful?
-    pass
-    if year and year != SCHOOLYEAR:
-        raise Bug("TODO")
-
-
-
-
-#####################################
-
-#????
-def get_group_info(
-    group_info: dict[str, dict[str, Any]], group: str, key: str
-) -> Any:
-    """Read a value for a given group and key from a mapping with an
-    "inheritance" mechanism.
-    """
-    while True:
-        try:
-            mapping: dict[str, Any] = group_info[group]
-        except KeyError:
-            raise GradeTableError(_NO_INFO_FOR_GROUP.format(group=group))
-        try:
-            return mapping[key]
-        except KeyError:
-            pass
-        try:
-            group = mapping["__INHERIT__"]
-        except KeyError:
-            raise GradeTableError(_MISSING_KEY.format(key=key))
-
-
-class _GradeTable:
-    """Manage the grade data for one group in one "term" – corresponding
-    to the contents of a single grade table.
-    """
-
-    def __init__(self, gradetable: dict):
-        """Use the subject/course information to handle "composite" subjects
-        and other special cases (e.g. averages).
-        <gradetable> is a structure such as is return by the function
-        <readGradeFile>.
-        """
-        info: Dict[str, str] = gradetable["__INFO__"]
-        self.group = info["GROUP"]
-        self.term = info["TERM"]
-        self.grades_date = info["GRADES_D"]
-        self.issue_date = info["ISSUE_D"]
-        self.gradeBase = GradeBase(self.term, self.group)
-        if info["SCHOOLYEAR"] != SCHOOLYEAR:
-            raise GradeTableError(
-                _TABLE_YEAR_MISMATCH.format(
-                    year=SCHOOLYEAR, filepath=info["__FILEPATH__"]
-                )
-            )
-        ### Get subjects for grade reports
-        subjects = Subjects()
-        # Check the subject names in the input file
-        for sid, name in gradetable["__SUBJECT_NAMES__"].items():
-            subjects.check_subject_name(sid, name)
-        class_subjects: List[Tuple[str, str]]
-        class_pupils: List[Tuple[str, str, str, dict]]
-        self.class_subjects, class_pupils = subjects.filter_pupil_group(
-            self.group, date=self.grades_date
-        )
-        # Do I really need to go through the subject lists for each pupil?
-        # I suppose, in principle, the calculations could vary from pupil to
-        # pupil. That would be unintended, but perhaps difficult to avoid as
-        # an error-prone possibility ...
-        self.pupils_grade_data = [
-            PupilGradeData(
-                gradeBase=self.gradeBase,
-                pupilid=pid,
-                pupilname=pname,
-                pupilgroups=pgroups,
-                subjectdata=sdata,
-                grades=gradetable["__GRADEMAP__"][pid],
-            )
-            for pid, pname, pgroups, sdata in class_pupils
-        ]
-
-
-class PupilGradeData:
-    """Manage the grades for a single pupil"""
-
-    def __init__(
-        self,
-        #gradeBase: GradeBase,
-        pupilid: str,
-        pupilname: str,
-        pupilgroups: str,
-        subjectdata: dict[str, dict[str, str]],
-        grades: dict[str, str],
-    ):
-        """Extract and process the subject data needed for grade reports.
-        The dependencies of composite and calculated fields are determined.
-        """
-        self.gradeBase = gradeBase
-        self.pid = pupilid
-        self.name = pupilname
-        self.groups = pupilgroups.split()
-        self.grades = grades
-        components: dict[str, list[tuple[str, int]]] = {}
-        specials: set[str] = set()
-        self.pupil_subjects: dict[str, dict[str, str]] = {}
-        for sid, smap in subjectdata.items():
-            psmap: dict[str, Any] = {
-                "TIDS": smap["TIDS"],
-                "GROUP": smap["GROUP"],
-                "SGROUP": smap["SGROUP"],
-            }
-            self.pupil_subjects[sid] = psmap
-            cmpst = smap["COMPOSITE"]
-            dependers: list[str] = cmpst.split() if cmpst else []
-            if dependers:
-                for _d in dependers:
-                    if _d[0] != "$":
-                        # Entries must be COMPOSITE or CALC
-                        raise GradeTableError(_BAD_DEPENDER.format(sid=_d))
-                    # Split off weighting
-                    try:
-                        d, _w = _d.split("*", 1)
-                    except ValueError:
-                        d, w = _d, 1
-                    else:
-                        try:
-                            w = int(_w)
-                        except ValueError:
-                            raise GradeTableError(
-                                _BAD_WEIGHT.format(sid=sid, d=_d)
-                            )
-                    if len(d) > 1 and d[1] == "$":
-                        # A CALC
-                        try:
-                            psmap["CALCS"].append(d)
-                        except KeyError:
-                            psmap["CALCS"] = [d]
-                        # psmap["COMPOSITE"] = None
-                    else:
-                        # A COMPOSITE, possibly "$"
-                        if sid[0] == "$":
-                            # A composite may not be a component of another composite
-                            raise GradeTableError(
-                                _COMPOSITE_COMPONENT.format(sid=sid, comp=d)
-                            )
-                        if len(dependers) != 1:
-                            # A composite must be the only entry
-                            raise GradeTableError(
-                                _COMPOSITE_NOT_ALONE.format(sid=sid, comp=d)
-                            )
-                        psmap["COMPOSITE"] = d
-                    try:
-                        components[d].append((sid, w))
-                    except KeyError:
-                        components[d] = [(sid, w)]
-            if sid[0] == "$":
-                if len(sid) == 1:
-                    raise GradeTableError(_NULL_COMPOSITE)
-                if sid[1] == "$":
-                    # CALC item – should not have an entry in the subjects table
-                    raise GradeTableError(_BAD_COMPOSITE.format(sid=sid))
-                else:
-                    # COMPOSITE item
-                    specials.add(sid)
-        self.calcs: Dict[str, List[Tuple[str, int]]] = {}
-        self.composites: Dict[str, List[Tuple[str, int]]] = {}
-        for c, clist in components.items():
-            try:
-                specials.remove(c)
-            except KeyError:
-                if c.startswith("$$"):
-                    # CALC item
-                    # The handler should be provided by "local" code.
-                    self.calcs[c] = clist
-            else:
-                self.composites[c] = clist
-        for c in specials:
-            REPORT("WARNING", _EMPTY_COMPOSITE.format(sid=c))
-
-    def calculate(self):
-        """Perform the calculations demanded by the COMPOSITES and the
-        CALCS.
-        """
-        ### Start with the COMPOSITES
-        for csid, clist in self.composites.items():
-            try:
-                self.grades[csid] = self.gradeBase.composite_calc(
-                    clist, self.grades
-                )
-            except GradeConfigError as e:
-                REPORT("ERROR", f"{self.name}: {e}")
-        ### Now the CALCS
-        for csid, clist in self.calcs.items():
-            try:
-                self.grades[csid] = self.gradeBase.calc_calc(clist,
-                        self.grades)
-            except GradeConfigError as e:
-                REPORT("ERROR", f"{self.name}: {e}")
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -947,62 +686,3 @@ if __name__ == "__main__":
 
     print("\n*** STORED GRADES")
     stored_grades = read_stored_grades("2. Halbjahr", "12G.R")
-
-    quit(0)
-
-
-    _filepath = DATAPATH(f"testing/Noten/NOTEN_1/Noten_{_group}_1")
-    _gdata = readGradeFile(_filepath)
-    for key, val in _gdata.items():
-        print(f"\n** {key}: {repr(val)}")
-
-    _tbytes = makeGradeTable(
-        term="1", group=_group, grades=_gdata["__GRADEMAP__"]
-    )
-    #        ISSUE_D: Optional[str] = None,
-    #        GRADES_D: Optional[str] = None)
-
-    _tpath = DATAPATH(f"testing/tmp/GradeTable-{_group}.xlsx")
-    _tdir = os.path.dirname(_tpath)
-    if not os.path.isdir(_tdir):
-        os.makedirs(_tdir)
-    with open(_tpath, "wb") as _fh:
-        _fh.write(_tbytes)
-    print(f"\nWROTE GRADE TABLE TO {_tpath}\n")
-
-    print("\n *************************************************\n")
-
-    from glob import glob
-
-    _files = glob(DATAPATH("testing/Noten/NOTEN_1_11.G/Noten_*"))
-    _group = "11G.G"
-    _term = "1. Halbjahr"
-    _grades = collate_grade_tables(files=_files, term=_term, group=_group)
-    print("COLLATED:")
-    for pid, smap in _grades.items():
-        print(f"\n -- {pid}::", smap)
-    _tbytes = makeGradeTable(term=_term, group=_group, grades=_grades)
-    #        ISSUE_D: Optional[str] = None,
-    #        GRADES_D: Optional[str] = None)
-
-    _tpath = DATAPATH(f"testing/tmp/GradeTable-{_group}.xlsx")
-    # _tdir = os.path.dirname(_tpath)
-    # if not os.path.isdir(_tdir):
-    #    os.makedirs(_tdir)
-    with open(_tpath, "wb") as _fh:
-        _fh.write(_tbytes)
-    print(f"\nWROTE GRADE TABLE TO {_tpath}\n")
-
-    print("\n *************************************************\n")
-
-    print("\n ... complete grade table")
-    _cgtable = GradeTable(_gdata)
-    for pgdata in _cgtable.pupils_grade_data:
-        print("\n???X", pgdata.pid, pgdata.name)
-        for sid, smap in pgdata.pupil_subjects.items():
-            print(f"§§§ {sid}: {repr(smap)}")
-        print("\n--- COMPOSITES:", pgdata.composites)
-        print("\n--- CALCS:", pgdata.calcs)
-
-        pgdata.calculate()
-        print("\n--- GRADES:", pgdata.grades)
