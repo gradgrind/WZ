@@ -1,7 +1,7 @@
 """
 ui/course_dialogs.py
 
-Last updated:  2022-10-28
+Last updated:  2022-10-30
 
 Supporting "dialogs", etc., for various purposes within the course editor.
 
@@ -101,6 +101,7 @@ from ui.ui_base import (
     QSpinBox,
     ### QtGui:
     QRegularExpressionValidator,
+    QIcon,
     ### QtCore:
     Qt,
     QSize,
@@ -1045,12 +1046,8 @@ class RoomDialog(QDialog):
         bt_left.clicked.connect(self.add2choices)
         bt_right = QToolButton()
         vboxm.addWidget(bt_right)
-        bt_right.setIcon(
-            self.style().standardIcon(
-#                QStyle.StandardPixmap.SP_DialogDiscardButton
-                QStyle.StandardPixmap.SP_TrashIcon
-            )
-        )
+#        bt_right.setIcon(QIcon.fromTheme("trash"))
+        bt_right.setIcon(QIcon.fromTheme("icon_edit-delete"))
         bt_right.setToolTip(T["Remove_from_choices"])
         bt_right.clicked.connect(self.discard_choice)
         vboxm.addStretch(1)

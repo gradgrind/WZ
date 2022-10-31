@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-10-29
+Last updated:  2022-10-31
 
 Front-end for managing grade reports.
 
@@ -24,6 +24,20 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
+##### Configuration #####################
+# Some sizes in points
+GRADETABLE_TITLEHEIGHT = 25
+GRADETABLE_ROWHEIGHT = 30
+GRADETABLE_SUBJECTWIDTH = 25
+GRADETABLE_EXTRAWIDTH = 40
+GRADETABLE_HEADERHEIGHT = 100
+GRADETABLE_PUPILWIDTH = 200
+GRADETABLE_LEVELWIDTH = 50
+
+GRID_COLOUR = "888800"  # rrggbb
+
+#########################################
+
 if __name__ == "__main__":
     import sys, os, builtins
 
@@ -43,8 +57,8 @@ T = TRANSLATIONS("ui.modules.grades_manager")
 
 ### +++++
 
-from core.db_access import open_database, db_values
-from core.base import class_group_split
+from core.db_access import open_database, db_values, db_read_table
+from core.base import class_group_split, Dates
 from core.basic_data import check_group
 from core.pupils import pupils_in_group, pupil_name
 from grades.gradetable import (
@@ -78,8 +92,9 @@ from ui.ui_base import (
     HLine,
     run,
 )
-from ui.editable import EdiTableWidget
-
+#from ui.editable import EdiTableWidget
+#from ui.grid_base import GridViewAuto
+from ui.grid_base import GridView
 
 #from ui.ui_extra import QWidget, QLabel, QVBoxLayout, \
 #        QTreeWidget, QTreeWidgetItem, Qt
@@ -148,6 +163,9 @@ class InstanceSelector(QWidget):
         self.setEnabled(mutable >= 0)
         self.addnew.setEnabled(mutable > 0)
 
+    def text(self):
+        return self.combobox.currentText()
+
 
 #TODO
 class InstanceDialog(QDialog):
@@ -185,6 +203,7 @@ class GradeManager(QWidget):
         hbox.addLayout(vboxl)
         vboxr = QVBoxLayout()
         hbox.addLayout(vboxr)
+        hbox.setStretchFactor(vboxl, 1)
 
         # Class info
         self.class_label = QLabel()
@@ -194,7 +213,8 @@ class GradeManager(QWidget):
         vboxl.addWidget(self.modified_label)
 
         # The class data table
-        self.pupil_data_table = EdiTableWidget()
+        self.pupil_data_table = GradeTableView()
+#        EdiTableWidget()
         vboxl.addWidget(self.pupil_data_table)
 
         # Various "controls" in the panel on the right
@@ -239,8 +259,54 @@ class GradeManager(QWidget):
         self.class_group = None
         self.changed_occasion(self.occasion_selector.currentText())
 
-    def select_instance(self, instance):
-        print(f"TODO: Instance '{instance}'")
+    def select_instance(self, instance=None):
+#
+        print(f"TODO: Instance '{instance}' // {self.instance_selector.text()}")
+
+        __instance = self.instance_selector.text()
+        if instance:
+            if __instance != instance:
+                raise Bug(f"Instance mismatch: '{instance}' vs. '{__instance}'")
+        else:
+            instance = __instance
+
+        # Get info from database
+        infolist = db_read_table(
+            "GRADES_INFO",
+            ["DATE_ISSUE", "DATE_GRADES"],
+            CLASS_GROUP=self.class_group,
+            OCCASION=self.occasion,
+            INSTANCE=instance
+        )[1]
+        if infolist:
+            if len(infolist) > 1:
+                raise Bug(
+                    f"Multiple entries in GRADES_INFO for {self.class_group}"
+                    f" / {self.occasion} / {instance}"
+                )
+            DATE_ISSUE, DATE_GRADES = infolist[0]
+        else:
+            # No entry in database, use "today" for initial date values
+            DATE_ISSUE = Dates.today()
+            DATE_GRADES = DATE_ISSUE
+
+        table_info = grade_table_info(self.occasion, self.class_group, instance)
+        dbgrades = read_stored_grades(self.occasion, self.class_group, instance)
+
+#TODO: If there are dbgrades, use these for the pupil rows, otherwise
+# from table_info.
+# Perhaps – if the date (of issue?) is not yet passed, the pupils should
+# always come from table_info?
+# Set up data structures?
+# Perform all calculations.
+
+        ## Headers
+        self.pupil_data_table.setup(
+            subjects=table_info["SUBJECTS"],
+            extra_columns=table_info["EXTRAS"],
+#TODO: This is from the general info, not from existing grade entries
+            pupils=table_info["PUPILS"],
+        )
 
     def modified(self):
         """Return <True> if there are unsaved changes.
@@ -259,6 +325,8 @@ class GradeManager(QWidget):
         groups = []
         for g in self.occasion_data:
             if g[0] == '_':
+                # Keys starting with '_' are for additional, non-group
+                # related information.
                 continue
             klass, group = class_group_split(g)
             if not check_group(klass, group):
@@ -281,6 +349,7 @@ class GradeManager(QWidget):
 
     def changed_class(self, new_class_group):
         if not self.__changes_enabled:
+            print("Class change handling disabled:", new_class_group)
             return
         print("NEW GROUP:", new_class_group)
 #        grade_table = self.get_grade_table(occasion, class_group)
@@ -297,6 +366,7 @@ class GradeManager(QWidget):
 # table. If I want to update the pupil list, there could be an update
 # button to do this?
 
+        self.__changes_enabled = False
         try:
             instance_data = self.group_data["INSTANCE"]
         except KeyError:
@@ -315,6 +385,94 @@ class GradeManager(QWidget):
                     OCCASION=self.occasion
                 )
                 self.instance_selector.set_list(instances, 1)
+        self.__changes_enabled = True
+        self.select_instance()
+
+
+#class GradeTableView(GridViewAuto):
+class GradeTableView(GridView):
+
+
+    def setup(self, subjects, extra_columns, pupils):
+        self.subject_list = subjects
+        self.extras_list = extra_columns
+        self.pupils_map = pupils
+        rows = (GRADETABLE_HEADERHEIGHT,) \
+            + (GRADETABLE_ROWHEIGHT,) * len(pupils)
+        cols = (
+           GRADETABLE_PUPILWIDTH,
+            GRADETABLE_LEVELWIDTH,
+        ) + (GRADETABLE_SUBJECTWIDTH,) * len(subjects) \
+          + (GRADETABLE_EXTRAWIDTH,) * len(extra_columns)
+        self.init(rows, cols, GRADETABLE_TITLEHEIGHT)
+
+        row_list = []
+        for rx in range(len(rows)):
+            row = []
+
+            for cx in range(len(cols)):
+
+#            self.grid_tile(rx, cx, tag=f"({cx} | {rx})")
+#            self.grid_tile(rx, cx, tag=f"({cx} | {rx})", border=None)
+                rotate = False
+                valign = None
+                halign = None
+                cell_selectable = True
+                if len(row_list) == 0:
+                    cell_selectable = False
+                    if len(row) >= 2:
+                        rotate = True
+                        valign = 'b'
+                elif len(row) == 0:
+                    halign = 'l'
+                row.append(
+                    self.grid_tile(
+                        rx, cx, tag=f"({cx} | {rx})",
+                        border=GRID_COLOUR,
+                        rotate=rotate,
+                        cell_selectable=cell_selectable,
+                        valign=valign,
+                        halign=halign
+                    )
+                )
+            row_list.append(row)
+
+        self.grid_line_thick_v(2)
+        self.grid_line_thick_h(1)
+
+        hheaders = dict(get_grade_config()["HEADERS"])
+
+        row_list[0][0].set_text(hheaders["PUPIL"])
+        row_list[0][1].set_text(hheaders["LEVEL"])
+        i = 2
+        for s in subjects:
+            row_list[0][i].set_text(s["NAME"])
+            i += 1
+        for s in extra_columns:
+            row_list[0][i].set_text(s["NAME"])
+            i += 1
+
+        i = 1
+        for pid, pinfo in pupils.items():
+            pdata, p_grade_tids = pinfo
+            row_list[i][0].set_text(pupil_name(pdata))
+            row_list[i][1].set_text(pdata["LEVEL"])
+            i += 1
+
+
+#TODO
+
+
+#?
+        if GRADETABLE_TITLEHEIGHT > 0:
+            title = self.add_title("Centre Title")
+            title_l = self.add_title("Left Title", halign="l")
+            title_r = self.add_title("Right Title", halign="r")
+
+    def table2pdf(self, fpath):
+        os.makedirs(os.path.dirname(fpath), exist_ok=True)
+        self.to_pdf(fpath)
+    #    self.to_pdf(fpath, can_rotate = False)
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -327,13 +485,13 @@ if __name__ == "__main__":
     widget.grade_manager.modified_label.setText("zuletzt geändert: 2021-10-05_20:14")
 # Actually this can be in the main code, using the fixed (translated)
 # column headers ... need to set up the data area.
-    widget.grade_manager.pupil_data_table.setup(colheaders = ["PID", "Name"],
-            undo_redo = True, paste = True,
-            on_changed = None)
+#    widget.grade_manager.pupil_data_table.setup(colheaders = ["PID", "Name"],
+#            undo_redo = True, paste = True,
+#            on_changed = None)
 
     widget.enter()
 
-    widget.resize(600, 400)
+    widget.resize(1000, 500)
     run(widget)
 
 

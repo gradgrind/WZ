@@ -2,7 +2,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2022-10-14
+Last updated:  2022-10-30
 
 Base functions for grids using the QGraphicsView framework.
 
@@ -63,7 +63,7 @@ TITLE_MARGIN = 15  # Left & right title margin (points)
 
 
 # ?
-FONT_DEFAULT = "Droid Sans"
+#FONT_DEFAULT = "Droid Sans"
 FONT_COLOUR = "442222"  # rrggbb
 # MARK_COLOUR = 'E00000'      # rrggbb
 
@@ -715,7 +715,10 @@ class GridViewAuto(GridView):
 
     def rescale(self, qrect=None):
         if qrect == None:
-            qrect = self._sceneRect
+            try:
+                qrect = self._sceneRect
+            except AttributeError:
+                return  # The view hasn't been initialized yet
         size = self.viewport().size()
         w = size.width()
         scale = w / qrect.width()
@@ -1126,7 +1129,7 @@ if __name__ == "__main__":
     tr = grid.grid_tile(2, 2, tag="B", text="B", valign='b')
     tr.set_verticaltext()
 
-    if titleheight:
+    if titleheight > 0:
         title = grid.add_title("Centre Title")
         title_l = grid.add_title("Left Title", halign="l")
         title_r = grid.add_title("Right Title", halign="r")
