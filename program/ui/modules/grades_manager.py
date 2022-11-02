@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-10-31
+Last updated:  2022-11-02
 
 Front-end for managing grade reports.
 
@@ -27,7 +27,7 @@ Copyright 2022 Michael Towers
 ##### Configuration #####################
 # Some sizes in points
 GRADETABLE_TITLEHEIGHT = 25
-GRADETABLE_ROWHEIGHT = 30
+GRADETABLE_ROWHEIGHT = 25
 GRADETABLE_SUBJECTWIDTH = 25
 GRADETABLE_EXTRAWIDTH = 40
 GRADETABLE_HEADERHEIGHT = 100
@@ -66,6 +66,7 @@ from grades.gradetable import (
     grade_table_info,
     read_stored_grades,
     make_grade_table,
+    NO_GRADE,
 )
 
 #???
@@ -270,7 +271,19 @@ class GradeManager(QWidget):
         else:
             instance = __instance
 
-        # Get info from database
+        # Get config info
+        table_info = grade_table_info(self.occasion, self.class_group, instance)
+        # Get stored pupils and grades
+        pid2grades = {}
+        pdata_list = []
+        for pdata, grade_map in read_stored_grades(
+            self.occasion,
+            self.class_group,
+            instance
+        ):
+            pdata_list.append(pdata)
+            pid2grades[pdata["PID"]] = grade_map
+        # Get general info from database concerning stored grades
         infolist = db_read_table(
             "GRADES_INFO",
             ["DATE_ISSUE", "DATE_GRADES"],
@@ -285,27 +298,69 @@ class GradeManager(QWidget):
                     f" / {self.occasion} / {instance}"
                 )
             DATE_ISSUE, DATE_GRADES = infolist[0]
+            if DATE_GRADES >= Dates.today():
+                # Assume the list of pupils is fixed at the issue date
+                pdata_list.clear()
         else:
             # No entry in database, use "today" for initial date values
             DATE_ISSUE = Dates.today()
             DATE_GRADES = DATE_ISSUE
+            if pdata_list:
+                raise Bug("Stored grades but no entry in GRADES_INFO for"
+                    " {self.class_group} / {self.occasion} / {instance}"
+                )
 
-        table_info = grade_table_info(self.occasion, self.class_group, instance)
-        dbgrades = read_stored_grades(self.occasion, self.class_group, instance)
-
-#TODO: If there are dbgrades, use these for the pupil rows, otherwise
-# from table_info.
-# Perhaps – if the date (of issue?) is not yet passed, the pupils should
-# always come from table_info?
+#TODO:
 # Set up data structures?
 # Perform all calculations.
 
-        ## Headers
+        subject_list = table_info["SUBJECTS"]
+        extras_list = table_info["EXTRAS"]
+        stored_sids = [
+            sdata["SID"]
+            for sdata in subject_list
+            if "FUNCTION" not in sdata
+        ]
+        stored_extras = [
+            sdata["SID"]
+            for sdata in extras_list
+            if "FUNCTION" not in sdata
+        ]
+        pid2grade_map = {}
+        if pdata_list:
+            # Use stored pupils for this issue
+            for pdata in pdata_list:
+                pid = pdata["PID"]
+                __grade_map = pid2grades.get(pid) or {}
+                grade_map = {}
+                pid2grade_map[pid] = grade_map
+                for sid in stored_sids:
+                    if p_grade_tids.get(sid):
+                        grade_map[sid] = __grade_map.get(sid, "")
+                    else:
+                        grade_map[sid] = NO_GRADE
+                for sid in stored_extras:
+                    grade_map[sid] = __grade_map.get(sid, "")
+        else:
+            # Use the current list of pupils for this group
+            for pid, pinfo in table_info["PUPILS"].items():
+                pdata, p_grade_tids = pinfo
+                pdata_list.append(pdata)
+                __grade_map = pid2grades.get(pid) or {}
+                grade_map = {}
+                pid2grade_map[pid] = grade_map
+                for sid in stored_sids:
+                    if p_grade_tids.get(sid):
+                        grade_map[sid] = __grade_map.get(sid, "")
+                    else:
+                        grade_map[sid] = NO_GRADE
+                for sid in stored_extras:
+                    grade_map[sid] = __grade_map.get(sid, "")
         self.pupil_data_table.setup(
-            subjects=table_info["SUBJECTS"],
-            extra_columns=table_info["EXTRAS"],
-#TODO: This is from the general info, not from existing grade entries
-            pupils=table_info["PUPILS"],
+            subjects=subject_list,
+            extra_columns=extras_list,
+            pupils=pdata_list,
+            grades=pid2grade_map
         )
 
     def modified(self):
@@ -393,10 +448,11 @@ class GradeManager(QWidget):
 class GradeTableView(GridView):
 
 
-    def setup(self, subjects, extra_columns, pupils):
+    def setup(self, subjects, extra_columns, pupils, grades):
         self.subject_list = subjects
         self.extras_list = extra_columns
-        self.pupils_map = pupils
+        self.pupils_list = pupils
+        self.pid2grades = grades
         rows = (GRADETABLE_HEADERHEIGHT,) \
             + (GRADETABLE_ROWHEIGHT,) * len(pupils)
         cols = (
@@ -453,10 +509,25 @@ class GradeTableView(GridView):
             i += 1
 
         i = 1
-        for pid, pinfo in pupils.items():
-            pdata, p_grade_tids = pinfo
+        for pdata in pupils:
             row_list[i][0].set_text(pupil_name(pdata))
             row_list[i][1].set_text(pdata["LEVEL"])
+            pgrades = grades[pdata["PID"]]
+
+#TODO: Consider the later usage of the cells (when editing). What data
+# structures are needed?
+# This will surely be too primitive:
+            c = 2
+            for s in subjects:
+                sid = s["SID"]
+                grade = pgrades.get(sid, "")
+                row_list[i][c].set_text(grade)
+                c += 1
+            for s in extra_columns:
+                sid = s["SID"]
+                grade = pgrades.get(sid, "")
+                row_list[i][c].set_text(grade)
+                c += 1
             i += 1
 
 
