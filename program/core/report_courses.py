@@ -1,7 +1,7 @@
 """
 core/report_courses.py
 
-Last updated:  2022-10-23
+Last updated:  2022-11-05
 
 Access course/subject data for reports.
 
@@ -181,10 +181,11 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
             sid,
             subject-name,
             subject-group,
-            composite-sid or '',
-            (extra-)report-flags or None
+            (extra-)report-info or None
         ]
     }
+    The extra report info (text reports only) is a pair:
+        (special report-subject, special report-authors)
     <pupils is a list, [
         pupil-data, "pupil-group-atoms", {tid, ...}
     ]

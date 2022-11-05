@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-10-29
+Last updated:  2022-11-05
 
 Access grade data, read and build grade tables.
 
@@ -67,7 +67,7 @@ import datetime
 
 from core.base import class_group_split, Dates
 from core.db_access import db_read_table, read_pairs
-from core.basic_data import SHARED_DATA
+from core.basic_data import SHARED_DATA, get_subjects_with_sorting
 from core.pupils import pupil_name, pupil_data
 from core.report_courses import get_pupil_grade_matrix
 from tables.spreadsheet import read_DataTable
@@ -229,13 +229,26 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     group_data = get_group_data(occasion, class_group)
     # print("??????", group_data)
     klass, group = class_group_split(class_group)
+    grade_info = get_grade_config()
+    composites = {}
+    composite_components = {}
+    composite_references = {}
+    averages = {}
     try:
-        __extra_info = get_grade_config()["GRADE_FIELDS_EXTRA"][klass]
+        __extra_info = grade_info["GRADE_FIELDS_EXTRA"][klass]
     except KeyError:
-        composites = {}
-        composite_references = {}
-        averages = {}
+        pass
     else:
+        # Get "composites" and "calculates", check sid not in subjects table:
+        sid_map = get_subjects_with_sorting()
+        composite_map = grade_info["COMPOSITES"]
+        for sid in composite_map:
+            if sid in sid_map:
+                raise ValueError(T["BAD_COMPOSITE_SID"].format(sid=sid))
+        extras_map = grade_info["CALCULATES"]
+        for sid in extras_map:
+            if sid in sid_map:
+                raise ValueError(T["BAD_CALCULATE_SID"].format(sid=sid))
         try:
             __clist = __extra_info["COMPOSITE"]
         except KeyError:
@@ -257,16 +270,27 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
                 __alist += __ginfo["CALCULATE"]
             except KeyError:
                 pass
+        for sid, fn in __clist:
+            try:
+                name, sorting, components = composite_map[sid]
+            except KeyError:
+                raise ValueError(T["UNKNOWN_COMPOSITE"].format(sid=sid))
+            composites[sid] = (name, fn, sorting)
+            composite_references[sid] = 0
+            for cmpn in components:
+                if cmpn in composite_components:
+                    raise(T["COMPONENT_NOT_UNIQUE"].format(sid=cmpn))
+                composite_components[cmpn] = sid
+        averages = {}
+        for sid, fn in __alist:
+            try:
+                name, subject_list = extras_map[sid]
+            except KeyError:
+                raise ValueError(T["UNKNOWN_CALCULATE"].format(sid=sid))
+            averages[sid] = (name, fn, subject_list)
 
-        composites = {}
-        composite_references = {}
-        for k, fn in __clist:
-            composites[k] = fn
-            composite_references[k] = 0
-
-#        composites = {k: fn for k, fn in __clist}
-        averages = {k: (n, fn) for k, n, fn in __alist}
-    header_list = []
+    subject_list = []
+    component_list = []
     for sdata in sorted(subjects.values()):
         # print("§§§§§§§§", sdata)
         # Subjects counting towards composites need some sort of reference
@@ -274,52 +298,34 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
         sid = sdata[1]
         sname = sdata[2]
         zgroup = sdata[3]
-        composite = sdata[4]
-        # sdata[5] is the text-report custom settings, which are
+        # sdata[4] is the text-report custom settings, which are
         # not relevant  here.
         value = {"SID": sid, "NAME": sname, "GROUP":zgroup}
         try:
-            value["FUNCTION"] = composites.pop(sid)
-            value["TYPE"] = "COMPOSITE"
+            composite = composite_components[sid]
+            value["COMPOSITE"] = composite
+            composite_references[composite] += 1
+            # A "composite component"
+            component_list.append(value)
         except KeyError:
-            value["TYPE"] = "SUBJECT"
-        if composite:
-            if composite == "---":
-                value["TARGET"] = ""
-            else:
-                try:
-                    composite_references[composite] += 1
-                    value["TARGET"] = composite
-                except KeyError:
-                    # This composite is not configured, ignore it.
-                    pass
-        header_list.append(value)
-    # Check usage and declaration of composites
-    for c, n in composite_references.items():
-        if n == 0:
-            # No references, which suggests the composite should not be
-            # defined ...
-            if c not in composites:
-                REPORT(
-                    "ERROR",
-                    T["COMPOSITE_NO_REFERENCE"].format(
-                        group=class_group,
-                        composite=c
-                    )
-                )
-        else:
-            # Referenced, so it must be defined ...
-            if c in composites:
-                REPORT(
-                    "ERROR",
-                    T["COMPOSITE_UNDECLARED"].format(
-                        group=class_group,
-                        composite=c
-                    )
-                )
-    result = {"SUBJECTS": header_list}
+            # A "normal" subject, not a "composite component"
+            subject_list.append(value)
+    result = {"SUBJECTS": subject_list, "COMPONENTS": component_list}
+
+    # Composites
+    composite_list = []
+    result["COMPOSITES"] = composite_list
+    for k, v in composites.items():
+        composite_list.append(
+            {
+                "SID": k,
+                "NAME": v[0],
+                "FUNCTION": v[1],
+                "GROUP": v[2]
+            }
+        )
+
     # Now all the extra fields
-#TODO: Should they be added to the subjects?
     extra_list = []
     result["EXTRAS"] = extra_list
     for k, v in averages.items():
@@ -439,6 +445,7 @@ def make_grade_table(
     ### Get subject, pupil and group information
     gtinfo = grade_table_info(occasion, class_group)
     subjects = gtinfo["SUBJECTS"]
+    components = gtinfo["COMPONENTS"]
     pupils = gtinfo["PUPILS"]
 
     ### Get template file
@@ -481,8 +488,10 @@ def make_grade_table(
     sid: str
     sdata: dict
     for sdata in subjects:
-        if sdata["TYPE"] != "SUBJECT":
-            continue
+
+
+#TODO
+
         sid = sdata["SID"]
         # Add subject
         col: int = table.nextcol()
@@ -673,6 +682,12 @@ if __name__ == "__main__":
     gtinfo = grade_table_info("2. Halbjahr", "12G.R")
     print("\n*** SUBJECTS")
     for val in gtinfo["SUBJECTS"]:
+        print("    ---", val)
+    print("\n*** COMPOSITE-COMPONENTS")
+    for val in gtinfo["COMPONENTS"]:
+        print("    ---", val)
+    print("\n*** COMPOSITES")
+    for val in gtinfo["COMPOSITES"]:
         print("    ---", val)
     print("\n*** EXTRA COLUMNS")
     for val in gtinfo["EXTRAS"]:

@@ -58,8 +58,11 @@ grades.gradetable: {
     INVALID_GRADE: "In {filepath}:\n  Die Note für {pupil} im Fach {sid} ist ungültig: {grade}"
 #    CALCULATION_WITH_COMPONENT: "Fach {subject} ist einem Sammelfach zugeordnet. Es darf zu keinen weiteren Berechnungen beitragen: Eintrag „{flags}“"
 #    INVALID_FLAG:   "Ungültiger Eintrag im Zeugnis-Feld, Fach {subject}: {flag}"
-    COMPOSITE_NO_REFERENCE: "Gruppe {group}: Sammelfach „{composite}“ hat keine Komponenten"
-    COMPOSITE_UNDECLARED: "Gruppe {group}: Sammelfach „{composite}“ wurde nicht angegeben"
+    BAD_COMPOSITE_SID: "Konfigurationsfehler in GRADE_CONFIG, COMPOSITES: SID = {sid} nicht zulässig (wird schon als normales Fach benutzt)"
+    BAD_CALCULATE_SID: "Konfigurationsfehler in GRADE_CONFIG: CALCULATES SID = {sid} nicht zulässig (wird schon als normales Fach benutzt)"
+    UNKNOWN_COMPOSITE: "Konfigurationsfehler in GRADE_CONFIG, GRADE_FIELDS_EXTRA: unbekanntes COMPOSITE SID = {sid}"
+    UNKNOWN_CALCULATE: "Konfigurationsfehler in GRADE_CONFIG, GRADE_FIELDS_EXTRA: unbekanntes CALCULATE SID = {sid}"
+    COMPONENT_NOT_UNIQUE: "Sammelfachkomponente {sid} ist mehreren Sammelfächern zugeordnet"
 }
 
 ui.ui_base: {
