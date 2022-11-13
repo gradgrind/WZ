@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-05
+Last updated:  2022-11-13
 
 Access grade data, read and build grade tables.
 
@@ -63,7 +63,7 @@ from core.pupils import pupil_name, pupil_data
 from core.report_courses import get_pupil_grade_matrix
 from tables.spreadsheet import read_DataTable
 from tables.matrix import KlassMatrix
-
+from local.grade_functions import grade_function
 
 class GradeTableError(Exception):
     pass
@@ -156,7 +156,7 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
             except KeyError:
                 raise GradeTableError(T["UNKNOWN_COMPOSITE"].format(sid=sid))
             composites[sid] = (name, fn, sorting)
-            composite_references[sid] = 0
+            composite_references[sid] = []
             for cmpn in components:
                 if cmpn in composite_components:
                     raise GradeTableError(
@@ -186,7 +186,7 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
         try:
             composite = composite_components[sid]
             value["COMPOSITE"] = composite
-            composite_references[composite] += 1
+            composite_references[composite].append(sid)
             # A "composite component"
             component_list.append(value)
         except KeyError:
@@ -198,21 +198,48 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     composite_list = []
     result["COMPOSITES"] = composite_list
     for k, v in composites.items():
-        composite_list.append(
-            {"SID": k, "NAME": v[0], "FUNCTION": v[1], "GROUP": v[2]}
-        )
+        f = v[1]
+        if f:
+            references = composite_references[k]
+            if not references:
+                REPORT(
+                    "WARNING",
+                    T["COMPOSITE_NO_COMPONENTS"].format(
+                        sid=k, name=v[0]
+                    )
+                )
+            composite_list.append(
+                {
+                    "SID": k,
+                    "NAME": v[0],
+                    "FUNCTION": f,
+                    "GROUP": v[2],
+                    "COMPONENTS": references
+                }
+            )
 
     # Now all the extra fields
     extra_list = []
     result["EXTRAS"] = extra_list
     for k, v in averages.items():
         extra_list.append(
-            {"SID": k, "NAME": v[0], "TYPE": "CALCULATE", "FUNCTION": v[1]}
+            {
+                "SID": k,
+                "NAME": v[0],
+                "TYPE": "CALCULATE",
+                "FUNCTION": v[1],
+                "COMPONENTS": v[2]
+            }
         )
     for k, v in group_data.items():
         if k[0] == "?":
             extra_list.append(
-                {"SID": k[1:], "NAME": v[0], "TYPE": "CHOICE", "VALUES": v[1]}
+                {
+                    "SID": k[1:],
+                    "NAME": v[0],
+                    "TYPE": "CHOICE",
+                    "VALUES": v[1]
+                }
             )
     report_types = group_data.get("REPORT_TYPES")
     if report_types:
@@ -237,7 +264,160 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     return result
 
 
-def read_stored_grades(occasion: str, class_group: str, instance: str = ""):
+####++++
+def full_grade_table(occasion, class_group, instance):
+    ### Get config info
+    table_info = grade_table_info(occasion, class_group, instance)
+    ### Get stored pupils and grades
+    pid2grades = {}
+    pdata_list = []
+    for pdata, grade_map in read_stored_grades(
+        occasion, class_group, instance
+    ):
+        pdata_list.append(pdata)
+        pid2grades[pdata["PID"]] = grade_map
+    ### Get general info from database concerning stored grades
+    infolist = db_read_table(
+        "GRADES_INFO",
+        ["DATE_ISSUE", "DATE_GRADES"],
+        CLASS_GROUP=class_group,
+        OCCASION=occasion,
+        INSTANCE=instance
+    )[1]
+    if infolist:
+        if len(infolist) > 1:
+            raise Bug(
+                f"Multiple entries in GRADES_INFO for {class_group}"
+                f" / {occasion} / {instance}"
+            )
+        DATE_ISSUE, DATE_GRADES = infolist[0]
+        if DATE_GRADES >= Dates.today():
+            # Assume the list of pupils is fixed at the issue date
+            pdata_list.clear()
+    else:
+        # No entry in database, use "today" for initial date values
+        DATE_ISSUE = Dates.today()
+        DATE_GRADES = DATE_ISSUE
+        if pdata_list:
+            raise Bug("Stored grades but no entry in GRADES_INFO for"
+                " {class_group} / {occasion} / {instance}"
+            )
+    subject_list = table_info["SUBJECTS"]
+    ## Fields: SID:str, NAME:str, GROUP:str
+    components_list = table_info["COMPONENTS"]
+    ## Fields: SID:str, NAME:str, GROUP:str, COMPOSITE:str
+    composites_list = table_info["COMPOSITES"]
+    ## Fields: SID:str, NAME:str, GROUP:str, FUNCTION:str, COMPONENTS:list[str]
+    extras_list = table_info["EXTRAS"]
+    ## Fields: SID:str, NAME:str, TYPE:str=CALCULATE, FUNCTION:str, COMPONENTS:list[str]
+    ## Fields: SID:str, NAME:str, TYPE:str=CALCULATE, FUNCTION:str, COMPONENTS:'*'
+    ## Fields: SID:str, NAME:str, TYPE:str=CHOICE, VALUES:list[str]
+    ## Fields: SID:str, NAME:str, TYPE:str=CHOICE_MAP, VALUES:list[list[str,str]]
+    ## Fields: SID:str, NAME:str, TYPE:str=TEXT
+    sidlist = [
+        sdata["SID"] for sdata in (
+            subject_list + components_list + composites_list + extras_list
+        )
+    ]
+    pid2grade_map = {}
+    if pdata_list:
+        # Use stored pupils for this issue
+        for pdata in pdata_list:
+            pid = pdata["PID"]
+            __grade_map = pid2grades.get(pid) or {}
+            grade_map = {}
+            pid2grade_map[pid] = grade_map
+            for sid in sidlist:
+                grade_map[sid] = __grade_map.get(sid, "")
+    else:
+        # Use the current list of pupils for this group
+        for pid, pinfo in table_info["PUPILS"].items():
+            pdata, p_grade_tids = pinfo
+            pdata_list.append(pdata)
+            __grade_map = pid2grades.get(pid) or {}
+            grade_map = {}
+            pid2grade_map[pid] = grade_map
+            for sid in sidlist:
+                if p_grade_tids.get(sid):
+                    grade_map[sid] = __grade_map.get(sid, "")
+                else:
+                    grade_map[sid] = NO_GRADE
+    table_info["ALL_SIDS"] = sidlist
+    table_info["GRADES"] = pid2grade_map
+    table_info["GRADE_TABLE_PUPILS"] = pdata_list
+    # Calculate contents of all cells with FUNCTION
+    for row in range(len(pdata_list)):
+        changes = calculate_row(table_info, row)
+#
+        print("+++++++ CALCULATED CHANGES:", changes)
+    return table_info
+
+
+def calculate_row(table, row):
+    """Calculate the evaluated cells of the row from "left to right"
+    (lower to higher index).
+    A calculation may depend on the value in an evaluated cell, but
+    not on evaluated cells to the right (because of the order of
+    evaluation).
+    "Composite" subjects are evaluated first.
+    """
+    pdata = table["GRADE_TABLE_PUPILS"][row]
+    pid = pdata["PID"]
+    grades = table["GRADES"][pid]
+    subjects = table["SUBJECTS"]
+    final_grades = [grades.get(sdata["SID"]) for sdata in subjects]
+    composites = table["COMPOSITES"]
+    extras = table["EXTRAS"]
+#
+    print("\n**** CALCULATE:", pid, grades)
+    changed_grades = []
+
+    for sdata in composites:
+        sid = sdata["SID"]
+        f = sdata["FUNCTION"]
+        components = sdata["COMPONENTS"]
+        value = grades[sid]
+        glist = [grades.get(__sid) for __sid in components]
+        new_value = grade_function(f, glist)
+        final_grades.append(new_value)
+        if new_value != value:
+            grades[sid] = new_value
+            changed_grades.append((sid, value))
+#
+        print("   --- COMPOSITE:", sid, value, "->", new_value, components)
+
+    for sdata in extras:
+        try:
+            f = sdata["FUNCTION"]
+        except KeyError:
+            continue
+        sid = sdata["SID"]
+        components = sdata["COMPONENTS"]
+        value = grades[sid]
+        if components == '*':
+            glist = final_grades
+        else:
+#TODO: Would it be better to exclude not-yet-calculated entries? At present
+# all entries are available, but might  not be up-to-date.
+            glist = [grades.get(__sid) for __sid in components]
+        new_value = grade_function(f, glist)
+        if new_value != value:
+            grades[sid] = new_value
+            changed_grades.append((sid, value))
+#
+        print("   --- EXTRA:", sid, value, "->", new_value, components)
+
+    return changed_grades
+
+
+def read_stored_grades(
+    occasion: str,
+    class_group: str,
+    instance: str = ""
+) -> list[tuple[dict, dict]]:
+    """Return an ordered list containing personal info and grade info
+    from the database for each pupil covered by the parameters.
+    """
     fields = [
         # "OCCASION",
         # "CLASS_GROUP",
@@ -530,3 +710,7 @@ if __name__ == "__main__":
 
     print("\n*** STORED GRADES")
     stored_grades = read_stored_grades("2. Halbjahr", "12G.R")
+
+    print("\n???????????????????????????????????????????????????????")
+
+    full_grade_table("2. Halbjahr", "12G.R", "")

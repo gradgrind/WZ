@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-02
+Last updated:  2022-11-06
 
 Front-end for managing grade reports.
 
@@ -94,8 +94,8 @@ from ui.ui_base import (
     run,
 )
 #from ui.editable import EdiTableWidget
-#from ui.grid_base import GridViewAuto
-from ui.grid_base import GridView
+from ui.grid_base import GridViewAuto
+#from ui.grid_base import GridView
 
 #from ui.ui_extra import QWidget, QLabel, QVBoxLayout, \
 #        QTreeWidget, QTreeWidgetItem, Qt
@@ -315,11 +315,19 @@ class GradeManager(QWidget):
 # Perform all calculations.
 
         subject_list = table_info["SUBJECTS"]
+        # Fields: SID:str, NAME:str, GROUP:str
+        components_list = table_info["COMPONENTS"]
+        # Fields: SID:str, NAME:str, GROUP:str, COMPOSITE:str
+        composites_list = table_info["COMPOSITES"]
+        # Fields: SID:str, NAME:str, GROUP:str, FUNCTION:str
         extras_list = table_info["EXTRAS"]
+        # Fields: SID:str, NAME:str, TYPE:str=CALCULATE, FUNCTION:str
+        # Fields: SID:str, NAME:str, TYPE:str=CHOICE, VALUES:list[str]
+        # Fields: SID:str, NAME:str, TYPE:str=CHOICE_MAP, VALUES:list[list[str,str]]
+        # Fields: SID:str, NAME:str, TYPE:str=TEXT
         stored_sids = [
             sdata["SID"]
-            for sdata in subject_list
-            if "FUNCTION" not in sdata
+            for sdata in (subject_list + components_list)
         ]
         stored_extras = [
             sdata["SID"]
@@ -335,10 +343,7 @@ class GradeManager(QWidget):
                 grade_map = {}
                 pid2grade_map[pid] = grade_map
                 for sid in stored_sids:
-                    if p_grade_tids.get(sid):
-                        grade_map[sid] = __grade_map.get(sid, "")
-                    else:
-                        grade_map[sid] = NO_GRADE
+                    grade_map[sid] = __grade_map.get(sid, "")
                 for sid in stored_extras:
                     grade_map[sid] = __grade_map.get(sid, "")
         else:
@@ -357,7 +362,7 @@ class GradeManager(QWidget):
                 for sid in stored_extras:
                     grade_map[sid] = __grade_map.get(sid, "")
         self.pupil_data_table.setup(
-            subjects=subject_list,
+            subjects=subject_list + components_list + composites_list,
             extra_columns=extras_list,
             pupils=pdata_list,
             grades=pid2grade_map
@@ -444,101 +449,148 @@ class GradeManager(QWidget):
         self.select_instance()
 
 
-#class GradeTableView(GridViewAuto):
-class GradeTableView(GridView):
+class GradeTableView(GridViewAuto):
+#class GradeTableView(GridView):
 
 
     def setup(self, subjects, extra_columns, pupils, grades):
+#? ... What data needs to be available later?
         self.subject_list = subjects
         self.extras_list = extra_columns
         self.pupils_list = pupils
         self.pid2grades = grades
-        rows = (GRADETABLE_HEADERHEIGHT,) \
+        # print("\n§§§§§§§§", grades)
+
+#        sid2col = {}
+        col2colour = []
+        colsubjects = []
+        self.subject_data_list = colsubjects
+        for sdata in subjects:
+            if sdata["NAME"]:
+#?
+                colsubjects.append(sdata)
+#            sid2col[sdata["SID"]] = col
+#TODO: colours
+                if "COMPOSITE" in sdata:
+                    col2colour.append("ffeeff")
+                elif "FUNCTION" in sdata:
+                    col2colour.append("eeffff")
+                else:
+                    col2colour.append(None)
+#            col += 1
+        nsubjects = len(colsubjects)
+        for sdata in extra_columns:
+            if sdata["NAME"]:
+#?
+                colsubjects.append(sdata)
+#                sid2col[sdata["SID"]] = col
+                col2colour.append("ffffcc" if "FUNCTION" in sdata else None)
+#                col += 1
+
+        __rows = (GRADETABLE_HEADERHEIGHT,) \
             + (GRADETABLE_ROWHEIGHT,) * len(pupils)
-        cols = (
+        __cols = (
            GRADETABLE_PUPILWIDTH,
             GRADETABLE_LEVELWIDTH,
-        ) + (GRADETABLE_SUBJECTWIDTH,) * len(subjects) \
-          + (GRADETABLE_EXTRAWIDTH,) * len(extra_columns)
-        self.init(rows, cols, GRADETABLE_TITLEHEIGHT)
-
-        row_list = []
-        for rx in range(len(rows)):
-            row = []
-
-            for cx in range(len(cols)):
-
-#            self.grid_tile(rx, cx, tag=f"({cx} | {rx})")
-#            self.grid_tile(rx, cx, tag=f"({cx} | {rx})", border=None)
-                rotate = False
-                valign = None
-                halign = None
-                cell_selectable = True
-                if len(row_list) == 0:
-                    cell_selectable = False
-                    if len(row) >= 2:
-                        rotate = True
-                        valign = 'b'
-                elif len(row) == 0:
-                    halign = 'l'
-                row.append(
-                    self.grid_tile(
-                        rx, cx, tag=f"({cx} | {rx})",
-                        border=GRID_COLOUR,
-                        rotate=rotate,
-                        cell_selectable=cell_selectable,
-                        valign=valign,
-                        halign=halign
-                    )
-                )
-            row_list.append(row)
+        ) + (GRADETABLE_SUBJECTWIDTH,) * nsubjects \
+          + (GRADETABLE_EXTRAWIDTH,) * (len(colsubjects) - nsubjects)
+        self.init(__rows, __cols, GRADETABLE_TITLEHEIGHT)
 
         self.grid_line_thick_v(2)
         self.grid_line_thick_h(1)
 
+        # The column headers
         hheaders = dict(get_grade_config()["HEADERS"])
+        self.grid_tile(row=0, col=0, cell_selectable=False,
+            text=hheaders["PUPIL"],
+            border=GRID_COLOUR,
+        )
+        self.grid_tile(row=0, col=1, cell_selectable=False,
+            text=hheaders["LEVEL"],
+            border=GRID_COLOUR,
+        )
+        __colstart = 2
+        col = 0
+        for s in colsubjects:
+            self.grid_tile(row=0, col=col+__colstart,
+                text=s["NAME"],
+                rotate=True,
+                valign = 'b',
+                border=GRID_COLOUR,
+                cell_selectable=False,
+                bg=col2colour[col]
+            )
+            col += 1
 
-        row_list[0][0].set_text(hheaders["PUPIL"])
-        row_list[0][1].set_text(hheaders["LEVEL"])
-        i = 2
-        for s in subjects:
-            row_list[0][i].set_text(s["NAME"])
-            i += 1
-        for s in extra_columns:
-            row_list[0][i].set_text(s["NAME"])
-            i += 1
-
-        i = 1
+        row_list = []
+        self.cell_matrix = row_list
+        __rowstart = 1
+        row = 0
         for pdata in pupils:
-            row_list[i][0].set_text(pupil_name(pdata))
-            row_list[i][1].set_text(pdata["LEVEL"])
+            rx = row + __rowstart
+            self.grid_tile(rx, 0,
+                text=pupil_name(pdata),
+                border=GRID_COLOUR,
+                cell_selectable=False,
+                halign='l',
+            )
+            self.grid_tile(rx, 1,
+                text=pdata["LEVEL"],
+                border=GRID_COLOUR,
+                cell_selectable=False,
+            )
+
             pgrades = grades[pdata["PID"]]
-
-#TODO: Consider the later usage of the cells (when editing). What data
-# structures are needed?
-# This will surely be too primitive:
-            c = 2
-            for s in subjects:
-                sid = s["SID"]
-                grade = pgrades.get(sid, "")
-                row_list[i][c].set_text(grade)
-                c += 1
-            for s in extra_columns:
-                sid = s["SID"]
-                grade = pgrades.get(sid, "")
-                row_list[i][c].set_text(grade)
-                c += 1
-            i += 1
+            row_cells = []
+            col = 0
+            for sdata in colsubjects:
+                sid = colsubjects[col]["SID"]
+                row_cells.append(
+                    self.grid_tile(rx, col + __colstart,
+                        text=pgrades.get(sid, ""),
+                        tag=f"({col} | {row})",
+                        border=GRID_COLOUR,
+                        bg=col2colour[col]
+                    )
+                )
+                col += 1
+            row_list.append(row_cells)
 
 
-#TODO
+            self.calculate_row(row)
 
+
+            row += 1
 
 #?
         if GRADETABLE_TITLEHEIGHT > 0:
             title = self.add_title("Centre Title")
             title_l = self.add_title("Left Title", halign="l")
             title_r = self.add_title("Right Title", halign="r")
+
+    def calculate_row(self, row):
+        """Calculate the evaluated cells of the row from left to right.
+        A calculation may depend on the value in an evaluated cell, but
+        not on evaluated cells to the right (because of the order of
+        evaluation).
+        """
+#TODO
+        cells = self.cell_matrix[row]
+
+        col = 0
+        for sdata in self.subject_data_list:
+            pass
+
+            try:
+                f = sdata["FUNCTION"]
+            except KeyError:
+                pass
+            else:
+                cell = cells[col]
+                cell.set_text("?")
+            col += 1
+
+
 
     def table2pdf(self, fpath):
         os.makedirs(os.path.dirname(fpath), exist_ok=True)
