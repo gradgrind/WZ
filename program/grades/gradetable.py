@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-13
+Last updated:  2022-11-14
 
 Access grade data, read and build grade tables.
 
@@ -264,7 +264,6 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     return result
 
 
-####++++
 def full_grade_table(occasion, class_group, instance):
     ### Get config info
     table_info = grade_table_info(occasion, class_group, instance)
@@ -713,4 +712,9 @@ if __name__ == "__main__":
 
     print("\n???????????????????????????????????????????????????????")
 
-    full_grade_table("2. Halbjahr", "12G.R", "")
+    grade_table = full_grade_table("2. Halbjahr", "12G.R", "").items()
+
+    print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+
+    for k, v in grade_table:
+        print("\n =======", k, "\n", v)

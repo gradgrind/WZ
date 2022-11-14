@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-06
+Last updated:  2022-11-14
 
 Front-end for managing grade reports.
 
@@ -36,10 +36,14 @@ GRADETABLE_LEVELWIDTH = 50
 
 GRID_COLOUR = "888800"  # rrggbb
 
+COMPONENT_COLOUR = "ffeeff"
+COMPOSITE_COLOUR = "eeffff"
+CALCULATED_COLOUR = "ffffcc"
+
 #########################################
 
 if __name__ == "__main__":
-    import sys, os, builtins
+    import sys, os
 
     this = sys.path[0]
     appdir = os.path.dirname(os.path.dirname(this))
@@ -57,15 +61,14 @@ T = TRANSLATIONS("ui.modules.grades_manager")
 
 ### +++++
 
-from core.db_access import open_database, db_values, db_read_table
-from core.base import class_group_split, Dates
+from core.db_access import open_database, db_values
+from core.base import class_group_split
 from core.basic_data import check_group
 from core.pupils import pupils_in_group, pupil_name
 from grades.gradetable import (
     get_grade_config,
-    grade_table_info,
-    read_stored_grades,
     make_grade_table,
+    full_grade_table,
     NO_GRADE,
 )
 
@@ -260,114 +263,6 @@ class GradeManager(QWidget):
         self.class_group = None
         self.changed_occasion(self.occasion_selector.currentText())
 
-    def select_instance(self, instance=None):
-#
-        print(f"TODO: Instance '{instance}' // {self.instance_selector.text()}")
-
-        __instance = self.instance_selector.text()
-        if instance:
-            if __instance != instance:
-                raise Bug(f"Instance mismatch: '{instance}' vs. '{__instance}'")
-        else:
-            instance = __instance
-
-        # Get config info
-        table_info = grade_table_info(self.occasion, self.class_group, instance)
-        # Get stored pupils and grades
-        pid2grades = {}
-        pdata_list = []
-        for pdata, grade_map in read_stored_grades(
-            self.occasion,
-            self.class_group,
-            instance
-        ):
-            pdata_list.append(pdata)
-            pid2grades[pdata["PID"]] = grade_map
-        # Get general info from database concerning stored grades
-        infolist = db_read_table(
-            "GRADES_INFO",
-            ["DATE_ISSUE", "DATE_GRADES"],
-            CLASS_GROUP=self.class_group,
-            OCCASION=self.occasion,
-            INSTANCE=instance
-        )[1]
-        if infolist:
-            if len(infolist) > 1:
-                raise Bug(
-                    f"Multiple entries in GRADES_INFO for {self.class_group}"
-                    f" / {self.occasion} / {instance}"
-                )
-            DATE_ISSUE, DATE_GRADES = infolist[0]
-            if DATE_GRADES >= Dates.today():
-                # Assume the list of pupils is fixed at the issue date
-                pdata_list.clear()
-        else:
-            # No entry in database, use "today" for initial date values
-            DATE_ISSUE = Dates.today()
-            DATE_GRADES = DATE_ISSUE
-            if pdata_list:
-                raise Bug("Stored grades but no entry in GRADES_INFO for"
-                    " {self.class_group} / {self.occasion} / {instance}"
-                )
-
-#TODO:
-# Set up data structures?
-# Perform all calculations.
-
-        subject_list = table_info["SUBJECTS"]
-        # Fields: SID:str, NAME:str, GROUP:str
-        components_list = table_info["COMPONENTS"]
-        # Fields: SID:str, NAME:str, GROUP:str, COMPOSITE:str
-        composites_list = table_info["COMPOSITES"]
-        # Fields: SID:str, NAME:str, GROUP:str, FUNCTION:str
-        extras_list = table_info["EXTRAS"]
-        # Fields: SID:str, NAME:str, TYPE:str=CALCULATE, FUNCTION:str
-        # Fields: SID:str, NAME:str, TYPE:str=CHOICE, VALUES:list[str]
-        # Fields: SID:str, NAME:str, TYPE:str=CHOICE_MAP, VALUES:list[list[str,str]]
-        # Fields: SID:str, NAME:str, TYPE:str=TEXT
-        stored_sids = [
-            sdata["SID"]
-            for sdata in (subject_list + components_list)
-        ]
-        stored_extras = [
-            sdata["SID"]
-            for sdata in extras_list
-            if "FUNCTION" not in sdata
-        ]
-        pid2grade_map = {}
-        if pdata_list:
-            # Use stored pupils for this issue
-            for pdata in pdata_list:
-                pid = pdata["PID"]
-                __grade_map = pid2grades.get(pid) or {}
-                grade_map = {}
-                pid2grade_map[pid] = grade_map
-                for sid in stored_sids:
-                    grade_map[sid] = __grade_map.get(sid, "")
-                for sid in stored_extras:
-                    grade_map[sid] = __grade_map.get(sid, "")
-        else:
-            # Use the current list of pupils for this group
-            for pid, pinfo in table_info["PUPILS"].items():
-                pdata, p_grade_tids = pinfo
-                pdata_list.append(pdata)
-                __grade_map = pid2grades.get(pid) or {}
-                grade_map = {}
-                pid2grade_map[pid] = grade_map
-                for sid in stored_sids:
-                    if p_grade_tids.get(sid):
-                        grade_map[sid] = __grade_map.get(sid, "")
-                    else:
-                        grade_map[sid] = NO_GRADE
-                for sid in stored_extras:
-                    grade_map[sid] = __grade_map.get(sid, "")
-        self.pupil_data_table.setup(
-            subjects=subject_list + components_list + composites_list,
-            extra_columns=extras_list,
-            pupils=pdata_list,
-            grades=pid2grade_map
-        )
-
     def modified(self):
         """Return <True> if there are unsaved changes.
         """
@@ -448,56 +343,77 @@ class GradeManager(QWidget):
         self.__changes_enabled = True
         self.select_instance()
 
+    def select_instance(self, instance=""):
+#
+        print(f"TODO: Instance '{instance}' // {self.instance_selector.text()}")
+
+        __instance = self.instance_selector.text()
+        if instance:
+            if __instance != instance:
+                raise Bug(f"Instance mismatch: '{instance}' vs. '{__instance}'")
+        else:
+            instance = __instance
+        grade_table = full_grade_table(
+            self.occasion, self.class_group, instance
+        )
+        self.pupil_data_table.setup(grade_table)
+
 
 class GradeTableView(GridViewAuto):
 #class GradeTableView(GridView):
 
-
-    def setup(self, subjects, extra_columns, pupils, grades):
+    def setup(self, grade_table):
 #? ... What data needs to be available later?
-        self.subject_list = subjects
-        self.extras_list = extra_columns
-        self.pupils_list = pupils
-        self.pid2grades = grades
-        # print("\n§§§§§§§§", grades)
+        subject_list = grade_table["SUBJECTS"]
+        component_list = grade_table["COMPONENTS"]
+        composite_list = grade_table["COMPOSITES"]
+        extras_list = grade_table["EXTRAS"]
+        all_sids = grade_table["ALL_SIDS"]
+        pupils_list = grade_table["GRADE_TABLE_PUPILS"]
+        pid2grades = grade_table["GRADES"]
+        # grades_table["GRADE_ENTRY"] # partial path ("templates/...") to
+        # grade entry template (without data-type ensing)
+        # grades_table["PUPILS"] # current pupil list from database
+#TODO: Do I need the latter entry?
 
-#        sid2col = {}
         col2colour = []
-        colsubjects = []
-        self.subject_data_list = colsubjects
-        for sdata in subjects:
-            if sdata["NAME"]:
 #?
-                colsubjects.append(sdata)
-#            sid2col[sdata["SID"]] = col
-#TODO: colours
-                if "COMPOSITE" in sdata:
-                    col2colour.append("ffeeff")
-                elif "FUNCTION" in sdata:
-                    col2colour.append("eeffff")
-                else:
-                    col2colour.append(None)
-#            col += 1
-        nsubjects = len(colsubjects)
-        for sdata in extra_columns:
-            if sdata["NAME"]:
-#?
-                colsubjects.append(sdata)
-#                sid2col[sdata["SID"]] = col
-                col2colour.append("ffffcc" if "FUNCTION" in sdata else None)
-#                col += 1
+#        colsubjects = []
+#        sid2col = {}
+#        self.subject_data_list = colsubjects
 
+        for sdata in subject_list:
+            col2colour.append(None)
+        for sdata in component_list:
+            col2colour.append(COMPONENT_COLOUR)
+        for sdata in composite_list:
+            col2colour.append(COMPOSITE_COLOUR)
+        nsubjects = len(col2colour)
+        for sdata in extras_list:
+            col2colour.append(
+                CALCULATED_COLOUR if "FUNCTION" in sdata else None
+            )
+#?
+#            colsubjects.append(sdata)
+#            sid2col[sdata["SID"]] = col
+#            col += 1
+
+        # Set the basic grid parameters
         __rows = (GRADETABLE_HEADERHEIGHT,) \
-            + (GRADETABLE_ROWHEIGHT,) * len(pupils)
+            + (GRADETABLE_ROWHEIGHT,) * len(pupils_list)
         __cols = (
            GRADETABLE_PUPILWIDTH,
             GRADETABLE_LEVELWIDTH,
-        ) + (GRADETABLE_SUBJECTWIDTH,) * nsubjects \
-          + (GRADETABLE_EXTRAWIDTH,) * (len(colsubjects) - nsubjects)
+        ) \
+            + (GRADETABLE_SUBJECTWIDTH,) * nsubjects \
+            + (GRADETABLE_EXTRAWIDTH,) * len(extras_list)
         self.init(__rows, __cols, GRADETABLE_TITLEHEIGHT)
 
         self.grid_line_thick_v(2)
         self.grid_line_thick_h(1)
+
+
+
 
         # The column headers
         hheaders = dict(get_grade_config()["HEADERS"])
