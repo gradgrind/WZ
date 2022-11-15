@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-14
+Last updated:  2022-11-15
 
 Access grade data, read and build grade tables.
 
@@ -314,7 +314,7 @@ def full_grade_table(occasion, class_group, instance):
     ## Fields: SID:str, NAME:str, TYPE:str=CHOICE_MAP, VALUES:list[list[str,str]]
     ## Fields: SID:str, NAME:str, TYPE:str=TEXT
     sidlist = [
-        sdata["SID"] for sdata in (
+        (sdata["SID"], sdata["NAME"]) for sdata in (
             subject_list + components_list + composites_list + extras_list
         )
     ]
@@ -326,7 +326,7 @@ def full_grade_table(occasion, class_group, instance):
             __grade_map = pid2grades.get(pid) or {}
             grade_map = {}
             pid2grade_map[pid] = grade_map
-            for sid in sidlist:
+            for sid, sname in sidlist:
                 grade_map[sid] = __grade_map.get(sid, "")
     else:
         # Use the current list of pupils for this group
@@ -336,7 +336,7 @@ def full_grade_table(occasion, class_group, instance):
             __grade_map = pid2grades.get(pid) or {}
             grade_map = {}
             pid2grade_map[pid] = grade_map
-            for sid in sidlist:
+            for sid, sname in sidlist:
                 if p_grade_tids.get(sid):
                     grade_map[sid] = __grade_map.get(sid, "")
                 else:

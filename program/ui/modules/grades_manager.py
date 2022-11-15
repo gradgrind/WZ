@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-14
+Last updated:  2022-11-15
 
 Front-end for managing grade reports.
 
@@ -412,10 +412,10 @@ class GradeTableView(GridViewAuto):
         self.grid_line_thick_v(2)
         self.grid_line_thick_h(1)
 
-
-
-
         # The column headers
+#TODO: -> T[]?
+# Maybe a more flexible approach with variable fields – but how to find
+# the content in that case?!
         hheaders = dict(get_grade_config()["HEADERS"])
         self.grid_tile(row=0, col=0, cell_selectable=False,
             text=hheaders["PUPIL"],
@@ -427,9 +427,9 @@ class GradeTableView(GridViewAuto):
         )
         __colstart = 2
         col = 0
-        for s in colsubjects:
+        for sid, sname in all_sids:
             self.grid_tile(row=0, col=col+__colstart,
-                text=s["NAME"],
+                text=sname,
                 rotate=True,
                 valign = 'b',
                 border=GRID_COLOUR,
@@ -442,7 +442,7 @@ class GradeTableView(GridViewAuto):
         self.cell_matrix = row_list
         __rowstart = 1
         row = 0
-        for pdata in pupils:
+        for pdata in pupils_list:
             rx = row + __rowstart
             self.grid_tile(rx, 0,
                 text=pupil_name(pdata),
@@ -456,11 +456,10 @@ class GradeTableView(GridViewAuto):
                 cell_selectable=False,
             )
 
-            pgrades = grades[pdata["PID"]]
+            pgrades = pid2grades[pdata["PID"]]
             row_cells = []
             col = 0
-            for sdata in colsubjects:
-                sid = colsubjects[col]["SID"]
+            for sid, sname in all_sids:
                 row_cells.append(
                     self.grid_tile(rx, col + __colstart,
                         text=pgrades.get(sid, ""),
@@ -473,7 +472,7 @@ class GradeTableView(GridViewAuto):
             row_list.append(row_cells)
 
 
-            self.calculate_row(row)
+#            self.calculate_row(row)
 
 
             row += 1
@@ -483,29 +482,6 @@ class GradeTableView(GridViewAuto):
             title = self.add_title("Centre Title")
             title_l = self.add_title("Left Title", halign="l")
             title_r = self.add_title("Right Title", halign="r")
-
-    def calculate_row(self, row):
-        """Calculate the evaluated cells of the row from left to right.
-        A calculation may depend on the value in an evaluated cell, but
-        not on evaluated cells to the right (because of the order of
-        evaluation).
-        """
-#TODO
-        cells = self.cell_matrix[row]
-
-        col = 0
-        for sdata in self.subject_data_list:
-            pass
-
-            try:
-                f = sdata["FUNCTION"]
-            except KeyError:
-                pass
-            else:
-                cell = cells[col]
-                cell.set_text("?")
-            col += 1
-
 
 
     def table2pdf(self, fpath):
