@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 """
 ui/grid_base.py
 
-Last updated:  2022-10-30
+Last updated:  2022-11-18
 
-Base functions for grids using the QGraphicsView framework.
+Base functions for table-grids using the QGraphicsView framework.
 
 =+LICENCE=============================
 Copyright 2022 Michael Towers
@@ -39,9 +38,8 @@ be rendered symmetrically around the mathematically defined points, while
 rendering with a pen with an odd number of pixels, the spare pixel will
 be rendered to the right and below the mathematical point.
 "
-"""
 
-"""The grid area can be covered by boxes of predefined width and height.
+The grid area can be covered by boxes of predefined width and height.
 I would suggest an optional box border of fixed width (but what does
 "fixed width" mean here, e.g fixed pixels or fixed points/mm? As I am
 aiming for a point/mm based specification, I would suggest the latter).
@@ -52,7 +50,7 @@ would need a transparent pen.
 
 ##### Configuration #####################
 GRID_COLOUR = "888800"  # rrggbb
-SELECT_COLOUR = "ff0000"
+SELECT_COLOUR = "2370ff"
 FONT_SIZE_DEFAULT = 12
 BORDER_WIDTH = 1
 THICK_LINE_WIDTH = 3
@@ -86,6 +84,8 @@ from qtpy.QtWidgets import (
     QGraphicsRectItem,
     QGraphicsSimpleTextItem,
     QGraphicsLineItem,
+    QVBoxLayout,
+    QLineEdit,
 )
 from qtpy.QtGui import (
     QFont,
@@ -98,7 +98,7 @@ from qtpy.QtGui import (
     QPageLayout,
     QPageSize,
 )
-from qtpy.QtCore import Qt, QMarginsF, QRectF
+from qtpy.QtCore import Qt, QMarginsF, QRectF, QPointF
 
 
 class GridError(Exception):
@@ -196,6 +196,64 @@ class StyleCache:
         return font
 
 
+class Selection(QGraphicsRectItem):
+    """A rectangle covering one or more cells.
+    """
+    def __init__(self, grid, parent=None):
+        super().__init__(parent=parent)
+        self.xmarks = grid.xmarks
+        self.ymarks = grid.ymarks
+        self.setPen(StyleCache.getPen(grid.pt2px(SELECT_WIDTH), SELECT_COLOUR))
+        self.setZValue(20)
+        grid.scene().addItem(self)
+        self.clear()
+
+    def clear(self):
+        self.start_cellrc = (-1, -1)
+        self.end_cellrc = (-1, -1)
+        self.__range = (-1, -1, 0, 0)
+        self.hide()
+
+    def range(self):
+        return self.__range
+
+    def is_active(self):
+        return self.isVisible()
+
+    def set_pending(self, cellrc):
+        """This is called on left-mouse-down. The actual selection only
+        occurs after a small mouse movement.
+        """
+        self.start_cellrc = cellrc
+
+    def is_primed(self):
+        """Test whether a start cell is pending (or already set).
+        """
+        return self.start_cellrc[0] >= 0
+
+    def set_end_cell(self, cellrc):
+        if self.end_cellrc != cellrc:
+            self.end_cellrc = cellrc
+            self.expose()
+
+    def expose(self):
+        r0, c0 = self.start_cellrc
+        r1, c1 = self.end_cellrc
+        # Ensure that r0 <= r1 and c0 <= c1
+        if r0 > r1:
+            r0, r1 = r1, r0
+        if c0 > c1:
+            c0, c1 = c1, c0
+        self.__range = (r0, c0, r1 - r0 + 1, c1 - c0 + 1)
+        # Get the coordinate boundaries
+        x0 = self.xmarks[c0]
+        y0 = self.ymarks[r0]
+        x1 = self.xmarks[c1 + 1]
+        y1 = self.ymarks[r1 + 1]
+        self.setRect(x0, y0, x1 - x0, y1 - y0)
+        self.show()
+
+
 class GridView(QGraphicsView):
     """This is the "view" widget for the grid.
     The actual grid is implemented as a "scene".
@@ -224,6 +282,11 @@ class GridView(QGraphicsView):
     def px2mm(self, px):
         return px * 25.4 / self.ldpi
 
+    def screen_coordinates(self, scene_pointf):
+        """Return the screen coordinates of the given scene point.
+        """
+        viewp = self.mapFromScene(scene_pointf)
+        return self.mapToGlobal(viewp)
 
     def mousePressEvent(self, event):
 #Qt5
@@ -238,118 +301,98 @@ class GridView(QGraphicsView):
 #        print("SCENEPOS:", event.scenePosition())
 
         try:
-            point = event.position().toPoint()
+            point = event.position().toPoint()  # Qt6
         except:
-            point = event.pos()
+            point = event.pos()                 # Qt5
+#
+        print("§§????????", point)
+
         self.point0 = point
-        self.end_cell = None
+        self.select.clear()
+#        self.end_cell = None
         # print("POS:", point, self.mapToGlobal(point), self.itemAt(point))
         # The sought <Tile> may not be the top item.
         items = self.items(point)
-        self.start_cell = None
-        self.select.hide()
         if items and event.button() == Qt.LeftButton:
-            # Select the topmost selectable cell
+            # Only a grid cell is "selectable"
             for item in items:
                 try:
-                    self.start_cell = item.selectable_cell
-                    break
-                except AttributeError:
-                    pass
-
-    def mouseReleaseEvent(self, event):
-        if event.button() != Qt.LeftButton or not self.start_cell:
-            return
-        try:
-            point = event.position().toPoint()
-        except:
-            point = event.pos()
-        delta = (point - self.point0).manhattanLength()
-        items = self.items(point)
-#TODO: A time test may be better?
-        if (not self.end_cell) and delta < 2:
-            if items:
-                for item in items:
-                    # Give all items at this point a chance to react,
-                    # starting with the topmost. An item can break the
-                    # chain by returning a false value.
-                    try:
-                        if not item.leftclick():
-                            return
-                    except AttributeError:
-                        pass
-        else:
-            cell = None
-            for item in items:
-                try:
-                    cell = item.selectable_cell
-                    break
-                except AttributeError:
-                    pass
-            if cell and cell != self.end_cell:
-                self.end_cell = cell
-                self.draw_selection()
-
-    def contextMenuEvent(self, event):
-        try:
-            point = event.position().toPoint()
-        except:
-            point = event.pos()
-        items = self.items(point)
-        if items:
-            for item in items:
-                # Give all items at this point a chance to react, starting
-                # with the topmost. An item can break the chain by
-                # returning a false value.
-                try:
-                    if not item.contextmenu():
-                        return
+                    self.select.set_pending(item.gridrc)
+                    break # only take account of the first grid cell
                 except AttributeError:
                     pass
 
     def mouseMoveEvent(self, event):
+        # Only act if the selection has at least been "primed" – i.e.
+        # if the left button is depressed.
+        if not self.select.is_primed():
+            return
         try:
             point = event.position().toPoint()
         except:
             point = event.pos()
         # print("MOVE TEST", point - self.point0)
         items = self.items(point)
-        coords = None
         # Act only if the topmost selectable cell has changed
         for item in items:
             try:
-                coords = item.selectable_cell
+                coords = item.gridrc
             except AttributeError:
                 pass
             else:
-                if coords == self.end_cell:
-                    return
-        if coords:
-            # print("MOVE", coords)
-            if self.start_cell and self.end_cell != coords:
-                # Record new end of selection and redraw band
-                self.end_cell = coords
-                self.draw_selection()
+                if self.select.is_active():
+                    self.select.set_end_cell(coords)
+                else:
+                    delta = (point - self.point0).manhattanLength()
+                    if delta > 1:
+                        self.select.set_end_cell(coords)
 
-    def draw_selection(self):
-#TODO: This may work for the band coordinates, but it hasn't kept
-# track of the cell-matrix coordinates
-        x0 = self.start_cell[0]
-        x1 = self.end_cell[0]
-        if x0 > x1:
-            w = x0 + self.start_cell[2] - x1
-            x0 = x1
-        else:
-            w = x1 + self.end_cell[2] - x0
-        y0 = self.start_cell[1]
-        y1 = self.end_cell[1]
-        if y0 > y1:
-            h = y0 + self.start_cell[3] - y1
-            y0 = y1
-        else:
-            h = y1 + self.end_cell[3] - y0
-        self.select.setRect(x0, y0, w, h)
-        self.select.show()
+    def mouseReleaseEvent(self, event):
+        if event.button() != Qt.LeftButton:
+            return
+        try:
+            point = event.position().toPoint()
+        except:
+            point = event.pos()
+        if self.select.is_active():
+            print("§?§?§?§?§ SELECT ACTIVE:", self.select.range())
+            return
+        items = self.items(point)
+#TODO: A time test may be better?
+        if items:
+            for item in items:
+                # Give all items at this point a chance to react,
+                # starting with the topmost. An item can break the
+                # chain by returning a false value.
+                if not self.tile_left_clicked(item):
+                    return
+
+    def contextMenuEvent(self, event):
+        try:
+            pointf = event.position()   # Qt6
+            point = pointf.toPoint()
+        except:
+            point = event.pos()         # Qt5
+            pointf = QPointF(point)
+
+#TODO: If within active selection, call it on this somehow?
+# Otherwise clear selection?
+        if self.select.is_active():
+            print("§§????", pointf, self.select.rect())
+            if self.select.contains(pointf):
+                print("§§CONTAINED")
+            else:
+                self.start_cell = None
+                self.select.hide()
+#?
+        items = self.items(point)
+        if items:
+            for item in items:
+                # Give all items at this point a chance to react, starting
+                # with the topmost. An item can break the chain by
+                # returning a false value.
+                if not self.tile_right_clicked(item):
+                    return
 
     ### View scaling
     def scaleUp(self):
@@ -402,16 +445,23 @@ class GridView(QGraphicsView):
         # print("X:", self.xmarks)
         # print("Y:", self.ymarks)
 
-        # Draw grid
-#        self.grid_pen = StyleCache.getPen(1, GRID_COLOUR)
-#        for i in range(len(self.xmarks)):
-#            scene.addItem(GridLine(self, True, i))
-#        for i in range(len(self.ymarks)):
-#            scene.addItem(GridLine(self, False, i))
+        # Construct grid
+        row_list = []
+        self.rows = row_list
+        for rx in range(len(rowheights)):
+            row = []
+            for cx in range(len(columnwidths)):
+                row.append(
+                    self.grid_tile(
+                        rx, cx, #tag=f"({cx} | {rx})",
+                        border=GRID_COLOUR,
+                        grid_cell=True
+                    )
+                )
+            row_list.append(row)
 
         # Allow a little margin
         margin = self.pt2px(SCENE_MARGIN)
-#? self?
         self._sceneRect = QRectF(
             -margin,
             -margin,
@@ -420,14 +470,12 @@ class GridView(QGraphicsView):
         )
         scene.setSceneRect(self._sceneRect)
 
-        self.select = QGraphicsRectItem()
-        self.select.setPen(StyleCache.getPen(
-                self.pt2px(SELECT_WIDTH), SELECT_COLOUR
-            )
-        )
-        self.select.setZValue(20)
-        self.select.hide()
-        scene.addItem(self.select)
+        # Add a "selection" rectangle to the scene
+        self.select = Selection(self)
+
+#?
+        # Register the available cell editors here
+        self.editor_list = {}
 
     def add_title(self, text, halign="c"):
         textItem = QGraphicsSimpleTextItem()
@@ -453,43 +501,6 @@ class GridView(QGraphicsView):
         yshift += (self.titleheight - h) / 2
         textItem.setPos(xshift, yshift)
         return textItem
-
-#deprecated?
-    def basic_tile(self,
-        row,
-        col,
-        cspan=1,
-        rspan=1,
-        cell_selectable=False,
-        **kargs
-    ):
-        """Add a basic tile to the grid, checking coordinates and
-        converting row + col to x + y point-coordinates for the
-        <Tile> class.
-        """
-        # Check bounds
-        if (
-            row < 0
-            or col < 0
-            or (row + rspan) >= len(self.ymarks)
-            or (col + cspan) >= len(self.xmarks)
-        ):
-            raise GridError(
-                _TILE_OUT_OF_BOUNDS.format(row=row, col=col, cspan=cspan, rspan=rspan)
-            )
-        x0 = self.xmarks[col]
-        y0 = self.ymarks[row]
-        x = x0 + 0.5
-        y = y0 + 0.5
-        w0 = self.xmarks[col + cspan] - x0
-        h0 = self.ymarks[row + rspan] - y0
-        w = w0 - 1
-        h = h0 - 1
-        t = Tile(self, x, y, w, h, **kargs)
-        if cell_selectable:
-            t.selectable_cell = (x0, y0, w0, h0)
-        self.scene().addItem(t)
-        return t
 
     def grid_line_thick_h(self, row):
         try:
@@ -518,12 +529,12 @@ class GridView(QGraphicsView):
         col,
         cspan=1,
         rspan=1,
-        cell_selectable=True,
+        grid_cell=False,
         **kargs
     ):
         """Add a basic tile to the grid, checking coordinates and
         converting row + col to x + y point-coordinates for the
-        <Tile> class.
+        <Tile> constructor.
         """
         # Check bounds
         if (
@@ -536,22 +547,54 @@ class GridView(QGraphicsView):
             raise GridError(
                 _TILE_OUT_OF_BOUNDS.format(row=row, col=col, cspan=cspan, rspan=rspan)
             )
+
         x = self.xmarks[col]
         y = self.ymarks[row]
         w = self.xmarks[col + cspan] - x
         h = self.ymarks[row + rspan] - y
         t = Tile(self, x, y, w, h, **kargs)
-        if cell_selectable:
-            t.selectable_cell = (x, y, w, h)
+        if grid_cell:
+            if rspan == 1 and cspan == 1:
+                t.gridrc = (row, col)
+            else:
+#TODO
+                raise GridError("Raster-Kachel in Zeile {row}, Spalte {col} darf nicht andere Zellen überdecken".format(row=row, col=col))
+
         self.scene().addItem(t)
         return t
 
+    def get_cell(self, cellrc):
+        return self.rows[cellrc[0]][cellrc[1]]
+
     def tile_left_clicked(self, tile):
-        print("LEFT CLICK:", tile.tag or "–––")
+        try:
+            tag = tile.tag
+        except AttributeError:
+            print("LEFT-CLICK IGNORED")
+            return True
+        print("LEFT CLICK:", tag or "–––", tile.text)
+#TODO: The editors will possibly also have to trigger other activities
+# (calculations, modify database, ...)
+        try:
+            editor = tile.editor
+        except AttributeError:
+            return True
+        f = self.editor_list[editor]
+        point = self.screen_coordinates(tile.scenePos())
+        print("?=?=?=?", point)
+        val = f.activate(tile, point)
+        if val is not None:
+            tile.set_text(val)
+
         return True
 
     def tile_right_clicked(self, tile):
-        print("CONTEXT MENU:", tile.tag or "–––")
+        try:
+            tag = tile.tag
+        except AttributeError:
+            print("CONTEXT MENU IGNORED")
+            return True
+        print("CONTEXT MENU:", tag or "–––")
         return True
 
     ### pdf output
@@ -903,11 +946,6 @@ class Tile(QGraphicsRectItem):
             yshift += self.height0 - (self.height0 + h) / 2
         self.textItem.setPos(xshift, yshift)
 
-    def leftclick(self):
-        return self._grid.tile_left_clicked(self)
-
-    def contextmenu(self):
-        return self._grid.tile_right_clicked(self)
 
 #################################################
 ### The pop-up editors
@@ -1049,24 +1087,28 @@ class PopupTextEdit(QDialog):
 
 
 class PopupLineEdit(QDialog):
-    def __init__(self, grid):
-        self._grid = grid
+    def __init__(self):
         super().__init__()
         vbox = QVBoxLayout(self)
         self.lineedit = QLineEdit(self)
         vbox.addWidget(self.lineedit)
         self.lineedit.returnPressed.connect(self.accept)
 
-    def activate(self, tile, x, y):
+    def activate(self, tile, pos):
         self.setWindowTitle(tile.tag)
         w = tile.width0
         if w < 50.0:
             w = 50.0
         self.lineedit.setFixedWidth(w)
-        self.lineedit.setText(tile.value() or '')
-        self.move(self._grid.screen_coordinates(x, y))
-        if self.exec_():
-            self._grid.value_changed(tile, self.lineedit.text())
+        self.lineedit.setText(tile.text)
+        self.move(pos)
+#        self.move(self._grid.screen_coordinates(x, y))
+        if self.exec():
+            print("CHANGED?:", self.lineedit.text())
+            return self.lineedit.text()
+        else:
+            print("NO CHANGE?")
+            return None
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -1085,54 +1127,34 @@ if __name__ == "__main__":
     titleheight = 25
     grid.init(rows, cols, titleheight)
 
-
-#TODO: Add grid_tiles
-    row_list = []
-    for rx in range(len(rows)):
-        row = []
-
-        for cx in range(len(cols)):
-
-#            grid.grid_tile(rx, cx, tag=f"({cx} | {rx})")
-#            grid.grid_tile(rx, cx, tag=f"({cx} | {rx})", border=None)
-            rotate = False
-            cell_selectable = True
-            if len(row_list) == 0:
-                cell_selectable = False
-                if len(row) >= 2:
-                    rotate = True
-            row.append(
-                grid.grid_tile(
-                    rx, cx, tag=f"({cx} | {rx})",
-                    border=GRID_COLOUR,
-                    rotate=rotate,
-                    cell_selectable=cell_selectable,
-                    valign='b'
-                )
-            )
-        row_list.append(row)
-
     grid.grid_line_thick_v(2)
     grid.grid_line_thick_h(1)
 
-    row_list[0][0].set_text("Not rotated")
-    row_list[0][0].set_valign('m')
-    row_list[0][2].set_text("Rotated")
-    row_list[0][2].set_valign('m')
-    row_list[0][4].set_text("English")
+    cell0 = grid.get_cell((0, 0))
+    cell0.set_text("Not rotated")
+    cell0.set_valign('m')
+    cell1 = grid.get_cell((0, 2))
+    cell1.set_text('Deutsch')
+    cell1.set_verticaltext()
+    cell1.set_valign('b')
+    cell2 = grid.get_cell((0, 4))
+    cell2.set_text("English")
+    cell2.set_verticaltext()
 
     grid.grid_tile(4, 3, tag="t2", text="A long entry")
     grid.grid_tile(2, 0, tag="l", text="left", halign='l')
     grid.grid_tile(3, 0, tag="r", text="right", halign='r')
-    grid.grid_tile(4, 0, tag="t", text="top", valign='t')
+    grid.grid_tile(4, 0, tag="t", text="top", valign='t', cspan=2, bg= "ffffaa")
     grid.grid_tile(5, 0, tag="b", text="bottom", valign='b')
-    tr = grid.grid_tile(2, 2, tag="B", text="B", valign='b')
-    tr.set_verticaltext()
 
     if titleheight > 0:
         title = grid.add_title("Centre Title")
         title_l = grid.add_title("Left Title", halign="l")
         title_r = grid.add_title("Right Title", halign="r")
+
+#TODO:
+    grid.editor_list["LINE_EDITOR"] = PopupLineEdit()
+    cell0.editor = "LINE_EDITOR"
 
     grid.resize(600, 400)
     grid.show()

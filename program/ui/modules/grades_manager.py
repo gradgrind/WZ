@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-15
+Last updated:  2022-11-18
 
 Front-end for managing grade reports.
 
@@ -370,29 +370,44 @@ class GradeTableView(GridViewAuto):
         extras_list = grade_table["EXTRAS"]
         all_sids = grade_table["ALL_SIDS"]
         pupils_list = grade_table["GRADE_TABLE_PUPILS"]
-        pid2grades = grade_table["GRADES"]
+        pid2grades = grade_table["PUPIL_GRADES"]
+        valid_grades = grade_table["GRADES"]
         # grades_table["GRADE_ENTRY"] # partial path ("templates/...") to
         # grade entry template (without data-type ensing)
         # grades_table["PUPILS"] # current pupil list from database
 #TODO: Do I need the latter entry?
 
         col2colour = []
+        click_handler = []
 #?
 #        colsubjects = []
 #        sid2col = {}
 #        self.subject_data_list = colsubjects
 
+
+#TODO: click handlers ...
         for sdata in subject_list:
             col2colour.append(None)
+#?
+            click_handler.append(("CHOICE", valid_grades))
         for sdata in component_list:
             col2colour.append(COMPONENT_COLOUR)
+#?
+            click_handler.append(("CHOICE", valid_grades))
         for sdata in composite_list:
             col2colour.append(COMPOSITE_COLOUR)
+#?
+            click_handler.append(None)
         nsubjects = len(col2colour)
         for sdata in extras_list:
-            col2colour.append(
-                CALCULATED_COLOUR if "FUNCTION" in sdata else None
-            )
+            if "FUNCTION" in sdata:
+                col2colour.append(CALCULATED_COLOUR)
+#?
+                click_handler.append(None)
+            else:
+                col2colour.append(None)
+#?
+                click_handler.append((sdata["TYPE"], sdata.get("VALUES")))
 #?
 #            colsubjects.append(sdata)
 #            sid2col[sdata["SID"]] = col
@@ -417,64 +432,54 @@ class GradeTableView(GridViewAuto):
 # Maybe a more flexible approach with variable fields – but how to find
 # the content in that case?!
         hheaders = dict(get_grade_config()["HEADERS"])
-        self.grid_tile(row=0, col=0, cell_selectable=False,
-            text=hheaders["PUPIL"],
-            border=GRID_COLOUR,
-        )
-        self.grid_tile(row=0, col=1, cell_selectable=False,
-            text=hheaders["LEVEL"],
-            border=GRID_COLOUR,
-        )
+        self.get_cell((0, 0)).set_text(hheaders["PUPIL"])
+        self.get_cell((0, 1)).set_text(hheaders["LEVEL"])
         __colstart = 2
         col = 0
         for sid, sname in all_sids:
-            self.grid_tile(row=0, col=col+__colstart,
-                text=sname,
-                rotate=True,
-                valign = 'b',
-                border=GRID_COLOUR,
-                cell_selectable=False,
-                bg=col2colour[col]
-            )
+            cell = self.get_cell((0, col+__colstart))
+            cell.set_verticaltext()
+            cell.set_valign('b')
+            cell.set_background(col2colour[col])
+            cell.set_text(sname)
             col += 1
 
-        row_list = []
-        self.cell_matrix = row_list
+#?
+#        row_list = []
+#        self.cell_matrix = row_list
         __rowstart = 1
         row = 0
         for pdata in pupils_list:
             rx = row + __rowstart
-            self.grid_tile(rx, 0,
-                text=pupil_name(pdata),
-                border=GRID_COLOUR,
-                cell_selectable=False,
-                halign='l',
-            )
-            self.grid_tile(rx, 1,
-                text=pdata["LEVEL"],
-                border=GRID_COLOUR,
-                cell_selectable=False,
-            )
+            cell = self.get_cell((rx, 0))
+            cell.set_halign('l')
+            cell.set_text(pupil_name(pdata))
+            cell = self.get_cell((rx, 1))
+            cell.set_text(pdata["LEVEL"])
 
             pgrades = pid2grades[pdata["PID"]]
-            row_cells = []
+#?
+#            row_cells = []
             col = 0
             for sid, sname in all_sids:
-                row_cells.append(
-                    self.grid_tile(rx, col + __colstart,
-                        text=pgrades.get(sid, ""),
-                        tag=f"({col} | {row})",
-                        border=GRID_COLOUR,
-                        bg=col2colour[col]
-                    )
-                )
+
+                cell = self.get_cell((rx, col + __colstart))
+                cell.set_background(col2colour[col])
+                cell.set_text(pgrades.get(sid, ""))
+
+#                row_cells.append(
+#                    self.grid_tile(rx, col + __colstart,
+#                        text=pgrades.get(sid, ""),
+#                        tag=f"({col} | {row})",
+#                        border=GRID_COLOUR,
+#                        bg=col2colour[col]
+#                    )
+#                )
                 col += 1
-            row_list.append(row_cells)
+#            row_list.append(row_cells)
 
 
 #            self.calculate_row(row)
-
-
             row += 1
 
 #?

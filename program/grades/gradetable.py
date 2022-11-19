@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-15
+Last updated:  2022-11-16
 
 Access grade data, read and build grade tables.
 
@@ -342,7 +342,7 @@ def full_grade_table(occasion, class_group, instance):
                 else:
                     grade_map[sid] = NO_GRADE
     table_info["ALL_SIDS"] = sidlist
-    table_info["GRADES"] = pid2grade_map
+    table_info["PUPIL_GRADES"] = pid2grade_map
     table_info["GRADE_TABLE_PUPILS"] = pdata_list
     # Calculate contents of all cells with FUNCTION
     for row in range(len(pdata_list)):
@@ -362,7 +362,7 @@ def calculate_row(table, row):
     """
     pdata = table["GRADE_TABLE_PUPILS"][row]
     pid = pdata["PID"]
-    grades = table["GRADES"][pid]
+    grades = table["PUPIL_GRADES"][pid]
     subjects = table["SUBJECTS"]
     final_grades = [grades.get(sdata["SID"]) for sdata in subjects]
     composites = table["COMPOSITES"]
