@@ -86,6 +86,9 @@ from qtpy.QtWidgets import (
     QGraphicsLineItem,
     QVBoxLayout,
     QLineEdit,
+    QListWidget,
+    QTableWidget,
+    QTableWidgetItem,
 )
 from qtpy.QtGui import (
     QFont,
@@ -473,10 +476,6 @@ class GridView(QGraphicsView):
         # Add a "selection" rectangle to the scene
         self.select = Selection(self)
 
-#?
-        # Register the available cell editors here
-        self.editor_list = {}
-
     def add_title(self, text, halign="c"):
         textItem = QGraphicsSimpleTextItem()
         self.scene().addItem(textItem)
@@ -567,26 +566,16 @@ class GridView(QGraphicsView):
         return self.rows[cellrc[0]][cellrc[1]]
 
     def tile_left_clicked(self, tile):
-        try:
-            tag = tile.tag
-        except AttributeError:
-            print("LEFT-CLICK IGNORED")
-            return True
-        print("LEFT CLICK:", tag or "–––", tile.text)
 #TODO: The editors will possibly also have to trigger other activities
 # (calculations, modify database, ...)
         try:
             editor = tile.editor
         except AttributeError:
             return True
-        f = self.editor_list[editor]
-        point = self.screen_coordinates(tile.scenePos())
-        print("?=?=?=?", point)
-        val = f.activate(tile, point)
-        if val is not None:
-            tile.set_text(val)
-
-        return True
+        if editor:
+            point = self.screen_coordinates(tile.scenePos())
+            editor.activate(tile, point)
+        return False
 
     def tile_right_clicked(self, tile):
         try:
@@ -950,17 +939,12 @@ class Tile(QGraphicsRectItem):
 #################################################
 ### The pop-up editors
 
-def PopupTable(grid, items, ncols = 3):
-    if items:
-        return _PopupTable(grid, items, ncols)
-    return None
-
-
-class _PopupTable(QDialog):
-#TODO: Note the change: '' is no longer included automatically!!!
-    def __init__(self, grid, items, ncols):
-        self._grid = grid
+#TODO
+class PopupTable(QDialog):
+    def __init__(self, items, ncols=None):
+        coln = ncols or 1
         super().__init__()
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         vbox = QVBoxLayout(self)
         self.table = QTableWidget(self)
         vbox.addWidget(self.table)
@@ -969,12 +953,12 @@ class _PopupTable(QDialog):
         self.table.itemActivated.connect(self._select)
         self.table.itemClicked.connect(self._select)
         # Enter the data
-        nrows = (len(items) + 2) // ncols
-        self.table.setColumnCount(ncols)
+        nrows = (len(items) + 2) // coln
+        self.table.setColumnCount(coln)
         self.table.setRowCount(nrows)
         i = 0
         for row in range(nrows):
-            for col in range(ncols):
+            for col in range(coln):
                 try:
                     text = items[i]
                     item = QTableWidgetItem(text)
@@ -983,7 +967,7 @@ class _PopupTable(QDialog):
                     item._text = text
                 except IndexError:
                     item = QTableWidgetItem('')
-                    item.setBackground(CellStyle.getBrush(NO_ITEM))
+                    item.setBackground(StyleCache.getBrush(''))
                     item.setFlags(Qt.NoItemFlags)
                     item._text = None
                 self.table.setItem(row, col, item)
@@ -996,7 +980,7 @@ class _PopupTable(QDialog):
         for r in range(nrows):
             h += self.table.rowHeight(r)
         w = 0
-        for c in range(ncols):
+        for c in range(coln):
             w += self.table.columnWidth(c)
         _cm = self.table.contentsMargins()
         h += _cm.top() + _cm.bottom()
@@ -1011,14 +995,17 @@ class _PopupTable(QDialog):
             self._value = item._text
             self.accept()
 
-    def activate(self, tile, x, y):
+    def activate(self, tile, pos):
         self.setWindowTitle(tile.tag)
-        # x and y are scene coordinates.
-        self.move(self._grid.screen_coordinates(x, y))
-        if self.exec_():
-            self._grid.value_changed(tile, self._value)
+        self.move(pos)
+        text0 = tile.text
+        if self.exec():
+            if self._value != text0:
+                tile.set_text(self._value)
+                return True
+        return False
 
-
+#TODO
 class PopupDate(QDialog):
     def __init__(self, grid):
         self._grid = grid
@@ -1059,7 +1046,7 @@ class PopupDate(QDialog):
         self.lbl.setText(QLocale().toString(date))
         self.date = date.toString('yyyy-MM-dd')
 
-
+#TODO
 class PopupTextEdit(QDialog):
     def __init__(self, grid):
         self._grid = grid
@@ -1089,6 +1076,7 @@ class PopupTextEdit(QDialog):
 class PopupLineEdit(QDialog):
     def __init__(self):
         super().__init__()
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         vbox = QVBoxLayout(self)
         self.lineedit = QLineEdit(self)
         vbox.addWidget(self.lineedit)
@@ -1100,15 +1088,53 @@ class PopupLineEdit(QDialog):
         if w < 50.0:
             w = 50.0
         self.lineedit.setFixedWidth(w)
-        self.lineedit.setText(tile.text)
+        text0 = tile.text
+        self.lineedit.setText(text0)
         self.move(pos)
-#        self.move(self._grid.screen_coordinates(x, y))
         if self.exec():
-            print("CHANGED?:", self.lineedit.text())
-            return self.lineedit.text()
+            text = self.lineedit.text()
+            if text != text0:
+                tile.set_text(text)
+                return True
+        return False
+
+#TODO
+class PopupList(QDialog):
+    def __init__(self, items, display_items=None):
+        super().__init__()
+        self.__items = items
+        self.__display_items = display_items
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        vbox = QVBoxLayout(self)
+        self.listbox = QListWidget(self)
+#TODO
+#        self.setFixedWidth(60)
+        if display_items:
+            self.listbox.addItems(display_items)
         else:
-            print("NO CHANGE?")
-            return None
+            self.listbox.addItems(items)
+#Width?
+        vbox.addWidget(self.listbox)
+        self.listbox.itemClicked.connect(self.accept)
+
+    def activate(self, tile, pos):
+        self.setWindowTitle(tile.tag)
+        text0 = tile.text
+        try:
+            i = self.__items.index(text0)
+        except ValueError:
+            pass
+        else:
+            self.listbox.setCurrentRow(i)
+        self.move(pos)
+        if self.exec():
+#TODO: especially for the case when display items are used
+            i = self.listbox.currentRow()
+            text = self.__items[i]
+            if text != text0:
+                tile.set_text(text)
+                return True
+        return False
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -1141,7 +1167,7 @@ if __name__ == "__main__":
     cell2.set_text("English")
     cell2.set_verticaltext()
 
-    grid.grid_tile(4, 3, tag="t2", text="A long entry")
+    cell_1 = grid.grid_tile(4, 3, tag="t2", text="A long entry")
     grid.grid_tile(2, 0, tag="l", text="left", halign='l')
     grid.grid_tile(3, 0, tag="r", text="right", halign='r')
     grid.grid_tile(4, 0, tag="t", text="top", valign='t', cspan=2, bg= "ffffaa")
@@ -1153,8 +1179,20 @@ if __name__ == "__main__":
         title_r = grid.add_title("Right Title", halign="r")
 
 #TODO:
-    grid.editor_list["LINE_EDITOR"] = PopupLineEdit()
-    cell0.editor = "LINE_EDITOR"
+    plain_line_editor = PopupLineEdit()
+    cell0.editor = plain_line_editor
+#    grade_editor = PopupList(
+    grade_editor = PopupTable(
+        (   "1+", "1", "1-",
+            "2+", "2", "2-",
+            "3+", "3", "3-",
+            "4+", "4", "4-",
+            "5+", "5", "5-",
+            "6", "nt", "nb",
+            "*", "/", ""
+        ), 3
+    )
+    cell_1.editor = grade_editor
 
     grid.resize(600, 400)
     grid.show()
