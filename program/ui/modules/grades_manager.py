@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-18
+Last updated:  2022-11-20
 
 Front-end for managing grade reports.
 
@@ -97,7 +97,7 @@ from ui.ui_base import (
     run,
 )
 #from ui.editable import EdiTableWidget
-from ui.grid_base import GridViewAuto
+from ui.grid_base import GridViewAuto, CellEditorTable
 #from ui.grid_base import GridView
 
 #from ui.ui_extra import QWidget, QLabel, QVBoxLayout, \
@@ -371,7 +371,7 @@ class GradeTableView(GridViewAuto):
         all_sids = grade_table["ALL_SIDS"]
         pupils_list = grade_table["GRADE_TABLE_PUPILS"]
         pid2grades = grade_table["PUPIL_GRADES"]
-        valid_grades = grade_table["GRADES"]
+        grade_config_table = grade_table["GRADES"]
         # grades_table["GRADE_ENTRY"] # partial path ("templates/...") to
         # grade entry template (without data-type ensing)
         # grades_table["PUPILS"] # current pupil list from database
@@ -385,29 +385,35 @@ class GradeTableView(GridViewAuto):
 #        self.subject_data_list = colsubjects
 
 
-#TODO: click handlers ...
+        grade_click_handler = CellEditorTable(grade_config_table).activate
         for sdata in subject_list:
             col2colour.append(None)
-#?
-            click_handler.append(("CHOICE", valid_grades))
+            click_handler.append(grade_click_handler)
         for sdata in component_list:
             col2colour.append(COMPONENT_COLOUR)
-#?
-            click_handler.append(("CHOICE", valid_grades))
+            click_handler.append(grade_click_handler)
         for sdata in composite_list:
             col2colour.append(COMPOSITE_COLOUR)
-#?
             click_handler.append(None)
         nsubjects = len(col2colour)
         for sdata in extras_list:
             if "FUNCTION" in sdata:
                 col2colour.append(CALCULATED_COLOUR)
-#?
                 click_handler.append(None)
             else:
                 col2colour.append(None)
-#?
-                click_handler.append((sdata["TYPE"], sdata.get("VALUES")))
+                handler_type = sdata["TYPE"]
+                if handler_type == "CHOICE":
+                    values = [[[v], ""] for v in sdata["VALUES"]]
+                    editor = CellEditorTable(values).activate
+                elif handler_type == "CHOICE_MAP":
+                    values = [[[v], text] for v, text in sdata["VALUES"]]
+                    editor = CellEditorTable(values).activate
+                else:
+#TODO
+                    editor = None
+                click_handler.append(editor)
+
 #?
 #            colsubjects.append(sdata)
 #            sid2col[sdata["SID"]] = col
@@ -466,15 +472,9 @@ class GradeTableView(GridViewAuto):
                 cell = self.get_cell((rx, col + __colstart))
                 cell.set_background(col2colour[col])
                 cell.set_text(pgrades.get(sid, ""))
-
-#                row_cells.append(
-#                    self.grid_tile(rx, col + __colstart,
-#                        text=pgrades.get(sid, ""),
-#                        tag=f"({col} | {row})",
-#                        border=GRID_COLOUR,
-#                        bg=col2colour[col]
-#                    )
-#                )
+                handler = click_handler[col]
+                if handler:
+                    cell.set_property("EDITOR", handler)
                 col += 1
 #            row_list.append(row_cells)
 

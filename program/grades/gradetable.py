@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-16
+Last updated:  2022-11-20
 
 Access grade data, read and build grade tables.
 
@@ -565,7 +565,7 @@ def read_grade_table_file(
     # print("\nFIELDS:", fields)
     gdata: dict[str, dict[str, str]] = {"__INFO__": info}
     group_data = get_group_data(info["OCCASION"], info["CLASS_GROUP"])
-    valid_grades = set(group_data["GRADES"])
+    valid_grades = get_valid_grades(group_data["GRADES"])
     for pdata in datatable["__ROWS__"]:
         pinfo = [pdata.pop(h) for h in header_map]
         pid: str = pinfo[0]
@@ -585,6 +585,18 @@ def read_grade_table_file(
                     )
                     pdata[k] = ""
     return gdata
+
+
+def get_valid_grades(value_table) -> dict[str,str]:
+    """Make a mapping of valid grades to their print values from the
+    configuration table (in GRADE_CONFIG).
+    """
+    gmap = {}
+    for row in value_table:
+        text = row[1]
+        for val in row[0]:
+            gmap[val] = text or val
+    return gmap
 
 
 def collate_grade_tables(
