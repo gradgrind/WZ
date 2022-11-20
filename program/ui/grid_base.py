@@ -1,7 +1,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2022-11-18
+Last updated:  2022-11-20
 
 Base functions for table-grids using the QGraphicsView framework.
 
@@ -54,7 +54,6 @@ SELECT_COLOUR = "2370ff"
 FONT_SIZE_DEFAULT = 12
 BORDER_WIDTH = 1
 THICK_LINE_WIDTH = 3
-CELL_MARGIN = 2
 SELECT_WIDTH = 3
 SCENE_MARGIN = 10  # Margin around content in GraphicsView widgets
 TITLE_MARGIN = 15  # Left & right title margin (points)
@@ -361,14 +360,18 @@ class GridView(QGraphicsView):
             print("§?§?§?§?§ SELECT ACTIVE:", self.select.range())
             return
         items = self.items(point)
-#TODO: A time test may be better?
         if items:
             for item in items:
-                # Give all items at this point a chance to react,
-                # starting with the topmost. An item can break the
-                # chain by returning a false value.
-                if not self.tile_left_clicked(item):
-                    return
+                # Find the topmost <Tile> which responds to a click
+                try:
+                    click_handler = item.on_left_click
+                except AttributeError:
+                    continue
+                point = self.screen_coordinates(item.scenePos())
+                value = click_handler()
+                if value is not None:
+                    self.cell_modified(value)
+                break
 
     def contextMenuEvent(self, event):
         try:
@@ -385,17 +388,23 @@ class GridView(QGraphicsView):
             if self.select.contains(pointf):
                 print("§§CONTAINED")
             else:
-                self.start_cell = None
-                self.select.hide()
+                self.select.clear()
 #?
+
         items = self.items(point)
         if items:
             for item in items:
-                # Give all items at this point a chance to react, starting
-                # with the topmost. An item can break the chain by
-                # returning a false value.
-                if not self.tile_right_clicked(item):
-                    return
+                # Find the topmost <Tile> which responds to the event
+                try:
+                    click_handler = item.on_context_menu
+                except AttributeError:
+                    continue
+                click_handler()
+                break
+
+
+    def cell_modified(self, row, col):
+        print("CELL MODIFIED:", row, col)
 
     ### View scaling
     def scaleUp(self):
@@ -422,7 +431,6 @@ class GridView(QGraphicsView):
         self.titleheight = self.pt2px(titleheight)
         self.border_width = self.pt2px(BORDER_WIDTH)
         self.thick_line_width = self.pt2px(THICK_LINE_WIDTH)
-        self.cell_margin = self.pt2px(CELL_MARGIN)
         scene = QGraphicsScene()
         self.setScene(scene)
         self.xmarks = [0]
@@ -456,7 +464,7 @@ class GridView(QGraphicsView):
             for cx in range(len(columnwidths)):
                 row.append(
                     self.grid_tile(
-                        rx, cx, #tag=f"({cx} | {rx})",
+                        rx, cx,
                         border=GRID_COLOUR,
                         grid_cell=True
                     )
@@ -551,7 +559,7 @@ class GridView(QGraphicsView):
         y = self.ymarks[row]
         w = self.xmarks[col + cspan] - x
         h = self.ymarks[row + rspan] - y
-        t = Tile(self, x, y, w, h, **kargs)
+        t = Tile(x, y, w, h, **kargs)
         if grid_cell:
             if rspan == 1 and cspan == 1:
                 t.gridrc = (row, col)
@@ -565,25 +573,14 @@ class GridView(QGraphicsView):
     def get_cell(self, cellrc):
         return self.rows[cellrc[0]][cellrc[1]]
 
-    def tile_left_clicked(self, tile):
-#TODO: The editors will possibly also have to trigger other activities
-# (calculations, modify database, ...)
-        try:
-            editor = tile.editor
-        except AttributeError:
-            return True
-        if editor:
-            point = self.screen_coordinates(tile.scenePos())
-            editor.activate(tile, point)
-        return False
-
+#TODO
     def tile_right_clicked(self, tile):
         try:
-            tag = tile.tag
-        except AttributeError:
-            print("CONTEXT MENU IGNORED")
+            cmen = tile.get_property("CONTEXT_MENU")
+        except KeyError:
+            print("NO CONTEXT MENU")
             return True
-        print("CONTEXT MENU:", tag or "–––")
+        print("CONTEXT MENU:", cmen)
         return True
 
     ### pdf output
@@ -813,9 +810,8 @@ class Tile(QGraphicsRectItem):
     Both cell and text can be styled to a limited extent.
     """
 
-    def __init__(self, grid, x, y, w, h, text="", tag="", **style):
-        self._grid = grid
-        self.tag = tag
+    def __init__(self, x, y, w, h, text="", **style):
+        self.__properties = {}
         self.height0 = h
         self.width0 = w
         super().__init__(0, 0, w, h)
@@ -850,6 +846,37 @@ class Tile(QGraphicsRectItem):
         pen0 = StyleCache.getPen(grid.border_width, self.style["border"])
         self.setPen(pen0)
 
+    def on_left_click(self):
+        try:
+            editor = self.__properties["EDITOR"]
+        except KeyError:
+            return None
+        view = self.scene().views()[0]
+        point = view.screen_coordinates(self.scenePos())
+        if editor(point, self.__properties):
+            self.set_text(None)
+            # Return the data needed for handling changes to this cell
+            return self.__properties.get("CHANGED")
+        return None
+
+    def on_context_menu(self):
+        try:
+            handler = self.__properties["CONTEXT_MENU"]
+        except KeyError:
+            return
+        view = self.scene().views()[0]
+        point = view.screen_coordinates(self.scenePos())
+        handler(point, self.__properties)
+
+    def set_property(self, key, value):
+        self.__properties[key] = value
+
+    def get_property(self, key):
+        try:
+            return self.__properties[key]
+        except KeyError:
+            raise KeyError(f"TILE_NO_PROPERTY: {key}")
+
     def set_background(self, colour):
         self.setBrush(StyleCache.getBrush(colour))
 
@@ -858,27 +885,30 @@ class Tile(QGraphicsRectItem):
 
     def set_halign(self, halign):
         self.halign = halign
-        self.set_text(self.text)
+        self.set_text(None)
 
     def set_valign(self, valign):
         self.valign = valign
-        self.set_text(self.text)
+        self.set_text(None)
 
     def set_verticaltext(self, rot90=True):
         self.rotated = rot90
-        self.set_text(self.text)
+        self.set_text(None)
 
     def set_text(self, text):
-        if type(text) != str:
+        if text is None:
+            text = self.__properties["TEXT"]
+        elif type(text) == str:
+            self.__properties["TEXT"] = text
+        else:
 #TODO
             raise GridError(_NOTSTRING.format(val=repr(text)))
-        self.text = text
         self.textItem.setText(text)
         self.textItem.setScale(1)
         tbr = self.textItem.boundingRect()
         w = tbr.width()
         h = tbr.height()
-        margin = self._grid.cell_margin
+        margin = h / 5
         scale = 1
         yshift = 0
         if text:
@@ -940,7 +970,7 @@ class Tile(QGraphicsRectItem):
 ### The pop-up editors
 
 #TODO
-class PopupTable(QDialog):
+class CellEditorTable(QDialog):
     def __init__(self, items, ncols=None):
         coln = ncols or 1
         super().__init__()
@@ -995,18 +1025,18 @@ class PopupTable(QDialog):
             self._value = item._text
             self.accept()
 
-    def activate(self, tile, pos):
-        self.setWindowTitle(tile.tag)
+    def activate(self, pos, properties):
+#        self.setWindowTitle(tile.tag)
         self.move(pos)
-        text0 = tile.text
+        text0 = properties["TEXT"]
         if self.exec():
             if self._value != text0:
-                tile.set_text(self._value)
+                properties["TEXT"] = self._value
                 return True
         return False
 
 #TODO
-class PopupDate(QDialog):
+class CellEditorDate(QDialog):
     def __init__(self, grid):
         self._grid = grid
         super().__init__()
@@ -1030,7 +1060,7 @@ class PopupDate(QDialog):
         self.accept()
 
     def activate(self, tile, x, y):
-        self.setWindowTitle(tile.tag)
+#        self.setWindowTitle(tile.tag)
         # Set date
         tile = tile
         date = tile.value()
@@ -1047,7 +1077,7 @@ class PopupDate(QDialog):
         self.date = date.toString('yyyy-MM-dd')
 
 #TODO
-class PopupTextEdit(QDialog):
+class CellEditorText(QDialog):
     def __init__(self, grid):
         self._grid = grid
         super().__init__()
@@ -1062,7 +1092,7 @@ class PopupTextEdit(QDialog):
         vbox.addWidget(buttonBox)
 
     def activate(self, tile, x, y):
-        self.setWindowTitle(tile.tag)
+#        self.setWindowTitle(tile.tag)
         text = tile.value()
         self.textedit.setPlainText(text)
         self.move(self._grid.screen_coordinates(x, y))
@@ -1073,7 +1103,7 @@ class PopupTextEdit(QDialog):
             self._grid.value_changed(tile, text)
 
 
-class PopupLineEdit(QDialog):
+class CellEditorLine(QDialog):
     def __init__(self):
         super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -1082,24 +1112,20 @@ class PopupLineEdit(QDialog):
         vbox.addWidget(self.lineedit)
         self.lineedit.returnPressed.connect(self.accept)
 
-    def activate(self, tile, pos):
-        self.setWindowTitle(tile.tag)
-        w = tile.width0
-        if w < 50.0:
-            w = 50.0
-        self.lineedit.setFixedWidth(w)
-        text0 = tile.text
+    def activate(self, pos, properties):
+#        self.setWindowTitle(tile.tag)
+        text0 = properties["TEXT"]
         self.lineedit.setText(text0)
         self.move(pos)
         if self.exec():
             text = self.lineedit.text()
             if text != text0:
-                tile.set_text(text)
+                properties["TEXT"] = text
                 return True
         return False
 
 #TODO
-class PopupList(QDialog):
+class CellEditorList(QDialog):
     def __init__(self, items, display_items=None):
         super().__init__()
         self.__items = items
@@ -1117,9 +1143,9 @@ class PopupList(QDialog):
         vbox.addWidget(self.listbox)
         self.listbox.itemClicked.connect(self.accept)
 
-    def activate(self, tile, pos):
-        self.setWindowTitle(tile.tag)
-        text0 = tile.text
+    def activate(self, pos, properties):
+#        self.setWindowTitle(tile.tag)
+        text0 = properties["TEXT"]
         try:
             i = self.__items.index(text0)
         except ValueError:
@@ -1132,7 +1158,7 @@ class PopupList(QDialog):
             i = self.listbox.currentRow()
             text = self.__items[i]
             if text != text0:
-                tile.set_text(text)
+                properties["TEXT"] = text
                 return True
         return False
 
@@ -1167,11 +1193,11 @@ if __name__ == "__main__":
     cell2.set_text("English")
     cell2.set_verticaltext()
 
-    cell_1 = grid.grid_tile(4, 3, tag="t2", text="A long entry")
-    grid.grid_tile(2, 0, tag="l", text="left", halign='l')
-    grid.grid_tile(3, 0, tag="r", text="right", halign='r')
-    grid.grid_tile(4, 0, tag="t", text="top", valign='t', cspan=2, bg= "ffffaa")
-    grid.grid_tile(5, 0, tag="b", text="bottom", valign='b')
+    cell_1 = grid.grid_tile(4, 3, text="A long entry")
+    grid.grid_tile(2, 0, text="left", halign='l')
+    grid.grid_tile(3, 0, text="right", halign='r')
+    grid.grid_tile(4, 0, text="top", valign='t', cspan=2, bg= "ffffaa")
+    grid.grid_tile(5, 0, text="bottom", valign='b')
 
     if titleheight > 0:
         title = grid.add_title("Centre Title")
@@ -1179,10 +1205,10 @@ if __name__ == "__main__":
         title_r = grid.add_title("Right Title", halign="r")
 
 #TODO:
-    plain_line_editor = PopupLineEdit()
-    cell0.editor = plain_line_editor
-#    grade_editor = PopupList(
-    grade_editor = PopupTable(
+    plain_line_editor = CellEditorLine().activate
+    cell0.set_property("EDITOR", plain_line_editor)
+#    grade_editor = CellEditorList(
+    grade_editor = CellEditorTable(
         (   "1+", "1", "1-",
             "2+", "2", "2-",
             "3+", "3", "3-",
@@ -1191,8 +1217,8 @@ if __name__ == "__main__":
             "6", "nt", "nb",
             "*", "/", ""
         ), 3
-    )
-    cell_1.editor = grade_editor
+    ).activate
+    cell_1.set_property("EDITOR", grade_editor)
 
     grid.resize(600, 400)
     grid.show()
