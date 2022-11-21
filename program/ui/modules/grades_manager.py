@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-20
+Last updated:  2022-11-21
 
 Front-end for managing grade reports.
 
@@ -70,6 +70,7 @@ from grades.gradetable import (
     make_grade_table,
     full_grade_table,
     NO_GRADE,
+    calculate_row
 )
 
 #???
@@ -363,6 +364,7 @@ class GradeTableView(GridViewAuto):
 #class GradeTableView(GridView):
 
     def setup(self, grade_table):
+        self.grade_table = grade_table
 #? ... What data needs to be available later?
         subject_list = grade_table["SUBJECTS"]
         component_list = grade_table["COMPONENTS"]
@@ -441,6 +443,7 @@ class GradeTableView(GridViewAuto):
         self.get_cell((0, 0)).set_text(hheaders["PUPIL"])
         self.get_cell((0, 1)).set_text(hheaders["LEVEL"])
         __colstart = 2
+        self.col0 = __colstart
         col = 0
         for sid, sname in all_sids:
             cell = self.get_cell((0, col+__colstart))
@@ -454,6 +457,7 @@ class GradeTableView(GridViewAuto):
 #        row_list = []
 #        self.cell_matrix = row_list
         __rowstart = 1
+        self.row0 = __rowstart
         row = 0
         for pdata in pupils_list:
             rx = row + __rowstart
@@ -487,6 +491,34 @@ class GradeTableView(GridViewAuto):
             title = self.add_title("Centre Title")
             title_l = self.add_title("Left Title", halign="l")
             title_r = self.add_title("Right Title", halign="r")
+
+
+    def cell_modified(self, row_col:tuple[int,int]):
+        """Override base method in grid_base.GridView.
+        """
+#TODO: change the grade in self.grade_table – for this it would be
+# good to have the new value from the popup ...
+
+        cell = self.get_cell(row_col)
+        try:
+            new_value = cell.get_property("VALUE")
+        except KeyError:
+            new_value = cell.get_property("TEXT")
+        print("\nNEW VALUE:", new_value)
+        row, col = row_col
+        sid, sname = self.grade_table["ALL_SIDS"][col-self.col0]
+        print("SID:", sid)
+        pdata = self.grade_table["GRADE_TABLE_PUPILS"][row-self.row0]
+        print("PDATA:", pdata)
+        grades = self.grade_table["PUPIL_GRADES"][pdata["PID"]]
+        print("GRADES:", grades)
+        grades[sid] = new_value
+
+
+        # Recalculate row
+        changed_grades = calculate_row(self.grade_table, row-self.row0)
+        print("\nCHANGED:", changed_grades)
+#TODO: Save grades to database
 
 
     def table2pdf(self, fpath):
