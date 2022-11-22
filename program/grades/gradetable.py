@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-20
+Last updated:  2022-11-22
 
 Access grade data, read and build grade tables.
 
@@ -57,7 +57,9 @@ from typing import Optional
 import datetime
 
 from core.base import class_group_split, Dates
-from core.db_access import db_read_table, read_pairs
+from core.db_access import (
+    db_read_table, read_pairs, db_new_row, db_delete_rows
+)
 from core.basic_data import SHARED_DATA, get_subjects_with_sorting
 from core.pupils import pupil_name, pupil_data
 from core.report_courses import get_pupil_grade_matrix
@@ -301,6 +303,13 @@ def full_grade_table(occasion, class_group, instance):
             raise Bug("Stored grades but no entry in GRADES_INFO for"
                 " {class_group} / {occasion} / {instance}"
             )
+        db_new_row("GRADES_INFO",
+            CLASS_GROUP=class_group,
+            OCCASION=occasion,
+            INSTANCE=instance,
+            DATE_ISSUE=DATE_ISSUE,
+            DATE_GRADES=DATE_GRADES
+        )
     subject_list = table_info["SUBJECTS"]
     ## Fields: SID:str, NAME:str, GROUP:str
     components_list = table_info["COMPONENTS"]
@@ -333,7 +342,10 @@ def full_grade_table(occasion, class_group, instance):
         for pid, pinfo in table_info["PUPILS"].items():
             pdata, p_grade_tids = pinfo
             pdata_list.append(pdata)
-            __grade_map = pid2grades.get(pid) or {}
+            try:
+                __grade_map = pid2grades.pop(pid)
+            except KeyError:
+                __grade_map = {}
             grade_map = {}
             pid2grade_map[pid] = grade_map
             for sid, sname in sidlist:
@@ -341,6 +353,16 @@ def full_grade_table(occasion, class_group, instance):
                     grade_map[sid] = __grade_map.get(sid, "")
                 else:
                     grade_map[sid] = NO_GRADE
+        # Remove pupils from grade table if they are no longer in the group.
+        # This must be done because otherwise they would be "reinstated"
+        # as soon as the date-of-issue is past.
+        for pid in pid2grades:
+            db_delete_rows("GRADES",
+                OCCASION=occasion,
+                CLASS_GROUP=class_group,
+                INSTANCE=instance,
+                PID=pid
+            )
     table_info["ALL_SIDS"] = sidlist
     table_info["PUPIL_GRADES"] = pid2grade_map
     table_info["GRADE_TABLE_PUPILS"] = pdata_list
