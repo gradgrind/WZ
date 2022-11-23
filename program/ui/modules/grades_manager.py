@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-21
+Last updated:  2022-11-23
 
 Front-end for managing grade reports.
 
@@ -70,7 +70,8 @@ from grades.gradetable import (
     make_grade_table,
     full_grade_table,
     NO_GRADE,
-    calculate_row
+    calculate_row,
+    update_pupil_grades
 )
 
 #???
@@ -483,7 +484,6 @@ class GradeTableView(GridViewAuto):
 #            row_list.append(row_cells)
 
 
-#            self.calculate_row(row)
             row += 1
 
 #?
@@ -510,16 +510,15 @@ class GradeTableView(GridViewAuto):
         print("SID:", sid)
         pdata = self.grade_table["GRADE_TABLE_PUPILS"][row-self.row0]
         print("PDATA:", pdata)
-        grades = self.grade_table["PUPIL_GRADES"][pdata["PID"]]
+        pid = pdata["PID"]
+        grades = self.grade_table["PUPIL_GRADES"][pid]
         print("GRADES:", grades)
         grades[sid] = new_value
 
-
-        # Recalculate row
-        changed_grades = calculate_row(self.grade_table, row-self.row0)
-        print("\nCHANGED:", changed_grades)
-#TODO: Save grades to database
-
+#TODO: Adjust updating so that the display is only updated from here?
+#TODO: This is not yet actually updating the db ...
+        # Update this pupil's grades (etc.) in the database
+        update_pupil_grades(self.grade_table, row-self.row0)
 
     def table2pdf(self, fpath):
         os.makedirs(os.path.dirname(fpath), exist_ok=True)

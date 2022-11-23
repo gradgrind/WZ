@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-22
+Last updated:  2022-11-23
 
 Access grade data, read and build grade tables.
 
@@ -194,7 +194,13 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
         except KeyError:
             # A "normal" subject, not a "composite component"
             subject_list.append(value)
-    result = {"SUBJECTS": subject_list, "COMPONENTS": component_list}
+    result = {
+        "OCCASION": occasion,
+        "CLASS_GROUP": class_group,
+        "INSTANCE": instance,
+        "SUBJECTS": subject_list,
+        "COMPONENTS": component_list
+    }
 
     # Composites
     composite_list = []
@@ -465,6 +471,32 @@ def read_stored_grades(
         grade_map = read_pairs(row["GRADE_MAP"])
         plist.append((pdata, grade_map))
     return plist
+
+
+def update_pupil_grades(grade_table, row):
+    # Recalculate row
+#TODO: Better using pid as selector?
+    pid = grade_table["GRADE_TABLE_PUPILS"][row]["PID"]
+    changed_grades = calculate_row(grade_table, row)
+    print("\nCHANGED:", changed_grades)
+    # Save grades to database
+    grades = grade_table["PUPIL_GRADES"][pid]
+    gstring = "\n".join([f"{k}:{v}" for k, v in grades.items()])
+#TODO
+    print("GRADES", "GRADE_MAP", gstring,
+        grade_table["OCCASION"],
+        grade_table["CLASS_GROUP"],
+        grade_table["INSTANCE"],
+        pid
+    )
+    return
+
+    db_update_field("GRADES", "GRADE_MAP", gstring,
+        OCCASION=grade_table["OCCASION"],
+        CLASS_GROUP=grade_table["CLASS_GROUP"],
+        INSTANCE=grade_table["INSTANCE"],
+        PID=pid
+    )
 
 
 def make_grade_table(
