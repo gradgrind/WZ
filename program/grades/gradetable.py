@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-23
+Last updated:  2022-11-26
 
 Access grade data, read and build grade tables.
 
@@ -58,7 +58,7 @@ import datetime
 
 from core.base import class_group_split, Dates
 from core.db_access import (
-    db_read_table, read_pairs, db_new_row, db_delete_rows
+    db_read_table, read_pairs, db_new_row, db_delete_rows, db_update_field
 )
 from core.basic_data import SHARED_DATA, get_subjects_with_sorting
 from core.pupils import pupil_name, pupil_data
@@ -184,7 +184,7 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
         zgroup = sdata[3]
         # sdata[4] is the text-report custom settings, which are
         # not relevant  here.
-        value = {"SID": sid, "NAME": sname, "GROUP": zgroup}
+        value = {"SID": sid, "NAME": sname, "TYPE": "SUBJECT", "GROUP": zgroup}
         try:
             composite = composite_components[sid]
             value["COMPOSITE"] = composite
@@ -220,6 +220,7 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
                 {
                     "SID": k,
                     "NAME": v[0],
+                    "TYPE": "COMPOSITE",
                     "FUNCTION": f,
                     "GROUP": v[2],
                     "COMPONENTS": references
@@ -245,22 +246,10 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
                 {
                     "SID": k[1:],
                     "NAME": v[0],
-                    "TYPE": "CHOICE",
-                    "VALUES": v[1]
+                    "TYPE": v[1],
+                    "VALUES": v[2]
                 }
             )
-    report_types = group_data.get("REPORT_TYPES")
-    if report_types:
-        extra_list.append(
-            {
-                "SID": "REPORT_TYPE",
-                "NAME": T["REPORT_TYPE"],
-                "TYPE": "CHOICE_MAP",
-                "VALUES": report_types,
-            }
-        )
-    extra_list.append({"SID": "REMARKS", "NAME": T["REMARKS"], "TYPE": "TEXT"})
-
     result["GRADES"] = group_data["GRADES"]
     result["GRADE_ENTRY"] = group_data["GRADE_ENTRY"]
 
@@ -317,11 +306,11 @@ def full_grade_table(occasion, class_group, instance):
             DATE_GRADES=DATE_GRADES
         )
     subject_list = table_info["SUBJECTS"]
-    ## Fields: SID:str, NAME:str, GROUP:str
+    ## Fields: SID:str, NAME:str, TYPE:str=SUBJECT, GROUP:str
     components_list = table_info["COMPONENTS"]
-    ## Fields: SID:str, NAME:str, GROUP:str, COMPOSITE:str
+    ## Fields: SID:str, NAME:str, TYPE:str=SUBJECT, GROUP:str, COMPOSITE:str
     composites_list = table_info["COMPOSITES"]
-    ## Fields: SID:str, NAME:str, GROUP:str, FUNCTION:str, COMPONENTS:list[str]
+    ## Fields: SID:str, NAME:str, TYPE:str=COMPOSITE, GROUP:str, FUNCTION:str, COMPONENTS:list[str]
     extras_list = table_info["EXTRAS"]
     ## Fields: SID:str, NAME:str, TYPE:str=CALCULATE, FUNCTION:str, COMPONENTS:list[str]
     ## Fields: SID:str, NAME:str, TYPE:str=CALCULATE, FUNCTION:str, COMPONENTS:'*'
@@ -329,7 +318,7 @@ def full_grade_table(occasion, class_group, instance):
     ## Fields: SID:str, NAME:str, TYPE:str=CHOICE_MAP, VALUES:list[list[str,str]]
     ## Fields: SID:str, NAME:str, TYPE:str=TEXT
     sidlist = [
-        (sdata["SID"], sdata["NAME"]) for sdata in (
+        (sdata["SID"], sdata["NAME"], sdata["TYPE"]) for sdata in (
             subject_list + components_list + composites_list + extras_list
         )
     ]
@@ -341,7 +330,8 @@ def full_grade_table(occasion, class_group, instance):
             __grade_map = pid2grades.get(pid) or {}
             grade_map = {}
             pid2grade_map[pid] = grade_map
-            for sid, sname in sidlist:
+            for sidinfo in sidlist:
+                sid = sidinfo[0]
                 grade_map[sid] = __grade_map.get(sid, "")
     else:
         # Use the current list of pupils for this group
@@ -349,16 +339,16 @@ def full_grade_table(occasion, class_group, instance):
             pdata, p_grade_tids = pinfo
             pdata_list.append(pdata)
             try:
-                __grade_map = pid2grades.pop(pid)
+                __grade_map = dict(pid2grades.pop(pid))
             except KeyError:
                 __grade_map = {}
             grade_map = {}
             pid2grade_map[pid] = grade_map
-            for sid, sname in sidlist:
-                if p_grade_tids.get(sid):
-                    grade_map[sid] = __grade_map.get(sid, "")
-                else:
+            for sid, _, stype in sidlist:
+                if stype == "SUBJECT" and not p_grade_tids.get(sid):
                     grade_map[sid] = NO_GRADE
+                else:
+                    grade_map[sid] = __grade_map.get(sid, "")
         # Remove pupils from grade table if they are no longer in the group.
         # This must be done because otherwise they would be "reinstated"
         # as soon as the date-of-issue is past.
@@ -373,14 +363,14 @@ def full_grade_table(occasion, class_group, instance):
     table_info["PUPIL_GRADES"] = pid2grade_map
     table_info["GRADE_TABLE_PUPILS"] = pdata_list
     # Calculate contents of all cells with FUNCTION
-    for row in range(len(pdata_list)):
-        changes = calculate_row(table_info, row)
+    for pdata in pdata_list:
+        changes = calculate_row(table_info, pdata["PID"])
 #
         print("+++++++ CALCULATED CHANGES:", changes)
     return table_info
 
 
-def calculate_row(table, row):
+def calculate_row(table, pid):
     """Calculate the evaluated cells of the row from "left to right"
     (lower to higher index).
     A calculation may depend on the value in an evaluated cell, but
@@ -388,8 +378,6 @@ def calculate_row(table, row):
     evaluation).
     "Composite" subjects are evaluated first.
     """
-    pdata = table["GRADE_TABLE_PUPILS"][row]
-    pid = pdata["PID"]
     grades = table["PUPIL_GRADES"][pid]
     subjects = table["SUBJECTS"]
     final_grades = [grades.get(sdata["SID"]) for sdata in subjects]
@@ -462,41 +450,45 @@ def read_stored_grades(
     )
     plist = []
     for row in rlist:
-        pid = row["PID"]
+        pid = row[0]
         pdata = pupil_data(pid)  # this mapping is not cached => it is mutable
         # Substitute the pupil fields which could differ in the grade data
         pdata["CLASS"] = class_group_split(class_group)[0]
-        pdata["LEVEL"] = row["LEVEL"]
+        pdata["LEVEL"] = row[1]
         # Get grade (etc.) info as mapping
-        grade_map = read_pairs(row["GRADE_MAP"])
+        grade_map = read_pairs(row[2])
         plist.append((pdata, grade_map))
     return plist
 
 
-def update_pupil_grades(grade_table, row):
+def update_pupil_grades(grade_table, pid):
     # Recalculate row
-#TODO: Better using pid as selector?
-    pid = grade_table["GRADE_TABLE_PUPILS"][row]["PID"]
-    changed_grades = calculate_row(grade_table, row)
+    changed_grades = calculate_row(grade_table, pid)
     print("\nCHANGED:", changed_grades)
     # Save grades to database
     grades = grade_table["PUPIL_GRADES"][pid]
     gstring = "\n".join([f"{k}:{v}" for k, v in grades.items()])
-#TODO
-    print("GRADES", "GRADE_MAP", gstring,
-        grade_table["OCCASION"],
-        grade_table["CLASS_GROUP"],
-        grade_table["INSTANCE"],
-        pid
-    )
-    return
-
-    db_update_field("GRADES", "GRADE_MAP", gstring,
+    #print("GRADES", "GRADE_MAP", gstring,
+    #    grade_table["OCCASION"],
+    #    grade_table["CLASS_GROUP"],
+    #    grade_table["INSTANCE"],
+    #    pid
+    #)
+    if not db_update_field("GRADES", "GRADE_MAP", gstring,
         OCCASION=grade_table["OCCASION"],
         CLASS_GROUP=grade_table["CLASS_GROUP"],
         INSTANCE=grade_table["INSTANCE"],
         PID=pid
-    )
+    ):
+        db_new_row("GRADES",
+            OCCASION=grade_table["OCCASION"],
+            CLASS_GROUP=grade_table["CLASS_GROUP"],
+            INSTANCE=grade_table["INSTANCE"],
+            PID=pid,
+            LEVEL=pupil_data(pid)["LEVEL"],
+            GRADE_MAP=gstring
+        )
+    return changed_grades
 
 
 def make_grade_table(

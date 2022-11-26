@@ -1,7 +1,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2022-11-20
+Last updated:  2022-11-26
 
 Base functions for table-grids using the QGraphicsView framework.
 
@@ -838,7 +838,7 @@ class Tile(QGraphicsRectItem):
         if editor(point, self.__properties):
             self.set_text(None)
             # Return the data needed for handling changes to this cell
-            return self.__properties.get("ROW_COL")
+            return self.__properties
         return None
 
     def on_context_menu(self):

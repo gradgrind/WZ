@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-23
+Last updated:  2022-11-26
 
 Front-end for managing grade reports.
 
@@ -70,7 +70,6 @@ from grades.gradetable import (
     make_grade_table,
     full_grade_table,
     NO_GRADE,
-    calculate_row,
     update_pupil_grades
 )
 
@@ -422,7 +421,15 @@ class GradeTableView(GridViewAuto):
 #            sid2col[sdata["SID"]] = col
 #            col += 1
 
-        # Set the basic grid parameters
+        ### Set the basic grid parameters
+        # Check for customized "extra-field" widths
+        custom_widths = get_grade_config().get("EXTRA_FIELD_WIDTHS")
+        extra_widths = []
+        for sdata in extras_list:
+            try:
+                extra_widths.append(int(custom_widths[sdata["SID"]]))
+            except:
+                extra_widths.append(GRADETABLE_EXTRAWIDTH)
         __rows = (GRADETABLE_HEADERHEIGHT,) \
             + (GRADETABLE_ROWHEIGHT,) * len(pupils_list)
         __cols = (
@@ -430,7 +437,7 @@ class GradeTableView(GridViewAuto):
             GRADETABLE_LEVELWIDTH,
         ) \
             + (GRADETABLE_SUBJECTWIDTH,) * nsubjects \
-            + (GRADETABLE_EXTRAWIDTH,) * len(extras_list)
+            + tuple(extra_widths)
         self.init(__rows, __cols, GRADETABLE_TITLEHEIGHT)
 
         self.grid_line_thick_v(2)
@@ -443,11 +450,14 @@ class GradeTableView(GridViewAuto):
         hheaders = dict(get_grade_config()["HEADERS"])
         self.get_cell((0, 0)).set_text(hheaders["PUPIL"])
         self.get_cell((0, 1)).set_text(hheaders["LEVEL"])
-        __colstart = 2
-        self.col0 = __colstart
+        colstart = 2
+        self.col0 = colstart
         col = 0
-        for sid, sname in all_sids:
-            cell = self.get_cell((0, col+__colstart))
+        self.sid2col = {}
+        for sid, sname, _ in all_sids:
+            gridcol = col + colstart
+            self.sid2col[sid] = gridcol
+            cell = self.get_cell((0, gridcol))
             cell.set_verticaltext()
             cell.set_valign('b')
             cell.set_background(col2colour[col])
@@ -457,25 +467,40 @@ class GradeTableView(GridViewAuto):
 #?
 #        row_list = []
 #        self.cell_matrix = row_list
-        __rowstart = 1
-        self.row0 = __rowstart
+        rowstart = 1
+        self.row0 = rowstart
         row = 0
+        self.pid2row = {}
         for pdata in pupils_list:
-            rx = row + __rowstart
-            cell = self.get_cell((rx, 0))
+            gridrow = row + rowstart
+            pid = pdata["PID"]
+            self.pid2row[pid] = gridrow
+            cell = self.get_cell((gridrow, 0))
             cell.set_halign('l')
             cell.set_text(pupil_name(pdata))
-            cell = self.get_cell((rx, 1))
+            cell = self.get_cell((gridrow, 1))
             cell.set_text(pdata["LEVEL"])
 
-            pgrades = pid2grades[pdata["PID"]]
+            pgrades = pid2grades[pid]
 #?
 #            row_cells = []
             col = 0
-            for sid, sname in all_sids:
+            for sid, sname, _ in all_sids:
 
-                cell = self.get_cell((rx, col + __colstart))
+                cell = self.get_cell((gridrow, col + colstart))
                 cell.set_background(col2colour[col])
+# This is not taking possible value delegates into account – which would
+# allow the display of a text distinct from the actual value of the cell.
+# At the moment it is not clear that I would need such a thing, but it
+# might be useful to have it built in to the base functionality in base_grid.
+# For editor types CHOICE_MAP it might come in handy, for instance.
+
+# Actually, that is not quite the intended use of CHOICE_MAP – the "key"
+# is displayed, but it is the "value" that is needed for further processing.
+# For this it would be enough to set the "VALUE" property.
+
+                cell.set_property("PID", pid)
+                cell.set_property("SID", sid)
                 cell.set_text(pgrades.get(sid, ""))
                 handler = click_handler[col]
                 if handler:
@@ -493,32 +518,24 @@ class GradeTableView(GridViewAuto):
             title_r = self.add_title("Right Title", halign="r")
 
 
-    def cell_modified(self, row_col:tuple[int,int]):
+    def cell_modified(self, properties:dict):
         """Override base method in grid_base.GridView.
         """
-#TODO: change the grade in self.grade_table – for this it would be
-# good to have the new value from the popup ...
-
-        cell = self.get_cell(row_col)
         try:
-            new_value = cell.get_property("VALUE")
+            new_value = properties["VALUE"]
         except KeyError:
-            new_value = cell.get_property("TEXT")
-        print("\nNEW VALUE:", new_value)
-        row, col = row_col
-        sid, sname = self.grade_table["ALL_SIDS"][col-self.col0]
-        print("SID:", sid)
-        pdata = self.grade_table["GRADE_TABLE_PUPILS"][row-self.row0]
-        print("PDATA:", pdata)
-        pid = pdata["PID"]
+            new_value = properties["TEXT"]
+        pid = properties["PID"]
+        sid = properties["SID"]
         grades = self.grade_table["PUPIL_GRADES"][pid]
-        print("GRADES:", grades)
         grades[sid] = new_value
-
-#TODO: Adjust updating so that the display is only updated from here?
-#TODO: This is not yet actually updating the db ...
         # Update this pupil's grades (etc.) in the database
-        update_pupil_grades(self.grade_table, row-self.row0)
+        changes = update_pupil_grades(self.grade_table, pid)
+        if changes:
+            # Update changed display cells
+            row = self.pid2row[pid]
+            for sid, oldval in changes:
+                self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
 
     def table2pdf(self, fpath):
         os.makedirs(os.path.dirname(fpath), exist_ok=True)

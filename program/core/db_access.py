@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-10-23
+Last updated:  2022-11-26
 
 Helper functions for accessing the database.
 
@@ -309,13 +309,17 @@ def db_update_fields(table, field_values, *wheres, **keys):
 
     f = ", ".join(fields)
     qtext = f"UPDATE {table} SET {f}{where_clause}"
-    # print("§§§", qtext)
+    print("§§§", qtext)
     query = QSqlQuery()
     if query.exec(qtext):
-        return True
-    error = query.lastError()
-    SHOW_ERROR(error.text())
-    return False
+        n = query.numRowsAffected()
+        if n == 1:
+            return True
+        if n > 1:
+            raise Bug(f"DB error : {n} rows updated ...\n  {qtext}")
+        # No row to update
+        return False
+    raise Bug(f"DB error: {query.lastError()} ...\n  {qtext}")
 
 
 def db_update_field(table, field, value, *wheres, **keys):

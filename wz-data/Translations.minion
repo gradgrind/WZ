@@ -43,8 +43,6 @@ core.report_courses: {
 
 grades.gradetable: {
     TITLE:          "Notentabelle, erstellt {time}"
-    REPORT_TYPE:    "Zeugnis-Art"
-    REMARKS:        "Bemerkungen"
     PID:            "ID"
     PUPIL:          "Schüler(in)"
     GROUPS:         "Gruppen"
