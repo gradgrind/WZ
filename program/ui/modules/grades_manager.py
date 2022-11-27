@@ -65,7 +65,7 @@ from core.db_access import open_database, db_values
 from core.base import class_group_split
 from core.basic_data import check_group
 from core.pupils import pupils_in_group, pupil_name
-from grades.gradetable_new import (
+from grades.gradetable import (
     get_grade_config,
     make_grade_table,
     full_grade_table,
