@@ -291,9 +291,7 @@ ui.modules.grades_manager: {
     MODULE_NAME:    "Noten"
     MODULE_TITLE:   "Noten verwalten"
     Pupils:         "Schülerinnen und Schüler"
-    Class_Group:    "Klasse/Gruppe"
-    Occasion:       "Anlass"
-    Instance:       "Kennzeichen"
+    CLASS:          "Klasse"
 
     # Messages
     BAD_GROUP_IN_CONFIG: "Konfiguration GRADE_ENTRY_TABLES: Ungültige Klasse/Gruppe ({group}) für Anlass „{occasion}“"

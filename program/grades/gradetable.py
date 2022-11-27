@@ -251,7 +251,7 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
                 }
             )
     result["GRADES"] = group_data["GRADES"]
-    result["GRADE_ENTRY"] = group_data["GRADE_ENTRY"]
+    result["GRADE_ENTRY"] = group_data.get("GRADE_ENTRY", "")
 
     pupil_map = {}
     result["PUPILS"] = pupil_map

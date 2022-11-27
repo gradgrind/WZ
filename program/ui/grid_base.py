@@ -78,6 +78,8 @@ from qtpy.QtWidgets import (
     QListWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTextEdit,
+    QDialogButtonBox,
 )
 from qtpy.QtGui import (
     QFont,
@@ -392,6 +394,10 @@ class GridView(QGraphicsView):
         print("CELL MODIFIED:", row_col)
 
     ### View scaling
+    def rescale(self):
+        self._scale = 1.0
+        self.scale(0)
+
     def scaleUp(self):
         self.scale(1)
 
@@ -469,7 +475,10 @@ class GridView(QGraphicsView):
         # Add a "selection" rectangle to the scene
         self.select = Selection(self)
 
-    def add_title(self, text, halign="c"):
+        # Titles
+        self.titles = {}
+
+    def add_title(self, halign="c"):
         textItem = QGraphicsSimpleTextItem()
         self.scene().addItem(textItem)
         font = QFont(StyleCache.getFont())
@@ -477,6 +486,13 @@ class GridView(QGraphicsView):
             font.setPointSizeF(font.pointSizeF() * 1.2)
         font.setBold(True)
         textItem.setFont(font)
+        self.titles[halign] = textItem
+        self.set_title(f"Title {halign}", halign)
+
+#TODO: Do I really want the <bottom> option? And the multiple l/r/c tags?
+# I could add  stuff under the table, maybe only for pdf/printing?
+    def set_title(self, text, tag="c", bottom=False):
+        textItem = self.titles[tag]
         textItem.setText(text)
         bdrect = textItem.mapRectToParent(textItem.boundingRect())
         w = bdrect.width()
@@ -484,13 +500,16 @@ class GridView(QGraphicsView):
         xshift = 0.0
         yshift = 0.0
         margin = self.pt2px(TITLE_MARGIN)
-        if halign == "l":
+        if tag[0] == "l":
             xshift += margin
-        elif halign == "r":
+        elif tag[0] == "r":
             xshift += self.grid_width - margin - w
         else:
             xshift += (self.grid_width - w) / 2
-        yshift += (self.titleheight - h) / 2
+        if bottom:
+            yshift = self.titleheight - h - h / 5
+        else:
+            yshift = h / 5
         textItem.setPos(xshift, yshift)
         return textItem
 
@@ -1076,11 +1095,10 @@ class CellEditorDate(QDialog):
         self.date = date.toString("yyyy-MM-dd")
 
 
-# TODO
 class CellEditorText(QDialog):
-    def __init__(self, grid):
-        self._grid = grid
+    def __init__(self):
         super().__init__()
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         vbox = QVBoxLayout(self)
         self.textedit = QTextEdit(self)
         self.textedit.setTabChangesFocus(True)
@@ -1092,16 +1110,18 @@ class CellEditorText(QDialog):
         buttonBox.rejected.connect(self.reject)
         vbox.addWidget(buttonBox)
 
-    def activate(self, tile, x, y):
+    def activate(self, pos, properties):
         #        self.setWindowTitle(tile.tag)
-        text = tile.value()
-        self.textedit.setPlainText(text)
-        self.move(self._grid.screen_coordinates(x, y))
-        if self.exec_():
+        text0 = properties["TEXT"]
+        self.textedit.setPlainText(text0)
+        self.move(pos)
+        if self.exec():
             text = self.textedit.toPlainText()
-            if text:
-                text = "\n".join([l.rstrip() for l in text.splitlines()])
-            self._grid.value_changed(tile, text)
+            if text != text0:
+                properties["TEXT"] = text
+                return True
+        return False
+
 
 
 class CellEditorLine(QDialog):
@@ -1222,9 +1242,9 @@ if __name__ == "__main__":
     grid.grid_tile(5, 0, text="bottom", valign="b")
 
     if titleheight > 0:
-        title = grid.add_title("Centre Title")
-        title_l = grid.add_title("Left Title", halign="l")
-        title_r = grid.add_title("Right Title", halign="r")
+        title = grid.add_title()
+        title_l = grid.add_title("l")
+        title_r = grid.add_title("r")
 
     # TODO:
     plain_line_editor = CellEditorLine().activate
@@ -1244,8 +1264,10 @@ if __name__ == "__main__":
             [   ["*", "/"],       "––––––"        ],
         ]
     ).activate
+    text_editor = CellEditorText().activate
     #    grade_editor = CellEditorList(
-    cell_1.set_property("EDITOR", grade_editor_I)
+    #cell_1.set_property("EDITOR", grade_editor_I)
+    cell_1.set_property("EDITOR", text_editor)
 
     grid.resize(600, 400)
     grid.show()
