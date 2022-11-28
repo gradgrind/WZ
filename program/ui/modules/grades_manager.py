@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-27
+Last updated:  2022-11-28
 
 Front-end for managing grade reports.
 
@@ -399,14 +399,17 @@ class GradeManager(QWidget):
         )
 #TODO? Maybe only for printing? The modification time can be presented
 # in the right-hand panel ...
-        self.pupil_data_table.set_title(
-            f'{self.info_fields["MODIFIED"]}: {grade_table["MODIFIED"]}',
-            "r2", True
-        )
+#        self.set_modified_time(grade_table["MODIFIED"])
+
+#    def set_modified_time(self, date_time):
+#        self.pupil_data_table.set_title(
+#            f'{self.info_fields["MODIFIED"]}: {date_time}',
+#            "r2", True
+#        )
 
     def issue_date_changed(self, qdate):
         print("TODO: Issue date changed", qdate)
-        update_table_info(
+        timestamp = update_table_info(
             "DATE_ISSUE",
             qdate.toString(Qt.DateFormat.ISODate),
             OCCASION=self.occasion,
@@ -414,11 +417,12 @@ class GradeManager(QWidget):
             INSTANCE=self.instance
         )
         # Reload table
+#?
         self.select_instance()
 
     def grade_date_changed(self, qdate):
         print("TODO: Grade date changed", qdate)
-        update_table_info(
+        timestamp = update_table_info(
             "DATE_GRADES",
             qdate.toString(Qt.DateFormat.ISODate),
             OCCASION=self.occasion,
@@ -561,12 +565,10 @@ class GradeTableView(GridViewAuto):
                 col += 1
             row += 1
 
-#?
-        if GRADETABLE_TITLEHEIGHT > 0:
-            self.title = self.add_title()
-            self.title_l = self.add_title("l")
-            self.add_title("r")
-            self.add_title("r2")
+        self.title = self.add_title()
+        self.title_l = self.add_title("l")
+        self.add_title("r")
+#        self.add_title("r2")
 
         self.rescale()
 
@@ -582,7 +584,8 @@ class GradeTableView(GridViewAuto):
         grades = self.grade_table["PUPIL_GRADES"][pid]
         grades[sid] = new_value
         # Update this pupil's grades (etc.) in the database
-        changes = update_pupil_grades(self.grade_table, pid)
+        changes, timestamp = update_pupil_grades(self.grade_table, pid)
+        self.grade_table["MODIFIED"] = timestamp
         if changes:
             # Update changed display cells
             row = self.pid2row[pid]

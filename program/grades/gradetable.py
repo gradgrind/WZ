@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-26
+Last updated:  2022-11-28
 
 Access grade data, read and build grade tables.
 
@@ -518,21 +518,24 @@ def update_pupil_grades(grade_table, pid):
             LEVEL=pupil_data(pid)["LEVEL"],
             GRADE_MAP=gstring
         )
-    db_update_field("GRADES_INFO", "MODIFIED", Dates.timestamp(),
+    timestamp = Dates.timestamp()
+    db_update_field("GRADES_INFO", "MODIFIED", timestamp,
         OCCASION=OCCASION,
         CLASS_GROUP=CLASS_GROUP,
         INSTANCE=INSTANCE
     )
-    return changed_grades
+    return changed_grades, timestamp
 
 
 def update_table_info(field, value, OCCASION, CLASS_GROUP, INSTANCE):
+    timestamp = Dates.timestamp()
     db_update_fields("GRADES_INFO",
-        [(field, value), ("MODIFIED", Dates.timestamp())],
+        [(field, value), ("MODIFIED", timestamp)],
         OCCASION=OCCASION,
         CLASS_GROUP=CLASS_GROUP,
         INSTANCE=INSTANCE
     )
+    return timestamp
 
 
 def make_grade_table(
