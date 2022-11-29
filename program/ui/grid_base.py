@@ -1,7 +1,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2022-11-26
+Last updated:  2022-11-28
 
 Base functions for table-grids using the QGraphicsView framework.
 
@@ -412,14 +412,13 @@ class GridView(QGraphicsView):
 
     ### ---------------
 
-    def init(self, rowheights, columnwidths, titleheight=0):
+    def init(self, rowheights, columnwidths):
         """Set the grid size.
             <columnwidths>: a list of column widths (points)
             <rowheights>: a list of row heights (points)
         Rows and columns are 0-indexed.
         The widths/heights include grid lines and other bounding boxes.
         """
-        self.titleheight = self.pt2px(titleheight)
         self.border_width = self.pt2px(BORDER_WIDTH)
         self.thick_line_width = self.pt2px(THICK_LINE_WIDTH)
         scene = QGraphicsScene()
@@ -433,7 +432,7 @@ class GridView(QGraphicsView):
             x += c
             self.xmarks.append(x)
         self.grid_width = x
-        y = self.titleheight
+        y = 0
         self.ymarks = [y]
         ypt = 0
         for r in rowheights:
@@ -474,44 +473,6 @@ class GridView(QGraphicsView):
 
         # Add a "selection" rectangle to the scene
         self.select = Selection(self)
-
-        # Titles
-        self.titles = {}
-
-    def add_title(self, halign="c"):
-        textItem = QGraphicsSimpleTextItem()
-        self.scene().addItem(textItem)
-        font = QFont(StyleCache.getFont())
-        if halign == "c":
-            font.setPointSizeF(font.pointSizeF() * 1.2)
-        font.setBold(True)
-        textItem.setFont(font)
-        self.titles[halign] = textItem
-        self.set_title(f"Title {halign}", halign)
-
-#TODO: Do I really want the <bottom> option? And the multiple l/r/c tags?
-# I could add  stuff under the table, maybe only for pdf/printing?
-    def set_title(self, text, tag="c", bottom=False):
-        textItem = self.titles[tag]
-        textItem.setText(text)
-        bdrect = textItem.mapRectToParent(textItem.boundingRect())
-        w = bdrect.width()
-        h = bdrect.height()
-        xshift = 0.0
-        yshift = 0.0
-        margin = self.pt2px(TITLE_MARGIN)
-        if tag[0] == "l":
-            xshift += margin
-        elif tag[0] == "r":
-            xshift += self.grid_width - margin - w
-        else:
-            xshift += (self.grid_width - w) / 2
-        if bottom:
-            yshift = self.titleheight - h - h / 5
-        else:
-            yshift = h / 5
-        textItem.setPos(xshift, yshift)
-        return textItem
 
     def grid_line_thick_h(self, row):
         try:
@@ -577,6 +538,29 @@ class GridView(QGraphicsView):
         return True
 
     ### pdf output
+
+    def set_title(self, text, offset, halign="c", y0=0):
+        textItem = QGraphicsSimpleTextItem(text)
+        self.scene().addItem(textItem)
+        font = QFont(StyleCache.getFont())
+        if halign == "c":
+            font.setPointSizeF(font.pointSizeF() * 1.2)
+        font.setBold(True)
+        textItem.setFont(font)
+        bdrect = textItem.mapRectToParent(textItem.boundingRect())
+        w = bdrect.width()
+        h = bdrect.height()
+        margin = self.pt2px(TITLE_MARGIN)
+        if halign == "l":
+            x = margin
+        elif halign == "r":
+            x = self.grid_width - margin - w
+        else:
+            x = (self.grid_width - w) / 2
+        y = y0 - offset - h/2
+        textItem.setPos(x, y)
+        return textItem
+
     def setPdfMargins(self, left=50, top=30, right=30, bottom=30):
         self._pdfmargins = (left, top, right, bottom)
         return self._pdfmargins
@@ -587,7 +571,9 @@ class GridView(QGraphicsView):
         except AttributeError:
             return self.setPdfMargins()
 
-    def to_pdf(self, filepath, landscape=False, can_rotate=True):
+    def to_pdf(self, filepath, landscape=False, can_rotate=True,
+        titleheight=0, footerheight=0
+    ):
         """Produce and save a pdf of the table.
         The output orientation can be selected via the <landscape> parameter.
         If possible, the table will be printed full size. If that doesn't
@@ -621,14 +607,18 @@ class GridView(QGraphicsView):
         pdf_wpx = self.pt2px(pdf_rect.width())
         pdf_hpx = self.pt2px(pdf_rect.height())
 
+        h0 = self.pt2px(titleheight)
+        h1 = self.pt2px(footerheight)
+        scene_height = h0 + self.grid_height + h1
+
         # Prepare the scene for printing – check size
-        if self.grid_width > self.grid_height:
+        if self.grid_width > scene_height:
             if (not landscape) and (self.grid_width > pdf_wpx) and can_rotate:
                 # The table is wider than the pdf area, so it would
                 # benefit from rotating
                 landscape = True
-        elif self.grid_width < self.grid_height:
-            if landscape and (self.grid_height > pdf_hpx) and can_rotate:
+        elif self.grid_width < scene_height:
+            if landscape and (scene_height > pdf_hpx) and can_rotate:
                 # The table is taller than the pdf area, so it would
                 # benefit from rotating
                 landscape = False
@@ -651,39 +641,19 @@ class GridView(QGraphicsView):
         painter = QPainter()
         painter.begin(printer)
         scene = self.scene()
-        if (self.grid_width < pdf_wpx) and (self.grid_height < pdf_hpx):
+        if (self.grid_width < pdf_wpx) and (scene_height < pdf_hpx):
             # If both dimensions are smaller than the pdf area, expand the
             # scene rectangle to avoid the table being enlarged.
-            scene.setSceneRect(0, 0, pdf_wpx, pdf_hpx)
-            scene.render(painter)
-            # print("SR1:", scene.sceneRect())
-            scene.setSceneRect(self._sceneRect)
-            # print("SR2:", scene.sceneRect())
+            scene.setSceneRect(0, -h0, pdf_wpx, pdf_hpx)
         else:
-            # print("SRX:", pdf_wpx, pdf_hpx)
-            scene.render(painter)
-            # print("SR:", scene.sceneRect())
+            # Otherwise just add title and footer space
+            scene.setSceneRect(0, -h0, self.grid_width, scene_height)
+        scene.render(painter)
+        # print("SR1:", scene.sceneRect())
+        scene.setSceneRect(self._sceneRect)
+        # print("SR2:", scene.sceneRect())
         painter.end()
         return filepath
-
-
-class GridLine(QGraphicsLineItem):
-    def __init__(self, view, vertical, index):
-        self.index = index
-        if vertical:
-            self.w = 0
-            self.h = view.grid_height - view.titleheight
-            self.x = view.xmarks[index]
-            self.y = view.titleheight
-        else:
-            self.w = view.grid_width
-            self.h = 0
-            self.x = 0
-            self.y = view.ymarks[index]
-        super().__init__(self.x, self.y, self.x + self.w, self.y + self.h)
-        self.setPen(view.grid_pen)
-        self.setZValue(-10)
-
 
 # TODO: Additional functionality (moving grid lines?) can be added here ...
 #        self.setAcceptHoverEvents(True)
@@ -1217,8 +1187,7 @@ if __name__ == "__main__":
     # grid = GridViewHFit() # buggy ...
     # grid = GridView()
     grid = GridViewAuto()
-    titleheight = 25
-    grid.init(rows, cols, titleheight)
+    grid.init(rows, cols)
 
     grid.grid_line_thick_v(2)
     grid.grid_line_thick_h(1)
@@ -1240,11 +1209,6 @@ if __name__ == "__main__":
     grid.grid_tile(3, 0, text="right", halign="r")
     grid.grid_tile(4, 0, text="top", valign="t", cspan=2, bg="ffffaa")
     grid.grid_tile(5, 0, text="bottom", valign="b")
-
-    if titleheight > 0:
-        title = grid.add_title()
-        title_l = grid.add_title("l")
-        title_r = grid.add_title("r")
 
     # TODO:
     plain_line_editor = CellEditorLine().activate
@@ -1284,10 +1248,31 @@ if __name__ == "__main__":
     basedir = os.path.dirname(appdir)
     start.setup(os.path.join(basedir, "TESTDATA"))
 
-    fpath = os.path.join(os.path.expanduser("~"), "test.pdf")
-    fpath = DATAPATH("testing/tmp/grid0.pdf")
+    fpath = DATAPATH("testing/tmp/grid1.pdf")
     os.makedirs(os.path.dirname(fpath), exist_ok=True)
-    grid.to_pdf(fpath)
-    #    grid.to_pdf(fpath, can_rotate = False)
+
+    titleheight = grid.pt2px(30)
+    titlemiddle = grid.pt2px(15)
+    footerheight = grid.pt2px(30)
+    footermiddle = grid.pt2px(15)
+
+    print("$1", grid.ymarks)
+
+    for yl in 0, -titleheight, grid.grid_height, grid.grid_height + footerheight:
+        line = QGraphicsLineItem(0, yl, grid.grid_width, yl)
+        line.setPen(StyleCache.getPen(grid.thick_line_width, "ff0000"))
+        line.setZValue(10)
+        grid.scene().addItem(line)
+
+    t1 = grid.set_title("Main Title", offset=titlemiddle)
+    h1 = grid.set_title("A footnote", halign="r",
+        y0=grid.grid_height + footerheight, offset=footermiddle
+    )
+
+    grid.to_pdf(fpath, titleheight=titleheight, footerheight=footerheight)
+    # grid.to_pdf(fpath, can_rotate = False, titleheight=titleheight, footerheight=footerheight)
+
+    grid.scene().removeItem(t1)
+    grid.scene().removeItem(h1)
 
     app.exec()

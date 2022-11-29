@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-28
+Last updated:  2022-11-29
 
 Front-end for managing grade reports.
 
@@ -27,6 +27,7 @@ Copyright 2022 Michael Towers
 ##### Configuration #####################
 # Some sizes in points
 GRADETABLE_TITLEHEIGHT = 40
+GRADETABLE_FOOTERHEIGHT = 30
 GRADETABLE_ROWHEIGHT = 25
 GRADETABLE_SUBJECTWIDTH = 25
 GRADETABLE_EXTRAWIDTH = 40
@@ -266,6 +267,11 @@ class GradeManager(QWidget):
         )
         vboxr.addWidget(self.pupil_list)
 
+#TODO: T...
+        make_pdf = QPushButton("Export PDF")
+        make_pdf.clicked.connect(self.pupil_data_table.export_pdf)
+        vboxr.addWidget(make_pdf)
+
     def init_data(self):
         self.__changes_enabled = False
         # Set up "occasions" here, from config
@@ -386,27 +392,6 @@ class GradeManager(QWidget):
         )
         self.pupil_data_table.setup(grade_table)
 
-        self.pupil_data_table.set_title(
-            f'{T["CLASS"]}: {self.class_group}'
-        )
-        ltitle = self.occasion
-        if self.instance:
-            ltitle = f'{ltitle} // {self.instance}'
-        self.pupil_data_table.set_title(ltitle, "l")
-        self.pupil_data_table.set_title(
-            f'{grade_table["DATE_ISSUE"]} [{grade_table["DATE_GRADES"]}]',
-            "r"
-        )
-#TODO? Maybe only for printing? The modification time can be presented
-# in the right-hand panel ...
-#        self.set_modified_time(grade_table["MODIFIED"])
-
-#    def set_modified_time(self, date_time):
-#        self.pupil_data_table.set_title(
-#            f'{self.info_fields["MODIFIED"]}: {date_time}',
-#            "r2", True
-#        )
-
     def issue_date_changed(self, qdate):
         print("TODO: Issue date changed", qdate)
         timestamp = update_table_info(
@@ -502,7 +487,7 @@ class GradeTableView(GridViewAuto):
         ) \
             + (GRADETABLE_SUBJECTWIDTH,) * nsubjects \
             + tuple(extra_widths)
-        self.init(__rows, __cols, GRADETABLE_TITLEHEIGHT)
+        self.init(__rows, __cols)
 
         self.grid_line_thick_v(2)
         self.grid_line_thick_h(1)
@@ -552,7 +537,7 @@ class GradeTableView(GridViewAuto):
 # might be useful to have it built in to the base functionality in base_grid.
 # For editor types CHOICE_MAP it might come in handy, for instance.
 
-# Actually, that is not quite the intended use of CHOICE_MAP – the "key"
+# That is not quite the intended use of CHOICE_MAP – the "key"
 # is displayed, but it is the "value" that is needed for further processing.
 # For this it would be enough to set the "VALUE" property.
 
@@ -564,11 +549,6 @@ class GradeTableView(GridViewAuto):
                     cell.set_property("EDITOR", handler)
                 col += 1
             row += 1
-
-        self.title = self.add_title()
-        self.title_l = self.add_title("l")
-        self.add_title("r")
-#        self.add_title("r2")
 
         self.rescale()
 
@@ -592,10 +572,61 @@ class GradeTableView(GridViewAuto):
             for sid, oldval in changes:
                 self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
 
-    def table2pdf(self, fpath):
+#TODO: file path handling ...
+# file dialog?
+# move function to GradeTableView?
+    def export_pdf(self, fpath=None):
+        titleheight = self.pt2px(GRADETABLE_TITLEHEIGHT)
+        footerheight = self.pt2px(GRADETABLE_FOOTERHEIGHT)
+        items = []
+        items.append(
+            self.set_title(
+                f'{T["CLASS"]}: {self.grade_table["CLASS_GROUP"]}',
+                titleheight // 2,
+                y0=0
+            )
+        )
+        occasion = self.grade_table["OCCASION"]
+        instance = self.grade_table["INSTANCE"]
+        if instance:
+            occasion = f'{occasion} // {instance}'
+        items.append(
+            self.set_title(
+                occasion,
+                titleheight // 2,
+                halign="l",
+                y0=0
+            )
+        )
+        items.append(
+            self.set_title(
+                f'{self.grade_table["DATE_ISSUE"]} [{self.grade_table["DATE_GRADES"]}]',
+                titleheight // 2,
+                halign="r",
+                y0=0
+            )
+        )
+        items.append(
+            self.set_title(
+#TODO: "MODIFIED" (self.info_fields["MODIFIED"])!
+            f'MODIFIED: {self.grade_table["MODIFIED"]}',
+                footerheight // 2,
+                halign="r",
+                y0=self.grid_height + footerheight
+            )
+        )
+        if not fpath:
+            fpath=DATAPATH("testing/tmp/grid1.pdf")
         os.makedirs(os.path.dirname(fpath), exist_ok=True)
-        self.to_pdf(fpath)
-    #    self.to_pdf(fpath, can_rotate = False)
+        self.to_pdf(
+            fpath,
+            titleheight=titleheight,
+            footerheight=footerheight
+        )
+        # grid.to_pdf(fpath, can_rotate = False, titleheight=titleheight, footerheight=footerheight)
+        for item in items:
+#TODO: add method to grid_base?
+            self.scene().removeItem(item)
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
