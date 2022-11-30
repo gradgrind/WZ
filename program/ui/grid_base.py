@@ -1,7 +1,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2022-11-28
+Last updated:  2022-11-30
 
 Base functions for table-grids using the QGraphicsView framework.
 
@@ -539,12 +539,12 @@ class GridView(QGraphicsView):
 
     ### pdf output
 
-    def set_title(self, text, offset, halign="c", y0=0):
+    def set_title(self, text, offset, halign="c", font_scale=None, y0=0):
         textItem = QGraphicsSimpleTextItem(text)
         self.scene().addItem(textItem)
         font = QFont(StyleCache.getFont())
-        if halign == "c":
-            font.setPointSizeF(font.pointSizeF() * 1.2)
+        if font_scale:
+            font.setPointSizeF(font.pointSizeF() * font_scale)
         font.setBold(True)
         textItem.setFont(font)
         bdrect = textItem.mapRectToParent(textItem.boundingRect())
@@ -560,6 +560,9 @@ class GridView(QGraphicsView):
         y = y0 - offset - h/2
         textItem.setPos(x, y)
         return textItem
+
+    def delete_item(self, item):
+        self.scene().removeItem(item)
 
     def setPdfMargins(self, left=50, top=30, right=30, bottom=30):
         self._pdfmargins = (left, top, right, bottom)
@@ -1264,7 +1267,7 @@ if __name__ == "__main__":
         line.setZValue(10)
         grid.scene().addItem(line)
 
-    t1 = grid.set_title("Main Title", offset=titlemiddle)
+    t1 = grid.set_title("Main Title", offset=titlemiddle, font_scale=1.2)
     h1 = grid.set_title("A footnote", halign="r",
         y0=grid.grid_height + footerheight, offset=footermiddle
     )

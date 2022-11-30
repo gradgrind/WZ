@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-28
+Last updated:  2022-11-30
 
 Access grade data, read and build grade tables.
 
@@ -484,7 +484,7 @@ def read_stored_grades(
         pdata["LEVEL"] = row[1]
         # Get grade (etc.) info as mapping
         grade_map = read_pairs(row[2])
-        plist.append((pdata, grade_map))
+        plist.append((pdata, dict(grade_map)))
     return plist
 
 

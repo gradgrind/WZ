@@ -86,7 +86,7 @@ from local.local_pupils import (
 
 def pupil_data(pid):
     """Return a mapping of the pupil-data for the given pupil-id.
-    This data is not cached.
+    IMPORTANT: This data is not cached.
     """
     flist, row = db_read_unique_entry("PUPILS", PID=pid)
     return dict(zip(flist, row))

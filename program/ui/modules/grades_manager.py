@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-29
+Last updated:  2022-11-30
 
 Front-end for managing grade reports.
 
@@ -52,6 +52,7 @@ if __name__ == "__main__":
     basedir = os.path.dirname(appdir)
     from core.base import start
     from ui.ui_base import StandalonePage as Page
+
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
@@ -75,7 +76,7 @@ from grades.gradetable import (
     update_table_info,
 )
 
-#???
+# ???
 from ui.ui_base import (
     QWidget,
     QFormLayout,
@@ -84,10 +85,8 @@ from ui.ui_base import (
     QLineEdit,
     QHBoxLayout,
     QVBoxLayout,
-
     QPushButton,
     QLayout,
-
     QLabel,
     QListWidget,
     QAbstractItemView,
@@ -96,19 +95,23 @@ from ui.ui_base import (
     # QtCore
     Qt,
     QDate,
-
+    # Other
     KeySelector,
     HLine,
     run,
+    saveDialog,
 )
-#from ui.editable import EdiTableWidget
-from ui.grid_base import GridViewAuto, CellEditorTable, CellEditorText
-#from ui.grid_base import GridView
 
-#from ui.ui_extra import QWidget, QLabel, QVBoxLayout, \
+# from ui.editable import EdiTableWidget
+from ui.grid_base import GridViewAuto, CellEditorTable, CellEditorText
+
+# from ui.grid_base import GridView
+
+# from ui.ui_extra import QWidget, QLabel, QVBoxLayout, \
 #        QTreeWidget, QTreeWidgetItem, Qt
 
 ### -----
+
 
 def init():
     MAIN_WIDGET.add_tab(ManageGrades())
@@ -151,14 +154,14 @@ class InstanceSelector(QWidget):
         hbox.addWidget(self.addnew)
         self.addnew.clicked.connect(self.do_addnew)
 
-#TODO: According to the "occasion" and class-group there can be different
-# sorts of "instance". The main report types don't cater for "instances",
-# so the combobox and button could be disabled. Where a list is supplied
-# in the configuration, no new values are possible, the current value
-# would come from the database entry. Perhaps dates might be permitted.
-# In that case a date-choice widget would be appropriate.
-# Single report types, and maybe some other types, would take any string.
-# In that case a line editor coulf be used.
+    # TODO: According to the "occasion" and class-group there can be different
+    # sorts of "instance". The main report types don't cater for "instances",
+    # so the combobox and button could be disabled. Where a list is supplied
+    # in the configuration, no new values are possible, the current value
+    # would come from the database entry. Perhaps dates might be permitted.
+    # In that case a date-choice widget would be appropriate.
+    # Single report types, and maybe some other types, would take any string.
+    # In that case a line editor coulf be used.
 
     def do_addnew(self):
         result = InstanceDialog.popup(
@@ -176,12 +179,12 @@ class InstanceSelector(QWidget):
         return self.combobox.currentText()
 
 
-#TODO
+# TODO
 class InstanceDialog(QDialog):
     @classmethod
     def popup(cls, start_value="", parent=None, pos=None):
         d = cls(parent)
-#        d.init()
+        #        d.init()
         if pos:
             d.move(pos)
         return d.activate(start_value)
@@ -189,10 +192,10 @@ class InstanceDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        #self.setWindowFlags(Qt.WindowType.Popup)
+        # self.setWindowFlags(Qt.WindowType.Popup)
         vbox0 = QVBoxLayout(self)
         vbox0.setContentsMargins(0, 0, 0, 0)
-        #vbox0.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
+        # vbox0.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
         self.ledit = QLineEdit()
         vbox0.addWidget(self.ledit)
 
@@ -216,7 +219,7 @@ class GradeManager(QWidget):
 
         # The class data table
         self.pupil_data_table = GradeTableView()
-#        EdiTableWidget()
+        #        EdiTableWidget()
         vboxl.addWidget(self.pupil_data_table)
 
         # Various "controls" in the panel on the right
@@ -230,18 +233,20 @@ class GradeManager(QWidget):
         self.class_selector = QComboBox()
         self.class_selector.currentTextChanged.connect(self.changed_class)
         formbox.addRow(self.info_fields["CLASS_GROUP"], self.class_selector)
-#        self.instance_selector = QComboBox()
+        #        self.instance_selector = QComboBox()
         self.instance_selector = InstanceSelector()
-#        delegate = InstanceDelegate(self)
-#        self.instance_selector.setEditable(True)
-#        self.instance_selector.setItemDelegate(delegate)
-#        self.instance_selector.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-#TODO: ? Rather index changed signal?
-#        self.instance_selector.currentTextChanged.connect(self.select_instance)
+        #        delegate = InstanceDelegate(self)
+        #        self.instance_selector.setEditable(True)
+        #        self.instance_selector.setItemDelegate(delegate)
+        #        self.instance_selector.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        # TODO: ? Rather index changed signal?
+        #        self.instance_selector.currentTextChanged.connect(self.select_instance)
         formbox.addRow(self.info_fields["INSTANCE"], self.instance_selector)
 
         # Date fields
-        firstday = QDate.fromString(CALENDAR["FIRST_DAY"], Qt.DateFormat.ISODate)
+        firstday = QDate.fromString(
+            CALENDAR["FIRST_DAY"], Qt.DateFormat.ISODate
+        )
         lastday = QDate.fromString(CALENDAR["LAST_DAY"], Qt.DateFormat.ISODate)
         self.issue_date = QDateEdit()
         self.issue_date.setMinimumDate(firstday)
@@ -257,6 +262,9 @@ class GradeManager(QWidget):
         self.grade_date.setDisplayFormat(CONFIG["QT_DATEFORMAT"])
         formbox.addRow(self.info_fields["DATE_GRADES"], self.grade_date)
         self.grade_date.dateChanged.connect(self.grade_date_changed)
+        self.modified_time = QLineEdit()
+        self.modified_time.setReadOnly(True)
+        formbox.addRow(self.info_fields["MODIFIED"], self.modified_time)
 
         vboxr.addWidget(HLine())
         vboxr.addWidget(QLabel(T["Pupils"]))
@@ -267,7 +275,7 @@ class GradeManager(QWidget):
         )
         vboxr.addWidget(self.pupil_list)
 
-#TODO: T...
+        # TODO: T...
         make_pdf = QPushButton("Export PDF")
         make_pdf.clicked.connect(self.pupil_data_table.export_pdf)
         vboxr.addWidget(make_pdf)
@@ -287,9 +295,8 @@ class GradeManager(QWidget):
         self.changed_occasion(self.occasion_selector.currentText())
 
     def modified(self):
-        """Return <True> if there are unsaved changes.
-        """
-#TODO: test whether there really are any changes?
+        """Return <True> if there are unsaved changes."""
+        # TODO: test whether there really are any changes?
         return True
 
     def changed_occasion(self, new_occasion: str):
@@ -302,7 +309,7 @@ class GradeManager(QWidget):
         self.occasion_data = self.occasion2data[self.occasion]
         groups = []
         for g in self.occasion_data:
-            if g[0] == '_':
+            if g[0] == "_":
                 # Keys starting with '_' are for additional, non-group
                 # related information.
                 continue
@@ -312,7 +319,7 @@ class GradeManager(QWidget):
                     "ERROR",
                     T["BAD_GROUP_IN_CONFIG"].format(
                         group=g, occasion=new_occasion
-                    )
+                    ),
                 )
                 continue
             groups.append(g)
@@ -320,7 +327,7 @@ class GradeManager(QWidget):
         self.__changes_enabled = False
         self.class_selector.clear()
         self.class_selector.addItems(groups)
-        self.class_selector.setCurrentText(self.class_group) # no exception
+        self.class_selector.setCurrentText(self.class_group)  # no exception
         # Enable callbacks
         self.__changes_enabled = True
         self.changed_class(self.class_selector.currentText())
@@ -330,7 +337,7 @@ class GradeManager(QWidget):
             print("Class change handling disabled:", new_class_group)
             return
         print("NEW GROUP:", new_class_group)
-#        grade_table = self.get_grade_table(occasion, class_group)
+        #        grade_table = self.get_grade_table(occasion, class_group)
 
         self.class_group = new_class_group
         self.group_data = self.occasion_data[new_class_group]
@@ -339,10 +346,10 @@ class GradeManager(QWidget):
         self.pupil_list.clear()
         self.pupil_list.addItems([pupil_name(p) for p in self.pupil_data_list])
 
-#TODO: If I am working from an old grade table, the odd pupil may have
-# changed class – I should probably get the pupil list from the grade
-# table. If I want to update the pupil list, there could be an update
-# button to do this?
+        # TODO: If I am working from an old grade table, the odd pupil may have
+        # changed class – I should probably get the pupil list from the grade
+        # table. If I want to update the pupil list, there could be an update
+        # button to do this?
 
         self.__changes_enabled = False
         try:
@@ -360,14 +367,14 @@ class GradeManager(QWidget):
                     "INSTANCE",
                     sort_field="INSTANCE",
                     CLASS_GROUP=self.class_group,
-                    OCCASION=self.occasion
+                    OCCASION=self.occasion,
                 )
                 self.instance_selector.set_list(instances, 1)
         self.__changes_enabled = True
         self.select_instance()
 
     def select_instance(self, instance=""):
-#
+        #
         print(f"TODO: Instance '{instance}' // {self.instance_selector.text()}")
 
         __instance = self.instance_selector.text()
@@ -381,16 +388,13 @@ class GradeManager(QWidget):
         )
         self.instance = instance
         self.issue_date.setDate(
-            QDate.fromString(
-                grade_table["DATE_ISSUE"], Qt.DateFormat.ISODate
-            )
+            QDate.fromString(grade_table["DATE_ISSUE"], Qt.DateFormat.ISODate)
         )
         self.grade_date.setDate(
-            QDate.fromString(
-                grade_table["DATE_GRADES"], Qt.DateFormat.ISODate
-            )
+            QDate.fromString(grade_table["DATE_GRADES"], Qt.DateFormat.ISODate)
         )
         self.pupil_data_table.setup(grade_table)
+        self.modified_time.setText(grade_table["MODIFIED"])
 
     def issue_date_changed(self, qdate):
         print("TODO: Issue date changed", qdate)
@@ -399,11 +403,11 @@ class GradeManager(QWidget):
             qdate.toString(Qt.DateFormat.ISODate),
             OCCASION=self.occasion,
             CLASS_GROUP=self.class_group,
-            INSTANCE=self.instance
+            INSTANCE=self.instance,
         )
-        # Reload table
-#?
-        self.select_instance()
+        self.modified_time.setText(timestamp)
+        #TODO: Reload table?
+        #self.select_instance()
 
     def grade_date_changed(self, qdate):
         print("TODO: Grade date changed", qdate)
@@ -412,18 +416,18 @@ class GradeManager(QWidget):
             qdate.toString(Qt.DateFormat.ISODate),
             OCCASION=self.occasion,
             CLASS_GROUP=self.class_group,
-            INSTANCE=self.instance
+            INSTANCE=self.instance,
         )
         # Reload table
         self.select_instance()
 
 
 class GradeTableView(GridViewAuto):
-#class GradeTableView(GridView):
+    # class GradeTableView(GridView):
 
     def setup(self, grade_table):
         self.grade_table = grade_table
-#? ... What data needs to be available later?
+        # ? ... What data needs to be available later?
         subject_list = grade_table["SUBJECTS"]
         component_list = grade_table["COMPONENTS"]
         composite_list = grade_table["COMPOSITES"]
@@ -435,7 +439,7 @@ class GradeTableView(GridViewAuto):
         # grades_table["GRADE_ENTRY"] # partial path ("templates/...") to
         # grade entry template (without data-type ensing)
         # grades_table["PUPILS"] # current pupil list from database
-#TODO: Do I need the latter entry?
+        # TODO: Do I need the latter entry?
 
         col2colour = []
         click_handler = []
@@ -466,7 +470,7 @@ class GradeTableView(GridViewAuto):
                 elif handler_type == "TEXT":
                     editor = CellEditorText().activate
                 else:
-#TODO?
+                    # TODO?
                     editor = None
                 click_handler.append(editor)
 
@@ -479,14 +483,17 @@ class GradeTableView(GridViewAuto):
                 extra_widths.append(int(custom_widths[sdata["SID"]]))
             except:
                 extra_widths.append(GRADETABLE_EXTRAWIDTH)
-        __rows = (GRADETABLE_HEADERHEIGHT,) \
-            + (GRADETABLE_ROWHEIGHT,) * len(pupils_list)
+        __rows = (GRADETABLE_HEADERHEIGHT,) + (GRADETABLE_ROWHEIGHT,) * len(
+            pupils_list
+        )
         __cols = (
-           GRADETABLE_PUPILWIDTH,
-            GRADETABLE_LEVELWIDTH,
-        ) \
-            + (GRADETABLE_SUBJECTWIDTH,) * nsubjects \
+            (
+                GRADETABLE_PUPILWIDTH,
+                GRADETABLE_LEVELWIDTH,
+            )
+            + (GRADETABLE_SUBJECTWIDTH,) * nsubjects
             + tuple(extra_widths)
+        )
         self.init(__rows, __cols)
 
         self.grid_line_thick_v(2)
@@ -505,7 +512,7 @@ class GradeTableView(GridViewAuto):
             self.sid2col[sid] = gridcol
             cell = self.get_cell((0, gridcol))
             cell.set_verticaltext()
-            cell.set_valign('b')
+            cell.set_valign("b")
             cell.set_background(col2colour[col])
             cell.set_text(sdata["NAME"])
             col += 1
@@ -520,7 +527,7 @@ class GradeTableView(GridViewAuto):
             pid = pdata["PID"]
             self.pid2row[pid] = gridrow
             cell = self.get_cell((gridrow, 0))
-            cell.set_halign('l')
+            cell.set_halign("l")
             cell.set_text(pupil_name(pdata))
             cell = self.get_cell((gridrow, 1))
             cell.set_text(pdata["LEVEL"])
@@ -530,16 +537,16 @@ class GradeTableView(GridViewAuto):
             for sid in all_sids:
                 cell = self.get_cell((gridrow, col + colstart))
                 cell.set_background(col2colour[col])
-#?
-# This is not taking possible value delegates into account – which would
-# allow the display of a text distinct from the actual value of the cell.
-# At the moment it is not clear that I would need such a thing, but it
-# might be useful to have it built in to the base functionality in base_grid.
-# For editor types CHOICE_MAP it might come in handy, for instance.
+                # ?
+                # This is not taking possible value delegates into account – which would
+                # allow the display of a text distinct from the actual value of the cell.
+                # At the moment it is not clear that I would need such a thing, but it
+                # might be useful to have it built in to the base functionality in base_grid.
+                # For editor types CHOICE_MAP it might come in handy, for instance.
 
-# That is not quite the intended use of CHOICE_MAP – the "key"
-# is displayed, but it is the "value" that is needed for further processing.
-# For this it would be enough to set the "VALUE" property.
+                # That is not quite the intended use of CHOICE_MAP – the "key"
+                # is displayed, but it is the "value" that is needed for further processing.
+                # For this it would be enough to set the "VALUE" property.
 
                 cell.set_property("PID", pid)
                 cell.set_property("SID", sid)
@@ -552,9 +559,8 @@ class GradeTableView(GridViewAuto):
 
         self.rescale()
 
-    def cell_modified(self, properties:dict):
-        """Override base method in grid_base.GridView.
-        """
+    def cell_modified(self, properties: dict):
+        """Override base method in grid_base.GridView."""
         try:
             new_value = properties["VALUE"]
         except KeyError:
@@ -566,67 +572,75 @@ class GradeTableView(GridViewAuto):
         # Update this pupil's grades (etc.) in the database
         changes, timestamp = update_pupil_grades(self.grade_table, pid)
         self.grade_table["MODIFIED"] = timestamp
+#        self.modified_time.setText(timestamp)
+
         if changes:
             # Update changed display cells
             row = self.pid2row[pid]
             for sid, oldval in changes:
                 self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
 
-#TODO: file path handling ...
-# file dialog?
-# move function to GradeTableView?
     def export_pdf(self, fpath=None):
         titleheight = self.pt2px(GRADETABLE_TITLEHEIGHT)
         footerheight = self.pt2px(GRADETABLE_FOOTERHEIGHT)
+        info_fields = dict(get_grade_config()["INFO_FIELDS"])
         items = []
+        cgroup = self.grade_table["CLASS_GROUP"]
         items.append(
             self.set_title(
-                f'{T["CLASS"]}: {self.grade_table["CLASS_GROUP"]}',
+                f'{info_fields["CLASS_GROUP"]}: {cgroup}',
                 titleheight // 2,
-                y0=0
+                font_scale=1.2,
+                halign="l",
+                y0=0,
             )
         )
         occasion = self.grade_table["OCCASION"]
         instance = self.grade_table["INSTANCE"]
         if instance:
-            occasion = f'{occasion} // {instance}'
+            occasion = f"{occasion}: {instance}"
         items.append(
-            self.set_title(
-                occasion,
-                titleheight // 2,
-                halign="l",
-                y0=0
-            )
+            self.set_title(occasion, titleheight // 2, halign="c", y0=0)
         )
         items.append(
             self.set_title(
-                f'{self.grade_table["DATE_ISSUE"]} [{self.grade_table["DATE_GRADES"]}]',
+                self.grade_table["DATE_ISSUE"],
                 titleheight // 2,
                 halign="r",
-                y0=0
+                y0=0,
             )
         )
         items.append(
             self.set_title(
-#TODO: "MODIFIED" (self.info_fields["MODIFIED"])!
-            f'MODIFIED: {self.grade_table["MODIFIED"]}',
+                f'{info_fields["DATE_GRADES"]}: {self.grade_table["DATE_GRADES"]}',
+                footerheight // 2,
+                halign="l",
+                y0=self.grid_height + footerheight,
+            )
+        )
+        items.append(
+            self.set_title(
+                f'{info_fields["MODIFIED"]}: {self.grade_table["MODIFIED"]}',
                 footerheight // 2,
                 halign="r",
-                y0=self.grid_height + footerheight
+                y0=self.grid_height + footerheight,
             )
         )
         if not fpath:
-            fpath=DATAPATH("testing/tmp/grid1.pdf")
+            fpath = saveDialog(
+                "pdf-Datei (*.pdf)",
+#TODO: T ...
+                f"Noten_{cgroup}_{occasion}"
+            )
+            if not fpath:
+                return
+        if not fpath.endswith(".pdf"):
+            fpath += ".pdf"
         os.makedirs(os.path.dirname(fpath), exist_ok=True)
-        self.to_pdf(
-            fpath,
-            titleheight=titleheight,
-            footerheight=footerheight
-        )
+        self.to_pdf(fpath, titleheight=titleheight, footerheight=footerheight)
         # grid.to_pdf(fpath, can_rotate = False, titleheight=titleheight, footerheight=footerheight)
         for item in items:
-#TODO: add method to grid_base?
-            self.scene().removeItem(item)
+            self.delete_item(item)
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -641,7 +655,7 @@ if __name__ == "__main__":
     run(widget)
 
 
-#new?
+# new?
 #    widget = ManagePupils()
 #    widget.enter()
 #    widget.resize(1000, 550)
