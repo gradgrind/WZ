@@ -62,6 +62,7 @@ grades.gradetable: {
     UNKNOWN_CALCULATE: "Konfigurationsfehler in GRADE_CONFIG, GRADE_FIELDS_EXTRA: unbekanntes CALCULATE SID = {sid}"
     COMPONENT_NOT_UNIQUE: "Sammelfachkomponente {sid} ist mehreren Sammelfächern zugeordnet"
     COMPOSITE_NO_COMPONENTS: "Sammelfach {name} ({sid}) hat keine Komponenten"
+    NO_PUPIL_GRADES: "Keine Schüler bzw. Noten: {report_info}"
 }
 
 local.grade_functions: {

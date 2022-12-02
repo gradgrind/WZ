@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-11-30
+Last updated:  2022-12-02
 
 Front-end for managing grade reports.
 
@@ -95,6 +95,7 @@ from ui.ui_base import (
     # QtCore
     Qt,
     QDate,
+    Signal,
     # Other
     KeySelector,
     HLine,
@@ -221,6 +222,7 @@ class GradeManager(QWidget):
         self.pupil_data_table = GradeTableView()
         #        EdiTableWidget()
         vboxl.addWidget(self.pupil_data_table)
+        self.pupil_data_table.signal_modified.connect(self.updated)
 
         # Various "controls" in the panel on the right
         grade_config = get_grade_config()
@@ -298,6 +300,9 @@ class GradeManager(QWidget):
         """Return <True> if there are unsaved changes."""
         # TODO: test whether there really are any changes?
         return True
+
+    def updated(self, timestamp):
+        self.modified_time.setText(timestamp)
 
     def changed_occasion(self, new_occasion: str):
         if not self.__changes_enabled:
@@ -387,17 +392,20 @@ class GradeManager(QWidget):
             self.occasion, self.class_group, instance
         )
         self.instance = instance
+        self.suppress_callbacks = True
         self.issue_date.setDate(
             QDate.fromString(grade_table["DATE_ISSUE"], Qt.DateFormat.ISODate)
         )
         self.grade_date.setDate(
             QDate.fromString(grade_table["DATE_GRADES"], Qt.DateFormat.ISODate)
         )
+        self.suppress_callbacks = False
         self.pupil_data_table.setup(grade_table)
-        self.modified_time.setText(grade_table["MODIFIED"])
+        self.updated(grade_table["MODIFIED"])
 
     def issue_date_changed(self, qdate):
-        print("TODO: Issue date changed", qdate)
+        if self.suppress_callbacks:
+            return
         timestamp = update_table_info(
             "DATE_ISSUE",
             qdate.toString(Qt.DateFormat.ISODate),
@@ -405,12 +413,13 @@ class GradeManager(QWidget):
             CLASS_GROUP=self.class_group,
             INSTANCE=self.instance,
         )
-        self.modified_time.setText(timestamp)
+        self.pupil_data_table.set_modified_time(timestamp)
         #TODO: Reload table?
         #self.select_instance()
 
     def grade_date_changed(self, qdate):
-        print("TODO: Grade date changed", qdate)
+        if self.suppress_callbacks:
+            return
         timestamp = update_table_info(
             "DATE_GRADES",
             qdate.toString(Qt.DateFormat.ISODate),
@@ -418,12 +427,14 @@ class GradeManager(QWidget):
             CLASS_GROUP=self.class_group,
             INSTANCE=self.instance,
         )
+        self.pupil_data_table.set_modified_time(timestamp)
         # Reload table
         self.select_instance()
 
 
 class GradeTableView(GridViewAuto):
     # class GradeTableView(GridView):
+    signal_modified = Signal(str)
 
     def setup(self, grade_table):
         self.grade_table = grade_table
@@ -571,14 +582,17 @@ class GradeTableView(GridViewAuto):
         grades[sid] = new_value
         # Update this pupil's grades (etc.) in the database
         changes, timestamp = update_pupil_grades(self.grade_table, pid)
-        self.grade_table["MODIFIED"] = timestamp
-#        self.modified_time.setText(timestamp)
-
+        self.set_modified_time(timestamp)
         if changes:
             # Update changed display cells
             row = self.pid2row[pid]
             for sid, oldval in changes:
                 self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
+
+    def set_modified_time(self, timestamp):
+        self.grade_table["MODIFIED"] = timestamp
+        # Signal change
+        self.signal_modified.emit(timestamp)
 
     def export_pdf(self, fpath=None):
         titleheight = self.pt2px(GRADETABLE_TITLEHEIGHT)

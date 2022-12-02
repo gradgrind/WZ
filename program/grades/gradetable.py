@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-11-30
+Last updated:  2022-12-02
 
 Access grade data, read and build grade tables.
 
@@ -62,8 +62,7 @@ from core.db_access import (
     read_pairs,
     db_new_row,
     db_delete_rows,
-    db_update_field,
-    db_update_fields
+    db_update_field
 )
 from core.basic_data import SHARED_DATA, get_subjects_with_sorting
 from core.pupils import pupil_name, pupil_data
@@ -289,6 +288,7 @@ def full_grade_table(occasion, class_group, instance):
         OCCASION=occasion,
         INSTANCE=instance
     )[1]
+    today = Dates.today()
     if infolist:
         if len(infolist) > 1:
             raise Bug(
@@ -296,17 +296,20 @@ def full_grade_table(occasion, class_group, instance):
                 f" / {occasion} / {instance}"
             )
         DATE_ISSUE, DATE_GRADES, MODIFIED = infolist[0]
-        if DATE_GRADES >= Dates.today():
-            # Assume the list of pupils is fixed at the issue date
-            pdata_list.clear()
+
+#TODO
+#later?
+#        if DATE_GRADES >= Dates.today():
+#            # Assume the list of pupils is fixed at the issue date
+#            pdata_list.clear()
     else:
         # No entry in database, use "today" for initial date values
-        DATE_ISSUE = Dates.today()
+        DATE_ISSUE = today
         DATE_GRADES = DATE_ISSUE
         MODIFIED = "–––––"
         if pdata_list:
             raise Bug("Stored grades but no entry in GRADES_INFO for"
-                " {class_group} / {occasion} / {instance}"
+                f" {class_group} / {occasion} / {instance}"
             )
         db_new_row("GRADES_INFO",
             CLASS_GROUP=class_group,
@@ -338,48 +341,71 @@ def full_grade_table(occasion, class_group, instance):
         )
     }
     pid2grade_map = {}
-    if pdata_list:
+    pid2level_change = set()
+    pid2old_grades = {}
+    if DATE_GRADES < today:
+        # Assume the list of pupils is fixed at the grading date
         # Use stored pupils for this issue
-        for pdata in pdata_list:
-            pid = pdata["PID"]
-            __grade_map = pid2grades.get(pid) or {}
-            grade_map = {}
-            pid2grade_map[pid] = grade_map
-            for sid in sid2data:
-                grade_map[sid] = __grade_map.get(sid, "")
+        if pdata_list:
+            for pdata in pdata_list:
+                pid = pdata["PID"]
+                __grade_map = pid2grades.get(pid) or {}
+                grade_map = {}
+                pid2grade_map[pid] = grade_map
+                for sid in sid2data:
+                    grade_map[sid] = __grade_map.get(sid, "")
+        else:
+            REPORT("ERROR", T["NO_PUPIL_GRADES"].format(
+                report_info=f"{class_group} / {occasion} / {instance}"
+            ))
     else:
         # Use the current list of pupils for this group
+        # ... but look for changed pupils and LEVEL fields
+        old_pdata = {
+            pdata["PID"]: pdata["LEVEL"]
+            for pdata in pdata_list
+        }
+        pdata_list = []
         for pid, pinfo in table_info["PUPILS"].items():
             pdata, p_grade_tids = pinfo
             pdata_list.append(pdata)
             try:
-                __grade_map = dict(pid2grades.pop(pid))
+                old_level = old_pdata.pop(pid)
             except KeyError:
                 __grade_map = {}
+            else:
+                if pdata["LEVEL"] != old_level:
+                    pid2level_change.add(pid)
+                __grade_map = dict(pid2grades.pop(pid))
+            pid2old_grades[pid] = __grade_map
             grade_map = {}
             pid2grade_map[pid] = grade_map
             for sid, sdata in sid2data.items():
                 if sdata["TYPE"] == "SUBJECT" and not p_grade_tids.get(sid):
                     grade_map[sid] = NO_GRADE
                 else:
-#TODO: consider the value list for defaults – take the first entry?
                     try:
                         grade_map[sid] = __grade_map[sid]
                     except KeyError:
+                        # Consider the value list for defaults, taking
+                        # the first entry
                         try:
                             values = sdata["VALUES"]
                         except KeyError:
                             grade_map[sid] = ""
                         else:
                             default = values[0]
+                            # The value can be a single string or a pair
                             if isinstance(default, list):
                                 grade_map[sid] = default[0]
                             else:
                                 grade_map[sid] = default
+            # Delay the comparison with the old data until after the
+            # computations. This allows for changes in the calculations.
         # Remove pupils from grade table if they are no longer in the group.
         # This must be done because otherwise they would be "reinstated"
         # as soon as the date-of-issue is past.
-        for pid in pid2grades:
+        for pid in old_pdata:
             db_delete_rows("GRADES",
                 OCCASION=occasion,
                 CLASS_GROUP=class_group,
@@ -390,11 +416,53 @@ def full_grade_table(occasion, class_group, instance):
     table_info["PUPIL_GRADES"] = pid2grade_map
     table_info["GRADE_TABLE_PUPILS"] = pdata_list
     # Calculate contents of all cells with FUNCTION
+    table_changed = False
     for pdata in pdata_list:
-        changes = calculate_row(table_info, pdata["PID"])
+        pid = pdata["PID"]
+        changes = calculate_row(table_info, pid)
+        if pid in pid2level_change:
 #
-        print("+++++++ CALCULATED CHANGES:", changes)
+            print(f"\n!!!!!!!!!! level changed for {pid}")
+            db_update_field("GRADES", "LEVEL", pdata["LEVEL"],
+                OCCASION=occasion,
+                CLASS_GROUP=class_group,
+                INSTANCE=instance,
+                PID=pid
+            )
+            table_changed = True
+        old_grades = pid2old_grades[pid]
+        if old_grades:
+            new_grades = pid2grade_map[pid]
+            if new_grades != old_grades:
+#
+                print(f"\n!!!!!!!!!! grades changed for {pid}")
+
+                # The update only occurs if there was already an entry
+                # for the pupil (<old_grades> not empty)
+                db_update_field("GRADES",
+                    "GRADE_MAP", grade_string(new_grades),
+                    OCCASION=occasion,
+                    CLASS_GROUP=class_group,
+                    INSTANCE=instance,
+                    PID=pid
+                )
+                table_changed = True
+        # print("+++++++ CALCULATED CHANGES:", changes)
+    if table_changed:
+        print("$$$ Read grade table data done")
+        update_grade_time(
+            OCCASION=occasion,
+            CLASS_GROUP=class_group,
+            INSTANCE=instance,
+        )
     return table_info
+
+
+def grade_string(grade_map: dict[str:str]) -> str:
+    """Return a string representation of a string mapping for a database
+    field.
+    """
+    return "\n".join([f"{k}:{v}" for k, v in grade_map.items()])
 
 
 def calculate_row(table, pid):
@@ -410,8 +478,7 @@ def calculate_row(table, pid):
     final_grades = [grades.get(sdata["SID"]) for sdata in subjects]
     composites = table["COMPOSITES"]
     extras = table["EXTRAS"]
-#
-    print("\n**** CALCULATE:", pid, grades)
+    # print("\n**** CALCULATE:", pid, grades)
     changed_grades = []
 
     for sdata in composites:
@@ -425,8 +492,7 @@ def calculate_row(table, pid):
         if new_value != value:
             grades[sid] = new_value
             changed_grades.append((sid, value))
-#
-        print("   --- COMPOSITE:", sid, value, "->", new_value, components)
+        # print("   --- COMPOSITE:", sid, value, "->", new_value, components)
 
     for sdata in extras:
         try:
@@ -446,8 +512,7 @@ def calculate_row(table, pid):
         if new_value != value:
             grades[sid] = new_value
             changed_grades.append((sid, value))
-#
-        print("   --- EXTRA:", sid, value, "->", new_value, components)
+        # print("   --- EXTRA:", sid, value, "->", new_value, components)
 
     return changed_grades
 
@@ -491,11 +556,11 @@ def read_stored_grades(
 def update_pupil_grades(grade_table, pid):
     # Recalculate row
     changed_grades = calculate_row(grade_table, pid)
-    print("\nCHANGED:", changed_grades)
+    # print("\nCHANGED:", changed_grades)
     # Save grades to database
     grades = grade_table["PUPIL_GRADES"][pid]
-    gstring = "\n".join([f"{k}:{v}" for k, v in grades.items()])
-    #print("GRADES", "GRADE_MAP", gstring,
+    gstring = grade_string(grades)
+    # print("GRADES", "GRADE_MAP", gstring,
     #    grade_table["OCCASION"],
     #    grade_table["CLASS_GROUP"],
     #    grade_table["INSTANCE"],
@@ -504,7 +569,8 @@ def update_pupil_grades(grade_table, pid):
     OCCASION = grade_table["OCCASION"]
     CLASS_GROUP = grade_table["CLASS_GROUP"]
     INSTANCE = grade_table["INSTANCE"]
-    if not db_update_field("GRADES", "GRADE_MAP", gstring,
+    if not db_update_field("GRADES",
+        "GRADE_MAP", gstring,
         OCCASION=OCCASION,
         CLASS_GROUP=CLASS_GROUP,
         INSTANCE=INSTANCE,
@@ -518,8 +584,8 @@ def update_pupil_grades(grade_table, pid):
             LEVEL=pupil_data(pid)["LEVEL"],
             GRADE_MAP=gstring
         )
-    timestamp = Dates.timestamp()
-    db_update_field("GRADES_INFO", "MODIFIED", timestamp,
+    print("$$$ update grades")
+    timestamp = update_grade_time(
         OCCASION=OCCASION,
         CLASS_GROUP=CLASS_GROUP,
         INSTANCE=INSTANCE
@@ -527,10 +593,29 @@ def update_pupil_grades(grade_table, pid):
     return changed_grades, timestamp
 
 
+def update_grade_time(OCCASION, CLASS_GROUP, INSTANCE):
+    timestamp = Dates.timestamp()
+    db_update_field("GRADES_INFO", "MODIFIED", timestamp,
+        OCCASION=OCCASION,
+        CLASS_GROUP=CLASS_GROUP,
+        INSTANCE=INSTANCE
+    )
+#--
+    print("%%% Update grade timestamp:\n"
+        f"  {CLASS_GROUP}/{OCCASION}/{INSTANCE}: {timestamp}"
+    )
+    return timestamp
+
+
 def update_table_info(field, value, OCCASION, CLASS_GROUP, INSTANCE):
     timestamp = Dates.timestamp()
-    db_update_fields("GRADES_INFO",
-        [(field, value), ("MODIFIED", timestamp)],
+    db_update_field("GRADES_INFO", field, value,
+        OCCASION=OCCASION,
+        CLASS_GROUP=CLASS_GROUP,
+        INSTANCE=INSTANCE
+    )
+    print("$$$ update table info")
+    timestamp = update_grade_time(
         OCCASION=OCCASION,
         CLASS_GROUP=CLASS_GROUP,
         INSTANCE=INSTANCE
