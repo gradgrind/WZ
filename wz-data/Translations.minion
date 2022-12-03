@@ -109,6 +109,13 @@ ui.grid_base: {
     NOT_STRING: "Kachelwert muss eine Zeichenkette sein, nicht: {val}"
 }
 
+ui.modules.pupils_manager: {
+    # Labels
+    MODULE_NAME:    Schüler
+    MODULE_TITLE:   "Schülerdaten verwalten"
+    CLASS:          Klasse
+}
+
 ui.modules.teachers: {
     # Messages
     INVALID_AVAILABILITY:   "Gültig sind '+', '-' und '*', nicht '{val}'"

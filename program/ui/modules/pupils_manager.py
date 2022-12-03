@@ -1,7 +1,7 @@
 """
 ui/modules/pupils_manager.py
 
-Last updated:  2022-09-02
+Last updated:  2022-12-03
 
 Front-end for managing pupil data.
 
@@ -24,13 +24,6 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
-#TODO ...
-_NAME = "Schüler"
-_TITLE ="Schülerdaten verwalten"
-
-
-### Messages
-
 #####################################################
 
 if __name__ == "__main__":
@@ -48,9 +41,35 @@ if __name__ == "__main__":
 else:
     from ui.ui_base import StackPage as Page
 
+T = TRANSLATIONS("ui.modules.pupils_manager")
 
-from ui.ui_base import QHBoxLayout, QVBoxLayout, QLabel, QPushButton, run
+### +++++
+
+from core.db_access import open_database, db_values
+from core.classes import Classes
+from core.basic_data import get_classes
+from core.pupils import get_pupil_fields, get_pupils
+from ui.ui_base import (
+    # QtWidgets
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QLabel,
+    QPushButton,
+    QStackedWidget,
+    QFormLayout,
+    QTableWidget,
+    QTableWidgetItem,
+    QAbstractItemView,
+    # QtCore
+    Qt,
+    # Others
+    APP,
+    KeySelector,
+    run
+)
 from ui.editable import EdiTableWidget
+
 
 
 #from ui.ui_extra import QWidget, QLabel, QVBoxLayout, \
@@ -61,11 +80,28 @@ from ui.editable import EdiTableWidget
 def init():
     MAIN_WIDGET.add_tab(ManagePupils())
 
+# ++++++++++++++ The widget implementation ++++++++++++++
 
 class ManagePupils(Page):
-    name = _NAME
-    title = _TITLE
+    name = T["MODULE_NAME"]
+    title = T["MODULE_TITLE"]
 
+    def __init__(self):
+        super().__init__()
+        self.pupil_manager = PupilManager()
+        hbox = QHBoxLayout(self)
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.addWidget(self.pupil_manager)
+
+    def enter(self):
+        open_database()
+        self.pupil_manager.init_data()
+
+    def is_modified(self):
+        return self.pupil_manager.modified()
+
+
+class PupilManager(QWidget):
     def __init__(self):
         super().__init__()
         hbox = QHBoxLayout(self)
@@ -73,51 +109,127 @@ class ManagePupils(Page):
         hbox.addLayout(vboxl)
         vboxr = QVBoxLayout()
         hbox.addLayout(vboxr)
+        hbox.setStretchFactor(vboxl, 1)
 
-        # Class info
-        self.class_label = QLabel()
-        vboxl.addWidget(self.class_label)
-#TODO: Do I want this?
-        self.modified_label = QLabel()
-        vboxl.addWidget(self.modified_label)
-
-        # The class data table
-        self.pupil_data_table = EdiTableWidget()
-        vboxl.addWidget(self.pupil_data_table)
+        # The class data table, etc.
+        self.data_view = QStackedWidget()
+        #        EdiTableWidget()
+        vboxl.addWidget(self.data_view)
+#        self.pupil_data_table.signal_modified.connect(self.updated)
 
         # Various "controls" in the panel on the right
-        pb1 = QPushButton("Just testing")
-        vboxr.addWidget(pb1)
-        pb2 = QPushButton("Another button")
-        vboxr.addWidget(pb2)
-        vboxr.addStretch(1)
-        for i in range(15):
-            vboxr.addWidget(QPushButton(f"Button {i}"))
+        formbox = QFormLayout()
+        vboxr.addLayout(formbox)
+        self.class_selector = KeySelector(changed_callback=self.changed_class)
+        formbox.addRow(T["CLASS"], self.class_selector)
 
-        def is_modified(self):
-            """Return <True> if there are unsaved changes.
-            """
+        self.pupil_table = TableWidget()
+        self.data_view.addWidget(self.pupil_table)
+
+    def modified(self):
+        """Return <True> if there are unsaved changes.
+        """
 #TODO: test whether there really are any changes?
-            return True
+        return True
 
+    def init_data(self):
+
+        print("TODO: INIT")
+
+        self.pupil_fields_map = get_pupil_fields()
+        self.pupil_table.setColumnCount(len(self.pupil_fields_map))
+        self.pupil_table.setHorizontalHeaderLabels(
+            self.pupil_fields_map.values()
+        )
+
+        classes = get_classes()
+        self.class_selector.set_items(classes.get_class_list())
+
+        self.class_selector.trigger()
+
+
+    def changed_class(self, klass):
+        # print("TODO: Change to class", klass)
+        pupils = get_pupils(klass)
+        self.pupil_table.setRowCount(len(pupils))
+        row = 0
+        for pdata in pupils:
+            col = 0
+            for f in self.pupil_fields_map:
+                self.pupil_table.setItem(row, col, QTableWidgetItem(pdata[f]))
+                col += 1
+            row += 1
+        return True # confirm acceptance to the <KeySelector>.
+
+
+class TableWidget(QTableWidget):
+    def __init__(self, parent=None, changed_callback=None):
+        self.changed_callback = changed_callback
+        super().__init__(parent=parent)
+        self.setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked
+            | QAbstractItemView.EditTrigger.AnyKeyPressed
+            | QAbstractItemView.EditTrigger.SelectedClicked  # this one has a delay!
+        )
+        # Note that the <Return> key doesn't cause the editor to be opened,
+        # so there is an event handling that ... see method <keyPressEvent>.
+
+        # Change stylesheet to make the selected cell more visible
+        self.setStyleSheet(
+            """QTableView {
+               selection-background-color: #f0e0ff;
+               selection-color: black;
+            }
+            QTableView::item:focus {
+                selection-background-color: #d0ffff;
+            }
+            """
+        )
+        self.cellClicked.connect(self.clicked)
+        self.cellPressed.connect(self.pressed)
+        self.cellEntered.connect(self.entered)
+
+    def keyPressEvent(self, e):
+        e.accept()
+        key = e.key()
+        if key == Qt.Key_Return:
+            if self.state() != self.EditingState:
+                self.editItem(self.currentItem())
+        else:
+            super().keyPressEvent(e)
+
+    def clicked(self, r, c):
+        print("CLICKED", r, c)
+
+    def pressed(self, r, c):
+        km = APP.queryKeyboardModifiers()
+        if km & Qt.KeyboardModifier.ShiftModifier:
+            return
+        print("Pressed", r, c)
+        self.clearSelection() # to avoid multiple selection ranges
+
+    def entered(self, r, c):
+        print("ENTERED", r, c)
+
+
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
     from ui.ui_base import run
 
     widget = ManagePupils()
-    widget.class_label.setText("<b>Klasse 02G</b>")
-    widget.modified_label.setText("zuletzt geändert: 2021-10-05_20:14")
+#    widget.pupil_manager.class_label.setText("<b>Klasse 02G</b>")
+#    widget.pupil_manager.modified_label.setText("zuletzt geändert: 2021-10-05_20:14")
 # Actually this can be in the main code, using the fixed (translated)
 # column headers ... need to set up the data area.
-    widget.pupil_data_table.setup(colheaders = ["PID", "Name"],
-            undo_redo = True, paste = True,
-            on_changed = None)
-    widget.resize(600, 400)
-    run(widget)
+#    widget.pupil_manager.pupil_data_table.setup(colheaders = ["PID", "Name"],
+#            undo_redo = True, paste = True,
+#            on_changed = None)
+#    widget.resize(600, 400)
+#    run(widget)
 
 
 #new?
-#    widget = ManagePupils()
-#    widget.enter()
-#    widget.resize(1000, 550)
-#    run(widget)
+    widget.enter()
+    widget.resize(1000, 550)
+    run(widget)

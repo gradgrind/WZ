@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2022-10-23
+core/pupils.py - last updated 2022-12-03
 
 Manage pupil data.
 
@@ -90,6 +90,13 @@ def pupil_data(pid):
     """
     flist, row = db_read_unique_entry("PUPILS", PID=pid)
     return dict(zip(flist, row))
+
+
+def get_pupil_fields():
+    return {
+        f[0]: f[1]
+        for f in CONFIG["PUPILS_FIELDS"] + CONFIG["PUPILS_EXTRA_FIELDS"]
+    }
 
 
 def get_pupils(klass):
