@@ -1,7 +1,7 @@
 """
 ui/modules/pupils_manager.py
 
-Last updated:  2022-12-03
+Last updated:  2022-12-04
 
 Front-end for managing pupil data.
 
@@ -46,12 +46,13 @@ T = TRANSLATIONS("ui.modules.pupils_manager")
 ### +++++
 
 from core.db_access import open_database, db_values
-from core.classes import Classes
 from core.basic_data import get_classes
 from core.pupils import get_pupil_fields, get_pupils
+from local.local_pupils import get_sortname
 from ui.ui_base import (
     # QtWidgets
     QWidget,
+    QDialog,
     QHBoxLayout,
     QVBoxLayout,
     QLabel,
@@ -61,19 +62,19 @@ from ui.ui_base import (
     QTableWidget,
     QTableWidgetItem,
     QAbstractItemView,
+    QLineEdit,
     # QtCore
-    Qt,
+    Qt, QPoint,
     # Others
     APP,
     KeySelector,
-    run
+    run,
 )
-from ui.editable import EdiTableWidget
-
-
-
-#from ui.ui_extra import QWidget, QLabel, QVBoxLayout, \
-#        QTreeWidget, QTreeWidgetItem, Qt
+from ui.cell_editors import (
+    CellEditorLine,
+    CellEditorDate,
+    CellEditorTable,
+)
 
 ### -----
 
@@ -138,15 +139,48 @@ class PupilManager(QWidget):
 
         self.pupil_fields_map = get_pupil_fields()
         self.pupil_table.setColumnCount(len(self.pupil_fields_map))
-        self.pupil_table.setHorizontalHeaderLabels(
-            self.pupil_fields_map.values()
-        )
-
         classes = get_classes()
-        self.class_selector.set_items(classes.get_class_list())
+        class_list = classes.get_class_list()
+        self.field_editors = []
+        headers = []
+        for vec in self.pupil_fields_map.values():
+            headers.append(vec[0])
+            e = vec[1]
+            if e == "CLASS_CHOICE":
+                vlist = [[[v], text] for v, text in class_list]
+                editor = CellEditorTable(vlist).activate
+            elif e == "PID":
+                editor = CellEditorPid().activate
+            elif e == "SORT_NAME":
+#TODO
+                editor = CellEditorSortName().activate
+            elif e == "GROUPS":
+#TODO
+                editor = CellEditorGroups(classes).activate
+# use classes[klass].divisions
+            elif e == "LINE":
+                editor = CellEditorLine().activate
+            elif e == "DATE_OR_EMPTY":
+                editor = CellEditorDate(empty_ok = True)
+            elif e == "DATE":
+                editor = CellEditorDate(empty_ok = False)
+            elif e == "CHOICE":
+                vlist = [[[v], ""] for v in vec[2]]
+                editor = CellEditorTable(vlist).activate
+            elif e == "CHOICE_MAP":
+                vlist = [[[v], text] for v, text in vec[2]]
+                editor = CellEditorTable(vlist).activate
+            else:
+                #TODO?
+                editor = None
+
+
+            self.field_editors.append(editor)
+        self.pupil_table.setHorizontalHeaderLabels(headers)
+
+        self.class_selector.set_items(class_list)
 
         self.class_selector.trigger()
-
 
     def changed_class(self, klass):
         # print("TODO: Change to class", klass)
@@ -156,21 +190,65 @@ class PupilManager(QWidget):
         for pdata in pupils:
             col = 0
             for f in self.pupil_fields_map:
-                self.pupil_table.setItem(row, col, QTableWidgetItem(pdata[f]))
+                self.pupil_table.setItem(row, col, CellItem(pdata[f]))
                 col += 1
             row += 1
+        # hHd = self.pupil_table.horizontalHeader()
+        self.pupil_table.resizeColumnsToContents()
+        # hHd.setStretchLastSection(True)
         return True # confirm acceptance to the <KeySelector>.
 
+########+++ field editors
+# CLASS: an existing class. Note that if this is changed the pupil should
+# disappear from the table!
+# --- CHOICE or CHOICE_MAP ... from available classes
+# PID: normally not editable. If I do allow editing there should perhaps
+# be a warning, and a check that the result is valid, whatever that means.
+# --- LINE ... but possibly with validator
+# SORT_NAME: This can be a simple text-line editor.
+# --- LINE
+# LASTNAME, FIRSTNAMES, FIRSTNAME: also normal text-line editors
+# --- LINE
+# GROUPS: ideally a sort-of check list of available groups for the class.
+# Actually, rather more complicated as groups within a division are
+# mutually exclusive.
+# DATE_EXIT: a date popup – probably without restrictions, but empty must
+# be possible
+# --- DATE_OR_EMPTY
+# LEVEL: This could be a choice from the grades configuration?
+# --- CHOICE or CHOICE_MAP ... from available levels (in GRADE_CONFIG)
+# DATE_ENTRY: a date popup – probably without restrictions
+# --- DATE
+# DATE_BIRTH: a date popup – probably without restrictions
+# --- DATE
+# BIRTHPLACE: a simple text-line editor
+# --- LINE
+# SEX: a choice, from the base configuration
+# --- CHOICE [m w]
+# HOME: a simple text-line editor
+# --- LINE
+# DATE_QPHASE: a date popup – probably without restrictions, but empty
+# must be possible
+# --- DATE_OR_EMPTY
+
+# At least the last one is specific to certain schools, not a general
+# requirement. So surely the handler should be specified in a config
+# file. Some handlers cannot easily be restricted to the config, so
+# maybe there would need to be some sort of combination, special handlers
+# for some fields in the code module.
+# At least CLASS, PID, GROUPS and LEVEL would need special handlers.
+########---
 
 class TableWidget(QTableWidget):
     def __init__(self, parent=None, changed_callback=None):
         self.changed_callback = changed_callback
         super().__init__(parent=parent)
-        self.setEditTriggers(
-            QAbstractItemView.EditTrigger.DoubleClicked
-            | QAbstractItemView.EditTrigger.AnyKeyPressed
-            | QAbstractItemView.EditTrigger.SelectedClicked  # this one has a delay!
-        )
+        self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+#        self.setEditTriggers(
+#            QAbstractItemView.EditTrigger.DoubleClicked
+#            | QAbstractItemView.EditTrigger.AnyKeyPressed
+#            | QAbstractItemView.EditTrigger.SelectedClicked  # this one has a delay!
+#        )
         # Note that the <Return> key doesn't cause the editor to be opened,
         # so there is an event handling that ... see method <keyPressEvent>.
 
@@ -188,6 +266,7 @@ class TableWidget(QTableWidget):
         self.cellClicked.connect(self.clicked)
         self.cellPressed.connect(self.pressed)
         self.cellEntered.connect(self.entered)
+        self.click_pending = False
 
     def keyPressEvent(self, e):
         e.accept()
@@ -199,7 +278,17 @@ class TableWidget(QTableWidget):
             super().keyPressEvent(e)
 
     def clicked(self, r, c):
-        print("CLICKED", r, c)
+        if self.click_pending:
+            x = self.columnViewportPosition(c)
+            y = self.rowViewportPosition(r)
+            pos = self.mapToGlobal(QPoint(x, y))
+            print("CLICKED", r, c, pos)
+#TODO
+#            editor = self.field_editors[c]
+#            if editor(pos, properties):
+#                update db and display
+# Where to store the properties? In the items, or in a separate store?
+# Exactly what info is required?
 
     def pressed(self, r, c):
         km = APP.queryKeyboardModifiers()
@@ -207,9 +296,67 @@ class TableWidget(QTableWidget):
             return
         print("Pressed", r, c)
         self.clearSelection() # to avoid multiple selection ranges
+        self.click_pending = True
 
     def entered(self, r, c):
         print("ENTERED", r, c)
+        self.click_pending = False
+
+#???
+class CellItem(QTableWidgetItem):
+    def __init__(self, text):
+        super().__init__(text)
+        self.__properties = {"TEXT": text, "VALUE": text}
+
+#TODO: How to get cell coordinates for popup?
+
+####################################################
+### Specialized cell editors for the pupil table ###
+####################################################
+
+
+class CellEditorPid(QDialog):
+    """For correcting a pupil-id or creating a new one. This should
+    normally be handled automatically, a manual change being generally
+    undesirable.
+    """
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        vbox = QVBoxLayout(self)
+        label = QLabel(f'<p style="color:#a00000;">{T["PID_WARNING"]}</p>')
+        vbox.addWidget(label)
+        self.lineedit = QLineEdit(self)
+        vbox.addWidget(self.lineedit)
+        self.lineedit.returnPressed.connect(self.accept)
+
+    def activate(self, pos, properties):
+        text0 = properties["TEXT"]
+        self.lineedit.setText(text0)
+        self.move(pos)
+        if self.exec():
+            text = self.lineedit.text()
+            if text != text0:
+                if pupil_data(text):
+                    properties["TEXT"] = text
+                    return True
+                SHOW_ERROR(T["PID_EXISTS"].format(pid=text))
+        return False
+
+
+#TODO
+class CellEditorSortName(QDialog):
+    def activate(self, pos, properties):
+# use get_sortname(pdata) if no text
+        pass
+
+#TODO
+class CellEditorGroups(QDialog):
+    def __init__(self, classes):
+        self.classes = classes
+
+    def activate(self, pos, properties):
+        pass
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

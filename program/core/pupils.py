@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2022-12-03
+core/pupils.py - last updated 2022-12-04
 
 Manage pupil data.
 
@@ -59,7 +59,7 @@ T = TRANSLATIONS("core.pupils")
 
 ### +++++
 
-from core.db_access import db_read_table, db_read_unique_entry
+from core.db_access import db_read_table, db_read_unique_entry, NoRecord
 from core.base import class_group_split
 from core.basic_data import SHARED_DATA
 
@@ -84,19 +84,21 @@ from local.local_pupils import (
 
 ### **************************************************************** ###
 
-def pupil_data(pid):
+def pupil_data(pid, allow_none=False):
     """Return a mapping of the pupil-data for the given pupil-id.
     IMPORTANT: This data is not cached.
     """
-    flist, row = db_read_unique_entry("PUPILS", PID=pid)
+    try:
+        flist, row = db_read_unique_entry("PUPILS", PID=pid)
+    except NoRecord:
+        if allow_none:
+            return None
+        REPORT("ERROR", T["UNKNOWN_PID"].format(pid=pid))
     return dict(zip(flist, row))
 
 
 def get_pupil_fields():
-    return {
-        f[0]: f[1]
-        for f in CONFIG["PUPILS_FIELDS"] + CONFIG["PUPILS_EXTRA_FIELDS"]
-    }
+    return {f[0]: f[1:] for f in CONFIG["PUPILS_FIELDS"]}
 
 
 def get_pupils(klass):
@@ -108,13 +110,7 @@ def get_pupils(klass):
         return SHARED_DATA[key]
     except KeyError:
         pass
-    #fields = {
-    #    f[0]: (f[1], len(f) > 2)
-    #    for f in CONFIG["PUPILS_FIELDS"] + CONFIG["PUPILS_EXTRA_FIELDS"]
-    #}
-    field_list = [
-        f[0] for f in CONFIG["PUPILS_FIELDS"] + CONFIG["PUPILS_EXTRA_FIELDS"]
-    ]
+    field_list = get_pupil_fields()
     l = len(field_list)
     pupils = []
     for row in db_read_table(

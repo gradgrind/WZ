@@ -1,5 +1,5 @@
 """
-local/local_pupils.py - last updated 2022-09-03
+local/local_pupils.py - last updated 2022-12-04
 
 Manage pupil data – school/location specific code.
 
@@ -208,6 +208,18 @@ def read_pupils_source(filepath):
             row["SORT_NAME"] = sort_name
         pupils.append(row)
     return pupils
+
+
+def get_sortname(pdata):
+    """Construct a string to use in sorting pupil names and for
+    pupil-related file names. The result should preferably be ASCII-only
+    and without spaces, but that is not compulsory.
+    """
+    return tussenvoegsel_filter(
+        pdata["FIRSTNAMES"],
+        pdata["LASTNAME"],
+        pdata["FIRSTNAME"]
+    )[-1]
 
 
 def tussenvoegsel_filter(firstnames, lastname, firstname):

@@ -33,6 +33,7 @@ core.pupils: {
     FILTER_ERROR: "Schülerdaten-Fehler: {msg}"
     INVALID_CLASS: "Importierte Schülerdaten: Ungültige Klasse ({klass}) in Zeile\n  ... {row}\n ... in Datei\n {path}"
     BAD_NAME:       "Ungültiger Schülername (Vornamen / Nachname): {name}"
+    UNKNOWN_PID: "Unbekanntes Schüler-Kennzeichen: '{pid}'"
 }
 
 core.report_courses: {
@@ -114,6 +115,10 @@ ui.modules.pupils_manager: {
     MODULE_NAME:    Schüler
     MODULE_TITLE:   "Schülerdaten verwalten"
     CLASS:          Klasse
+    
+    # Messages
+    PID_WARNING:    "WARNUNG: Normalerweise sollten Schüler-Kennzeichen nicht geändert werden!"
+    PID_EXISTS:         "Schüler-Kennzeichen existiert schon: '{pid}'"
 }
 
 ui.modules.teachers: {
