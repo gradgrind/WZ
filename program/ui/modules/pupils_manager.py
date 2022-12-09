@@ -1,7 +1,7 @@
 """
 ui/modules/pupils_manager.py
 
-Last updated:  2022-12-04
+Last updated:  2022-12-09
 
 Front-end for managing pupil data.
 
@@ -124,6 +124,7 @@ class PupilManager(QWidget):
         self.class_selector = KeySelector(changed_callback=self.changed_class)
         formbox.addRow(T["CLASS"], self.class_selector)
 
+#TODO: pass open_editor handler?
         self.pupil_table = TableWidget()
         self.data_view.addWidget(self.pupil_table)
 
@@ -289,6 +290,30 @@ class TableWidget(QTableWidget):
 #                update db and display
 # Where to store the properties? In the items, or in a separate store?
 # Exactly what info is required?
+# How about this:
+# The editors are associated with columns and are initialized with any
+# info not dependent on the row, The row data is supplied in the
+# properties <dict>, along with the current cell value. The editor
+# returns the new cell value – if edited – and the displayed value
+# can be calculated from the column "delegate" (if any). Presumably
+# the editor would also need access to the "delegate" for displaying
+# choices, etc.
+
+#            properties = {
+#                "PUPIL_DATA": self.pupil_data[r],
+#                "GROUP_DIVISIONS": self.group_divisions,
+#                "VALUE": self.values[r][c],
+# The values need to stored in such a way that the database can be
+# updated when there is a change, which means association with a pupil-id
+# and a field name.
+#                "COLUMN_DELEGATE": self.column_delegates[c]
+#            }
+# As several fields may not be empty, it might be sensible to provide a
+# separate form for entry of the data for a new pupil. This would then
+# be submitted when complete, not field for field.
+# Of course this form could also be used for editing individual fields.
+# In that case the class table wouldn't need editing functions (except,
+# perhaps, deletion ... but is deletion at all permitted?)
 
     def pressed(self, r, c):
         km = APP.queryKeyboardModifiers()

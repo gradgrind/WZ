@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-12-02
+Last updated:  2022-12-09
 
 Front-end for managing grade reports.
 
@@ -104,7 +104,8 @@ from ui.ui_base import (
 )
 
 # from ui.editable import EdiTableWidget
-from ui.grid_base import GridViewAuto, CellEditorTable, CellEditorText
+from ui.grid_base import GridViewAuto
+from ui.cell_editors import CellEditorTable, CellEditorText
 
 # from ui.grid_base import GridView
 
