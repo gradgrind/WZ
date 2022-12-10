@@ -1,7 +1,7 @@
 """
 ui/cell_editors.py
 
-Last updated:  2022-12-04
+Last updated:  2022-12-10
 
 Pop-up editors for table grids.
 
@@ -24,18 +24,23 @@ Copyright 2022 Michael Towers
 """
 
 from qtpy.QtWidgets import (
+    QApplication,
+    QStyle,
     QDialog,
     QVBoxLayout,
+    QHBoxLayout,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
     QDialogButtonBox,
     QCalendarWidget,
-    QLabel
+    QLabel,
+    QAbstractItemView,
 )
-from qtpy.QtCore import Qt, QDate
+from qtpy.QtCore import Qt, QDate, QSize
 
 ### -----
 
@@ -46,6 +51,7 @@ class CellEditorTable(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         vbox = QVBoxLayout(self)
         self.table = QTableWidget(self)
+        self.table.setSelectionMode(QAbstractItemView.NoSelection)
         vbox.addWidget(self.table)
         self.table.horizontalHeader().hide()
         self.table.verticalHeader().hide()
@@ -64,6 +70,7 @@ class CellEditorTable(QDialog):
         self.table.setColumnCount(coln + extracol)
         self.table.setRowCount(nrows)
         r = 0
+        self.val2item = {}
         for row in items:
             c = 0
             for val in row[0]:
@@ -74,12 +81,13 @@ class CellEditorTable(QDialog):
                 )
                 item._text = val
                 self.table.setItem(r, c, item)
+                self.val2item[val] = item
                 c += 1
             comment = row[1]
             if comment:
                 item = QTableWidgetItem(comment)
                 item.setFlags(Qt.ItemFlag.NoItemFlags)
-#                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                #                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
                 self.table.setItem(r, coln, item)
                 item._text = None
             r += 1
@@ -108,10 +116,14 @@ class CellEditorTable(QDialog):
 
     def activate(self, pos, properties):
         self.move(pos)
-        text0 = properties["TEXT"]
+        text0 = properties["VALUE"]
+        try:
+            self.table.setCurrentItem(self.val2item[text0])
+        except KeyError:
+            pass
         if self.exec():
             if self._value != text0:
-                properties["TEXT"] = self._value
+                properties["VALUE"] = self._value
                 return True
         return False
 
@@ -181,13 +193,13 @@ class CellEditorText(QDialog):
         vbox.addWidget(buttonBox)
 
     def activate(self, pos, properties):
-        text0 = properties["TEXT"]
+        text0 = properties["VALUE"]
         self.textedit.setPlainText(text0)
         self.move(pos)
         if self.exec():
             text = self.textedit.toPlainText()
             if text != text0:
-                properties["TEXT"] = text
+                properties["VALUE"] = text
                 return True
         return False
 
@@ -202,15 +214,76 @@ class CellEditorLine(QDialog):
         self.lineedit.returnPressed.connect(self.accept)
 
     def activate(self, pos, properties):
-        text0 = properties["TEXT"]
+        text0 = properties["VALUE"]
         self.lineedit.setText(text0)
         self.move(pos)
         if self.exec():
             text = self.lineedit.text()
             if text != text0:
-                properties["TEXT"] = text
+                properties["VALUE"] = text
                 return True
         return False
+
+
+class CellEditorCheckList(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        hbox = QHBoxLayout(self)
+        self.listbox = ListWidget()
+        self.listbox.setSpacing(5)
+        self.listbox.setSelectionMode(QAbstractItemView.NoSelection)
+        self.listbox.itemChanged.connect(self.item_changed)
+        hbox.addWidget(self.listbox)
+        buttonBox = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        buttonBox.setOrientation(Qt.Orientation.Vertical)
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        hbox.addWidget(buttonBox)
+
+    def set_list(self, items):
+        self.listbox.clear()
+        self.listbox.addItems(items)
+
+    def item_changed(self, lwi:QListWidgetItem):
+        """This should be overridden in a subclass if some action is
+        required when an item is toggled.
+        """
+        pass
+
+    def activate(self, pos, properties):
+        set0 = self.to_set(properties["VALUE"])
+        for n in range(self.listbox.count()):
+            lwi = self.listbox.item(n)
+            text = lwi.text()
+            lwi.setCheckState(
+                Qt.CheckState.Checked
+                if text in set0
+                else Qt.CheckState.Unchecked
+            )
+        self.move(pos)
+        if self.exec():
+            set1 = self.get_checked_item_set()
+            if set1 != set0:
+                properties["VALUE"] = self.from_set(set1)
+                return True
+        return False
+
+    def to_set(self, val):
+        return set(val.split())
+
+    def from_set(self, val):
+        return " ".join(sorted(val))
+
+    def get_checked_item_set(self):
+        cis = set()
+        for n in range(self.listbox.count()):
+            lwi = self.listbox.item(n)
+            if lwi.checkState() == Qt.CheckState.Checked:
+                cis.add(lwi.text())
+        return cis
 
 
 # TODO
@@ -233,7 +306,7 @@ class CellEditorList(QDialog):
         self.listbox.itemClicked.connect(self.accept)
 
     def activate(self, pos, properties):
-        text0 = properties["TEXT"]
+        text0 = properties["VALUE"]
         try:
             i = self.__items.index(text0)
         except ValueError:
@@ -246,6 +319,46 @@ class CellEditorList(QDialog):
             i = self.listbox.currentRow()
             text = self.__items[i]
             if text != text0:
-                properties["TEXT"] = text
+                properties["VALUE"] = text
                 return True
         return False
+
+
+#############################################################
+
+
+class ListWidget(QListWidget):
+    def sizeHint(self):
+        s = QSize()
+        s.setHeight(super().sizeHint().height())
+        scrollbarwidth = (
+            QApplication.instance()
+            .style()
+            .pixelMetric(QStyle.PM_ScrollBarExtent)
+        )
+        # The scroll-bar width alone is not quite enough ...
+        s.setWidth(self.sizeHintForColumn(0) + scrollbarwidth + 5)
+        # print("???", s, scrollbarwidth)
+        return s
+
+
+if __name__ == "__main__":
+    import sys
+
+    # Import all qt stuff
+    from qtpy.QtCore import QPoint
+
+    # print("STYLES:", QStyleFactory.keys())
+    QApplication.setStyle("Fusion")
+    APP = QApplication(sys.argv)
+
+    # This seems to deactivate activate-on-single-click in filedialog
+    # (presumably elsewhere as well?)
+    APP.setStyleSheet("QAbstractItemView { activate-on-singleclick: 0; }")
+
+    clist = CellEditorCheckList()
+    clist.set_list(["A", "B", "R", "G", "I", "II", "III"])
+    props = {"VALUE": 'G A'}
+    print("?????", clist.activate(QPoint(100, 200), props))
+    print("+++++", props)
+    quit(0)

@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2022-12-04
+core/pupils.py - last updated 2022-12-10
 
 Manage pupil data.
 
@@ -101,15 +101,16 @@ def get_pupil_fields():
     return {f[0]: f[1:] for f in CONFIG["PUPILS_FIELDS"]}
 
 
-def get_pupils(klass):
+def get_pupils(klass, use_cache=True):
     """Return a list of data mappings, one for each member of the given class.
-    This data is cached, so subsequent calls get the same instance.
+    This data is cached by default, so subsequent calls get the same instance.
     """
     key = f"PUPILS_{klass}"
-    try:
-        return SHARED_DATA[key]
-    except KeyError:
-        pass
+    if use_cache:
+        try:
+            return SHARED_DATA[key]
+        except KeyError:
+            pass
     field_list = get_pupil_fields()
     l = len(field_list)
     pupils = []

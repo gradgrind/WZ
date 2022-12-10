@@ -1,7 +1,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2022-12-04
+Last updated:  2022-12-10
 
 Base functions for table-grids using the QGraphicsView framework.
 
@@ -873,9 +873,9 @@ class Tile(QGraphicsRectItem):
 
     def set_text(self, text):
         if text is None:
-            text = self.__properties["TEXT"]
+            text = self.__properties["VALUE"]
         elif type(text) == str:
-            self.__properties["TEXT"] = text
+            self.__properties["VALUE"] = text
         else:
             raise ValueError(T["NOT_STRING"].format(val=repr(text)))
         self.textItem.setText(text)

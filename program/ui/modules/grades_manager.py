@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-12-09
+Last updated:  2022-12-10
 
 Front-end for managing grade reports.
 
@@ -573,10 +573,7 @@ class GradeTableView(GridViewAuto):
 
     def cell_modified(self, properties: dict):
         """Override base method in grid_base.GridView."""
-        try:
-            new_value = properties["VALUE"]
-        except KeyError:
-            new_value = properties["TEXT"]
+        new_value = properties["VALUE"]
         pid = properties["PID"]
         sid = properties["SID"]
         grades = self.grade_table["PUPIL_GRADES"][pid]

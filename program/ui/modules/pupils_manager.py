@@ -1,7 +1,7 @@
 """
 ui/modules/pupils_manager.py
 
-Last updated:  2022-12-09
+Last updated:  2022-12-10
 
 Front-end for managing pupil data.
 
@@ -47,7 +47,8 @@ T = TRANSLATIONS("ui.modules.pupils_manager")
 
 from core.db_access import open_database, db_values
 from core.basic_data import get_classes
-from core.pupils import get_pupil_fields, get_pupils
+from core.classes import build_group_data, atomic_maps
+from core.pupils import get_pupil_fields, get_pupils, pupil_data
 from local.local_pupils import get_sortname
 from ui.ui_base import (
     # QtWidgets
@@ -74,6 +75,7 @@ from ui.cell_editors import (
     CellEditorLine,
     CellEditorDate,
     CellEditorTable,
+    CellEditorCheckList,
 )
 
 ### -----
@@ -81,7 +83,6 @@ from ui.cell_editors import (
 def init():
     MAIN_WIDGET.add_tab(ManagePupils())
 
-# ++++++++++++++ The widget implementation ++++++++++++++
 
 class ManagePupils(Page):
     name = T["MODULE_NAME"]
@@ -101,6 +102,7 @@ class ManagePupils(Page):
     def is_modified(self):
         return self.pupil_manager.modified()
 
+# ++++++++++++++ The widget implementation ++++++++++++++
 
 class PupilManager(QWidget):
     def __init__(self):
@@ -113,6 +115,7 @@ class PupilManager(QWidget):
         hbox.setStretchFactor(vboxl, 1)
 
         # The class data table, etc.
+#TODO: Perhaps without QStackedWidget ... maybe the plain table is enough.
         self.data_view = QStackedWidget()
         #        EdiTableWidget()
         vboxl.addWidget(self.data_view)
@@ -125,7 +128,7 @@ class PupilManager(QWidget):
         formbox.addRow(T["CLASS"], self.class_selector)
 
 #TODO: pass open_editor handler?
-        self.pupil_table = TableWidget()
+        self.pupil_table = TableWidget(edit_handler=self.edit_cell)
         self.data_view.addWidget(self.pupil_table)
 
     def modified(self):
@@ -144,7 +147,9 @@ class PupilManager(QWidget):
         class_list = classes.get_class_list()
         self.field_editors = []
         headers = []
-        for vec in self.pupil_fields_map.values():
+        self.field_list = []
+        for f, vec in self.pupil_fields_map.items():
+            self.field_list.append(f)
             headers.append(vec[0])
             e = vec[1]
             if e == "CLASS_CHOICE":
@@ -156,9 +161,8 @@ class PupilManager(QWidget):
 #TODO
                 editor = CellEditorSortName().activate
             elif e == "GROUPS":
-#TODO
-                editor = CellEditorGroups(classes).activate
-# use classes[klass].divisions
+                self.group_editor = CellEditorGroups(classes)
+                editor = self.group_editor.activate
             elif e == "LINE":
                 editor = CellEditorLine().activate
             elif e == "DATE_OR_EMPTY":
@@ -185,10 +189,10 @@ class PupilManager(QWidget):
 
     def changed_class(self, klass):
         # print("TODO: Change to class", klass)
-        pupils = get_pupils(klass)
-        self.pupil_table.setRowCount(len(pupils))
+        self.pupil_list = get_pupils(klass, use_cache=False)
+        self.pupil_table.setRowCount(len(self.pupil_list))
         row = 0
-        for pdata in pupils:
+        for pdata in self.pupil_list:
             col = 0
             for f in self.pupil_fields_map:
                 self.pupil_table.setItem(row, col, CellItem(pdata[f]))
@@ -197,7 +201,22 @@ class PupilManager(QWidget):
         # hHd = self.pupil_table.horizontalHeader()
         self.pupil_table.resizeColumnsToContents()
         # hHd.setStretchLastSection(True)
+        self.group_editor.set_class(klass)
         return True # confirm acceptance to the <KeySelector>.
+
+    def edit_cell(self, r, c, pos):
+        pdata = self.pupil_list[r]
+        properties = {
+            "ROW_DATA": pdata,
+            "VALUE": pdata[self.field_list[c]],
+        }
+        editor = self.field_editors[c]
+        if editor(pos, properties):
+            print("====>", properties)
+#TODO
+#                update db and display
+
+
 
 ########+++ field editors
 # CLASS: an existing class. Note that if this is changed the pupil should
@@ -241,8 +260,8 @@ class PupilManager(QWidget):
 ########---
 
 class TableWidget(QTableWidget):
-    def __init__(self, parent=None, changed_callback=None):
-        self.changed_callback = changed_callback
+    def __init__(self, parent=None, edit_handler=None):
+        self.edit_handler = edit_handler
         super().__init__(parent=parent)
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 #        self.setEditTriggers(
@@ -279,41 +298,12 @@ class TableWidget(QTableWidget):
             super().keyPressEvent(e)
 
     def clicked(self, r, c):
-        if self.click_pending:
+        if self.click_pending and self.edit_handler:
             x = self.columnViewportPosition(c)
             y = self.rowViewportPosition(r)
             pos = self.mapToGlobal(QPoint(x, y))
             print("CLICKED", r, c, pos)
-#TODO
-#            editor = self.field_editors[c]
-#            if editor(pos, properties):
-#                update db and display
-# Where to store the properties? In the items, or in a separate store?
-# Exactly what info is required?
-# How about this:
-# The editors are associated with columns and are initialized with any
-# info not dependent on the row, The row data is supplied in the
-# properties <dict>, along with the current cell value. The editor
-# returns the new cell value – if edited – and the displayed value
-# can be calculated from the column "delegate" (if any). Presumably
-# the editor would also need access to the "delegate" for displaying
-# choices, etc.
-
-#            properties = {
-#                "PUPIL_DATA": self.pupil_data[r],
-#                "GROUP_DIVISIONS": self.group_divisions,
-#                "VALUE": self.values[r][c],
-# The values need to stored in such a way that the database can be
-# updated when there is a change, which means association with a pupil-id
-# and a field name.
-#                "COLUMN_DELEGATE": self.column_delegates[c]
-#            }
-# As several fields may not be empty, it might be sensible to provide a
-# separate form for entry of the data for a new pupil. This would then
-# be submitted when complete, not field for field.
-# Of course this form could also be used for editing individual fields.
-# In that case the class table wouldn't need editing functions (except,
-# perhaps, deletion ... but is deletion at all permitted?)
+            self.edit_handler(r, c, pos)
 
     def pressed(self, r, c):
         km = APP.queryKeyboardModifiers()
@@ -332,8 +322,6 @@ class CellItem(QTableWidgetItem):
     def __init__(self, text):
         super().__init__(text)
         self.__properties = {"TEXT": text, "VALUE": text}
-
-#TODO: How to get cell coordinates for popup?
 
 ####################################################
 ### Specialized cell editors for the pupil table ###
@@ -356,32 +344,83 @@ class CellEditorPid(QDialog):
         self.lineedit.returnPressed.connect(self.accept)
 
     def activate(self, pos, properties):
-        text0 = properties["TEXT"]
+        text0 = properties["VALUE"]
         self.lineedit.setText(text0)
         self.move(pos)
         if self.exec():
             text = self.lineedit.text()
+            # A new pupil-id may not be null ...
+            if text:
+                if text != text0:
+                    # ... and may not be in use
+                    if pupil_data(text, allow_none=True):
+                        SHOW_ERROR(T["PID_EXISTS"].format(pid=text))
+                    else:
+                        properties["VALUE"] = text
+                        return True
+            else:
+                SHOW_ERROR(T["NULL_PID"])
+        return False
+
+
+class CellEditorSortName(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        vbox = QVBoxLayout(self)
+        self.lineedit = QLineEdit(self)
+        vbox.addWidget(self.lineedit)
+        self.lineedit.returnPressed.connect(self.accept)
+
+    def activate(self, pos, properties):
+        text0 = properties["VALUE"]
+        if text0:
+            self.lineedit.setText(text0)
+        else:
+            # Generate a default sorting name
+            self.lineedit.setText(get_sortname(properties["ROW_DATA"]))
+        self.move(pos)
+        if self.exec():
+            text = self.lineedit.text()
             if text != text0:
-                if pupil_data(text):
-                    properties["TEXT"] = text
+                # Check that it is unique
+                if db_check_unique_entry("PUPILS", SORT_NAME=text):
+                    SHOW_ERROR(T["SORT_NAME_EXISTS"])
+                else:
+                    properties["VALUE"] = text
                     return True
-                SHOW_ERROR(T["PID_EXISTS"].format(pid=text))
         return False
 
 
 #TODO
-class CellEditorSortName(QDialog):
-    def activate(self, pos, properties):
-# use get_sortname(pdata) if no text
-        pass
-
-#TODO
-class CellEditorGroups(QDialog):
+class CellEditorGroups(CellEditorCheckList):
+    """The groups field is a somewhat optional field – the program
+    doesn't necessarily need any group information. However, membership
+    of certain groups may be important, e.g. if it affects the grading.
+    """
+# I suppose ideally it would be some sort of check-box affair with
+# illegal combinations being forbidden.
     def __init__(self, classes):
-        self.classes = classes
+        self.__classes = classes
+        super().__init__()
 
-    def activate(self, pos, properties):
-        pass
+    def set_class(self, klass):
+        divisions = self.__classes[klass].divisions
+        gdata = build_group_data(divisions)
+        self.__g2atoms = {
+            g: set(atoms) for g, atoms in atomic_maps(
+                gdata["MINIMAL_SUBGROUPS"], list(gdata["GROUP_MAP"])
+            ).items() if g and '.' not in g
+        }
+#
+        print("\n ... Atoms:", self.__g2atoms)
+        self.set_list(self.__g2atoms)
+
+    def item_changed(self, lwi):
+#TODO: Check validity if adding a group
+
+        if lwi.checkState() == Qt.CheckState.Checked:
+            g = lwi.text()
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

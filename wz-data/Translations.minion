@@ -119,6 +119,8 @@ ui.modules.pupils_manager: {
     # Messages
     PID_WARNING:    "WARNUNG: Normalerweise sollten Schüler-Kennzeichen nicht geändert werden!"
     PID_EXISTS:         "Schüler-Kennzeichen existiert schon: '{pid}'"
+    NULL_PID:           "Leeres Schüler-Kennzeichen"
+    SORT_NAME_EXISTS: "Der Sortiername existiert schon"
 }
 
 ui.modules.teachers: {
