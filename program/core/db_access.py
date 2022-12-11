@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-12-10
+Last updated:  2022-12-11
 
 Helper functions for accessing the database.
 
@@ -248,7 +248,7 @@ def db_read_unique_entry(table, *wheres, **keys):
 
 def db_check_unique_entry(table, *wheres, **keys):
     try:
-        flist, rlist = db_read_table(table, None, *wheres, **keys)
+        flist, vlist = db_read_unique_entry(table, *wheres, **keys)
         return True
     except NoRecord:
         return False

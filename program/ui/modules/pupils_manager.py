@@ -1,7 +1,7 @@
 """
 ui/modules/pupils_manager.py
 
-Last updated:  2022-12-10
+Last updated:  2022-12-11
 
 Front-end for managing pupil data.
 
@@ -27,7 +27,7 @@ Copyright 2022 Michael Towers
 #####################################################
 
 if __name__ == "__main__":
-    import sys, os, builtins
+    import sys, os
 
     this = sys.path[0]
     appdir = os.path.dirname(os.path.dirname(this))
@@ -45,10 +45,16 @@ T = TRANSLATIONS("ui.modules.pupils_manager")
 
 ### +++++
 
-from core.db_access import open_database, db_values
+from core.db_access import (
+    open_database,
+    db_update_field,
+    db_new_row,
+    db_check_unique_entry,
+    db_delete_rows,
+)
 from core.basic_data import get_classes
 from core.classes import build_group_data, atomic_maps
-from core.pupils import get_pupil_fields, get_pupils, pupil_data
+from core.pupils import get_pupil_fields, get_pupils, pupil_data, pupil_name
 from local.local_pupils import get_sortname
 from ui.ui_base import (
     # QtWidgets
@@ -58,7 +64,6 @@ from ui.ui_base import (
     QVBoxLayout,
     QLabel,
     QPushButton,
-    QStackedWidget,
     QFormLayout,
     QTableWidget,
     QTableWidgetItem,
@@ -69,7 +74,6 @@ from ui.ui_base import (
     # Others
     APP,
     KeySelector,
-    run,
 )
 from ui.cell_editors import (
     CellEditorLine,
@@ -115,32 +119,27 @@ class PupilManager(QWidget):
         hbox.setStretchFactor(vboxl, 1)
 
         # The class data table, etc.
-#TODO: Perhaps without QStackedWidget ... maybe the plain table is enough.
-        self.data_view = QStackedWidget()
-        #        EdiTableWidget()
-        vboxl.addWidget(self.data_view)
-#        self.pupil_data_table.signal_modified.connect(self.updated)
+        self.pupil_table = TableWidget(edit_handler=self.edit_cell)
+        vboxl.addWidget(self.pupil_table)
 
         # Various "controls" in the panel on the right
         formbox = QFormLayout()
         vboxr.addLayout(formbox)
         self.class_selector = KeySelector(changed_callback=self.changed_class)
         formbox.addRow(T["CLASS"], self.class_selector)
-
-#TODO: pass open_editor handler?
-        self.pupil_table = TableWidget(edit_handler=self.edit_cell)
-        self.data_view.addWidget(self.pupil_table)
+        del_pupil = QPushButton(T["REMOVE_PUPIL"])
+        del_pupil.clicked.connect(self.remove_pupil)
+        vboxr.addWidget(del_pupil)
+        add_pupil = QPushButton(T["NEW_PUPIL"])
+        add_pupil.clicked.connect(self.new_pupil)
+        vboxr.addWidget(add_pupil)
 
     def modified(self):
         """Return <True> if there are unsaved changes.
         """
-#TODO: test whether there really are any changes?
-        return True
+        return False    # All changes are done immediately
 
     def init_data(self):
-
-        print("TODO: INIT")
-
         self.pupil_fields_map = get_pupil_fields()
         self.pupil_table.setColumnCount(len(self.pupil_fields_map))
         classes = get_classes()
@@ -158,7 +157,6 @@ class PupilManager(QWidget):
             elif e == "PID":
                 editor = CellEditorPid().activate
             elif e == "SORT_NAME":
-#TODO
                 editor = CellEditorSortName().activate
             elif e == "GROUPS":
                 self.group_editor = CellEditorGroups(classes)
@@ -166,9 +164,9 @@ class PupilManager(QWidget):
             elif e == "LINE":
                 editor = CellEditorLine().activate
             elif e == "DATE_OR_EMPTY":
-                editor = CellEditorDate(empty_ok = True)
+                editor = CellEditorDate(empty_ok = True).activate
             elif e == "DATE":
-                editor = CellEditorDate(empty_ok = False)
+                editor = CellEditorDate(empty_ok = False).activate
             elif e == "CHOICE":
                 vlist = [[[v], ""] for v in vec[2]]
                 editor = CellEditorTable(vlist).activate
@@ -178,45 +176,49 @@ class PupilManager(QWidget):
             else:
                 #TODO?
                 editor = None
-
-
             self.field_editors.append(editor)
         self.pupil_table.setHorizontalHeaderLabels(headers)
-
         self.class_selector.set_items(class_list)
-
         self.class_selector.trigger()
 
     def changed_class(self, klass):
-        # print("TODO: Change to class", klass)
         self.pupil_list = get_pupils(klass, use_cache=False)
         self.pupil_table.setRowCount(len(self.pupil_list))
         row = 0
         for pdata in self.pupil_list:
             col = 0
             for f in self.pupil_fields_map:
-                self.pupil_table.setItem(row, col, CellItem(pdata[f]))
+                self.pupil_table.setItem(row, col, QTableWidgetItem(pdata[f]))
                 col += 1
             row += 1
         # hHd = self.pupil_table.horizontalHeader()
         self.pupil_table.resizeColumnsToContents()
         # hHd.setStretchLastSection(True)
         self.group_editor.set_class(klass)
+        self.klass = klass
         return True # confirm acceptance to the <KeySelector>.
 
     def edit_cell(self, r, c, pos):
         pdata = self.pupil_list[r]
+        field = self.field_list[c]
         properties = {
             "ROW_DATA": pdata,
-            "VALUE": pdata[self.field_list[c]],
+            "VALUE": pdata[field],
         }
         editor = self.field_editors[c]
         if editor(pos, properties):
             print("====>", properties)
-#TODO
-#                update db and display
+            # Update db and display
+            val = properties["VALUE"]
+            pid = pdata["PID"]
+            if not db_update_field("PUPILS", field, val, PID=pid):
+                raise Bug(f"PUPILS: update of {field} to {val} for {pid} failed")
+            pdata[field] = val
+#TODO: What about a "delegate", to show a display version of the value?
+            self.pupil_table.item(r, c).setText(val)
 
-
+#TODO: What about changing class? Perhaps this should be blocked? There
+# could be a special button to move a selected pupil to another class?
 
 ########+++ field editors
 # CLASS: an existing class. Note that if this is changed the pupil should
@@ -259,6 +261,38 @@ class PupilManager(QWidget):
 # At least CLASS, PID, GROUPS and LEVEL would need special handlers.
 ########---
 
+    def new_pupil(self):
+        """Add a dummy pupil to the class and redisplay the pupils.
+        """
+        field_data = CONFIG["DUMMY_PUPIL"]
+        db_new_row("PUPILS", CLASS=self.klass, **dict(field_data))
+        # Redisplay pupil list
+        self.changed_class(self.klass)
+
+    def remove_pupil(self):
+        # Get table selection
+        try:
+            sel_range = self.pupil_table.selectedRanges()[0]
+        except IndexError:
+            print("§§§§§ NO SELECETED PUPIL")
+            return
+        pdata_list = [
+            self.pupil_list[row]
+            for row in range(sel_range.topRow(), sel_range.bottomRow()+1)
+        ]
+
+        if SHOW_CONFIRM(T["CONFIRM_DELETE_PUPILS"].format(
+            pnames="\n  ".join(
+                [""] +[pupil_name(pdata) for pdata in pdata_list]
+            )
+        )):
+            db_delete_rows("PUPILS",
+                PID=[pdata["PID"] for pdata in pdata_list]
+            )
+            # Redisplay pupil list
+            self.changed_class(self.klass)
+
+
 class TableWidget(QTableWidget):
     def __init__(self, parent=None, edit_handler=None):
         self.edit_handler = edit_handler
@@ -292,36 +326,34 @@ class TableWidget(QTableWidget):
         e.accept()
         key = e.key()
         if key == Qt.Key_Return:
-            if self.state() != self.EditingState:
-                self.editItem(self.currentItem())
+            self.open_editor(self.currentRow(), self. currentColumn())
         else:
             super().keyPressEvent(e)
 
     def clicked(self, r, c):
-        if self.click_pending and self.edit_handler:
+        if self.click_pending:
+            self.open_editor(r, c)
+
+    def open_editor(self, r, c):
+        if self.edit_handler:
             x = self.columnViewportPosition(c)
             y = self.rowViewportPosition(r)
             pos = self.mapToGlobal(QPoint(x, y))
-            print("CLICKED", r, c, pos)
+            #print("CLICKED", r, c, pos)
             self.edit_handler(r, c, pos)
 
     def pressed(self, r, c):
         km = APP.queryKeyboardModifiers()
         if km & Qt.KeyboardModifier.ShiftModifier:
             return
-        print("Pressed", r, c)
+        #print("Pressed", r, c)
         self.clearSelection() # to avoid multiple selection ranges
         self.click_pending = True
 
     def entered(self, r, c):
-        print("ENTERED", r, c)
+        #print("ENTERED", r, c)
         self.click_pending = False
 
-#???
-class CellItem(QTableWidgetItem):
-    def __init__(self, text):
-        super().__init__(text)
-        self.__properties = {"TEXT": text, "VALUE": text}
 
 ####################################################
 ### Specialized cell editors for the pupil table ###
@@ -382,6 +414,8 @@ class CellEditorSortName(QDialog):
         self.move(pos)
         if self.exec():
             text = self.lineedit.text()
+            if not text:
+                text = get_sortname(properties["ROW_DATA"])
             if text != text0:
                 # Check that it is unique
                 if db_check_unique_entry("PUPILS", SORT_NAME=text):
@@ -412,8 +446,7 @@ class CellEditorGroups(CellEditorCheckList):
                 gdata["MINIMAL_SUBGROUPS"], list(gdata["GROUP_MAP"])
             ).items() if g and '.' not in g
         }
-#
-        print("\n ... Atoms:", self.__g2atoms)
+        #print("\n ... Atoms:", self.__g2atoms)
         self.set_list(self.__g2atoms)
 
     def item_changed(self, lwi):
@@ -429,18 +462,6 @@ if __name__ == "__main__":
     from ui.ui_base import run
 
     widget = ManagePupils()
-#    widget.pupil_manager.class_label.setText("<b>Klasse 02G</b>")
-#    widget.pupil_manager.modified_label.setText("zuletzt geändert: 2021-10-05_20:14")
-# Actually this can be in the main code, using the fixed (translated)
-# column headers ... need to set up the data area.
-#    widget.pupil_manager.pupil_data_table.setup(colheaders = ["PID", "Name"],
-#            undo_redo = True, paste = True,
-#            on_changed = None)
-#    widget.resize(600, 400)
-#    run(widget)
-
-
-#new?
     widget.enter()
     widget.resize(1000, 550)
     run(widget)
