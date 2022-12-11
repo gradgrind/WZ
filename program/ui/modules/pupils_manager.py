@@ -69,6 +69,7 @@ from ui.ui_base import (
     QTableWidgetItem,
     QAbstractItemView,
     QLineEdit,
+    QDialogButtonBox,
     # QtCore
     Qt, QPoint,
     # Others
@@ -126,10 +127,14 @@ class PupilManager(QWidget):
         formbox = QFormLayout()
         vboxr.addLayout(formbox)
         self.class_selector = KeySelector(changed_callback=self.changed_class)
+        self.choose_class = ChooseClass()
         formbox.addRow(T["CLASS"], self.class_selector)
         del_pupil = QPushButton(T["REMOVE_PUPIL"])
         del_pupil.clicked.connect(self.remove_pupil)
         vboxr.addWidget(del_pupil)
+        change_class = QPushButton(T["CHANGE_CLASS"])
+        change_class.clicked.connect(self.do_class_change)
+        vboxr.addWidget(change_class)
         add_pupil = QPushButton(T["NEW_PUPIL"])
         add_pupil.clicked.connect(self.new_pupil)
         vboxr.addWidget(add_pupil)
@@ -152,8 +157,7 @@ class PupilManager(QWidget):
             headers.append(vec[0])
             e = vec[1]
             if e == "CLASS_CHOICE":
-                vlist = [[[v], text] for v, text in class_list]
-                editor = CellEditorTable(vlist).activate
+                editor = None
             elif e == "PID":
                 editor = CellEditorPid().activate
             elif e == "SORT_NAME":
@@ -179,6 +183,7 @@ class PupilManager(QWidget):
             self.field_editors.append(editor)
         self.pupil_table.setHorizontalHeaderLabels(headers)
         self.class_selector.set_items(class_list)
+        self.choose_class.set_items(class_list)
         self.class_selector.trigger()
 
     def changed_class(self, klass):
@@ -206,7 +211,7 @@ class PupilManager(QWidget):
             "VALUE": pdata[field],
         }
         editor = self.field_editors[c]
-        if editor(pos, properties):
+        if editor and editor(pos, properties):
             print("====>", properties)
             # Update db and display
             val = properties["VALUE"]
@@ -217,49 +222,14 @@ class PupilManager(QWidget):
 #TODO: What about a "delegate", to show a display version of the value?
             self.pupil_table.item(r, c).setText(val)
 
-#TODO: What about changing class? Perhaps this should be blocked? There
+#TODO: What about changing class? The pupil should then disappear from
+# the current table. Perhaps this should be blocked? There
 # could be a special button to move a selected pupil to another class?
 
-########+++ field editors
-# CLASS: an existing class. Note that if this is changed the pupil should
-# disappear from the table!
-# --- CHOICE or CHOICE_MAP ... from available classes
-# PID: normally not editable. If I do allow editing there should perhaps
-# be a warning, and a check that the result is valid, whatever that means.
-# --- LINE ... but possibly with validator
-# SORT_NAME: This can be a simple text-line editor.
-# --- LINE
-# LASTNAME, FIRSTNAMES, FIRSTNAME: also normal text-line editors
-# --- LINE
-# GROUPS: ideally a sort-of check list of available groups for the class.
-# Actually, rather more complicated as groups within a division are
-# mutually exclusive.
-# DATE_EXIT: a date popup – probably without restrictions, but empty must
-# be possible
-# --- DATE_OR_EMPTY
-# LEVEL: This could be a choice from the grades configuration?
-# --- CHOICE or CHOICE_MAP ... from available levels (in GRADE_CONFIG)
-# DATE_ENTRY: a date popup – probably without restrictions
-# --- DATE
-# DATE_BIRTH: a date popup – probably without restrictions
-# --- DATE
-# BIRTHPLACE: a simple text-line editor
-# --- LINE
-# SEX: a choice, from the base configuration
-# --- CHOICE [m w]
-# HOME: a simple text-line editor
-# --- LINE
-# DATE_QPHASE: a date popup – probably without restrictions, but empty
-# must be possible
-# --- DATE_OR_EMPTY
-
-# At least the last one is specific to certain schools, not a general
-# requirement. So surely the handler should be specified in a config
-# file. Some handlers cannot easily be restricted to the config, so
-# maybe there would need to be some sort of combination, special handlers
-# for some fields in the code module.
-# At least CLASS, PID, GROUPS and LEVEL would need special handlers.
-########---
+# Some field handlers are specific to certain schools/situations, so
+# the handler should be specified in a config file.
+# Some special handlers are required for certain fields – these are
+# defined separately from the more general handlers.
 
     def new_pupil(self):
         """Add a dummy pupil to the class and redisplay the pupils.
@@ -269,12 +239,28 @@ class PupilManager(QWidget):
         # Redisplay pupil list
         self.changed_class(self.klass)
 
+    def do_class_change(self):
+        # Get table selection
+        try:
+            sel_range = self.pupil_table.selectedRanges()[0]
+        except IndexError:
+            #print("§§§§§ NO SELECETED PUPIL")
+            return
+        pdata_list = [
+            self.pupil_list[row]
+            for row in range(sel_range.topRow(), sel_range.bottomRow()+1)
+        ]
+        k = self.choose_class.activate(self.klass)
+        if k:
+#TODO
+            print("§§§§§§§§ -->", k)
+
     def remove_pupil(self):
         # Get table selection
         try:
             sel_range = self.pupil_table.selectedRanges()[0]
         except IndexError:
-            print("§§§§§ NO SELECETED PUPIL")
+            #print("§§§§§ NO SELECETED PUPIL")
             return
         pdata_list = [
             self.pupil_list[row]
@@ -355,6 +341,18 @@ class TableWidget(QTableWidget):
         self.click_pending = False
 
 
+#TODO
+class ChooseClass(QDialog):
+    def __init__(self):
+        pass
+
+    def set_items(self, kv_list):
+        pass
+
+    def activate(self, klass):
+        return None     # or selected class
+
+
 ####################################################
 ### Specialized cell editors for the pupil table ###
 ####################################################
@@ -370,10 +368,17 @@ class CellEditorPid(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         vbox = QVBoxLayout(self)
         label = QLabel(f'<p style="color:#a00000;">{T["PID_WARNING"]}</p>')
+        label.setWordWrap(True)
         vbox.addWidget(label)
         self.lineedit = QLineEdit(self)
         vbox.addWidget(self.lineedit)
         self.lineedit.returnPressed.connect(self.accept)
+        buttonBox = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        vbox.addWidget(buttonBox)
 
     def activate(self, pos, properties):
         text0 = properties["VALUE"]
@@ -403,6 +408,12 @@ class CellEditorSortName(QDialog):
         self.lineedit = QLineEdit(self)
         vbox.addWidget(self.lineedit)
         self.lineedit.returnPressed.connect(self.accept)
+        buttonBox = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        vbox.addWidget(buttonBox)
 
     def activate(self, pos, properties):
         text0 = properties["VALUE"]
@@ -426,14 +437,12 @@ class CellEditorSortName(QDialog):
         return False
 
 
-#TODO
 class CellEditorGroups(CellEditorCheckList):
     """The groups field is a somewhat optional field – the program
     doesn't necessarily need any group information. However, membership
     of certain groups may be important, e.g. if it affects the grading.
+    Only compatible groups may be checked simultaneously.
     """
-# I suppose ideally it would be some sort of check-box affair with
-# illegal combinations being forbidden.
     def __init__(self, classes):
         self.__classes = classes
         super().__init__()
@@ -450,10 +459,13 @@ class CellEditorGroups(CellEditorCheckList):
         self.set_list(self.__g2atoms)
 
     def item_changed(self, lwi):
-#TODO: Check validity if adding a group
-
+        """Check compatibility of groups every time a group is added.
+        """
         if lwi.checkState() == Qt.CheckState.Checked:
-            g = lwi.text()
+            gset = self.get_checked_item_set()
+            isct = set.intersection(*[self.__g2atoms[g] for g in gset])
+            if not isct:
+                lwi.setCheckState(Qt.CheckState.Unchecked)
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#

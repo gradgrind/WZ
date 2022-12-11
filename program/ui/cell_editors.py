@@ -1,7 +1,7 @@
 """
 ui/cell_editors.py
 
-Last updated:  2022-12-10
+Last updated:  2022-12-11
 
 Pop-up editors for table grids.
 
@@ -50,13 +50,21 @@ class CellEditorTable(QDialog):
         super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         vbox = QVBoxLayout(self)
+        hbox = QHBoxLayout()
+        vbox.addLayout(hbox)
         self.table = QTableWidget(self)
         self.table.setSelectionMode(QAbstractItemView.NoSelection)
-        vbox.addWidget(self.table)
+        hbox.addWidget(self.table)
         self.table.horizontalHeader().hide()
         self.table.verticalHeader().hide()
         self.table.itemActivated.connect(self._select)
         self.table.itemClicked.connect(self._select)
+        buttonBox = QDialogButtonBox(
+            QDialogButtonBox.Cancel
+        )
+        buttonBox.setOrientation(Qt.Orientation.Vertical)
+        buttonBox.rejected.connect(self.reject)
+        hbox.addWidget(buttonBox)
         # Enter the data
         coln = 0
         extracol = 0
@@ -75,7 +83,9 @@ class CellEditorTable(QDialog):
             c = 0
             for val in row[0]:
                 item = QTableWidgetItem(val)
-                item.setTextAlignment(Qt.AlignHCenter)
+                item.setTextAlignment(
+                    Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+                )
                 item.setFlags(
                     Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
                 )
@@ -115,7 +125,8 @@ class CellEditorTable(QDialog):
             self.accept()
 
     def activate(self, pos, properties):
-        self.move(pos)
+        if pos:
+            self.move(pos)
         text0 = properties["VALUE"]
         try:
             self.table.setCurrentItem(self.val2item[text0])
@@ -212,6 +223,12 @@ class CellEditorLine(QDialog):
         self.lineedit = QLineEdit(self)
         vbox.addWidget(self.lineedit)
         self.lineedit.returnPressed.connect(self.accept)
+        buttonBox = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        vbox.addWidget(buttonBox)
 
     def activate(self, pos, properties):
         text0 = properties["VALUE"]

@@ -116,10 +116,12 @@ ui.modules.pupils_manager: {
     MODULE_TITLE:   "Schülerdaten verwalten"
     CLASS:          Klasse
     NEW_PUPIL:  "Neuer Schüler"
+    CHANGE_CLASS: "Klasse wechseln"
     REMOVE_PUPIL: "Schüler entfernen"
     
     # Messages
-    PID_WARNING:    "WARNUNG: Außer für neue Schüler sollte das Kennzeichen normalerweise nicht geändert werden!"
+    PID_WARNING:    "WARNUNG: Außer bei neuen Schülern sollte das Kennzeichen normalerweise nicht geändert werden!"
+    CLASS_WARNING: "WARNUNG: Wenn die Klasse geändert wird, werden die selektierten Schüler aus der Liste für die aktuelle Klasse verschwinden!"
     PID_EXISTS:         "Schüler-Kennzeichen existiert schon: '{pid}'"
     NULL_PID:           "Leeres Schüler-Kennzeichen"
     SORT_NAME_EXISTS: "Der Sortiername existiert schon"
