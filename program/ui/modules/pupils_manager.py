@@ -81,6 +81,7 @@ from ui.cell_editors import (
     CellEditorDate,
     CellEditorTable,
     CellEditorCheckList,
+    CellEditorList,
 )
 
 ### -----
@@ -127,7 +128,6 @@ class PupilManager(QWidget):
         formbox = QFormLayout()
         vboxr.addLayout(formbox)
         self.class_selector = KeySelector(changed_callback=self.changed_class)
-        self.choose_class = ChooseClass()
         formbox.addRow(T["CLASS"], self.class_selector)
         del_pupil = QPushButton(T["REMOVE_PUPIL"])
         del_pupil.clicked.connect(self.remove_pupil)
@@ -183,7 +183,10 @@ class PupilManager(QWidget):
             self.field_editors.append(editor)
         self.pupil_table.setHorizontalHeaderLabels(headers)
         self.class_selector.set_items(class_list)
-        self.choose_class.set_items(class_list)
+        self.choose_class = CellEditorList(
+            *map(list, zip(*class_list)),
+            label=f'<p style="color:#a00000;">{T["CLASS_WARNING"]}</p>'
+        ).activate
         self.class_selector.trigger()
 
     def changed_class(self, klass):
@@ -246,14 +249,18 @@ class PupilManager(QWidget):
         except IndexError:
             #print("§§§§§ NO SELECETED PUPIL")
             return
-        pdata_list = [
-            self.pupil_list[row]
-            for row in range(sel_range.topRow(), sel_range.bottomRow()+1)
-        ]
-        k = self.choose_class.activate(self.klass)
-        if k:
-#TODO
-            print("§§§§§§§§ -->", k)
+        val = {"VALUE": self.klass}
+        if self.choose_class(None, val):
+            pid_list = [
+                self.pupil_list[row]["PID"]
+                for row in range(sel_range.topRow(), sel_range.bottomRow()+1)
+            ]
+            k = val["VALUE"]
+            for pid in pid_list:
+                if not db_update_field("PUPILS", "CLASS", k, PID=pid):
+                    raise Bug(f"PUPILS: update of CLASS to {k} for {pid} failed")
+            # Redisplay pupil list
+            self.changed_class(self.klass)
 
     def remove_pupil(self):
         # Get table selection

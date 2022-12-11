@@ -303,24 +303,33 @@ class CellEditorCheckList(QDialog):
         return cis
 
 
-# TODO
 class CellEditorList(QDialog):
-    def __init__(self, items, display_items=None):
+    def __init__(self, items, display_items=None, label=None):
         super().__init__()
         self.__items = items
         self.__display_items = display_items
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         vbox = QVBoxLayout(self)
+        if label:
+            label = QLabel(label)
+            label.setWordWrap(True)
+            vbox.addWidget(label)
         self.listbox = QListWidget(self)
-        # TODO
+        # TODO?
         #        self.setFixedWidth(60)
         if display_items:
             self.listbox.addItems(display_items)
         else:
             self.listbox.addItems(items)
-        # Width?
         vbox.addWidget(self.listbox)
         self.listbox.itemClicked.connect(self.accept)
+        self.listbox.itemActivated.connect(self.accept)
+        buttonBox = QDialogButtonBox(
+            QDialogButtonBox.Cancel
+        )
+        #buttonBox.setOrientation(Qt.Orientation.Vertical)
+        buttonBox.rejected.connect(self.reject)
+        vbox.addWidget(buttonBox)
 
     def activate(self, pos, properties):
         text0 = properties["VALUE"]
@@ -330,7 +339,8 @@ class CellEditorList(QDialog):
             pass
         else:
             self.listbox.setCurrentRow(i)
-        self.move(pos)
+        if pos:
+            self.move(pos)
         if self.exec():
             # TODO: especially for the case when display items are used
             i = self.listbox.currentRow()
