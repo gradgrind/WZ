@@ -1,7 +1,7 @@
 """
 ui/cell_editors.py
 
-Last updated:  2022-12-11
+Last updated:  2022-12-12
 
 Pop-up editors for table grids.
 
@@ -342,7 +342,6 @@ class CellEditorList(QDialog):
         if pos:
             self.move(pos)
         if self.exec():
-            # TODO: especially for the case when display items are used
             i = self.listbox.currentRow()
             text = self.__items[i]
             if text != text0:

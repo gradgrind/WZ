@@ -1,7 +1,7 @@
 """
 ui/modules/pupils_manager.py
 
-Last updated:  2022-12-11
+Last updated:  2022-12-12
 
 Front-end for managing pupil data.
 
@@ -35,6 +35,7 @@ if __name__ == "__main__":
     basedir = os.path.dirname(appdir)
     from core.base import start
     from ui.ui_base import StandalonePage as Page
+
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
@@ -65,17 +66,15 @@ from ui.ui_base import (
     QLabel,
     QPushButton,
     QFormLayout,
-    QTableWidget,
     QTableWidgetItem,
-    QAbstractItemView,
     QLineEdit,
     QDialogButtonBox,
     # QtCore
-    Qt, QPoint,
+    Qt,
     # Others
-    APP,
     KeySelector,
 )
+from ui.simple_table import TableWidget
 from ui.cell_editors import (
     CellEditorLine,
     CellEditorDate,
@@ -85,6 +84,7 @@ from ui.cell_editors import (
 )
 
 ### -----
+
 
 def init():
     MAIN_WIDGET.add_tab(ManagePupils())
@@ -108,7 +108,9 @@ class ManagePupils(Page):
     def is_modified(self):
         return self.pupil_manager.modified()
 
+
 # ++++++++++++++ The widget implementation ++++++++++++++
+
 
 class PupilManager(QWidget):
     def __init__(self):
@@ -140,9 +142,8 @@ class PupilManager(QWidget):
         vboxr.addWidget(add_pupil)
 
     def modified(self):
-        """Return <True> if there are unsaved changes.
-        """
-        return False    # All changes are done immediately
+        """Return <True> if there are unsaved changes."""
+        return False  # All changes are done immediately
 
     def init_data(self):
         self.pupil_fields_map = get_pupil_fields()
@@ -168,9 +169,9 @@ class PupilManager(QWidget):
             elif e == "LINE":
                 editor = CellEditorLine().activate
             elif e == "DATE_OR_EMPTY":
-                editor = CellEditorDate(empty_ok = True).activate
+                editor = CellEditorDate(empty_ok=True).activate
             elif e == "DATE":
-                editor = CellEditorDate(empty_ok = False).activate
+                editor = CellEditorDate(empty_ok=False).activate
             elif e == "CHOICE":
                 vlist = [[[v], ""] for v in vec[2]]
                 editor = CellEditorTable(vlist).activate
@@ -178,14 +179,14 @@ class PupilManager(QWidget):
                 vlist = [[[v], text] for v, text in vec[2]]
                 editor = CellEditorTable(vlist).activate
             else:
-                #TODO?
+                # TODO?
                 editor = None
             self.field_editors.append(editor)
         self.pupil_table.setHorizontalHeaderLabels(headers)
         self.class_selector.set_items(class_list)
         self.choose_class = CellEditorList(
             *map(list, zip(*class_list)),
-            label=f'<p style="color:#a00000;">{T["CLASS_WARNING"]}</p>'
+            label=f'<p style="color:#a00000;">{T["CLASS_WARNING"]}</p>',
         ).activate
         self.class_selector.trigger()
 
@@ -204,7 +205,7 @@ class PupilManager(QWidget):
         # hHd.setStretchLastSection(True)
         self.group_editor.set_class(klass)
         self.klass = klass
-        return True # confirm acceptance to the <KeySelector>.
+        return True  # confirm acceptance to the <KeySelector>.
 
     def edit_cell(self, r, c, pos):
         pdata = self.pupil_list[r]
@@ -220,23 +221,24 @@ class PupilManager(QWidget):
             val = properties["VALUE"]
             pid = pdata["PID"]
             if not db_update_field("PUPILS", field, val, PID=pid):
-                raise Bug(f"PUPILS: update of {field} to {val} for {pid} failed")
+                raise Bug(
+                    f"PUPILS: update of {field} to {val} for {pid} failed"
+                )
             pdata[field] = val
-#TODO: What about a "delegate", to show a display version of the value?
+            # TODO: What about a "delegate", to show a display version of the value?
             self.pupil_table.item(r, c).setText(val)
 
-#TODO: What about changing class? The pupil should then disappear from
-# the current table. Perhaps this should be blocked? There
-# could be a special button to move a selected pupil to another class?
+    # TODO: What about changing class? The pupil should then disappear from
+    # the current table. Perhaps this should be blocked? There
+    # could be a special button to move a selected pupil to another class?
 
-# Some field handlers are specific to certain schools/situations, so
-# the handler should be specified in a config file.
-# Some special handlers are required for certain fields – these are
-# defined separately from the more general handlers.
+    # Some field handlers are specific to certain schools/situations, so
+    # the handler should be specified in a config file.
+    # Some special handlers are required for certain fields – these are
+    # defined separately from the more general handlers.
 
     def new_pupil(self):
-        """Add a dummy pupil to the class and redisplay the pupils.
-        """
+        """Add a dummy pupil to the class and redisplay the pupils."""
         field_data = CONFIG["DUMMY_PUPIL"]
         db_new_row("PUPILS", CLASS=self.klass, **dict(field_data))
         # Redisplay pupil list
@@ -247,18 +249,20 @@ class PupilManager(QWidget):
         try:
             sel_range = self.pupil_table.selectedRanges()[0]
         except IndexError:
-            #print("§§§§§ NO SELECETED PUPIL")
+            # print("§§§§§ NO SELECETED PUPIL")
             return
         val = {"VALUE": self.klass}
         if self.choose_class(None, val):
             pid_list = [
                 self.pupil_list[row]["PID"]
-                for row in range(sel_range.topRow(), sel_range.bottomRow()+1)
+                for row in range(sel_range.topRow(), sel_range.bottomRow() + 1)
             ]
             k = val["VALUE"]
             for pid in pid_list:
                 if not db_update_field("PUPILS", "CLASS", k, PID=pid):
-                    raise Bug(f"PUPILS: update of CLASS to {k} for {pid} failed")
+                    raise Bug(
+                        f"PUPILS: update of CLASS to {k} for {pid} failed"
+                    )
             # Redisplay pupil list
             self.changed_class(self.klass)
 
@@ -267,97 +271,23 @@ class PupilManager(QWidget):
         try:
             sel_range = self.pupil_table.selectedRanges()[0]
         except IndexError:
-            #print("§§§§§ NO SELECETED PUPIL")
+            # print("§§§§§ NO SELECETED PUPIL")
             return
         pdata_list = [
             self.pupil_list[row]
-            for row in range(sel_range.topRow(), sel_range.bottomRow()+1)
+            for row in range(sel_range.topRow(), sel_range.bottomRow() + 1)
         ]
 
-        if SHOW_CONFIRM(T["CONFIRM_DELETE_PUPILS"].format(
-            pnames="\n  ".join(
-                [""] +[pupil_name(pdata) for pdata in pdata_list]
+        if SHOW_CONFIRM(
+            T["CONFIRM_DELETE_PUPILS"].format(
+                pnames="\n  ".join(
+                    [""] + [pupil_name(pdata) for pdata in pdata_list]
+                )
             )
-        )):
-            db_delete_rows("PUPILS",
-                PID=[pdata["PID"] for pdata in pdata_list]
-            )
+        ):
+            db_delete_rows("PUPILS", PID=[pdata["PID"] for pdata in pdata_list])
             # Redisplay pupil list
             self.changed_class(self.klass)
-
-
-class TableWidget(QTableWidget):
-    def __init__(self, parent=None, edit_handler=None):
-        self.edit_handler = edit_handler
-        super().__init__(parent=parent)
-        self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-#        self.setEditTriggers(
-#            QAbstractItemView.EditTrigger.DoubleClicked
-#            | QAbstractItemView.EditTrigger.AnyKeyPressed
-#            | QAbstractItemView.EditTrigger.SelectedClicked  # this one has a delay!
-#        )
-        # Note that the <Return> key doesn't cause the editor to be opened,
-        # so there is an event handling that ... see method <keyPressEvent>.
-
-        # Change stylesheet to make the selected cell more visible
-        self.setStyleSheet(
-            """QTableView {
-               selection-background-color: #f0e0ff;
-               selection-color: black;
-            }
-            QTableView::item:focus {
-                selection-background-color: #d0ffff;
-            }
-            """
-        )
-        self.cellClicked.connect(self.clicked)
-        self.cellPressed.connect(self.pressed)
-        self.cellEntered.connect(self.entered)
-        self.click_pending = False
-
-    def keyPressEvent(self, e):
-        e.accept()
-        key = e.key()
-        if key == Qt.Key_Return:
-            self.open_editor(self.currentRow(), self. currentColumn())
-        else:
-            super().keyPressEvent(e)
-
-    def clicked(self, r, c):
-        if self.click_pending:
-            self.open_editor(r, c)
-
-    def open_editor(self, r, c):
-        if self.edit_handler:
-            x = self.columnViewportPosition(c)
-            y = self.rowViewportPosition(r)
-            pos = self.mapToGlobal(QPoint(x, y))
-            #print("CLICKED", r, c, pos)
-            self.edit_handler(r, c, pos)
-
-    def pressed(self, r, c):
-        km = APP.queryKeyboardModifiers()
-        if km & Qt.KeyboardModifier.ShiftModifier:
-            return
-        #print("Pressed", r, c)
-        self.clearSelection() # to avoid multiple selection ranges
-        self.click_pending = True
-
-    def entered(self, r, c):
-        #print("ENTERED", r, c)
-        self.click_pending = False
-
-
-#TODO
-class ChooseClass(QDialog):
-    def __init__(self):
-        pass
-
-    def set_items(self, kv_list):
-        pass
-
-    def activate(self, klass):
-        return None     # or selected class
 
 
 ####################################################
@@ -370,6 +300,7 @@ class CellEditorPid(QDialog):
     normally be handled automatically, a manual change being generally
     undesirable.
     """
+
     def __init__(self):
         super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -450,6 +381,7 @@ class CellEditorGroups(CellEditorCheckList):
     of certain groups may be important, e.g. if it affects the grading.
     Only compatible groups may be checked simultaneously.
     """
+
     def __init__(self, classes):
         self.__classes = classes
         super().__init__()
@@ -458,16 +390,17 @@ class CellEditorGroups(CellEditorCheckList):
         divisions = self.__classes[klass].divisions
         gdata = build_group_data(divisions)
         self.__g2atoms = {
-            g: set(atoms) for g, atoms in atomic_maps(
+            g: set(atoms)
+            for g, atoms in atomic_maps(
                 gdata["MINIMAL_SUBGROUPS"], list(gdata["GROUP_MAP"])
-            ).items() if g and '.' not in g
+            ).items()
+            if g and "." not in g
         }
-        #print("\n ... Atoms:", self.__g2atoms)
+        # print("\n ... Atoms:", self.__g2atoms)
         self.set_list(self.__g2atoms)
 
     def item_changed(self, lwi):
-        """Check compatibility of groups every time a group is added.
-        """
+        """Check compatibility of groups every time a group is added."""
         if lwi.checkState() == Qt.CheckState.Checked:
             gset = self.get_checked_item_set()
             isct = set.intersection(*[self.__g2atoms[g] for g in gset])
