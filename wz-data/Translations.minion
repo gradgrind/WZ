@@ -110,6 +110,13 @@ ui.grid_base: {
     NOT_STRING: "Kachelwert muss eine Zeichenkette sein, nicht: {val}"
 }
 
+ui.simple_table: {
+    NO_SELECTION: "Keine Zellen ausgewählt"
+    PASTE_RANGE_NOT_RECTANGULAR: "Einzufügender Bereich nicht rechteckig"
+    CLIPBOARD_EMPTY: "Die Zwischenablage ist leer"
+    BAD_PASTE_RANGE: "Die Dimensionen der einzufügenden Daten sind nicht kompatibel mit dem ausgewählten Bereich."
+}
+
 ui.modules.pupils_manager: {
     # Labels
     MODULE_NAME:    Schüler
