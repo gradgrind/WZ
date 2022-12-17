@@ -96,7 +96,6 @@ class TableWidget(QTableWidget):
 
     def clicked(self, r, c):
         if self.click_pending:
-            print("EDIT", r, c)
             self.open_editor(r, c)
 
     def open_editor(self, r, c):
@@ -105,9 +104,9 @@ class TableWidget(QTableWidget):
             y = self.rowViewportPosition(r)
             pos = self.mapToGlobal(QPoint(x, y))
             # print("CLICKED", r, c, pos)
-            props = {"VALUE": self.read_cell(r, c)}
-            if self.edit_handler(pos, props):
-                self.write_cell(r, c, props["VALUE"])
+            val = self.edit_handler(r, c, pos)
+            if val != None:
+                self.write_cell(r, c, val)
 
     def pressed(self, r, c):
         km = QApplication.instance().queryKeyboardModifiers()
@@ -264,13 +263,22 @@ class TableWidget(QTableWidget):
         for i in range(nrows):  # iterate over selected rows
             self.write_cells_to_row(r0 + i, c0, rows[i])
 
+
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
     from ui.ui_base import run
     from ui.cell_editors import CellEditorLine
 
-    widget = TableWidget(edit_handler=CellEditorLine().activate)
+    line_editor = CellEditorLine().activate
+    def cell_editor(r, c, pos):
+        props = {"VALUE": widget.read_cell(r, c)}
+        if line_editor(pos, props):
+            return props["VALUE"]
+        else:
+            return None
+
+    widget = TableWidget(edit_handler=cell_editor)
     widget.add_actions()
     width = 6
     height = 10

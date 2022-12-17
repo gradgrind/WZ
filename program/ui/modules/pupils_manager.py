@@ -1,7 +1,7 @@
 """
 ui/modules/pupils_manager.py
 
-Last updated:  2022-12-12
+Last updated:  2022-12-17
 
 Front-end for managing pupil data.
 
@@ -226,11 +226,12 @@ class PupilManager(QWidget):
                 )
             pdata[field] = val
             # TODO: What about a "delegate", to show a display version of the value?
-            self.pupil_table.item(r, c).setText(val)
+            return val
+        return None
 
-    # TODO: What about changing class? The pupil should then disappear from
-    # the current table. Perhaps this should be blocked? There
-    # could be a special button to move a selected pupil to another class?
+    # The CLASS field is not editable. To move a pupil to a different
+    # class there is a special button. After such a change there needs
+    # to be a redisplay, because the pupil will disappear from its old class.
 
     # Some field handlers are specific to certain schools/situations, so
     # the handler should be specified in a config file.
