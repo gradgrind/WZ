@@ -1,7 +1,7 @@
 """
 ui/simple_table.py
 
-Last updated:  2022-12-14
+Last updated:  2022-12-17
 
 A fairly simple table widget, which supports (single) range selection.
 Cell editing is possible using external pop-up editors.
@@ -25,15 +25,33 @@ Copyright 2022 Michael Towers
 =-LICENCE========================================
 """
 
+import sys, os
+
+if __name__ == "__main__":
+    # Enable package import if running as module
+    this = sys.path[0]
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    basedir = os.path.dirname(appdir)
+    from core.base import start
+
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
+
 T = TRANSLATIONS("ui.simple_table")
 
 ### +++++
 
-from ui.uibase import (
+from ui.ui_base import (
     ## QtWidgets
     QApplication,
     QTableWidget,
+    QTableWidgetItem,
     QAbstractItemView,
+    QAction,
+    QMenu,
+    ## QtGui
+    QKeySequence,
     ## QtCore
     Qt,
     QPoint,
@@ -46,6 +64,7 @@ class TableWidget(QTableWidget):
         self.edit_handler = edit_handler
         super().__init__(parent=parent)
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ContiguousSelection)
         # The editing support built into <QTableWidget> is not used.
         # Event handlers determine when a selection should be laid on or
         # adjusted – or else when to call an external editor supplied as
@@ -77,6 +96,7 @@ class TableWidget(QTableWidget):
 
     def clicked(self, r, c):
         if self.click_pending:
+            print("EDIT", r, c)
             self.open_editor(r, c)
 
     def open_editor(self, r, c):
@@ -85,15 +105,13 @@ class TableWidget(QTableWidget):
             y = self.rowViewportPosition(r)
             pos = self.mapToGlobal(QPoint(x, y))
             # print("CLICKED", r, c, pos)
-            self.edit_handler(r, c, pos)
+            props = {"VALUE": self.read_cell(r, c)}
+            if self.edit_handler(pos, props):
+                self.write_cell(r, c, props["VALUE"])
 
     def pressed(self, r, c):
         km = QApplication.instance().queryKeyboardModifiers()
-        if km & Qt.KeyboardModifier.ShiftModifier:
-            return
-        # print("Pressed", r, c)
-        self.clearSelection()  # to avoid multiple selection ranges
-        self.click_pending = True
+        self.click_pending = km == Qt.KeyboardModifier.NoModifier
 
     def entered(self, r, c):
         # print("ENTERED", r, c)
@@ -105,7 +123,7 @@ class TableWidget(QTableWidget):
         If no cells are selected, all elements are 0.
         """
         try:
-            sel_range = self.pupil_table.selectedRanges()[0]
+            sel_range = self.selectedRanges()[0]
         except IndexError:
             return (0, 0, 0, 0)
         r0 = sel_range.topRow()
@@ -114,7 +132,26 @@ class TableWidget(QTableWidget):
         ncols = sel_range.rightColumn() - c0 + 1
         return (nrows, r0, ncols, c0)
 
-##### TODO: Implement copy/paste
+    ##### Actions: copy/paste
+
+    def add_actions(self):
+        self.selection_menu = QMenu(self)
+        action = QAction(T["COPY_SELECTION"], parent=self)
+        action.setShortcut(QKeySequence.Copy)
+        action.setShortcutVisibleInContextMenu(True)
+        action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        action.triggered.connect(self.read_from_selection)
+        self.addAction(action)
+        self.selection_menu.addAction(action)
+        action = QAction(T["PASTE_SELECTION"], parent=self)
+        action.setShortcut(QKeySequence.Paste)
+        action.setShortcutVisibleInContextMenu(True)
+        action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        action.triggered.connect(self.write_to_selection)
+        self.addAction(action)
+        self.selection_menu.addAction(action)
+        # Enable context menu
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
     def read_cell(self, r, c):
         """Return the value in the given cell.
@@ -129,7 +166,7 @@ class TableWidget(QTableWidget):
         """
         self.item(r, c).setText(value)
 
-    def self.write_cells_to_row(self, r, c, row):
+    def write_cells_to_row(self, r, c, row):
         """Write a list of values to cells in row <r> starting at
         column <c>.
         This can be overridden if there is an underlying data store
@@ -176,12 +213,14 @@ class TableWidget(QTableWidget):
         nrows, r0, ncols, c0 = self.get_selection()
         if not nrows:
             SHOW_WARNING(T["NO_SELECTION"])
+            return
         rows = []
         rowlen = -1
         # Get data from clipboard
         tsv = QApplication.instance().clipboard().text().rstrip('\n')
         if not tsv:
             SHOW_WARNING(T["CLIPBOARD_EMPTY"])
+            return
         for line in tsv.splitlines():
             rowlist = line.split('\t')
             if rowlen < 0:
@@ -201,20 +240,44 @@ class TableWidget(QTableWidget):
                     return
                 row = row * ncols   # copy value for each column
             elif ncols != rowlen:
-                SHOW_ERROR(T["BAD_PASTE_RANGE"])
+                SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
+                    h0=collen, w0=rowlen, h1=nrows, w1=ncols
+                ))
                 return
             for i in range(nrows):  # iterate over selected rows
                 self.write_cells_to_row(r0 + i, c0, row)
             return
         if rowlen == 1:   # paste a single column
             if nrows != collen:
-                SHOW_ERROR(T["BAD_PASTE_RANGE"])
+                SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
+                    h0=collen, w0=rowlen, h1=nrows, w1=ncols
+                ))
                 return
             for i in range(nrows):  # iterate over selected rows
-                self.write_cells_to_row(r0 + i, c0, row[i] * ncols)
+                self.write_cells_to_row(r0 + i, c0, rows[i] * ncols)
             return
         if ncols != rowlen or nrows != collen:  # paste a block
-            SHOW_ERROR(T["BAD_PASTE_RANGE"])
+            SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
+                h0=collen, w0=rowlen, h1=nrows, w1=ncols
+            ))
             return
         for i in range(nrows):  # iterate over selected rows
-            self.write_cells_to_row(r0 + i, c0, row[i])
+            self.write_cells_to_row(r0 + i, c0, rows[i])
+
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+
+if __name__ == "__main__":
+    from ui.ui_base import run
+    from ui.cell_editors import CellEditorLine
+
+    widget = TableWidget(edit_handler=CellEditorLine().activate)
+    widget.add_actions()
+    width = 6
+    height = 10
+    widget.setColumnCount(width)
+    widget.setRowCount(height)
+    for r in range(height):
+        for c in range(width):
+            widget.setItem(r, c, QTableWidgetItem())
+    widget.resize(600, 550)
+    run(widget)
