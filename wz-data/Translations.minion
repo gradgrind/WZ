@@ -30,7 +30,8 @@ core.classes: {
 }
 
 core.pupils: {
-    FILTER_ERROR: "Schülerdaten-Fehler: {msg}"
+    #FILTER_ERROR: "Schülerdaten-Fehler: {msg}"
+    NECESSARY_FIELD_EMPTY: "Feld {field} darf nicht leer sein:\n  {row}"
     INVALID_CLASS: "Importierte Schülerdaten: Ungültige Klasse ({klass}) in Zeile\n  ... {row}\n ... in Datei\n {path}"
     BAD_NAME:       "Ungültiger Schülername (Vornamen / Nachname): {name}"
     UNKNOWN_PID: "Unbekanntes Schüler-Kennzeichen: '{pid}'"

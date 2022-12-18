@@ -151,37 +151,35 @@ def read_pupils_source(filepath):
     """Read a spreadsheet file containing pupil data from an external
     "master" database.
     """
-    field_list = [
-        {
-            'NAME': field[0],
-            'DISPLAY_NAME': field[1],
-            'REQUIRED': len(field) > 2,
-        }
-        for field in CONFIG["PUPILS_FIELDS"] + CONFIG["PUPILS_EXTRA_FIELDS"]
-    ]
-    fields = {
-        'INFO_FIELDS': [],
-        'TABLE_FIELDS': field_list}
-    data = read_DataTable(filepath)
     try:
-        data = filter_DataTable(data, fields, extend=False)
-    except TableError as e:
-        raise ValueError(
-            T["FILTER_ERROR"].format(msg=f"{e} \n ... in\n {filepath}")
-        )
+        xdb_fields = CONFIG["MASTER_DB"]
+    except KeyError:
+        return None
+    necessary = {line[0] for line in CONFIG["PUPILS_FIELDS"] if line[4]}
     # Change class names, adjust pupil names ("tussenvoegsel")
     day1 = CALENDAR["FIRST_DAY"]
     pupils = []
+    data = read_DataTable(filepath)
     for row in data["__ROWS__"]:
-        if (x:=row.get("DAY_EXIT")):
+        irow = {}
+        for f, t in xdb_fields:
+            v = row[t]
+            if (f in necessary) and (not v):
+                REPORT("ERROR",
+                    T["NECESSARY_FIELD_EMPTY"].format(field=t, row=repr(row))
+                )
+            irow[f] = v
+        if (x:=irow.get("DATE_EXIT")):
             if x < day1:
                 continue
-        klass = row["CLASS"]
+        klass = irow["CLASS"]
         try:
             if klass[-1] == "K":
                 klass = f"{int(klass[:-1]):02}K"
+                irow["CLASS"] = klass
             elif klass != "13":
                 klass = f"{int(klass):02}G"
+                irow["CLASS"] = klass
         except ValueError:
             raise ValueError(
                 T["INVALID_CLASS"].format(
@@ -191,17 +189,20 @@ def read_pupils_source(filepath):
                 )
             )
         (
-            row["FIRSTNAMES"],
-            row["LASTNAME"],
-            row["FIRSTNAME"],
+            irow["FIRSTNAMES"],
+            irow["LASTNAME"],
+            irow["FIRSTNAME"],
             sort_name
         ) = tussenvoegsel_filter(
-            row["FIRSTNAMES"], row["LASTNAME"], row["FIRSTNAME"]
+            irow["FIRSTNAMES"], irow["LASTNAME"], irow["FIRSTNAME"]
         )
-        if not row.get("SORT_NAME"):
-            row["SORT_NAME"] = sort_name
-        pupils.append(row)
-    return pupils
+        s_name = irow.get("SORT_NAME")
+        if not s_name:
+            s_name = sort_name
+            irow["SORT_NAME"] = sort_name
+        pupils.append((klass, s_name, irow))
+        pupils.sort()
+    return [p[-1] for p in pupils]
 
 
 def get_sortname(pdata):

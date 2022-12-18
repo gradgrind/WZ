@@ -73,7 +73,7 @@ from local.local_pupils import (
     next_class,
     migrate_special,
 #    check_pid_valid,
-#    read_pupils_source
+    read_pupils_source,
 )
 
 ### -----
@@ -479,6 +479,13 @@ if __name__ == "__main__":
     for pdata in leavers.values():
         print("  +++", pdata)
 
+    print("\nImported pupils:")
+    plist = read_pupils_source(RESOURCEPATH("import_pupils"))
+    for pdata in plist[:20]:
+        print(" ::: ", pdata)
+    print("\n     ...\n")
+    for pdata in plist[-20:]:
+        print(" ::: ", pdata)
 
     quit(0)
 
