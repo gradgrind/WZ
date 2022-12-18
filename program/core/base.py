@@ -1,7 +1,7 @@
 """
 core/base.py
 
-Last updated:  2022-04-19
+Last updated:  2022-12-18
 
 Basic configuration and structural stuff.
 
@@ -130,6 +130,12 @@ class start:
         """
         return os.path.join(cls.__DATA, "RESOURCES", *path.split("/"))
 
+    @staticmethod
+    def year_data_path(year, path=""):
+        """Return the directory (full path) containing the data for the
+        given year.
+        """
+        return os.path.join(basedir, f"DATA-{year}", *path.split("/"))
 
 class Dates:
     @staticmethod

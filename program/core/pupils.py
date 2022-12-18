@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2022-12-10
+core/pupils.py - last updated 2022-12-18
 
 Manage pupil data.
 
@@ -61,18 +61,19 @@ T = TRANSLATIONS("core.pupils")
 
 from core.db_access import db_read_table, db_read_unique_entry, NoRecord
 from core.base import class_group_split
-from core.basic_data import SHARED_DATA
+from core.basic_data import SHARED_DATA, get_classes
 
 #? ...
 import re
 import tarfile
 from glob import glob
 
-from core.base import Dates
+from core.base import Dates, class_group_split
 from local.local_pupils import (
-    check_pid_valid,
     next_class,
-    read_pupils_source
+    migrate_special,
+#    check_pid_valid,
+#    read_pupils_source
 )
 
 ### -----
@@ -169,6 +170,40 @@ def final_year_pupils():
             except KeyError:
                 collect[k] = [item]
     return collect
+
+
+def migrate_pupils():
+    """Migrate all pupils to the next class.
+    This is a preparation for the next school year.
+    Return a mapping {new-class: pupil-data-list}.
+    A second result returns a mapping containing pupils who would
+    normally leave the school at the end of the year. In this mapping
+    the classes are not changed.
+    Pupils with explicit leaving dates up to the end of the current year
+    will be dropped.
+    """
+    date1 = CALENDAR["~NEXT_FIRST_DAY"]
+    leavers = {}
+    for cg in (CONFIG.get("LEAVING_GROUPS") or []):
+        for pdata in pupils_in_group(cg, date=date1):
+            leavers[pdata["PID"]] = pdata.copy()
+    migrated = {}
+    classes = get_classes()
+    for klass, name in classes.get_class_list():
+        try:
+            new_class = CONFIG["MIGRATE_CLASS"][klass]
+        except KeyError:
+            new_class = next_class(klass)
+        class_list = []
+        for pdata in pupils_in_group(cg, date=date1):
+            pid = pdata["PID"]
+            if pid not in leavers:
+                new_pdata = pdata.copy()
+                migrate_special(new_pdata)
+                class_list.append(new_pdata)
+        if class_list:
+            migrated[new_class] = class_list
+    return migrated, leavers
 
 
 #########################################
@@ -434,15 +469,16 @@ if __name__ == "__main__":
         print("  +++", pdata)
         pid = pdata["PID"]
 
-
-    print("\nFinal-year pupils:")
-    for k, pdata in final_year_pupils().items():
-        print("  +++", k)
-        for item in pdata:
-            print("        ::", item)
-
     print(f"\nDATA FOR PID={pid}:")
     print(pupil_data(pid))
+
+    migrated, leavers = migrate_pupils()
+    print(f"\nMIGRATE TO {int(SCHOOLYEAR) + 1}")
+
+    print("\nFinal-year pupils:")
+    for pdata in leavers.values():
+        print("  +++", pdata)
+
 
     quit(0)
 

@@ -1,7 +1,7 @@
 """
 ui/modules/pupils_manager.py
 
-Last updated:  2022-12-17
+Last updated:  2022-12-18
 
 Front-end for managing pupil data.
 
@@ -55,7 +55,12 @@ from core.db_access import (
 )
 from core.basic_data import get_classes
 from core.classes import build_group_data, atomic_maps
-from core.pupils import get_pupil_fields, get_pupils, pupil_data, pupil_name
+from core.pupils import (
+    get_pupil_fields,
+    get_pupils,
+    pupil_data,
+    pupil_name,
+)
 from local.local_pupils import get_sortname
 from ui.ui_base import (
     # QtWidgets
@@ -69,6 +74,9 @@ from ui.ui_base import (
     QTableWidgetItem,
     QLineEdit,
     QDialogButtonBox,
+
+    QTreeWidget,
+    QTreeWidgetItem,
     # QtCore
     Qt,
     # Others
@@ -131,6 +139,7 @@ class PupilManager(QWidget):
         vboxr.addLayout(formbox)
         self.class_selector = KeySelector(changed_callback=self.changed_class)
         formbox.addRow(T["CLASS"], self.class_selector)
+
         del_pupil = QPushButton(T["REMOVE_PUPIL"])
         del_pupil.clicked.connect(self.remove_pupil)
         vboxr.addWidget(del_pupil)

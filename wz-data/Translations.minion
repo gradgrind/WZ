@@ -122,6 +122,12 @@ ui.simple_table: {
     BAD_PASTE_RANGE: "Die Dimensionen der einzufügenden Daten sind nicht kompatibel mit dem ausgewählten Bereich: {h0}x{w0} -> {h1}x{w1}"
 }
 
+ui.modules.year_manager: {
+    # Labels
+    MODULE_NAME:    Jahre
+    MODULE_TITLE:   "Jahresdaten verwalten"
+}
+
 ui.modules.pupils_manager: {
     # Labels
     MODULE_NAME:    Schüler

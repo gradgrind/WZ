@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-12-11
+Last updated:  2022-12-18
 
 Helper functions for accessing the database.
 
@@ -92,6 +92,46 @@ def open_database():
     return con
 
 
+class DatabaseShortAccess:
+    """A "context manager" for performing some commands on a database
+    then closing it. The default database is not affected.
+    """
+    def __init__(self, dbpath, tag):
+        """Open the database at the given address. <tag> should be an
+        ASCII string, unique to open databases.
+        """
+        self.dbpath = dbpath
+        self.tag = tag
+
+    def __enter__(self):
+        # Enter the context manager
+        self.con = QSqlDatabase.addDatabase("QSQLITE", self.tag)
+        self.con.setDatabaseName(self.dbpath)
+        if not self.con.open():
+            raise Bug(f"Cannot open database at {self.dbpath}")
+        foreign_keys_on = "PRAGMA foreign_keys = ON"
+        if not QSqlQuery(foreign_keys_on, self.con).isActive():
+            raise Bug(f"Failed: {foreign_keys_on}")
+
+    def __exit__(self, *args):
+        # Exit the context manager
+        self.con.close()
+        self.con = None  # needed to release the database object
+        QSqlDatabase.removeDatabase(self.tag)
+
+    @classmethod
+    def new_database(cls, dbpath, sql_list):
+        if os.path.isfile(dbpath):
+            os.remove(dbpath)
+        dbdir = os.path.dirname(dbpath)
+        os.makedirs(dbdir, exist_ok=True)
+        db = cls(dbpath, "NEW")
+        with db:
+            for cmd in sql_list:
+                if not QSqlQuery(cmd, db.con).isActive():
+                    raise Bug("Failed: create table")
+
+
 def db_backup(name=""):
     dbpath = DATAPATH(DATABASE)
     if name:
@@ -129,6 +169,9 @@ def table_extent(table):
 
 def db_query(query_text):
     query = QSqlQuery(query_text)
+    if not query.isActive():
+        error = query.lastError()
+        SHOW_ERROR(f"SQL query failed: {error.text()}\n  {query_text}")
     rec = query.record()
     nfields = rec.count()
     value_list = []
@@ -508,3 +551,23 @@ if __name__ == "__main__":
         print("  ", row)
 
 # It seems that null entries are read as empty strings ...
+
+    # Get schema of existing database
+    sql_list = [row[4] for row in db_query("SELECT * FROM sqlite_schema")
+        if row[4]
+    ]
+    print("\n SCHEMA:")
+    for cmd in sql_list:
+        print(" --", cmd)
+
+    print("\nNEW DATABASE ...")
+    dp = start.year_data_path(int(SCHOOLYEAR) + 1, "migrated.sqlite")
+    DatabaseShortAccess.new_database(dp, sql_list)
+    print("  ... @", dp)
+
+    print("\n ++++++++\n")
+    db_query(f"ATTACH '{dp}' AS newdb")
+    for t in ("CLASSES", "SUBJECTS", "TEACHERS", "COURSES", "LESSONS"):
+        print(" ++", t)
+        db_query(f"INSERT INTO newdb.{t} SELECT * FROM main.{t}")
+    db_query("DETACH newdb")

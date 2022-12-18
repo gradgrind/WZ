@@ -1,7 +1,7 @@
 """
-ui/modules/teachers.py
+ui/modules/teachers_manager.py
 
-Last updated:  2022-08-22
+Last updated:  2022-12-18
 
 Edit teachers' data.
 
@@ -231,8 +231,8 @@ class TeacherEditor(QSplitter):
         self.teachermodel = QSqlTableModel()
         self.teachermodel.setTable("TEACHERS")
         self.teachermodel.setEditStrategy(
-			QSqlTableModel.EditStrategy.OnManualSubmit
-		)
+            QSqlTableModel.EditStrategy.OnManualSubmit
+        )
         # Set up the teacher view
         self.teachertable.setModel(self.teachermodel)
         for f, t in TEACHER_COLS:

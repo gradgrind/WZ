@@ -1,5 +1,5 @@
 """
-local/local_pupils.py - last updated 2022-12-04
+local/local_pupils.py - last updated 2022-12-18
 
 Manage pupil data – school/location specific code.
 
@@ -26,36 +26,30 @@ T = TRANSLATIONS("core.pupils")
 
 import re
 
-from core.base import Dates
+from core.base import Dates, class_group_split
 from tables.spreadsheet import read_DataTable, filter_DataTable, TableError
 
 ### -----
 
-def next_class(pdata):
-    """Adjust the pupil data to the next class.
-    Note that this is an "in-place" operation, so if the original data
-    should remain unchanged, pass in a copy.
+
+def next_class(klass):
+    """Find the class after the given one (for the following year).
     """
-    klass = pdata["CLASS"]
-    leaving_groups = CONFIG["LEAVING_GROUPS"].get(klass)
-    if leaving_groups:
-        if leaving_groups == "*":
-            return "X"
-        for g in pdata["GROUPS"].split():
-            if g in leaving_groups:
-                return "X"
-    # Progress to next class ...
     k_year = class_year(klass)
     k_new = int(k_year) + 1
     k_suffix = klass[2:]
-    klass = f"{k_new:02}{k_suffix}"
+    return f"{k_new:02}{k_suffix}"
+
+
+def migrate_special(pdata):
+    """Special migration changes for the locality.
+    """
     # Handle entry into "Qualifikationsphase"
-    if k_new == 12 and "G" in pdata["GROUPS"].split():
+    if pdata["CLASS"] == "12G" and "G" in pdata["GROUPS"].split():
         try:
             pdata["DATE_QPHASE"] = CALENDAR["~NEXT_FIRST_DAY"]
         except KeyError:
             pass
-    return klass
 
 
 def class_year(klass):
