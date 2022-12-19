@@ -1,5 +1,5 @@
 """
-local/local_pupils.py - last updated 2022-12-18
+local/local_pupils.py - last updated 2022-12-19
 
 Manage pupil data – school/location specific code.
 
@@ -26,15 +26,14 @@ T = TRANSLATIONS("core.pupils")
 
 import re
 
-from core.base import Dates, class_group_split
-from tables.spreadsheet import read_DataTable, filter_DataTable, TableError
+from core.base import Dates
+from tables.spreadsheet import Spreadsheet, read_DataTable
 
 ### -----
 
 
 def next_class(klass):
-    """Find the class after the given one (for the following year).
-    """
+    """Find the class after the given one (for the following year)."""
     k_year = class_year(klass)
     k_new = int(k_year) + 1
     k_suffix = klass[2:]
@@ -42,8 +41,7 @@ def next_class(klass):
 
 
 def migrate_special(pdata):
-    """Special migration changes for the locality.
-    """
+    """Special migration changes for the locality."""
     # Handle entry into "Qualifikationsphase"
     if pdata["CLASS"] == "12G" and "G" in pdata["GROUPS"].split():
         try:
@@ -147,6 +145,19 @@ ASCII_SUB = {
 }
 
 
+def get_remote_data():
+    """Fetch the latest school pupil data – from an external source.
+    At present this allows choosing and opening a table file containing
+    the pupils' data and covering the whole school.
+    """
+    filetypes = " ".join(["*." + fte for fte in Spreadsheet.filetype_endings()])
+    fpath = OPEN_FILE(f'{T["OPEN_TABLETYPE"]} ({filetypes})')
+    if fpath:
+        return read_pupils_source(fpath)
+    else:
+        return None
+
+
 def read_pupils_source(filepath):
     """Read a spreadsheet file containing pupil data from an external
     "master" database.
@@ -165,11 +176,12 @@ def read_pupils_source(filepath):
         for f, t in xdb_fields:
             v = row[t]
             if (f in necessary) and (not v):
-                REPORT("ERROR",
-                    T["NECESSARY_FIELD_EMPTY"].format(field=t, row=repr(row))
+                REPORT(
+                    "ERROR",
+                    T["NECESSARY_FIELD_EMPTY"].format(field=t, row=repr(row)),
                 )
             irow[f] = v
-        if (x:=irow.get("DATE_EXIT")):
+        if x := irow.get("DATE_EXIT"):
             if x < day1:
                 continue
         klass = irow["CLASS"]
@@ -183,16 +195,14 @@ def read_pupils_source(filepath):
         except ValueError:
             raise ValueError(
                 T["INVALID_CLASS"].format(
-                    klass=klass,
-                    row=repr(row),
-                    path=filepath
+                    klass=klass, row=repr(row), path=filepath
                 )
             )
         (
             irow["FIRSTNAMES"],
             irow["LASTNAME"],
             irow["FIRSTNAME"],
-            sort_name
+            sort_name,
         ) = tussenvoegsel_filter(
             irow["FIRSTNAMES"], irow["LASTNAME"], irow["FIRSTNAME"]
         )
@@ -211,9 +221,7 @@ def get_sortname(pdata):
     and without spaces, but that is not compulsory.
     """
     return tussenvoegsel_filter(
-        pdata["FIRSTNAMES"],
-        pdata["LASTNAME"],
-        pdata["FIRSTNAME"]
+        pdata["FIRSTNAMES"], pdata["LASTNAME"], pdata["FIRSTNAME"]
     )[-1]
 
 
@@ -241,13 +249,19 @@ def tussenvoegsel_filter(firstnames, lastname, firstname):
     firstnames1, tv, lastname1 = tvSplit(firstnames, lastname)
     firstname1 = tvSplit(firstname, "X")[0]
     if tv:
-        lastname1 = tv + lastname1
+        return (
+            firstnames1,
+            f"{tv} {lastname1}",
+            firstname1,
+            asciify(f"{lastname1}_{tv}_{firstname1}"),
+        )
     return (
         firstnames1,
         lastname1,
         firstname1,
-        asciify(f"{lastname1}_{firstname1}")
+        asciify(f"{lastname1}_{firstname1}"),
     )
+
 
 def tvSplit(firstnames, lastname):
     """Split off a "tussenvoegsel" from the end of the first-names,
@@ -278,6 +292,5 @@ def tvSplit(firstnames, lastname):
         if len(ln) == 1:
             break
         tv.append(ln.pop(0))
-    # Add space to <tv> for prefixing to <lastname>
-    tv = (" ".join(tv) + " ") if tv else None
+    tv = " ".join(tv) if tv else None
     return (" ".join(fn), tv, " ".join(ln))

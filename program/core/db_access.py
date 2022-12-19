@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-12-18
+Last updated:  2022-12-19
 
 Helper functions for accessing the database.
 
@@ -243,7 +243,7 @@ def db_read_table(
             )
             where_cond.append(f'"{k}" IN ( {instring} )')
         else:
-            raise Bug(f"Unexpected comparison value: '{repr(v)}' for '{f}'")
+            raise Bug(f"Unexpected comparison value: '{repr(v)}' for '{k}'")
     if where_cond:
         where_clause = f" WHERE {' AND '.join(where_cond)}"
     else:
@@ -360,7 +360,7 @@ def db_update_fields(table, field_values, *wheres, **keys):
 
     f = ", ".join(fields)
     qtext = f"UPDATE {table} SET {f}{where_clause}"
-    print("§§§", qtext)
+    # print("§§§", qtext)
     query = QSqlQuery()
     if query.exec(qtext):
         n = query.numRowsAffected()

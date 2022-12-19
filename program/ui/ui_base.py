@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-10-03
+Last updated:  2022-12-19
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -488,21 +488,36 @@ builtins.SHOW_WARNING = _popupWarn
 builtins.SHOW_ERROR = _popupError
 builtins.SHOW_CONFIRM = _popupConfirm
 
+
 ### File/Folder Dialogs
 
-
-def openDialog(filetype, title=None):
-    dir0 = SETTINGS.value("LAST_LOAD_DIR") or os.path.expanduser("~")
+def openDialog(filetype, start="", title=None):
+    """If <start> is a path (with directories), it will be passed to
+    the QFileDialog as start address. Otherwise the last used directory
+    or the home folder will be used as starting point.
+    """
+    if os.path.dirname(start):
+        dir0 = start
+    else:
+        dir0 = SETTINGS.value("LAST_LOAD_DIR") or os.path.expanduser("~")
+        if start:
+            dir0 = os.path.join(dir0, start)
     fpath = QFileDialog.getOpenFileName(
-        None, title or _FILEOPEN, dir0, filetype
+        None, title or T["FILEOPEN"], dir0, filetype
     )[0]
     if fpath:
         SETTINGS.setValue("LAST_LOAD_DIR", os.path.dirname(fpath))
     return fpath
 
 
-def dirDialog(title=None):
-    dir0 = SETTINGS.value("LAST_LOAD_DIR") or os.path.expanduser("~")
+def dirDialog(start=None, title=None):
+    """If no <start> is given, the last used directory
+    or the home folder will be used as starting point.
+    """
+    if start:
+        dir0 = start
+    else:
+        dir0 = SETTINGS.value("LAST_DIR") or os.path.expanduser("~")
     dpath = QFileDialog.getExistingDirectory(
         None,
         title or T["DIROPEN"],
@@ -510,18 +525,32 @@ def dirDialog(title=None):
         QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
     )
     if dpath:
-        SETTINGS.setValue("LAST_LOAD_DIR", dpath)
+        SETTINGS.setValue("LAST_DIR", dpath)
     return dpath
 
 
-def saveDialog(filetype, filename, title=None):
-    dir0 = SETTINGS.value("LAST_SAVE_DIR") or os.path.expanduser("~")
+def saveDialog(filetype, start=None, title=None):
+    """If <start> is a path (with directories), it will be passed to
+    the QFileDialog as start address. Otherwise the last used directory
+    or the home folder will be used as starting point.
+    """
+    if os.path.dirname(start):
+        dir0 = start
+    else:
+        dir0 = SETTINGS.value("LAST_SAVE_DIR") or os.path.expanduser("~")
+        if start:
+            dir0 = os.path.join(dir0, start)
     fpath = QFileDialog.getSaveFileName(
-        None, title or T["FILESAVE"], os.path.join(dir0, filename), filetype
+        None, title or T["FILESAVE"], start, filetype
     )[0]
     if fpath:
         SETTINGS.setValue("LAST_SAVE_DIR", os.path.dirname(fpath))
     return fpath
+
+
+builtins.OPEN_FILE = openDialog
+builtins.SAVE_FILE = saveDialog
+builtins.GET_FOLDER = dirDialog
 
 
 # TODO: deprecated, see <RowSelectTable>
@@ -774,6 +803,7 @@ class __Reporter(QDialog):
         self.bt_done.setEnabled(False)
         self.show()
         self.__active = True
+        self.reportview.clear()
         txt = f'+++ {T["PROCESSING"]} ...'
         self.reportview.append(f'<span style="color:#d406e3;">{txt}</span>')
         self.reportview.append('')
@@ -789,6 +819,7 @@ class __Reporter(QDialog):
         while not self.__close_pending:
             QCoreApplication.processEvents()
             time.sleep(0.01)
+        self.hide()
         return result
 
     def newtext(self, mtype, text):

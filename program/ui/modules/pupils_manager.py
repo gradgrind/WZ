@@ -1,7 +1,7 @@
 """
 ui/modules/pupils_manager.py
 
-Last updated:  2022-12-18
+Last updated:  2022-12-19
 
 Front-end for managing pupil data.
 
@@ -60,8 +60,10 @@ from core.pupils import (
     get_pupils,
     pupil_data,
     pupil_name,
+    compare_update,
+    update_classes,
 )
-from local.local_pupils import get_sortname
+from local.local_pupils import get_sortname, get_remote_data
 from ui.ui_base import (
     # QtWidgets
     QWidget,
@@ -74,7 +76,6 @@ from ui.ui_base import (
     QTableWidgetItem,
     QLineEdit,
     QDialogButtonBox,
-
     QTreeWidget,
     QTreeWidgetItem,
     # QtCore
@@ -140,6 +141,10 @@ class PupilManager(QWidget):
         self.class_selector = KeySelector(changed_callback=self.changed_class)
         formbox.addRow(T["CLASS"], self.class_selector)
 
+        if "MASTER_DB" in CONFIG:
+            update_pupils = QPushButton(T["UPDATE_PUPILS"])
+            update_pupils.clicked.connect(self.update_pupils)
+            vboxr.addWidget(update_pupils)
         del_pupil = QPushButton(T["REMOVE_PUPIL"])
         del_pupil.clicked.connect(self.remove_pupil)
         vboxr.addWidget(del_pupil)
@@ -298,6 +303,121 @@ class PupilManager(QWidget):
             db_delete_rows("PUPILS", PID=[pdata["PID"] for pdata in pdata_list])
             # Redisplay pupil list
             self.changed_class(self.klass)
+
+    def update_pupils(self):
+        plist = get_remote_data()
+        if not plist:
+            return
+        pupils_delta = compare_update(plist)
+        if not pupils_delta:
+            SHOW_INFO(T["NO_CHANGES"])
+            return
+        do_list = update_pupils_dialog(pupils_delta, self.pupil_table.size())
+        if do_list:
+        # Encapsulate the action in a "run block" (because it might
+        # take a few moments)
+            PROCESS(
+                update_classes,
+                T["DB_UPDATE_PUPILS"],
+                changes=do_list
+            )
+            # Redisplay pupil list
+            self.changed_class(self.klass)
+
+
+def update_pupils_dialog(pupils_delta, size):
+    """Display a tree of pending updates and allow their deselection.
+    """
+    dialog = QDialog()
+    vbox = QVBoxLayout(dialog)
+    vbox.addWidget(QLabel(T["CHANGED_PUPIL_DATA"]))
+    tree = QTreeWidget()
+    tree.setStyleSheet(
+        """QTreeView::item {
+            padding: 4;
+        }
+        """
+    )
+    vbox.addWidget(tree)
+    tree.setHeaderHidden(True)
+    tree.setWordWrap(True)
+    buttonBox = QDialogButtonBox(
+        QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+    )
+    buttonBox.accepted.connect(dialog.accept)
+    buttonBox.rejected.connect(dialog.reject)
+    vbox.addWidget(buttonBox)
+    # Divide changes according to class
+    class_delta = {}
+    for delta in pupils_delta:
+        klass = delta[1]["CLASS"]
+        try:
+            class_delta[klass].append(delta)
+        except KeyError:
+            class_delta[klass] = [delta]
+    # Localized field names
+    f_t = {line[0]: line[1] for line in CONFIG["PUPILS_FIELDS"]}
+    # Populate the tree
+    elements = []
+    for klass, delta_list in class_delta.items():
+        parent = QTreeWidgetItem(tree)
+        parent.setText(0, T["CLASS_K"].format(klass=klass))
+        parent.setFlags(parent.flags() | Qt.ItemFlag.ItemIsAutoTristate
+                | Qt.ItemFlag.ItemIsUserCheckable)
+        for delta in delta_list:
+            child = QTreeWidgetItem(parent)
+            elements.append((delta, child))
+            child.setFlags(child.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            op, pdata = delta[0], delta[1]
+            name = pupil_name(pdata)
+            if op == "NEW":
+                text = T["NEW_PUPIL_N"].format(name=name)
+            elif op == "DELTA":
+                changes = delta[2]
+                if len(changes) > 1:
+                    child.setFlags(
+                        child.flags() | Qt.ItemFlag.ItemIsAutoTristate
+                    )
+                    for k, v in changes:
+                        c2 = QTreeWidgetItem(child)
+                        c2.setFlags(
+                            c2.flags() | Qt.ItemFlag.ItemIsUserCheckable
+                        )
+                        c2.setText(0, f"{f_t[k]}[{v}]")
+                        c2.setCheckState(0, Qt.Checked)
+                    text = T["CHANGE_PUPIL_FIELDS"].format(name=name)
+                else:
+                    k, v = changes[0]
+                    text = T["CHANGE_PUPIL_FIELD"].format(
+                        name=name, field=f"{f_t[k]}[{v}]"
+                    )
+            elif op == "REMOVE":
+                text = T["REMOVE_PUPIL_N"].format(name=name)
+            else:
+                raise Bug(f"Unexpected pupil-delta operator: {op}")
+            child.setText(0, text)
+            child.setCheckState(0, Qt.Checked)
+    # Show dialog and collect results
+    keeplist = []
+    dialog.resize(size)
+    if dialog.exec():
+        for delta, child in elements:
+            # Filter the changes lists
+            if child.checkState(0) == Qt.CheckState.Unchecked:
+                continue
+            # Check update entries for children
+            nchildren = child.childCount()
+            if nchildren:
+                # Rewrite the updates list, including checked fields
+                ulist = delta[2]
+                field_list = ulist.copy()
+                ulist.clear()
+                for i in range(nchildren):
+                    subc = child.child(i)
+                    if subc.checkState(0) == Qt.CheckState.Checked:
+                        ulist.append(field_list[i])
+            keeplist.append(delta)
+    return keeplist
 
 
 ####################################################

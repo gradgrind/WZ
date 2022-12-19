@@ -1,7 +1,7 @@
 """
 ui/modules/year_manager.py
 
-Last updated:  2022-12-18
+Last updated:  2022-12-19
 
 Front-end for managing year data, migrations, etc.
 
@@ -171,7 +171,7 @@ def migrate_leavers_dialog(leavers):
         parent = QTreeWidgetItem(tree)
 #T[] ...
         parent.setText(0, "Klasse {}".format(klass))
-        parent.setFlags(parent.flags() | Qt.ItemFlag.ItemIsTristate
+        parent.setFlags(parent.flags() | Qt.ItemFlag.ItemIsAutoTristate
                 | Qt.ItemFlag.ItemIsUserCheckable)
         for pid, name in pid_name:
             child = QTreeWidgetItem(parent)

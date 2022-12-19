@@ -30,6 +30,10 @@ core.classes: {
 }
 
 core.pupils: {
+    # Labels
+    OPEN_TABLETYPE: "Tabellendatei"
+
+    # Messages
     #FILTER_ERROR: "Schülerdaten-Fehler: {msg}"
     NECESSARY_FIELD_EMPTY: "Feld {field} darf nicht leer sein:\n  {row}"
     INVALID_CLASS: "Importierte Schülerdaten: Ungültige Klasse ({klass}) in Zeile\n  ... {row}\n ... in Datei\n {path}"
@@ -134,17 +138,26 @@ ui.modules.pupils_manager: {
     MODULE_NAME:    Schüler
     MODULE_TITLE:   "Schülerdaten verwalten"
     CLASS:          Klasse
-    NEW_PUPIL:  "Neuer Schüler"
-    CHANGE_CLASS: "Klasse wechseln"
-    REMOVE_PUPIL: "Schüler entfernen"
-    
+    CLASS_K:        "Klasse {klass}"
+    NEW_PUPIL:      "Neuer Schüler"
+    NEW_PUPIL_N:    "Neu: {name}"
+    CHANGE_PUPIL_FIELD: "{name}, Feld ändern: {field}"
+    CHANGE_PUPIL_FIELDS: "{name}, mehrere Felder ändern ..."
+    CHANGE_CLASS:   "Klasse wechseln"
+    REMOVE_PUPIL:   "Schüler entfernen"
+    REMOVE_PUPIL_N: "Entfernen: {name}"
+    CHANGED_PUPIL_DATA: "Geänderte Schülerdaten:\n  Welche sollten übernommen werden?"
+    UPDATE_PUPILS:  "Schülerdaten aktualisieren"
+    DB_UPDATE_PUPILS: "Update pupils in DB"
+
     # Messages
     PID_WARNING:    "WARNUNG: Außer bei neuen Schülern sollte das Kennzeichen normalerweise nicht geändert werden!"
-    CLASS_WARNING: "WARNUNG: Wenn die Klasse geändert wird, werden die selektierten Schüler aus der Liste für die aktuelle Klasse verschwinden!"
-    PID_EXISTS:         "Schüler-Kennzeichen existiert schon: '{pid}'"
-    NULL_PID:           "Leeres Schüler-Kennzeichen"
+    CLASS_WARNING:  "WARNUNG: Wenn die Klasse geändert wird, werden die selektierten Schüler aus der Liste für die aktuelle Klasse verschwinden!"
+    PID_EXISTS:     "Schüler-Kennzeichen existiert schon: '{pid}'"
+    NULL_PID:       "Leeres Schüler-Kennzeichen"
     SORT_NAME_EXISTS: "Der Sortiername existiert schon"
     CONFIRM_DELETE_PUPILS: "Sollen folgende Schüler(-Kennzeichen) wirklich aus der Datenbank entfernt werden?\n{pnames}"
+    NO_CHANGES:     "Keine Änderungen!"
 }
 
 ui.modules.teachers: {
