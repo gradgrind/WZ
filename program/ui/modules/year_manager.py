@@ -1,7 +1,7 @@
 """
 ui/modules/year_manager.py
 
-Last updated:  2022-12-19
+Last updated:  2022-12-22
 
 Front-end for managing year data, migrations, etc.
 
@@ -52,6 +52,8 @@ from core.db_access import (
     db_new_row,
     db_check_unique_entry,
     db_delete_rows,
+    sql_insert_from_dict,
+    migrate_db,
 )
 from core.basic_data import get_classes
 from core.classes import build_group_data, atomic_maps
@@ -117,9 +119,9 @@ class YearManager(QWidget):
     def __init__(self):
         super().__init__()
         vbox = QVBoxLayout(self)
-#T[] ...
-        migrate = QPushButton("MIGRATE_PUPILS")
-        migrate.clicked.connect(mpd_activate)
+        migrate = QPushButton(T["MIGRATE_DATA"])
+        migrate.setToolTip(T["MIGRATE_TO_NEXT_YEAR"])
+        migrate.clicked.connect(do_migration)
         vbox.addWidget(migrate)
 
     def modified(self):
@@ -129,12 +131,22 @@ class YearManager(QWidget):
     def init_data(self):
         pass
 
-def mpd_activate():
+def do_migration():
     migrated, leavers = migrate_pupils()
     keepers = migrate_leavers_dialog(leavers)
-    print("\nMIGRATION, Keep these:")
     for pid in keepers:
-        print("  ..", pupil_name(leavers[pid]))
+        pdata = leavers[pid]
+        migrated[pdata["CLASS"]].append(pdata)
+    sql_list = []
+    for klass in sorted(migrated):
+        pdlist = migrated[klass]
+        # Get sql commands to insert pupil data
+        for pdata in sorted(pdlist, key=lambda pd: pd["SORT_NAME"]):
+            print("   ...", klass, pupil_name(pdata))
+            sql_list.append(sql_insert_from_dict("PUPILS", pdata))
+#TODO: Use a PROCESS pop-up?
+    migrate_db(sql_list)
+
 
 def migrate_leavers_dialog(leavers):
     """Handle migration of pupils who would normally leave to the next
@@ -142,8 +154,7 @@ def migrate_leavers_dialog(leavers):
     """
     dialog = QDialog()
     vbox = QVBoxLayout(dialog)
-#T[] ...
-    vbox.addWidget(QLabel("SELECT_REPEATERS"))
+    vbox.addWidget(QLabel(T["SELECT_REPEATERS"]))
     tree = QTreeWidget()
     vbox.addWidget(tree)
     tree.setHeaderHidden(True)
@@ -169,8 +180,7 @@ def migrate_leavers_dialog(leavers):
     elements = []
     for klass, pid_name in classes.items():
         parent = QTreeWidgetItem(tree)
-#T[] ...
-        parent.setText(0, "Klasse {}".format(klass))
+        parent.setText(0, T["CLASS_K"].format(klass=klass))
         parent.setFlags(parent.flags() | Qt.ItemFlag.ItemIsAutoTristate
                 | Qt.ItemFlag.ItemIsUserCheckable)
         for pid, name in pid_name:

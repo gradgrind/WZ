@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2022-12-19
+core/pupils.py - last updated 2022-12-22
 
 Manage pupil data.
 
@@ -165,10 +165,11 @@ def migrate_pupils():
         except KeyError:
             new_class = next_class(klass)
         class_list = []
-        for pdata in pupils_in_group(cg, date=date1):
+        for pdata in pupils_in_group(klass, date=date1):
             pid = pdata["PID"]
             if pid not in leavers:
                 new_pdata = pdata.copy()
+                new_pdata["CLASS"] = new_class
                 migrate_special(new_pdata)
                 class_list.append(new_pdata)
         if class_list:

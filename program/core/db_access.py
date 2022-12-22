@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-12-19
+Last updated:  2022-12-22
 
 Helper functions for accessing the database.
 
@@ -51,6 +51,7 @@ from datetime import datetime
 from shutil import copyfile
 from glob import glob
 
+from core.base import start
 from ui.ui_base import (
     ### QtSql:
     QSqlDatabase,
@@ -127,8 +128,11 @@ class DatabaseShortAccess:
         os.makedirs(dbdir, exist_ok=True)
         db = cls(dbpath, "NEW")
         with db:
+            query = QSqlQuery(db.con)
             for cmd in sql_list:
-                if not QSqlQuery(cmd, db.con).isActive():
+                if not query.exec(cmd):
+                    error = query.lastError()
+                    SHOW_ERROR(f"SQL query failed: {error.text()}\n  {cmd}")
                     raise Bug("Failed: create table")
 
 
@@ -377,9 +381,9 @@ def db_update_field(table, field, value, *wheres, **keys):
     return db_update_fields(table, [(field, value)], *wheres, **keys)
 
 
-def db_new_row(table, **values):
+def sql_insert_from_dict(table, field_dict):
     flist, vlist = [], []
-    for f, v in values.items():
+    for f, v in field_dict.items():
         flist.append(f'"{f}"')
         if isinstance(v, str):
             vlist.append(f'"{v}"')
@@ -387,10 +391,12 @@ def db_new_row(table, **values):
             vlist.append(f"{v}")
         else:
             raise Bug(f"Unexpected field value: '{repr(v)}' for '{f}'")
-    qtext = (
-        f"INSERT INTO {table} ({', '.join(flist)}) VALUES ({', '.join(vlist)})"
-    )
-    # print("§§§", qtext)
+    return f"INSERT INTO {table} ({', '.join(flist)}) VALUES ({', '.join(vlist)})"
+
+
+def db_new_row(table, **values):
+    qtext = sql_insert_from_dict(table, values)
+  # print("§§§", qtext)
     query = QSqlQuery()
     if query.exec(qtext):
         newid = query.lastInsertId()
@@ -442,7 +448,10 @@ def db_unique_fields(table):
     return fields
 """
 
-
+#TODO: Increase flexibility?
+# 1) Add a write_pairs function and use it in the places where such data
+# is to be stored.
+# 2) Consider a different format (e.g. json)
 def read_pairs(data):
     """Read a list of (key, value) pairs from the given string.
 
@@ -459,6 +468,45 @@ def read_pairs(data):
         except ValueError:
             SHOW_ERROR(T["BAD_KEY_VALUE_LIST"].format(text=data))
     return pairs
+
+
+#TODO: Is this a sensible approach?
+# Would it be better to simply do a copy and remove entries which are
+# no longer needed?
+def migrate_db(sql_extra: list[str]):
+    """Migrate the current database to the next school year.
+    The argument is a list of sql commands to execute after creating the
+    new database.
+    """
+    # Get schema of existing database
+    sql_list = [row[4] for row in db_query("SELECT * FROM sqlite_schema")
+        if row[4]
+    ]
+    print("\n SCHEMA:")
+    for cmd in sql_list:
+        print(" --", cmd)
+
+    print("\nNEW DATABASE ...")
+    dp = start.year_data_path(int(SCHOOLYEAR) + 1, "migrated.sqlite")
+    DatabaseShortAccess.new_database(dp, sql_list)
+    print("  ... @", dp)
+
+    print("\n ++++++++\n")
+    db_query(f"ATTACH '{dp}' AS newdb")
+#TODO: Maybe more tables to copy?
+    for t in ("CLASSES", "SUBJECTS", "TEACHERS", "COURSES", "LESSONS"):
+        print(" ++", t)
+        db_query(f"INSERT INTO newdb.{t} SELECT * FROM main.{t}")
+    db_query("DETACH newdb")
+
+    db = DatabaseShortAccess(dp, "NEW")
+    with db:
+        query = QSqlQuery(db.con)
+        for cmd in  sql_extra:
+            if not query.exec(cmd):
+                error = query.lastError()
+                SHOW_ERROR(f"SQL query failed: {error.text()}\n  {cmd}")
+                raise Bug("Failed: extend table")
 
 
 # -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
@@ -552,22 +600,4 @@ if __name__ == "__main__":
 
 # It seems that null entries are read as empty strings ...
 
-    # Get schema of existing database
-    sql_list = [row[4] for row in db_query("SELECT * FROM sqlite_schema")
-        if row[4]
-    ]
-    print("\n SCHEMA:")
-    for cmd in sql_list:
-        print(" --", cmd)
-
-    print("\nNEW DATABASE ...")
-    dp = start.year_data_path(int(SCHOOLYEAR) + 1, "migrated.sqlite")
-    DatabaseShortAccess.new_database(dp, sql_list)
-    print("  ... @", dp)
-
-    print("\n ++++++++\n")
-    db_query(f"ATTACH '{dp}' AS newdb")
-    for t in ("CLASSES", "SUBJECTS", "TEACHERS", "COURSES", "LESSONS"):
-        print(" ++", t)
-        db_query(f"INSERT INTO newdb.{t} SELECT * FROM main.{t}")
-    db_query("DETACH newdb")
+    migrate_db([])
