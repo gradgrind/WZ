@@ -134,6 +134,7 @@ ui.modules.year_manager: {
     MIGRATE_DATA:   "Daten für das nächste Schuljahr vorbereiten"
     SELECT_REPEATERS: "Falls es Schüler gibt, die das letzte Jahr wiederholen, sollten sie hier markiert werden."
     CLASS_K:    "Klasse {klass}"
+    PROCESS_MIGRATE: "Datenbank für {year} vorbereiten"
     
     # Tooltips
     MIGRATE_TO_NEXT_YEAR: "Eine neue Datenbank wird angelegt, alle Schüler in die nächste Klasse versetzt."

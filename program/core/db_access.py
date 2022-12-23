@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-12-22
+Last updated:  2022-12-23
 
 Helper functions for accessing the database.
 
@@ -51,7 +51,6 @@ from datetime import datetime
 from shutil import copyfile
 from glob import glob
 
-from core.base import start
 from ui.ui_base import (
     ### QtSql:
     QSqlDatabase,
@@ -473,7 +472,7 @@ def read_pairs(data):
 #TODO: Is this a sensible approach?
 # Would it be better to simply do a copy and remove entries which are
 # no longer needed?
-def migrate_db(sql_extra: list[str]):
+def migrate_db(path:str, sql_extra: list[str]):
     """Migrate the current database to the next school year.
     The argument is a list of sql commands to execute after creating the
     new database.
@@ -487,7 +486,7 @@ def migrate_db(sql_extra: list[str]):
         print(" --", cmd)
 
     print("\nNEW DATABASE ...")
-    dp = start.year_data_path(int(SCHOOLYEAR) + 1, "migrated.sqlite")
+    dp = os.path.join(path, "migrated.sqlite")
     DatabaseShortAccess.new_database(dp, sql_list)
     print("  ... @", dp)
 
@@ -600,4 +599,5 @@ if __name__ == "__main__":
 
 # It seems that null entries are read as empty strings ...
 
-    migrate_db([])
+    from core.base import Dates
+    migrate_db(start.year_data_path(Dates.next_year()), [])

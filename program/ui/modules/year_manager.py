@@ -1,7 +1,7 @@
 """
 ui/modules/year_manager.py
 
-Last updated:  2022-12-22
+Last updated:  2022-12-23
 
 Front-end for managing year data, migrations, etc.
 
@@ -46,6 +46,7 @@ T = TRANSLATIONS("ui.modules.year_manager")
 
 ### +++++
 
+from core.base import Dates, start
 from core.db_access import (
     open_database,
     db_update_field,
@@ -144,8 +145,19 @@ def do_migration():
         for pdata in sorted(pdlist, key=lambda pd: pd["SORT_NAME"]):
             print("   ...", klass, pupil_name(pdata))
             sql_list.append(sql_insert_from_dict("PUPILS", pdata))
-#TODO: Use a PROCESS pop-up?
-    migrate_db(sql_list)
+    # Folder for next year's data:
+    new_folder = start.year_data_path(Dates.next_year())
+    # Use a PROCESS pop-up to encapsulate the database migration
+    PROCESS(
+#TODO: Maybe include other migrations in the window?
+        migrate_db,
+        title=T["PROCESS_MIGRATE"].format(year=Dates.next_year()),
+        path=new_folder,
+        sql_extra=sql_list
+    )
+    # Perform basic conversion of calendar – it will still need manual
+    # editing, but should at least enable "entry" into the new year.
+    Dates.migrate_calendar()
 
 
 def migrate_leavers_dialog(leavers):

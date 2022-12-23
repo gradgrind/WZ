@@ -1,7 +1,7 @@
 """
 core/base.py
 
-Last updated:  2022-12-18
+Last updated:  2022-12-23
 
 Basic configuration and structural stuff.
 
@@ -197,6 +197,10 @@ class Dates:
         return datetime.datetime.now().isoformat(sep="_", timespec="minutes")
 
     @staticmethod
+    def next_year() -> str:
+        return str(int(SCHOOLYEAR) + 1)
+
+    @staticmethod
     def day1(schoolyear):
         """Return the date of the first day of the school year."""
         m1 = int(CONFIG["SCHOOLYEAR_MONTH_1"])
@@ -238,13 +242,14 @@ class Dates:
         return str(y)
 
     @classmethod
-    def save_calendar(cls, text, fpath=None, save=True):
+    def save_calendar(cls, text, fpath=None):
         """Save the given text as a calendar file to the given path.
-        If no path is supplied, save as the current calendar file.
+        If no path is supplied, don't save.
+        If the path is '*', save as the current calendar file.
         Some very minimal checks are made.
-        If <save> is false, don't save the file.
         Return the (modified) text.
         """
+        print("SAVE CALENDAR", fpath)
         cls.check_calendar(_Minion.parse(text))  # check the school year
         header = CONFIG["CALENDAR_HEADER"].format(date=cls.today())
         try:
@@ -254,8 +259,8 @@ class Dates:
         except:
             pass
         text = header + text
-        if save:
-            if not fpath:
+        if fpath:
+            if fpath == '*':
                 fpath = DATAPATH("CONFIG/Calendar")
             os.makedirs(os.path.dirname(fpath), exist_ok=True)
             with open(fpath, "w", encoding="utf-8") as fh:
@@ -305,12 +310,14 @@ class Dates:
             raise DataError(_MISSING_LAST_DAY)
 
     @classmethod
-    def migrate_calendar(cls, new_year, calendar_path=None):
+    def migrate_calendar(cls, new_year=None, calendar_path=None, save=True):
         """Generate a "starter" calendar for the given school-year.
         It simply takes the given calendar and changes anything that
         looks like a year to fit the new year. It of course still needs
         extensive editing, but it should allow the new year to be opened.
         If no calendar file is supplied, use the currently active one.
+        If no <new_year> is supplied, use the one following the currently
+        active one.
         """
 
         def fn_sub(m):
@@ -324,12 +331,17 @@ class Dates:
         calfile = calendar_path or DATAPATH("CONFIG/Calendar")
         with open(calfile, "r", encoding="utf-8") as fh:
             caltext = fh.read()
+        if not new_year:
+            new_year = cls.next_year()
         old_year = cls.calendar_year(_Minion.parse(caltext))
         old_lastyear = str(int(old_year) - 1)
         new_lastyear = str(int(new_year) - 1)
         rematch = r"([0-9]{4})"
         text = re.sub(rematch, fn_sub, caltext)
-        return cls.save_calendar(text, save=False)
+        if save:
+            path = start.year_data_path(new_year, "CONFIG/Calendar")
+            return cls.save_calendar(text, fpath=path)
+        return cls.save_calendar(text)
 
 
 def class_group_split(class_group: str) -> Tuple[str,str]:
@@ -397,5 +409,5 @@ if __name__ == "__main__":
         print("BAD Date:", Dates.print_date("2016-02-30"))
     except DataError as e:
         print(" ... trapped:", e)
-    new_year = str(int(SCHOOLYEAR) + 1)
-    print(f"\n\nCalendar for {new_year}:\n" + Dates.migrate_calendar(new_year))
+    new_year = Dates.next_year()
+    print(f"\n\nCalendar for {new_year}:\n" + Dates.migrate_calendar(save=False))
