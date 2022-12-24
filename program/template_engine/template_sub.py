@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
-
 """
 template_engine/template_sub.py
 
-Last updated:  2022-01-22
+Last updated:  2022-12-23
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -30,27 +28,15 @@ characters, '_' and '.'.
 
 There is always the danger that editing the templates (in LibreOffice)
 can lead to the substitution fields being internally split up by styling
-tags. This can generally be "repaired" by marking the edited field,
-selecting "clear formatting" in the style selection pop-down (top left
-of the window) and then reselecting the desired style. If that doesn't
-help, it may be necessary to retype the field.
+tags. This can generally be "repaired" by marking (selecting) the edited
+field, selecting "Clear Direct Formatting" in "Format" menu or in the
+context (right-click) menu, and then reselecting the desired style.
+If that doesn't help, it may be necessary to retype the field.
 """
 
-### Messages:
-_MISSING_PDFS = "pdf-Erstellung schlug fehl:\n  von {spath}\n  nach {dpath}"
-_MISSING_PDF = "pdf-Erstellung schlug fehl: {fpath}"
-_BAD_FIELD_INFO = "Ungültige Feld-Info ({error}) in:\n  {path}"
-
-### Paths:
-_Grades_Single = 'Notenzeugnisse/Einzeln'
-_Grades_Term = 'Notenzeugnisse/HJ%s'
-_Grades_Abitur = 'Notenzeugnisse/Abitur'
-
-
 import sys, os
+
 if __name__ == "__main__":
-    import locale
-    print("LOCALE:", locale.setlocale(locale.LC_ALL, ""))
     # Enable package import if running as module
     this = sys.path[0]
     appdir = os.path.dirname(this)
@@ -58,8 +44,12 @@ if __name__ == "__main__":
     basedir = os.path.dirname(appdir)
     from core.base import start
 
-    start.setup(os.path.join(basedir, "TESTDATA"))
-#    start.setup(os.path.join(basedir, 'DATA'))
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+    start.setup(os.path.join(basedir, "DATA-2023"))
+
+T = TRANSLATIONS("template_engine.template_sub")
+
+### +++++
 
 from io import BytesIO
 import tempfile
@@ -71,9 +61,10 @@ from template_engine.simpleodt import OdtFields, Metadata
 from template_engine.simpleodt import DocumentError as TemplateError
 from minion2 import Minion, MinionError
 
-### +++++
+### -----
 
-def merge_pdf(ifile_list, pad2sided = False):
+
+def merge_pdf(ifile_list, pad2sided=False):
     """Join the pdf-files in the input list <ifile_list> to produce a
     single pdf-file. The output is returned as a <bytes> object.
     The parameter <pad2sided> allows blank pages to be added
@@ -88,13 +79,13 @@ def merge_pdf(ifile_list, pad2sided = False):
             page = Page(src.pages[0])
             w = page.trimbox[2]
             h = page.trimbox[3]
-            pdf.add_blank_page(page_size = (w, h))
+            pdf.add_blank_page(page_size=(w, h))
     bstream = BytesIO()
     pdf.save(bstream)
     return bstream.getvalue()
 
 
-def clean_dir(dpath, remove = False):
+def clean_dir(dpath, remove=False):
     """If <remove> is true, remove the given folder and its (direct)
     contents. Subfolders will raise an exception – they shouldn't exist.
     If <remove> is false, ensure that the given folder exists and is empty.
@@ -113,27 +104,30 @@ def libre_office(odt_list, pdf_dir):
     The input files are provided as a list of absolute paths,
     <pdf_dir> is the absolute path to the output folder.
     """
-# Use LibreOffice to convert the odt-files to pdf-files.
-# If using the appimage, the paths MUST be absolute, so I use absolute
-# paths "on principle".
-# I don't know whether the program blocks until the conversion is complete
-# (some versions don't), so it might be good to check that all the
-# expected files have been generated (with a timeout in case something
-# goes wrong?).
-# The old problem that libreoffice wouldn't work headless if another
-# instance (e.g. desktop) was running seems to be no longer the case,
-# at least on linux.
+    # Use LibreOffice to convert the odt-files to pdf-files.
+    # If using the appimage, the paths MUST be absolute, so I use absolute
+    # paths "on principle".
+    # I don't know whether the program blocks until the conversion is complete
+    # (some versions don't), so it might be good to check that all the
+    # expected files have been generated (with a timeout in case something
+    # goes wrong?).
+    # The old problem that libreoffice wouldn't work headless if another
+    # instance (e.g. desktop) was running seems to be no longer the case,
+    # at least on linux.
     def extern_out(line):
-        REPORT('OUT', line)
+        REPORT("OUT", line)
 
-    rc, msg = run_extern(CONFIG["LIBREOFFICE"], '--headless',
-            '--convert-to', 'pdf',
-            '--outdir', pdf_dir,
-            *odt_list,
-            feedback = extern_out
-        )
+    rc, msg = run_extern(
+        CONFIG["LIBREOFFICE"],
+        "--headless",
+        "--convert-to",
+        "pdf",
+        "--outdir",
+        pdf_dir,
+        *odt_list,
+        feedback=extern_out
+    )
 
-###
 
 class Template:
     """Manage a template file.
@@ -145,6 +139,7 @@ class Template:
     The method <all_keys> returns a <set> of all field names from the
     template.
     """
+
     def __init__(self, template_path, full_path=False):
         """<template_path> is the path to the template file.
         If <full_path> is true, the path is absolute;
@@ -152,11 +147,14 @@ class Template:
         The '.odt' ending is optional in <template_path> and will
         normally not be passed in.
         """
-        self.template_path = (template_path if full_path
-                else RESOURCEPATH('templates/' + template_path))
-        if not self.template_path.endswith('.odt'):
-            self.template_path += '.odt'
-#
+        self.template_path = (
+            template_path
+            if full_path
+            else RESOURCEPATH("templates/" + template_path)
+        )
+        if not self.template_path.endswith(".odt"):
+            self.template_path += ".odt"
+
     def fields(self):
         """Return the fields as a list of pairs:
             [(tag, style or <None>), ...]
@@ -165,32 +163,34 @@ class Template:
         indicates that a multi-line text may be substituted here.
         """
         return OdtFields.listUserFields(self.template_path)
-#
+
     def all_keys(self):
-        """Return a <set> of all field names.
-        """
+        """Return a <set> of all field names."""
         return {k for k, s in self.fields()}
-#
+
     def user_info(self):
-        """Return "custom" metadata from the template.
-        """
+        """Return "custom" metadata from the template."""
         return Metadata(self.template_path).user_meta()
-#
+
     def metadata(self):
-        """Return "normal" metadata from the template.
-        """
+        """Return "normal" metadata from the template."""
         md = Metadata(self.template_path).doc_meta()
-        _fi = md.pop('description', None)
+        _fi = md.pop("description", None)
         if _fi:
             try:
-                md['FIELD_INFO'] = Minion().parse(_fi)
+                md["FIELD_INFO"] = Minion().parse(_fi)
             except MinionError as e:
-                REPORT('ERROR', _BAD_FIELD_INFO.format(error = str(e),
-                        path = self.template_path))
+                REPORT(
+                    "ERROR",
+                    T["BAD_FIELD_INFO"].format(
+                        error=str(e), path=self.template_path
+                    ),
+                )
         return md
-#
-    def make_pdf(self, data_list, dir_name, working_dir = None,
-            double_sided = False):
+
+    def make_pdf(
+        self, data_list, dir_name, working_dir=None, double_sided=False
+    ):
         """From the supplied list of data mappings produce a pdf
         containing the concatenated individual reports.
         <dir_name> is the name of the folder containing all the output
@@ -216,44 +216,44 @@ class Template:
         clean_dir(odt_dir)
         odt_list = []
         for datamap in data_list:
-            _outfile = os.path.join(odt_dir, datamap['PSORT'] + '.odt')
+            _outfile = os.path.join(odt_dir, datamap["PSORT"] + ".odt")
             # Force removal of comment-metadata
-            odtBytes = self.make_odt_bytes(datamap, no_info = True)
+            odtBytes = self.make_odt_bytes(datamap, no_info=True)
             # Save the <bytes>
-            with open(_outfile, 'bw') as fout:
+            with open(_outfile, "bw") as fout:
                 fout.write(odtBytes)
             odt_list.append(_outfile)
 
-        pdf_dir = os.path.join(wdir, 'pdf')
+        pdf_dir = os.path.join(wdir, "pdf")
         clean_dir(pdf_dir)
 
         libre_office(odt_list, pdf_dir)
 
         pdfs = os.listdir(pdf_dir)
         if len(pdfs) != len(odt_list):
-            raise TemplateError(_MISSING_PDFS.format(spath = odt_dir,
-                    dpath = pdf_dir))
-# Maybe there's output from libreoffice somewhere?
-
+            raise TemplateError(
+                T["MISSING_PDFS"].format(spath=odt_dir, dpath=pdf_dir)
+            )
         # Concatenate the pdf-files – possibly padding with empty pages –
         # to build the final result.
         # Get pad2sided from the template data (single-sided documents
         # should not be padded!).
-        pdf_bytes = merge_pdf([os.path.join(pdf_dir, pdf)
-                        for pdf in sorted(pdfs)],
-                pad2sided = double_sided)
+        pdf_bytes = merge_pdf(
+            [os.path.join(pdf_dir, pdf) for pdf in sorted(pdfs)],
+            pad2sided=double_sided,
+        )
         # If a working folder is provided, store the result in it
-        pdf_file = dir_name + '.pdf'
+        pdf_file = dir_name + ".pdf"
         if working_dir:
             pdf_path = os.path.join(wdir, pdf_file)
-            with open(pdf_path, 'wb') as fout:
-                    fout.write(pdf_bytes)
-            clean_dir(pdf_dir, remove = True)
+            with open(pdf_path, "wb") as fout:
+                fout.write(pdf_bytes)
+            clean_dir(pdf_dir, remove=True)
             return pdf_path
         else:
             return pdf_bytes
-#
-    def make1pdf(self, datamap, file_path = None):
+
+    def make1pdf(self, datamap, file_path=None):
         """From the supplied data mapping produce a pdf of the
         corresponding report.
         The behaviour depends on whether <file_path> is supplied.
@@ -267,9 +267,9 @@ class Template:
             the same file path, but with appropriate file suffix).
         """
         if file_path:
-            if file_path.endswith('.pdf'):
+            if file_path.endswith(".pdf"):
                 # Remove pdf ending
-                fpath = file_path.rsplit('.', 1)[0]
+                fpath = file_path.rsplit(".", 1)[0]
             else:
                 fpath = file_path
             wdir = os.path.dirname(fpath)
@@ -278,140 +278,160 @@ class Template:
         else:
             # This is for intermediate files on the way to the file-bytes
             wdirTD = tempfile.TemporaryDirectory()
-            fpath = os.path.join(wdirTD.name, '_TMP_')
-        _outfile = fpath + '.odt'
+            fpath = os.path.join(wdirTD.name, "_TMP_")
+        _outfile = fpath + ".odt"
         # Force removal of comment-metadata
-        odtBytes = self.make_odt_bytes(datamap, no_info = True)
+        odtBytes = self.make_odt_bytes(datamap, no_info=True)
         # Save the <bytes>
-        with open(_outfile, 'bw') as fout:
+        with open(_outfile, "bw") as fout:
             fout.write(odtBytes)
         libre_office([_outfile], os.path.dirname(_outfile))
-        pdf_file = fpath + '.pdf'
+        pdf_file = fpath + ".pdf"
         if not os.path.isfile(pdf_file):
-            raise TemplateError(_MISSING_PDF.format(fpath = pdf_file))
-# Maybe there's output from libreoffice somewhere?
+            raise TemplateError(T["MISSING_PDF"].format(fpath=pdf_file))
         if file_path:
             return pdf_file
         else:
-            with open(pdf_file, 'rb') as fin:
+            with open(pdf_file, "rb") as fin:
                 return fin.read()
-#
+
     def make_doc(self, datamap):
         """From the supplied data mapping produce a text document (odt)
         of the corresponding report, returning the file content as <bytes>.
         """
         return self.make_odt_bytes(datamap)
-#
-    def show(self, datamap, filename = None):
+
+    def show(self, datamap, filename=None):
         """The resulting file is shown in a viewer, at present only the
         odt-file is generated and shown in LibreOffice. The file is
         not saved anywhere (but could be within LibreOffice).
         """
         odtBytes = self.make_odt_bytes(datamap)
         wdirTD = tempfile.TemporaryDirectory()
-        fpath = os.path.join(wdirTD.name, filename or '_TMP_')
-        _outfile = fpath + '.odt'
+        fpath = os.path.join(wdirTD.name, filename or "_TMP_")
+        _outfile = fpath + ".odt"
         # Save the <bytes>
-        with open(_outfile, 'bw') as fout:
+        with open(_outfile, "bw") as fout:
             fout.write(odtBytes)
             # Open in external viewer
-            run_extern(CONFIG["LIBREOFFICE"], '--view', _outfile)
+            run_extern(CONFIG["LIBREOFFICE"], "--view", _outfile)
         return None
-#
-    def make_odt_bytes(self, datamap, no_info = False):
-#TODO: Do something with <used> and <notsub>?
+
+    def make_odt_bytes(self, datamap, no_info=False):
+        # TODO: Do something with <used> and <notsub>?
         odtBytes, used, notsub = OdtFields.fillUserFields(
-                self.template_path, datamap,
-                FIELD_INFO = '' if no_info else None)
+            self.template_path, datamap, FIELD_INFO="" if no_info else None
+        )
         return odtBytes
 
 
-#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
+# --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     sdict0 = {
-        'SCHOOL': 'Freie Michaelschule',
-        'SCHOOLBIG': 'FREIE MICHAELSCHULE',
-        'CLASS': '11',              # ?
-        'CYEAR': '11',              # ?
-        'schoolyear': '2020',
-        'SCHOOLYEAR': '2019 – 2020',
-        'ZEUGNIS': 'ZEUGNIS',
-        'Zeugnis': 'Zeugnis',
-        'LEVEL': 'Maßstab Gymnasium',   # Sek I, not Abschluss
-        'issue_d': '2020-07-15',    # for file names ...
-        'ISSUE_D': '15.07.2020',    # always
-        'GRADES_D': '06.07.2020',   # Versetzung only (Zeugnis 11.Gym, 12.Gym)
-        'COMMENT': '',
-        'NOCOMMENT': '––––––––––',
-        'GS': '',                   # Abgang only
-        'GSVERMERK': '',            # Abgang SekI only
-
-# Pupil data
-        'POB': 'Hannover',
-        'DOB_D': '12.02.2002',
-        'ENTRY_D': '01.08.2009',
-        'FIRSTNAMES': 'Elena Susanne',
-        'LASTNAME': 'Blender',
-        'PSORT': 'Blender_Elena',
-        'EXIT_D': '15.07.2020',     # Abschluss / Abgang only
-
-        'S.V.01': 'Deutsch', 'G.V.01': 'sehr gut',
-        'S.V.02': 'Englisch', 'G.V.02': 'gut',
-        'S.V.03': 'Französisch', 'G.V.03': 'befriedigend',
-        'S.V.04': 'Kunst', 'G.V.04': 'gut',
-        'S.V.05': 'Musik', 'G.V.05': 'gut',
-        'S.V.06': 'Geschichte', 'G.V.06': 'gut',
-        'S.V.07': 'Sozialkunde', 'G.V.07': 'befriedigend',
-        'S.V.08': 'Religion', 'G.V.08': 'gut',
-        'S.V.09': 'Mathematik', 'G.V.09': 'befriedigend',
-        'S.V.10': 'Biologie', 'G.V.10': 'sehr gut',
-        'S.V.11': 'Chemie', 'G.V.11': 'gut',
-        'S.V.12': 'Physik', 'G.V.12': 'mangelhaft',
-        'S.V.13': 'Sport', 'G.V.13': 'gut',
-        'S.V.14': '––––––––––', 'G.V.14': '––––––––––',
-        'S.V.15': '––––––––––', 'G.V.15': '––––––––––',
-        'S.V.16': '––––––––––', 'G.V.16': '––––––––––',
-
-        'S.K.01': 'Eurythmie', 'G.K.01': 'sehr gut',
-        'S.K.02': 'Buchbinden', 'G.K.02': 'gut',
-        'S.K.03': 'Kunstgeschichte', 'G.K.03': '––––––',
-        'S.K.04': '––––––––––', 'G.K.04': '––––––––––',
-        'S.K.05': '––––––––––', 'G.K.05': '––––––––––',
-        'S.K.06': '––––––––––', 'G.K.06': '––––––––––',
-        'S.K.07': '––––––––––', 'G.K.07': '––––––––––',
-        'S.K.08': '––––––––––', 'G.K.08': '––––––––––',
+        "SCHOOL": "Freie Michaelschule",
+        "SCHOOLBIG": "FREIE MICHAELSCHULE",
+        "CLASS": "11",  # ?
+        "CYEAR": "11",  # ?
+        "schoolyear": "2020",
+        "SCHOOLYEAR": "2019 – 2020",
+        "ZEUGNIS": "ZEUGNIS",
+        "Zeugnis": "Zeugnis",
+        "LEVEL": "Maßstab Gymnasium",  # Sek I, not Abschluss
+        "issue_d": "2020-07-15",  # for file names ...
+        "ISSUE_D": "15.07.2020",  # always
+        "GRADES_D": "06.07.2020",  # Versetzung only (Zeugnis 11.Gym, 12.Gym)
+        "COMMENT": "",
+        "NOCOMMENT": "––––––––––",
+        "GS": "",  # Abgang only
+        "GSVERMERK": "",  # Abgang SekI only
+        # Pupil data
+        "POB": "Hannover",
+        "DOB_D": "12.02.2002",
+        "ENTRY_D": "01.08.2009",
+        "FIRSTNAMES": "Elena Susanne",
+        "LASTNAME": "Blender",
+        "PSORT": "Blender_Elena",
+        "EXIT_D": "15.07.2020",  # Abschluss / Abgang only
+        "S.V.01": "Deutsch",
+        "G.V.01": "sehr gut",
+        "S.V.02": "Englisch",
+        "G.V.02": "gut",
+        "S.V.03": "Französisch",
+        "G.V.03": "befriedigend",
+        "S.V.04": "Kunst",
+        "G.V.04": "gut",
+        "S.V.05": "Musik",
+        "G.V.05": "gut",
+        "S.V.06": "Geschichte",
+        "G.V.06": "gut",
+        "S.V.07": "Sozialkunde",
+        "G.V.07": "befriedigend",
+        "S.V.08": "Religion",
+        "G.V.08": "gut",
+        "S.V.09": "Mathematik",
+        "G.V.09": "befriedigend",
+        "S.V.10": "Biologie",
+        "G.V.10": "sehr gut",
+        "S.V.11": "Chemie",
+        "G.V.11": "gut",
+        "S.V.12": "Physik",
+        "G.V.12": "mangelhaft",
+        "S.V.13": "Sport",
+        "G.V.13": "gut",
+        "S.V.14": "––––––––––",
+        "G.V.14": "––––––––––",
+        "S.V.15": "––––––––––",
+        "G.V.15": "––––––––––",
+        "S.V.16": "––––––––––",
+        "G.V.16": "––––––––––",
+        "S.K.01": "Eurythmie",
+        "G.K.01": "sehr gut",
+        "S.K.02": "Buchbinden",
+        "G.K.02": "gut",
+        "S.K.03": "Kunstgeschichte",
+        "G.K.03": "––––––",
+        "S.K.04": "––––––––––",
+        "G.K.04": "––––––––––",
+        "S.K.05": "––––––––––",
+        "G.K.05": "––––––––––",
+        "S.K.06": "––––––––––",
+        "G.K.06": "––––––––––",
+        "S.K.07": "––––––––––",
+        "G.K.07": "––––––––––",
+        "S.K.08": "––––––––––",
+        "G.K.08": "––––––––––",
     }
 
-    t = Template('Noten/SekI')
+    t = Template("grade_reports/SekI")
     print("\nMetadata:\n", t.metadata())
     print("\nUser-Info:\n", t.user_info())
+    print("\nKeys:", sorted(t.all_keys()))
+    print("\n----------------------------------------------")
 
-#    t = Template('Noten/Fachhochschulreife')
-    t = Template('Noten/SekII-13-Abgang')
-    t.FILES_PATH = 'GRADE_REPORTS'
+    #    t = Template('grade_reports/Fachhochschulreife')
+    t = Template("grade_reports/SekII-13-Abgang")
+    print("\nMetadata:\n", t.metadata())
+    print("\nUser-Info:\n", t.user_info())
+#?    t.FILES_PATH = "GRADE_REPORTS"
     print("\nKeys:", sorted(t.all_keys()))
 
-#    t.show(sdict0)
-#    quit(0)
+    #    t.show(sdict0)
+    #    quit(0)
 
-    print("\nMetadata:\n", t.metadata())
-
-    print("\nUser-Info:\n", t.user_info())
-
-    wdir = DATAPATH('testing/tmp')
-    file_name = '%s_%s' % (sdict0['PSORT'], sdict0['issue_d'])
+    wdir = DATAPATH("testing/tmp")
+    file_name = "%s_%s" % (sdict0["PSORT"], sdict0["issue_d"])
     fpath = t.make1pdf(sdict0, os.path.join(wdir, file_name))
-#    pdf_bytes = t.make_pdf1(sdict0, file_name)
-#    fpath = os.path.join(wdir, file_name) + '.pdf'
-#    with open(fpath, 'wb') as fout:
-#        fout.write(pdf_bytes)
+    #    pdf_bytes = t.make_pdf1(sdict0, file_name)
+    #    fpath = os.path.join(wdir, file_name) + '.pdf'
+    #    with open(fpath, 'wb') as fout:
+    #        fout.write(pdf_bytes)
 
     print("\nGenerated", fpath)
 
     sdict1 = sdict0.copy()
-    sdict1['PSORT'] = 'Blender_Eleni'
-    sdict1['FIRSTNAMES'] = 'Eleni Marie'
-    dir_name = '11_2'
+    sdict1["PSORT"] = "Blender_Eleni"
+    sdict1["FIRSTNAMES"] = "Eleni Marie"
+    dir_name = "11_2"
     print("\nGenerated", t.make_pdf([sdict0, sdict1], dir_name, wdir))

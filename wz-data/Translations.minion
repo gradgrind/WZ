@@ -1,5 +1,15 @@
 ### Translations
 
+core.base: {
+    # Messages
+    MISSING_LAST_DAY: "Feld „LAST_DAY“ fehlt im Kalender"
+    BAD_DATE:       "Ungültiges Datum: {date}"
+    BAD_DATE_CAL:   "Ungültiges Datum im Kalender: {line}"
+    INVALID_SCHOOLYEAR: "Ungültiges Schuljahr: {year}"
+    DODGY_SCHOOLYEAR: "[?] Möglicherweise fehlerhaftes Schuljahr: {year}"
+
+}
+
 core.db_access: {
     # Messages
     BACKUP_TO:          "Sicherungskopie der Daten: {f}\n"
@@ -47,6 +57,13 @@ core.report_courses: {
     MULTIPLE_REPORT_SETTINGS: "Gruppe {group}: Zeugnis-Info in Fach {subject} widersprüchlich"
 }
 
+template_engine.template_sub: {
+    # Messages
+    MISSING_PDFS: "pdf-Erstellung schlug fehl:\n  von {spath}\n  nach {dpath}"
+    MISSING_PDF: "pdf-Erstellung schlug fehl: {fpath}"
+    BAD_FIELD_INFO: "Ungültige Feld-Info ({error}) in:\n  {path}"
+}
+
 grades.gradetable: {
     TITLE:          "Notentabelle, erstellt {time}"
     PID:            "ID"
@@ -69,6 +86,15 @@ grades.gradetable: {
     COMPONENT_NOT_UNIQUE: "Sammelfachkomponente {sid} ist mehreren Sammelfächern zugeordnet"
     COMPOSITE_NO_COMPONENTS: "Sammelfach {name} ({sid}) hat keine Komponenten"
     NO_PUPIL_GRADES: "Keine Schüler bzw. Noten: {report_info}"
+}
+
+grades.makereports: {
+    # Messages
+    INVALID_REPORT_TYPE: "Ungültige Zeugnis-Art ({rtype}) für Schüler:\n  {pids}"
+    
+    BAD_REPORT_TYPE: "Ungültiger Zeugnistyp: '{rtype}'"
+    NO_SLOT:        "Kein Platz mehr für Fach mit Kürzel {sid} in Fachgruppe {tag}. Bisher: {done}"
+    UNKNOWN_SUBJECT_GROUP: "Zeugnis-Vorlage {path}:\n  Fachgruppe {group} ist ungültig"
 }
 
 local.grade_functions: {

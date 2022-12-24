@@ -1,7 +1,7 @@
 """
 core/base.py
 
-Last updated:  2022-12-23
+Last updated:  2022-12-24
 
 Basic configuration and structural stuff.
 
@@ -22,18 +22,6 @@ Copyright 2022 Michael Towers
 
 =-LICENCE=================================
 """
-
-### Messages
-_NO_SCHOOLYEAR = "Kein Schuljahr"
-_MISSING_LAST_DAY = "Feld „LAST_DAY“ fehlt im Kalender"
-_BAD_DATE = "Ungültiges Datum: {date}"
-_BAD_DATE_CAL = "Ungültiges Datum im Kalender: {line}"
-_INVALID_SCHOOLYEAR = "Ungültiges Schuljahr: {year}"
-_DODGY_SCHOOLYEAR = "[?] Möglicherweise fehlerhaftes Schuljahr: {year}"
-_BAD_CONFIG_LINE = "In Konfigurationsdatei {cfile}:\n  ungültige Zeile: {line}"
-_DOUBLE_CONFIG_TAG = (
-    "In Konfigurationsdatei {cfile}:\n" "  mehrfacher Eintrag: {tag} = ..."
-)
 
 NO_DATE = "*"  # an unspecified date
 
@@ -76,6 +64,8 @@ __TRANSLATIONS = MINION(APPDATAPATH("Translations.minion"))
 def __translations(module):
     return __TRANSLATIONS[module]
 builtins.TRANSLATIONS = __translations
+
+T = TRANSLATIONS("core.base")
 
 ### -----
 
@@ -139,7 +129,7 @@ class start:
 
 class Dates:
     @staticmethod
-    def print_date(date, trap=True):
+    def print_date(date, date_format, trap=True):
         """Convert a date string from the program format (e.g. "2016-12-06")
         to the format used for output (e.g. "06.12.2016").
         If an invalid date is passed, a <DataError> is raised, unless
@@ -147,28 +137,11 @@ class Dates:
         """
         try:
             d = datetime.datetime.strptime(date, "%Y-%m-%d")
-            return d.strftime(CONFIG["DATEFORMAT"])
+            return d.strftime(date_format)
         except:
             if trap:
-                raise DataError(_BAD_DATE.format(date=date))
+                raise DataError(T["BAD_DATE"].format(date=date))
         return None
-
-    # TODO: deprecated (because the conversion is done by/for the template)?
-    @classmethod
-    def convert_dates(cls, mapping):
-        """Convert all date values in the given mapping to the format
-        used for output (see method <print_date>). The date values are
-        those with keys ending '_D'.
-        Return a list of the keys for failed conversions.
-        """
-        fails = []
-        for key, val in mapping.items():
-            if key.endswith("_D"):
-                try:
-                    mapping[key] = cls.print_date(val)
-                except DataError:
-                    fails.append(key)
-        return fails
 
     @classmethod
     def today(cls, iso=True):
@@ -224,7 +197,7 @@ class Dates:
         try:
             datetime.date.fromisoformat(d)
         except ValueError:
-            raise DataError(_BAD_DATE.format(date=d))
+            raise DataError(T["BAD_DATE"].format(date=d))
         if d < d1:
             return False
         return d <= d2
@@ -283,9 +256,9 @@ class Dates:
         try:
             y1 = int(schoolyear)
         except ValueError:
-            raise DataError(_INVALID_SCHOOLYEAR.format(year=schoolyear))
+            raise DataError(T["INVALID_SCHOOLYEAR"].format(year=schoolyear))
         if y1 < int(y0) or y1 > int(y0) + 2:
-            raise DataError(_DODGY_SCHOOLYEAR.format(year=schoolyear))
+            raise DataError(T["DODGY_SCHOOLYEAR"].format(year=schoolyear))
         for k, v in calendar.items():
             if isinstance(v, list):
                 # range of days, check validity
@@ -298,7 +271,7 @@ class Dates:
                 # single day, check validity
                 if k[0] == "~" or cls.check_schoolyear(schoolyear, v):
                     continue
-            raise DataError(_BAD_DATE_CAL.format(line="%s: %s" % (k, v)))
+            raise DataError(T["BAD_DATE_CAL"].format(line="%s: %s" % (k, v)))
         return calendar
 
     @staticmethod
@@ -307,7 +280,7 @@ class Dates:
         try:
             return calendar["LAST_DAY"].split("-", 1)[0]
         except KeyError:
-            raise DataError(_MISSING_LAST_DAY)
+            raise DataError(T["MISSING_LAST_DAY"])
 
     @classmethod
     def migrate_calendar(cls, new_year=None, calendar_path=None, save=True):
@@ -404,9 +377,9 @@ if __name__ == "__main__":
     print("Today (possibly faked):", Dates.today())
     print("Current school year:", Dates.get_schoolyear())
     print("School year of data:", SCHOOLYEAR)
-    print("A date:", Dates.print_date("2016-04-25"))
+    print("A date:", Dates.print_date("2016-04-25", "%d.%m.%Y"))
     try:
-        print("BAD Date:", Dates.print_date("2016-02-30"))
+        print("BAD Date:", Dates.print_date("2016-02-30", "%d.%m.%Y"))
     except DataError as e:
         print(" ... trapped:", e)
     new_year = Dates.next_year()

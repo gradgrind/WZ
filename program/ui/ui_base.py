@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-12-19
+Last updated:  2022-12-24
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -88,6 +88,33 @@ class GuiError(Exception):
 T = TRANSLATIONS("ui.ui_base")
 
 ### -----
+
+DATE_FORMAT_MAP = {
+#TODO: Only a few parameters have been implemented so far ...
+    "%": "%",
+    "d": "dd",
+    "m": "MM",
+    "Y": "yyyy",
+}
+def date2qt(strftime):
+    """Convert a date format (as for "strftime") to the format for QDate.
+    """
+    l = []
+    pending = False
+    for c in strftime:
+        if pending:
+            try:
+                l.append(DATE_FORMAT_MAP[c])
+            except KeyError:
+                raise Bug(
+                    f"Date format conversion not implemented for %{c}"
+                )
+            pending = False
+        elif c == '%':
+            pending = True
+        else:
+            l.append(c)
+    return "".join(l)
 
 
 class HLine(QFrame):

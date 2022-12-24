@@ -101,6 +101,7 @@ from ui.ui_base import (
     HLine,
     run,
     saveDialog,
+    date2qt,
 )
 
 # from ui.editable import EdiTableWidget
@@ -255,14 +256,15 @@ class GradeManager(QWidget):
         self.issue_date.setMinimumDate(firstday)
         self.issue_date.setMaximumDate(lastday)
         self.issue_date.setCalendarPopup(True)
-        self.issue_date.setDisplayFormat(CONFIG["QT_DATEFORMAT"])
+        date_format = date2qt(CONFIG["DATEFORMAT"])
+        self.issue_date.setDisplayFormat(date_format)
         formbox.addRow(self.info_fields["DATE_ISSUE"], self.issue_date)
         self.issue_date.dateChanged.connect(self.issue_date_changed)
         self.grade_date = QDateEdit()
         self.grade_date.setMinimumDate(firstday)
         self.grade_date.setMaximumDate(lastday)
         self.grade_date.setCalendarPopup(True)
-        self.grade_date.setDisplayFormat(CONFIG["QT_DATEFORMAT"])
+        self.grade_date.setDisplayFormat(date_format)
         formbox.addRow(self.info_fields["DATE_GRADES"], self.grade_date)
         self.grade_date.dateChanged.connect(self.grade_date_changed)
         self.modified_time = QLineEdit()

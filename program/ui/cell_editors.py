@@ -1,7 +1,7 @@
 """
 ui/cell_editors.py
 
-Last updated:  2022-12-12
+Last updated:  2022-12-24
 
 Pop-up editors for table grids.
 
@@ -189,7 +189,12 @@ class CellEditorDate(QDialog):
 
 
 class CellEditorText(QDialog):
-    def __init__(self):
+    def __init__(self, newline="\\n"):
+        """Display a text editor widget with multiline capability.
+        if <newline> is not empty, the stored value will have this
+        string instead of a newline.
+        """
+        self.newline = newline
         super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         vbox = QVBoxLayout(self)
@@ -205,11 +210,15 @@ class CellEditorText(QDialog):
 
     def activate(self, pos, properties):
         text0 = properties["VALUE"]
+        if self.newline:
+            text0 = text0.replace(self.newline, "\n")
         self.textedit.setPlainText(text0)
         self.move(pos)
         if self.exec():
             text = self.textedit.toPlainText()
             if text != text0:
+                if self.newline:
+                    text = text.replace("\n", self.newline)
                 properties["VALUE"] = text
                 return True
         return False
