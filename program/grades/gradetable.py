@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-12-02
+Last updated:  2022-12-24
 
 Access grade data, read and build grade tables.
 
@@ -643,7 +643,7 @@ def make_grade_table(
     pupils = gtinfo["PUPILS"]
 
     ### Get template file
-    template_path = RESOURCEPATH(gtinfo["GRADE_ENTRY"])
+    template_path = RESOURCEPATH("templates/" + gtinfo["GRADE_ENTRY"])
     table = KlassMatrix(template_path)
 
     ### Set title line
@@ -898,11 +898,11 @@ if __name__ == "__main__":
         print(" .........", p_grade_tids)
 
     print("\n*** STORED GRADES")
-    stored_grades = read_stored_grades("2. Halbjahr", "12G.R")
+    stored_grades = read_stored_grades("1. Halbjahr", "12G.R")
 
     print("\n???????????????????????????????????????????????????????")
 
-    grade_table = full_grade_table("2. Halbjahr", "12G.R", "").items()
+    grade_table = full_grade_table("1. Halbjahr", "12G.R", "").items()
 
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 

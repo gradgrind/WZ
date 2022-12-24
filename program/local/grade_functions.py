@@ -1,7 +1,7 @@
 """
 local/grade_functions.py
 
-Last updated:  2022-11-21
+Last updated:  2022-12-23
 
 Functions to perform grade calculations.
 
@@ -113,3 +113,12 @@ def AVERAGE_I(grades):
     return astr
 
 GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
+
+
+
+
+#TODO: Building reports
+
+def process_grade_data(pdata, grade_info):
+#TODO
+    return pdata
