@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-12-23
+Last updated:  2022-12-25
 
 Helper functions for accessing the database.
 
@@ -447,26 +447,58 @@ def db_unique_fields(table):
     return fields
 """
 
-#TODO: Increase flexibility?
-# 1) Add a write_pairs function and use it in the places where such data
-# is to be stored.
-# 2) Consider a different format (e.g. json)
-def read_pairs(data):
+#TODO: Increase flexibility by using (e.g.) JSON?
+def read_pairs(data:str) -> list[tuple[str,str]]:
     """Read a list of (key, value) pairs from the given string.
 
     Each line of the input supplies one such pair.
     Key and value are separated by ':'.
     This format is used for special database fields which
     contain multiple key-value pairs.
+    Values containing multiple lines are made possible by using
+    backslash-n for newline characters in the stored string. The
+    newlines are recovered by this function.
     """
     pairs = []
     for line in data.splitlines():
         try:
             k, v = line.split(":", 1)
-            pairs.append((k.strip(), v.strip()))
+            pairs.append((k.strip(), v.strip().replace("\\n", "\n")))
         except ValueError:
             SHOW_ERROR(T["BAD_KEY_VALUE_LIST"].format(text=data))
     return pairs
+
+
+def write_pairs(pairs:list[tuple[str,str]]) -> str:
+    """Convert a list of (key, value) pairs to a string representation.
+
+    Each pair of the input supplies one line of the string.
+    Key and value are separated by ':'.
+    This format is used for special database fields which
+    contain multiple key-value pairs.
+    Values containing multiple lines are made possible by using
+    backslash-n for newline characters in the stored string.
+    """
+    lines = []
+    for k, v in pairs:
+        if ":" in k or "\n" in k:
+            SHOW_ERROR(T["BAD_KEY_IN_KV_LIST"].format(key=k))
+            continue
+        if "\\n" in v:
+            SHOW_ERROR(T["NEWLINE_TAG_IN_KV_LIST"].format(val=v))
+            continue
+        v1 = v.replace("\n", "\\n")
+        lines.append(f'{k}:{v1}')
+    return "\n".join(lines)
+
+
+def write_pairs_dict(pairs:dict[str,str]) -> str:
+    """Convert a mapping of (key, value) pairs to a string representation.
+    See <write_pairs> for further details.
+    """
+    #TODO: Note that <write_pairs> can also accept an iterator (though
+    # the type definition doesn't show this ...)
+    return write_pairs(pairs.items())
 
 
 #TODO: Is this a sensible approach?

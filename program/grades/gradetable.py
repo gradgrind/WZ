@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-12-24
+Last updated:  2022-12-25
 
 Access grade data, read and build grade tables.
 
@@ -62,7 +62,8 @@ from core.db_access import (
     read_pairs,
     db_new_row,
     db_delete_rows,
-    db_update_field
+    db_update_field,
+    write_pairs_dict,
 )
 from core.basic_data import SHARED_DATA, get_subjects_with_sorting
 from core.pupils import pupil_name, pupil_data
@@ -440,7 +441,7 @@ def full_grade_table(occasion, class_group, instance):
                 # The update only occurs if there was already an entry
                 # for the pupil (<old_grades> not empty)
                 db_update_field("GRADES",
-                    "GRADE_MAP", grade_string(new_grades),
+                    "GRADE_MAP", write_pairs_dict(new_grades),
                     OCCASION=occasion,
                     CLASS_GROUP=class_group,
                     INSTANCE=instance,
@@ -456,13 +457,6 @@ def full_grade_table(occasion, class_group, instance):
             INSTANCE=instance,
         )
     return table_info
-
-
-def grade_string(grade_map: dict[str:str]) -> str:
-    """Return a string representation of a string mapping for a database
-    field.
-    """
-    return "\n".join([f"{k}:{v}" for k, v in grade_map.items()])
 
 
 def calculate_row(table, pid):
@@ -559,7 +553,7 @@ def update_pupil_grades(grade_table, pid):
     # print("\nCHANGED:", changed_grades)
     # Save grades to database
     grades = grade_table["PUPIL_GRADES"][pid]
-    gstring = grade_string(grades)
+    gstring = write_pairs_dict(grades)
     # print("GRADES", "GRADE_MAP", gstring,
     #    grade_table["OCCASION"],
     #    grade_table["CLASS_GROUP"],
