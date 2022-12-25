@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-12-10
+Last updated:  2022-12-25
 
 Front-end for managing grade reports.
 
@@ -479,6 +479,7 @@ class GradeTableView(GridViewAuto):
                     values = [[[v], ""] for v in sdata["VALUES"]]
                     editor = CellEditorTable(values).activate
                 elif handler_type == "CHOICE_MAP":
+                    print("%%%%%%%%%%%%%%", sdata)
                     values = [[[v], text] for v, text in sdata["VALUES"]]
                     editor = CellEditorTable(values).activate
                 elif handler_type == "TEXT":

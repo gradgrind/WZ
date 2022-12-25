@@ -97,6 +97,9 @@ grades.makereports: {
     BAD_REPORT_TYPE: "Ungültiger Zeugnistyp: '{rtype}'"
     NO_SLOT:        "Kein Platz mehr für Fach mit Kürzel {sid} in Fachgruppe {tag}. Bisher: {done}"
     UNKNOWN_SUBJECT_GROUP: "Zeugnis-Vorlage {path}:\n  Fachgruppe {group} ist ungültig"
+    MISSING_SUBJECT_GRADE: "Fach-Id '{sid}' hat keine Note"
+    BAD_GRADE:      "Ungültige Note ({grade}) für Fach-Id '{sid}'"
+    TOO_FEW_KEYS:   "Zu wenig Felder für Fächer in Gruppe '{tag}'"
 }
 
 local.grade_functions: {

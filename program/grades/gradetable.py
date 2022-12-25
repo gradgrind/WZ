@@ -103,18 +103,28 @@ def get_group_data(occasion: str, class_group: str):
     else:
         raise Bug(f'Invalid grade "occasion": {occasion}')
     try:
-        return odata[class_group]
+        symbols = odata["__SYMBOLS__"].copy()
+    except KeyError:
+        symbols = {}
+    try:
+        cgodata = odata[class_group].copy()
     except KeyError:
         raise GradeTableError(
             T["INVALID_OCCASION_GROUP"].format(occasion=o, group=class_group)
         )
+    try:
+        symbols.update(cgodata.pop("__SYMBOLS__"))
+    except KeyError:
+        pass
+    cgodata["SYMBOLS"] = symbols
+    return cgodata
 
 
 def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     ### Get subject, pupil and group report-information
     subjects, pupils = get_pupil_grade_matrix(class_group, text_reports=False)
     group_data = get_group_data(occasion, class_group)
-    # print("??????", group_data)
+    print("??????", group_data)
     klass, group = class_group_split(class_group)
     grade_info = get_grade_config()
     composites = {}
@@ -253,14 +263,13 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
                 "TYPE": v[1]
             }
             try:
-                values = v[2]
+                node["VALUES"] = v[2]
             except IndexError:
-                values = None
-            if values:
-                node["VALUES"] = values
+                node["VALUES"] = []
             extra_list.append(node)
     result["GRADES"] = group_data["GRADES"]
     result["GRADE_ENTRY"] = group_data.get("GRADE_ENTRY", "")
+    result["SYMBOLS"] = group_data["SYMBOLS"]
 
     pupil_map = {}
     result["PUPILS"] = pupil_map
@@ -395,7 +404,10 @@ def full_grade_table(occasion, class_group, instance):
                         except KeyError:
                             grade_map[sid] = ""
                         else:
-                            default = values[0]
+                            if values:
+                                default = values[0]
+                            else:
+                                default = ""
                             # The value can be a single string or a pair
                             if isinstance(default, list):
                                 grade_map[sid] = default[0]
@@ -896,9 +908,12 @@ if __name__ == "__main__":
 
     print("\n???????????????????????????????????????????????????????")
 
-    grade_table = full_grade_table("1. Halbjahr", "12G.R", "").items()
+    #grade_table = full_grade_table("1. Halbjahr", "12G.R", "").items()
+    grade_table = full_grade_table("2. Halbjahr", "13", "").items()
 
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
     for k, v in grade_table:
         print("\n =======", k, "\n", v)
+
+    #print("\n&&&&&&&&&&&&&&&&&", get_group_data("1. Halbjahr", "13"))

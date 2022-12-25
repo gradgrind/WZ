@@ -1,7 +1,7 @@
 """
 local/grade_functions.py
 
-Last updated:  2022-12-23
+Last updated:  2022-12-25
 
 Functions to perform grade calculations.
 
@@ -119,6 +119,12 @@ GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 
 #TODO: Building reports
 
-def process_grade_data(pdata, grade_info):
+def process_grade_data(pdata, grade_info, grade_config):
 #TODO
-    return pdata
+    pdata["NOCOMMENT"] = "" if pdata["REMARKS"] else "––––––––––"
+    try:
+        level = pdata["LEVEL"]
+    except KeyError:
+        pass
+    else:
+        pdata["LEVEL"] = grade_config["LEVEL_MAP"].get(level) or level
