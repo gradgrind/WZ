@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-12-24
+Last updated:  2022-12-26
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -788,7 +788,8 @@ class __Reporter(QDialog):
     colours = {
         "INFO":     "#00a000",
         "WARNING":  "#eb8900",
-        "ERROR":    "#d00000"
+        "ERROR":    "#d00000",
+        "OUT":      "#ee00ee",
     }
 
     def __init__(self, parent=None):

@@ -1,7 +1,7 @@
 """
 local/grade_functions.py
 
-Last updated:  2022-12-25
+Last updated:  2022-12-26
 
 Functions to perform grade calculations.
 
@@ -118,6 +118,14 @@ GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 
 
 #TODO: Building reports
+
+def report_name(occasion, group, instance, rtype):
+    """Return a suitable file/folder name for a set of reports.
+    """
+    if instance:
+        instance = '_' + instance
+    return f"{occasion}_{group}{instance}_{rtype}".replace(" ", "")
+
 
 def process_grade_data(pdata, grade_info, grade_config):
 #TODO

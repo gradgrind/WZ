@@ -164,7 +164,7 @@ class InstanceSelector(QWidget):
     # would come from the database entry. Perhaps dates might be permitted.
     # In that case a date-choice widget would be appropriate.
     # Single report types, and maybe some other types, would take any string.
-    # In that case a line editor coulf be used.
+    # In that case a line editor could be used.
 
     def do_addnew(self):
         result = InstanceDialog.popup(

@@ -100,6 +100,7 @@ grades.makereports: {
     MISSING_SUBJECT_GRADE: "Fach-Id '{sid}' hat keine Note"
     BAD_GRADE:      "Ungültige Note ({grade}) für Fach-Id '{sid}'"
     TOO_FEW_KEYS:   "Zu wenig Felder für Fächer in Gruppe '{tag}'"
+    BAD_SUBJECT_KEY: "Ungültiges Fach-Feld in Vorlage: {key}"
 }
 
 local.grade_functions: {

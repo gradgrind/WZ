@@ -1,7 +1,7 @@
 """
 grades/makereports.py
 
-Last updated:  2022-12-25
+Last updated:  2022-12-26
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -36,17 +36,6 @@ Copyright 2022 Michael Towers
 #       Sozialpraktikum:        3 Wochen
 # TODO: Maybe component courses (& eurythmy?) merely as "teilgenommen"?
 
-_REPORT_TYPE_FIELD = "*ZA"
-
-## Messages
-_INVALID_SUBJECT_KEY = "Ungültiges Fach-Feld in Vorlage: {key}"
-_BAD_GRADE = "Ungültige Note ({grade}) im Fach {sid}"
-_NO_GRADE = "Keine Note im Fach {sid}"
-_NO_SUBJECT_GROUP = "Fach {sid}: Fach-Gruppe {group} nicht in Vorlage"
-
-_NOT_COMPLETE = "Daten für {pupil} unvollständig"
-_MULTI_GRADE_GROUPS = "Fach {sbj} passt zu mehr als eine Fach-Gruppe"
-
 ###############################################################
 
 import sys, os
@@ -79,7 +68,7 @@ from core.base import Dates
 # from local.grade_template import info_extend
 from template_engine.template_sub import Template, TemplateError
 from grades.gradetable import full_grade_table, get_grade_config
-from local.grade_functions import process_grade_data
+from local.grade_functions import process_grade_data, report_name
 
 ### -----
 
@@ -110,7 +99,7 @@ def make_reports(occasion, class_group, instance):
     # SYMBOLS
 
     # I can get the template path via the REPORT_TYPE "grade" for each pupil.
-    # grade_info["ALL_SIDS"]["REPORT_TYPE"]["VALUES"] is a list of [key
+    # grade_info["ALL_SIDS"]["REPORT_TYPE"]["VALUES"] is a list of [key,
     # path] pairs.
 
     ### Divide the subjects into groups
@@ -137,8 +126,6 @@ def make_reports(occasion, class_group, instance):
         #print("\n", pdata)
         #print("  ---", stdata)
         pid = pdata["PID"]
-
-#TODO: Also need data from GRADES_INFO table
         grades = grade_info["PUPIL_GRADES"][pid]
         #print("  ***", grades)
         rtype = grades["REPORT_TYPE"]
@@ -149,114 +136,53 @@ def make_reports(occasion, class_group, instance):
 
     ### Build reports for each report-type separately
     rtype_path = dict(grade_info["ALL_SIDS"]["REPORT_TYPE"]["VALUES"])
-    path_list = [
-        build_report_type(
-            rtype,
+    fplist = []
+    for rtype, pid_list in rtypes.items():
+        try:
+            tpath = rtype_path[rtype]
+        except KeyError:
+            REPORT(
+                "ERROR",
+                T["INVALID_REPORT_TYPE"].format(
+                    rtype=rtype, pids=", ".join(pid_list)
+                )
+            )
+            return ""
+        print("\nTEMPLATE:", rtype, tpath, pid_list)
+        template = Template(tpath)
+        gmaplist = collect_report_type_data(
+            template,
             pid_list,
-            rtype_path,
             subject_groups,
             grade_info
         )
-        for rtype, pid_list in rtypes.items()
-    ]
-
-#TODO
-    return
-
-    if x:
-        if y:
-            gmap = self.gmap0.copy()
-            # Get pupil data
-            pdata = pupils[pid]
-            # could just do gmap[k] = pdata[k] or '' and later substitute all dates?
-            for k in pdata.keys():
-                v = pdata[k]
-                if v:
-                    if k.endswith("_D"):
-                        v = Dates.print_date(v)
-                else:
-                    v = ""
-                gmap[k] = v
-            grades = self.grade_table[pid]
-            # Grade parameters
-#            gmap["STREAM"] = grades.stream
-#            gmap["SekII"] = grades.sekII
-#            comment = grades.pop("*B", "")
-#            if comment:
-#                comment = comment.replace(LINEBREAK, "\n")
-#            gmap["COMMENT"] = comment
-
-            ## Process the grades themselves ...
-            if self.grade_table.term == "A":
-                showgrades = {
-                    k: UNGRADED if v == NO_GRADE else v
-                    for k, v in grades.abicalc.tags.items()
-                }
-                gmap.update(showgrades)
-                gmap.update(grades.abicalc.calculate())
-            else:
-                # Sort into grade groups
-                grade_map = self.sort_grade_keys(
-                    pdata.name(), grades, gTemplate
-                )
-                gmap.update(grade_map)
-                gmap["REPORT_TYPE"] = rtype
-
-            ## Add template and "local" stuff
-            info_extend(gmap)
-            gmaplist.append(gmap)
-
-
-
-        _tg = prepare_report_data(rtype, pid_list)
-        if _tg:
-            template, gmaplist = _tg
-            # make_pdf: data_list, dir_name, working_dir, double_sided
-            fplist.append(
-                template.make_pdf(
-                    gmaplist,
-                    grades.report_name(
-                        group=self.grade_table.group,
-                        term=self.grade_table.term,
-                        rtype=rtype,
-                    ),
-                    year_path(
-                        self.grade_table.schoolyear,
-                        grades.REPORT_DIR.format(
-                            term=self.grade_table.term
-                        ),
-                    ),
-                    double_sided=grades.double_sided(
-                        self.grade_table.group, rtype
-                    ),
-                )
+        # make_pdf: data_list, dir_name, working_dir, double_sided
+        fplist.append(
+            template.make_pdf(
+                gmaplist,
+                report_name(
+                    occasion=occasion,
+                    group=class_group,
+                    instance=instance,
+                    rtype=rtype,
+                ),
+                DATAPATH("GRADES"),
+                #TODO: get value from gui?
+                double_sided=1, # 1 => if number of pages odd and >1
             )
+        )
     return fplist
 
 
-
-def build_report_type(
-    rtype: str,
+def collect_report_type_data(
+    template: Template,
     pid_list: list[str],
-    rtype_path: dict[str,str],
     subject_groups: dict[str,list[str]],
     grade_info: dict
 ) -> str:
     """Build grade reports of the given type (<rtype>) for the given
     pupils (<pid_list>).
     """
-    try:
-        tpath = rtype_path[rtype]
-    except KeyError:
-        REPORT(
-            "ERROR",
-            T["INVALID_REPORT_TYPE"].format(
-                rtype=rtype, pids=", ".join(pid_list)
-            )
-        )
-        return ""
-    print("\nTEMPLATE:", rtype, tpath, pid_list)
-    template = Template(tpath)
     all_keys = template.all_keys()
     subjects, tagmap = group_grades(all_keys)
     print("\n§§§ SUBJECTS:", subjects)
@@ -332,80 +258,9 @@ def build_report_type(
         for k in rptdata:
             if k not in all_keys:
                 print(f"+++++++++ {k:<20}", rptdata[k])
+
         gmaplist.append(rptdata)
-
-#        print("\n ====>", grades)
-
-#TODO ...
-    return ""
-
-
-
-
-#??????????????????
-def prepare_report_data(rtype, pid_list):
-    """Prepare the slot-mappings for report generation.
-    Return a tuple: (template object, list of slot-mappings).
-    """
-    ### Pupil data
-    pupils = Pupils(self.grade_table.schoolyear)
-    # The individual pupil data can be fetched using pupils[pid].
-    # Fetching the whole class may not be good enough, as it is vaguely
-    # possible that a pupil has changed class.
-    # The subject data is available at <self.grade_table.subjects>
-    # and <self.sid2subject_data>.
-    ### Grade report template
-    try:
-        template_tag = Grades.report_template(self.grade_table.group, rtype)
-    except GradeConfigError:
-        REPORT("ERROR", T["BAD_REPORT_TYPE"].format(rtype=rtype))
-        return None
-    gTemplate = Template(template_tag)
-    ### Build the data mappings and generate the reports
-    gmaplist = []
-    for pid in pid_list:
-        gmap = self.gmap0.copy()
-        # Get pupil data
-        pdata = pupils[pid]
-        # could just do gmap[k] = pdata[k] or '' and later substitute all dates?
-        for k in pdata.keys():
-            v = pdata[k]
-            if v:
-                if k.endswith("_D"):
-                    v = Dates.print_date(v)
-            else:
-                v = ""
-            gmap[k] = v
-        grades = self.grade_table[pid]
-        # Grade parameters
-        gmap["STREAM"] = grades.stream
-        gmap["SekII"] = grades.sekII
-        comment = grades.pop("*B", "")
-        if comment:
-            comment = comment.replace(LINEBREAK, "\n")
-        gmap["COMMENT"] = comment
-
-        ## Process the grades themselves ...
-        if self.grade_table.term == "A":
-            showgrades = {
-                k: UNGRADED if v == NO_GRADE else v
-                for k, v in grades.abicalc.tags.items()
-            }
-            gmap.update(showgrades)
-            gmap.update(grades.abicalc.calculate())
-        else:
-            # Sort into grade groups
-            grade_map = self.sort_grade_keys(
-                pdata.name(), grades, gTemplate
-            )
-            gmap.update(grade_map)
-            gmap["REPORT_TYPE"] = rtype
-
-        ## Add template and "local" stuff
-        info_extend(gmap)
-        gmaplist.append(gmap)
-
-    return (gTemplate, gmaplist)
+    return gmaplist
 
 
 def group_grades(all_keys: set[str]) -> tuple[set[str], dict[str, list[str]]]:
@@ -426,7 +281,7 @@ def group_grades(all_keys: set[str]) -> tuple[set[str], dict[str, list[str]]]:
             try:
                 tag, index = key[2:].rsplit(".", 1)
             except ValueError:
-                raise GradeReportError(_INVALID_SUBJECT_KEY.format(key=key))
+                raise GradeReportError(T["BAD_SUBJECT_KEY"].format(key=key))
             try:
                 tags[tag].add(index)
             except KeyError:
@@ -496,7 +351,13 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
 if __name__ == "__main__":
     from core.db_access import open_database
     open_database()
-    make_reports("1. Halbjahr", "12G.R", "")
+    PROCESS(
+        make_reports,
+        title="Build reports",
+        occasion="1. Halbjahr",
+        class_group="12G.R",
+        instance=""
+    )
 
     quit(0)
 

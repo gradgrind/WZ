@@ -1,7 +1,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2022-12-23
+Last updated:  2022-12-26
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -64,22 +64,25 @@ from minion2 import Minion, MinionError
 ### -----
 
 
-def merge_pdf(ifile_list, pad2sided=False):
+def merge_pdf(ifile_list, pad2sided=0):
     """Join the pdf-files in the input list <ifile_list> to produce a
     single pdf-file. The output is returned as a <bytes> object.
     The parameter <pad2sided> allows blank pages to be added
     when input files have an odd number of pages – to ensure that
-    double-sided printing works properly.
+    double-sided printing works properly. It can take the value 0 (no
+    padding), 1 (padding if odd number of pages, but more than 1 page)
+    or 2 (padding if odd number of pages).
     """
     pdf = Pdf.new()
     for ifile in ifile_list:
         src = Pdf.open(ifile)
         pdf.pages.extend(src.pages)
         if pad2sided and (len(src.pages) & 1):
-            page = Page(src.pages[0])
-            w = page.trimbox[2]
-            h = page.trimbox[3]
-            pdf.add_blank_page(page_size=(w, h))
+            if pad2sided != 1 or len(src.pages) > 1:
+                page = Page(src.pages[0])
+                w = page.trimbox[2]
+                h = page.trimbox[3]
+                pdf.add_blank_page(page_size=(w, h))
     bstream = BytesIO()
     pdf.save(bstream)
     return bstream.getvalue()
@@ -189,7 +192,7 @@ class Template:
         return md
 
     def make_pdf(
-        self, data_list, dir_name, working_dir=None, double_sided=False
+        self, data_list, dir_name, working_dir=None, double_sided=0
     ):
         """From the supplied list of data mappings produce a pdf
         containing the concatenated individual reports.
@@ -200,6 +203,7 @@ class Template:
         normally be a path within the data area for the school-year being
         processed. If it is not supplied, a temporary directory is created,
         which is removed automatically when the function completes.
+        <double_sided> should be 0, 1, or 2 (see <merge_pdf>).
         Note that the return value varies according to whether <working_dir>
         is provided:
             With <working_dir>: path to resulting pdf-file
@@ -216,7 +220,7 @@ class Template:
         clean_dir(odt_dir)
         odt_list = []
         for datamap in data_list:
-            _outfile = os.path.join(odt_dir, datamap["PSORT"] + ".odt")
+            _outfile = os.path.join(odt_dir, datamap["SORT_NAME"] + ".odt")
             # Force removal of comment-metadata
             odtBytes = self.make_odt_bytes(datamap, no_info=True)
             # Save the <bytes>
