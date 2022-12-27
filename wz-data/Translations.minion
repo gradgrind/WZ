@@ -101,6 +101,10 @@ grades.makereports: {
     BAD_GRADE:      "Ungültige Note ({grade}) für Fach-Id '{sid}'"
     TOO_FEW_KEYS:   "Zu wenig Felder für Fächer in Gruppe '{tag}'"
     BAD_SUBJECT_KEY: "Ungültiges Fach-Feld in Vorlage: {key}"
+    CHECK_FIELDS:   " >>>>> Datenfelder für {name}:\n{data}"
+    USED_KEY:       "Wert eingetragen: {key:<20} = '{val}'"
+    UNUSED_KEY:     "(Wert nicht erforderlich: {key:<20} = '{val}')"
+    MISSING_KEY:    "Zeugnis für {name}:\n  Kein Wert für Feld {key}"
 }
 
 local.grade_functions: {

@@ -1,7 +1,7 @@
 """
 grades/makereports.py
 
-Last updated:  2022-12-26
+Last updated:  2022-12-27
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -56,27 +56,22 @@ T = TRANSLATIONS("grades.makereports")
 ### +++++
 
 from core.base import Dates
-#from core.pupils import Pupils
-#from core.courses import Subjects, UNCHOSEN, NULL
-
-# from local.base_config import year_path, \
-#        print_schoolyear, LINEBREAK
-#from local.local_grades import class_year
-
-# from local.grade_config import UNCHOSEN, MISSING_GRADE, NO_GRADE, UNGRADED, \
-#        GradeConfigError, NO_SUBJECT
-# from local.grade_template import info_extend
-from template_engine.template_sub import Template, TemplateError
-from grades.gradetable import full_grade_table, get_grade_config
+from core.pupils import pupil_name
+from template_engine.template_sub import Template
+from grades.gradetable import full_grade_table, get_grade_config, NO_GRADE
 from local.grade_functions import process_grade_data, report_name
+
+class GradeReportError(Exception):
+    pass
 
 ### -----
 
-
-def make_reports(occasion, class_group, instance):
+def make_reports(occasion, class_group, instance, show_data=False):
     """The resulting pdfs will be combined into a single pdf-file for
     each report type. If the reports are double-sided, empty pages
     are added as necessary.
+    If <show_data> is true, additional debugging information will be
+    shown.
     Return a list of file-paths for the report-type pdf-files.
     """
     grade_info = full_grade_table(occasion, class_group, instance)
@@ -113,21 +108,21 @@ def make_reports(occasion, class_group, instance):
             subject_groups[group].append(sdata)
         except KeyError:
             subject_groups[group] = [sdata]
-#    print("\n$$$$$$$$$ GROUPED SUBJECTS:")
-#    for group, slist in subject_groups.items():
-#        print("  ***", group)
-#        for sdata in slist:
-#            print("        ---", sdata)
+    #    print("\n$$$$$$$$$ GROUPED SUBJECTS:")
+    #    for group, slist in subject_groups.items():
+    #        print("  ***", group)
+    #        for sdata in slist:
+    #            print("        ---", sdata)
 
     ### Divide the pupils according to report type
     rtypes = {}
     for pid, data in grade_info["PUPILS"].items():
         pdata, stdata = data
-        #print("\n", pdata)
-        #print("  ---", stdata)
+        # print("\n", pdata)
+        # print("  ---", stdata)
         pid = pdata["PID"]
         grades = grade_info["PUPIL_GRADES"][pid]
-        #print("  ***", grades)
+        # print("  ***", grades)
         rtype = grades["REPORT_TYPE"]
         try:
             rtypes[rtype].append(pid)
@@ -145,16 +140,13 @@ def make_reports(occasion, class_group, instance):
                 "ERROR",
                 T["INVALID_REPORT_TYPE"].format(
                     rtype=rtype, pids=", ".join(pid_list)
-                )
+                ),
             )
             return ""
-        print("\nTEMPLATE:", rtype, tpath, pid_list)
+        # print("\nTEMPLATE:", rtype, tpath, pid_list)
         template = Template(tpath)
         gmaplist = collect_report_type_data(
-            template,
-            pid_list,
-            subject_groups,
-            grade_info
+            template, pid_list, subject_groups, grade_info, show_data
         )
         # make_pdf: data_list, dir_name, working_dir, double_sided
         fplist.append(
@@ -167,8 +159,8 @@ def make_reports(occasion, class_group, instance):
                     rtype=rtype,
                 ),
                 DATAPATH("GRADES"),
-                #TODO: get value from gui?
-                double_sided=1, # 1 => if number of pages odd and >1
+                # TODO: get value from gui?
+                double_sided=1,  # 1 => if number of pages odd and >1
             )
         )
     return fplist
@@ -177,22 +169,23 @@ def make_reports(occasion, class_group, instance):
 def collect_report_type_data(
     template: Template,
     pid_list: list[str],
-    subject_groups: dict[str,list[str]],
-    grade_info: dict
+    subject_groups: dict[str, list[str]],
+    grade_info: dict,
+    show_data: bool,
 ) -> str:
     """Build grade reports of the given type (<rtype>) for the given
     pupils (<pid_list>).
     """
     all_keys = template.all_keys()
     subjects, tagmap = group_grades(all_keys)
-    print("\n§§§ SUBJECTS:", subjects)
-    print("\n§§§ TAGMAP:", tagmap)
+    # print("\n§§§ SUBJECTS:", subjects)
+    # print("\n§§§ TAGMAP:", tagmap)
 
     ## Template field/value processing
     metadata = template.metadata()
     template_field_info = metadata.get("FIELD_INFO") or {}
     grade_map = template_field_info.get("GRADE_MAP") or {}
-    print("\nGRADE MAP:", grade_map)
+    # print("\nGRADE MAP:", grade_map)
 
     ## Transform subject groups?
     try:
@@ -205,22 +198,23 @@ def collect_report_type_data(
             try:
                 g1 = gmap[g]
             except KeyError:
-                REPORT("ERROR", T["UNKNOWN_SUBJECT_GROUP"].format(
-                    path=template.template_path , group=g
-                ))
+                REPORT(
+                    "ERROR",
+                    T["UNKNOWN_SUBJECT_GROUP"].format(
+                        path=template.template_path, group=g
+                    ),
+                )
                 continue
             if not g1:
-                continue    # these subjects are not shown
+                continue  # these subjects are not shown
             try:
                 sgroups[g1] += slist
             except KeyError:
                 sgroups[g1] = slist.copy()
-    print("\nSUBJECT GROUPS:", sgroups)
+    # print("\nSUBJECT GROUPS:", sgroups)
 
     ## Build the data mappings and generate the reports
-    date_format = (
-        template_field_info.get("DATEFORMAT") or CONFIG["DATEFORMAT"]
-    )
+    date_format = template_field_info.get("DATEFORMAT") or CONFIG["DATEFORMAT"]
     base_data = {
         "SCHOOL": CONFIG["SCHOOL_NAME"],
         "SCHOOLBIG": CONFIG["SCHOOL_NAME"].upper(),
@@ -248,16 +242,24 @@ def collect_report_type_data(
                     v = ""
                 rptdata[k] = v
 
-#TODO ...
-        print("\n**** CHECK FIELDS ****")
-        for k in all_keys:
+        lines = []
+        pname = pupil_name(rptdata)
+        for k in sorted(all_keys):
             if k in rptdata:
-                print(f"$$$$$$$$ {k:<20}", rptdata[k])
+                lines.append(T["USED_KEY"].format(key=k, val=rptdata[k]))
             else:
-                print(f"-------- {k:<20}")
-        for k in rptdata:
-            if k not in all_keys:
-                print(f"+++++++++ {k:<20}", rptdata[k])
+                REPORT("ERROR", T["MISSING_KEY"].format(name=pname, key=k))
+
+        if show_data:
+            for k in sorted(rptdata):
+                if k not in all_keys:
+                    lines.append(T["UNUSED_KEY"].format(key=k, val=rptdata[k]))
+            REPORT(
+                "INFO",
+                T["CHECK_FIELDS"].format(
+                    name=pupil_name(rptdata), data="\n".join(lines)
+                ),
+            )
 
         gmaplist.append(rptdata)
     return gmaplist
@@ -289,7 +291,7 @@ def group_grades(all_keys: set[str]) -> tuple[set[str], dict[str, list[str]]]:
         elif key.startswith("g."):
             # g.<subject tag>
             subjects.add(key[2:])
-    tagmap: Dict[str, List[str]] = {
+    tagmap: dict[str, list[str]] = {
         tag: sorted(ilist, reverse=True) for tag, ilist in tags.items()
     }
     return subjects, tagmap
@@ -307,6 +309,7 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
     <grade_map>: {grade: print form of grade, ...}
     The mapping <rptdata> is modified to include the results.
     """
+
     def print_grade(grade):
         try:
             return grade_map[grade]
@@ -315,14 +318,15 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
                 REPORT("ERROR", T["BAD_GRADE"].format(sid=sid, grade=grade))
                 return "?"
             return ""
-    NOGRADE = print_grade("/")
+
+    NOGRADE = print_grade(NO_GRADE)
 
     for sid in subjects:
         try:
             g = rptdata.pop(sid)
         except KeyError:
             REPORT("WARNING", T["MISSING_SUBJECT_GRADE"].format(sid=sid))
-            g = '/'
+            g = "/"
         rptdata[f"g.{sid}"] = print_grade(g)
 
     for tag, sdata_list in sgroups.items():
@@ -350,49 +354,13 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
 
 if __name__ == "__main__":
     from core.db_access import open_database
+
     open_database()
     PROCESS(
         make_reports,
         title="Build reports",
         occasion="1. Halbjahr",
         class_group="12G.R",
-        instance=""
+        instance="",
+        show_data=True,
     )
-
-    quit(0)
-
-    _t = Template('Noten/SekI')
-    # Subjects().pupil_subjects(_pid, grades=True)
-    # returns a dict, sid: subject-data. However, sid is also in the
-    # subject-data dict.
-
-    #_GRADE_DATA = MINION(DATAPATH("CONFIG/GRADE_DATA"))
-    _group = "12G.R"
-    _pid = "200401"
-    _filepath = DATAPATH(f"testing/Noten/NOTEN_1/Noten_{_group}_1")
-    _gdata = readGradeFile(_filepath)
-    _pgrades = _gdata["__GRADEMAP__"][_pid]
-    _s = Subjects()
-    _c, _g = class_group_split(_group)
-    _slist = _s.report_subjects(_c, grades=True)
-    print("\n +++ _slist", _slist)
-    _pmap = _s.pupil_subjects(_pid, grades=True)
-    print("\n +++ _pmap", _pid, _pmap)
-
-    _grades = []
-    for _sid, _sname in _slist:
-        try:
-            _grades.append((_sid, _pmap[_sid]["SGROUP"],
-                    _pgrades.get(_sid) or ""))
-        except KeyError:
-            pass
-    print("\n +++ _grades", _grades)
-
-    _gkeys = sort_grade_keys(_grades, _t)
-    print("\n +++ _gkeys", _gkeys)
-    quit(0)
-
-    _cgtable = GradeTable(_gdata)
-    _grade_reports = GradeReports(_cgtable)
-    print("\nSHARED DATA:", _grade_reports.gmap0)
-
