@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-12-26
+Last updated:  2022-12-27
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -568,7 +568,7 @@ def saveDialog(filetype, start=None, title=None):
         if start:
             dir0 = os.path.join(dir0, start)
     fpath = QFileDialog.getSaveFileName(
-        None, title or T["FILESAVE"], start, filetype
+        None, title or T["FILESAVE"], dir0, filetype
     )[0]
     if fpath:
         SETTINGS.setValue("LAST_SAVE_DIR", os.path.dirname(fpath))

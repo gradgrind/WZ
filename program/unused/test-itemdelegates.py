@@ -31,7 +31,8 @@ class RotatedHeaderView(QHeaderView):
         self._descent = self._metrics.descent()
         self._margin = 10
 
-    def paintSection(self, painter, rect, index):
+    def _paintSection(self, painter, rect, index):
+        # This version has no border
         data = self._get_data(index)
         painter.rotate(-90)
         #painter.setFont(self._font)
@@ -41,20 +42,20 @@ class RotatedHeaderView(QHeaderView):
             data
         )
 
-    def _paintSection(self, painter, rect, index):
+    def paintSection(self, painter, rect, index):
+        # Has problems with the border
+        painter.save()
         painter.rotate(-90)
         print("???1", rect)
         rect2 = QRect(rect)
         print("???2", rect2)
         rect2.setY(int(rect.left()))
-        rect2.setX(- rect.height() + 2)
+        rect2.setX(- rect.height() + 2) # +2 is an experimental tweak
         rect2.setWidth(rect.height())
         rect2.setHeight(rect.width())
         print("???2+", rect2)
         super().paintSection(painter, rect2, index)
-#        painter.rotate(90)
-
-
+        painter.restore()
 
     def sizeHint(self):
         return QSize(0, self._get_text_width() + 2 * self._margin)

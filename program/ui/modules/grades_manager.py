@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-12-25
+Last updated:  2022-12-28
 
 Front-end for managing grade reports.
 
@@ -54,7 +54,6 @@ if __name__ == "__main__":
     from ui.ui_base import StandalonePage as Page
 
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
-    #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 else:
     from ui.ui_base import StackPage as Page
@@ -71,25 +70,20 @@ from grades.gradetable import (
     get_grade_config,
     make_grade_table,
     full_grade_table,
-    NO_GRADE,
     update_pupil_grades,
     update_table_info,
 )
+from grades.makereports import make_reports
+from local.grade_functions import report_name
 
-# ???
 from ui.ui_base import (
     QWidget,
     QFormLayout,
     QDialog,
-    QStyledItemDelegate,
     QLineEdit,
     QHBoxLayout,
     QVBoxLayout,
     QPushButton,
-    QLayout,
-    QLabel,
-    QListWidget,
-    QAbstractItemView,
     QComboBox,
     QDateEdit,
     # QtCore
@@ -97,21 +91,12 @@ from ui.ui_base import (
     QDate,
     Signal,
     # Other
-    KeySelector,
-    HLine,
     run,
-    saveDialog,
     date2qt,
 )
 
-# from ui.editable import EdiTableWidget
 from ui.grid_base import GridViewAuto
 from ui.cell_editors import CellEditorTable, CellEditorText
-
-# from ui.grid_base import GridView
-
-# from ui.ui_extra import QWidget, QLabel, QVBoxLayout, \
-#        QTreeWidget, QTreeWidgetItem, Qt
 
 ### -----
 
@@ -271,19 +256,32 @@ class GradeManager(QWidget):
         self.modified_time.setReadOnly(True)
         formbox.addRow(self.info_fields["MODIFIED"], self.modified_time)
 
-        vboxr.addWidget(HLine())
-        vboxr.addWidget(QLabel(T["Pupils"]))
-        self.pupil_list = QListWidget()
-        # self.pupil_list.setMinimumWidth(30)
-        self.pupil_list.setSelectionMode(
-            QAbstractItemView.SelectionMode.SingleSelection
-        )
-        vboxr.addWidget(self.pupil_list)
+        # vboxr.addWidget(HLine())
 
-        # TODO: T...
-        make_pdf = QPushButton("Export PDF")
+        # vboxr.addWidget(QLabel(T["Pupils"]))
+        # self.pupil_list = QListWidget()
+        # self.pupil_list.setSelectionMode(
+        #    QAbstractItemView.SelectionMode.SingleSelection
+        # )
+        # vboxr.addWidget(self.pupil_list)
+
+        make_pdf = QPushButton(T["Export_PDF"])
         make_pdf.clicked.connect(self.pupil_data_table.export_pdf)
         vboxr.addWidget(make_pdf)
+
+        # TODO: Generate input tables, read input tables,
+        # generate reports (using only selected pupils? - what about
+        # multiple selection? pop up a checklist?)
+
+        make_input_table = QPushButton(T["MAKE_INPUT_TABLE"])
+        make_input_table.clicked.connect(self.do_make_input_table)
+        vboxr.addWidget(make_input_table)
+        read_input_table = QPushButton(T["READ_INPUT_TABLE"])
+        read_input_table.clicked.connect(self.do_read_input_table)
+        vboxr.addWidget(read_input_table)
+        make_reports = QPushButton(T["MAKE_REPORTS"])
+        make_reports.clicked.connect(self.do_make_reports)
+        vboxr.addWidget(make_reports)
 
     def init_data(self):
         self.__changes_enabled = False
@@ -300,9 +298,11 @@ class GradeManager(QWidget):
         self.changed_occasion(self.occasion_selector.currentText())
 
     def modified(self):
-        """Return <True> if there are unsaved changes."""
-        # TODO: test whether there really are any changes?
-        return True
+        """Return <True> if there are unsaved changes.
+
+        This module always saves changes immediately.
+        """
+        return False
 
     def updated(self, timestamp):
         self.modified_time.setText(timestamp)
@@ -351,8 +351,8 @@ class GradeManager(QWidget):
         self.group_data = self.occasion_data[new_class_group]
 
         self.pupil_data_list = pupils_in_group(new_class_group, date=None)
-        self.pupil_list.clear()
-        self.pupil_list.addItems([pupil_name(p) for p in self.pupil_data_list])
+        # self.pupil_list.clear()
+        # self.pupil_list.addItems([pupil_name(p) for p in self.pupil_data_list])
 
         # TODO: If I am working from an old grade table, the odd pupil may have
         # changed class – I should probably get the pupil list from the grade
@@ -417,8 +417,8 @@ class GradeManager(QWidget):
             INSTANCE=self.instance,
         )
         self.pupil_data_table.set_modified_time(timestamp)
-        #TODO: Reload table?
-        #self.select_instance()
+        # TODO: Reload table?
+        # self.select_instance()
 
     def grade_date_changed(self, qdate):
         if self.suppress_callbacks:
@@ -433,6 +433,38 @@ class GradeManager(QWidget):
         self.pupil_data_table.set_modified_time(timestamp)
         # Reload table
         self.select_instance()
+
+    def do_make_input_table(self):
+        table_data = self.pupil_data_table.grade_table
+        xlsx_bytes = make_grade_table(
+            occasion=self.occasion,
+            class_group=self.class_group,
+            instance=self.instance,
+            DATE_ISSUE=table_data["DATE_ISSUE"],
+            DATE_GRADES=table_data["DATE_GRADES"],
+            grades=table_data["PUPIL_GRADES"],
+        )
+        fname = report_name(self.occasion, self.class_group, self.instance, "NOTEN")
+        fpath = SAVE_FILE("Excel-Datei (*.xlsx)", start=fname, title=None)
+        if not fpath.endswith(".xlsx"):
+            fpath += ".xlsx"
+        with open(fpath, 'wb') as fh:
+            fh.write(xlsx_bytes)
+        REPORT("INFO", f"Written to {fpath}")
+
+    def do_read_input_table(self):
+        print("TODO: do_read_input_table")
+
+    def do_make_reports(self):
+        flist = PROCESS(
+            make_reports,
+            title=T["MAKE_REPORTS"],
+            occasion=self.occasion,
+            class_group=self.class_group,
+            instance=self.instance,
+            show_data=False
+        )
+        print("->", flist)
 
 
 class GradeTableView(GridViewAuto):
@@ -642,10 +674,10 @@ class GradeTableView(GridViewAuto):
             )
         )
         if not fpath:
-            fpath = saveDialog(
+            fpath = SAVE_FILE(
                 "pdf-Datei (*.pdf)",
-#TODO: T ...
-                f"Noten_{cgroup}_{occasion}"
+                # TODO: T ...
+                f"Noten_{cgroup}_{occasion}",
             )
             if not fpath:
                 return
@@ -661,17 +693,8 @@ class GradeTableView(GridViewAuto):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    from ui.ui_base import run
-
     widget = ManageGrades()
     widget.enter()
 
     widget.resize(1000, 500)
     run(widget)
-
-
-# new?
-#    widget = ManagePupils()
-#    widget.enter()
-#    widget.resize(1000, 550)
-#    run(widget)

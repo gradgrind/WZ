@@ -105,6 +105,9 @@ grades.makereports: {
     USED_KEY:       "Wert eingetragen: {key:<20} = '{val}'"
     UNUSED_KEY:     "(Wert nicht erforderlich: {key:<20} = '{val}')"
     MISSING_KEY:    "Zeugnis für {name}:\n  Kein Wert für Feld {key}"
+    MISSING_SUBJECT_GROUP: "Fachgruppe {tag} ist nicht bekannt"
+    ALL_KEYS:       "Alle Felder des Dokuments {path}:\n{keys}"
+    PDF_FILE:       "Erstellte PDF-Datei:\n --> {path}"
 }
 
 local.grade_functions: {
@@ -385,7 +388,11 @@ ui.modules.grades_manager: {
     # Labels
     MODULE_NAME:    "Noten"
     MODULE_TITLE:   "Noten verwalten"
-    Pupils:         "Schülerinnen und Schüler"
+    Export_PDF:     "als PDF exportieren"
+    MAKE_INPUT_TABLE: "Eingabetabelle erstellen"
+    READ_INPUT_TABLE: "Eingabetabelle einlesen"
+    MAKE_REPORTS:   "Zeugnisse erstellen"
+#    Pupils:         "Schülerinnen und Schüler"
 
     # Messages
     BAD_GROUP_IN_CONFIG: "Konfiguration GRADE_ENTRY_TABLES: Ungültige Klasse/Gruppe ({group}) für Anlass „{occasion}“"

@@ -1,7 +1,7 @@
 """
 grades/makereports.py
 
-Last updated:  2022-12-27
+Last updated:  2022-12-28
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -93,7 +93,7 @@ def make_reports(occasion, class_group, instance, show_data=False):
     # GRADE_TABLE_PUPILS,
     # SYMBOLS
 
-    # I can get the template path via the REPORT_TYPE "grade" for each pupil.
+    # I can get the template path via the REPORT_TYPE value for each pupil.
     # grade_info["ALL_SIDS"]["REPORT_TYPE"]["VALUES"] is a list of [key,
     # path] pairs.
 
@@ -121,7 +121,10 @@ def make_reports(occasion, class_group, instance, show_data=False):
         # print("\n", pdata)
         # print("  ---", stdata)
         pid = pdata["PID"]
-        grades = grade_info["PUPIL_GRADES"][pid]
+        try:
+            grades = grade_info["PUPIL_GRADES"][pid]
+        except KeyError:
+            continue
         # print("  ***", grades)
         rtype = grades["REPORT_TYPE"]
         try:
@@ -149,20 +152,20 @@ def make_reports(occasion, class_group, instance, show_data=False):
             template, pid_list, subject_groups, grade_info, show_data
         )
         # make_pdf: data_list, dir_name, working_dir, double_sided
-        fplist.append(
-            template.make_pdf(
-                gmaplist,
-                report_name(
-                    occasion=occasion,
-                    group=class_group,
-                    instance=instance,
-                    rtype=rtype,
-                ),
-                DATAPATH("GRADES"),
-                # TODO: get value from gui?
-                double_sided=1,  # 1 => if number of pages odd and >1
-            )
+        pdf_path = template.make_pdf(
+            gmaplist,
+            report_name(
+                occasion=occasion,
+                group=class_group,
+                instance=instance,
+                rtype=rtype,
+            ),
+            DATAPATH("GRADES"),
+            # TODO: get value from gui?
+            double_sided=1,  # 1 => if number of pages odd and >1
         )
+        fplist.append(pdf_path)
+        REPORT("INFO", T["PDF_FILE"].format(path=pdf_path))
     return fplist
 
 
@@ -177,6 +180,14 @@ def collect_report_type_data(
     pupils (<pid_list>).
     """
     all_keys = template.all_keys()
+    if show_data:
+        REPORT(
+            "INFO",
+            T["ALL_KEYS"].format(
+                keys=", ".join(sorted(all_keys)),
+                path=template.template_path
+            )
+        )
     subjects, tagmap = group_grades(all_keys)
     # print("\n§§§ SUBJECTS:", subjects)
     # print("\n§§§ TAGMAP:", tagmap)
@@ -188,15 +199,33 @@ def collect_report_type_data(
     # print("\nGRADE MAP:", grade_map)
 
     ## Transform subject groups?
-    try:
-        gmap = template_field_info["GROUP_MAP"]
-    except KeyError:
-        sgroups = subject_groups
-    else:
-        sgroups = {}
-        for g, slist in subject_groups.items():
+    sgmap = template_field_info.get("SUFFIX_GROUP_MAP") or {}
+    gmap = template_field_info.get("GROUP_MAP") or {}
+    sgroups = {}
+    for g in sorted(subject_groups):
+        for sdata in subject_groups[g]:
+            sid = sdata["SID"]
+            try:
+                sid0, gsuff = sid.rsplit('.', 1)
+            except ValueError:
+                pass
+            else:
+                try:
+                    gs = sgmap[gsuff]
+                    if not gs:
+                        continue  # this subject is not shown
+                except KeyError:
+                    pass
+                else:
+                    try:
+                        sgroups[gs].append(sdata)
+                    except KeyError:
+                        sgroups[gs] = [sdata]
+                    continue
             try:
                 g1 = gmap[g]
+                if not g1:
+                    continue  # this subject is not shown
             except KeyError:
                 REPORT(
                     "ERROR",
@@ -205,12 +234,10 @@ def collect_report_type_data(
                     ),
                 )
                 continue
-            if not g1:
-                continue  # these subjects are not shown
             try:
-                sgroups[g1] += slist
+                sgroups[g1].append(sdata)
             except KeyError:
-                sgroups[g1] = slist.copy()
+                sgroups[g1] = [sdata]
     # print("\nSUBJECT GROUPS:", sgroups)
 
     ## Build the data mappings and generate the reports
@@ -319,7 +346,7 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
                 return "?"
             return ""
 
-    NOGRADE = print_grade(NO_GRADE)
+    NOGRADE = grade_map.get(NO_GRADE) or '––––––'
 
     for sid in subjects:
         try:
@@ -330,11 +357,17 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
         rptdata[f"g.{sid}"] = print_grade(g)
 
     for tag, sdata_list in sgroups.items():
-        keys = tagmap[tag].copy()
+        try:
+            keys = tagmap[tag].copy()
+        except KeyError:
+            REPORT("ERROR", T["MISSING_SUBJECT_GROUP"].format(tag=tag))
+            continue
         for sdata in sdata_list:
             sid = sdata["SID"]
             try:
                 g = rptdata.pop(sid)
+                if g == NO_GRADE:
+                    continue
             except KeyError:
                 continue
             try:
@@ -343,7 +376,7 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
                 REPORT("ERROR", T["TOO_FEW_KEYS"].format(tag=tag))
                 continue
             rptdata[f"G.{tag}.{k}"] = print_grade(g)
-            rptdata[f"S.{tag}.{k}"] = sdata["NAME"]
+            rptdata[f"S.{tag}.{k}"] = sdata["NAME"].split('*', 1)[0]
 
         for k in keys:
             rptdata[f"G.{tag}.{k}"] = NOGRADE
@@ -356,11 +389,14 @@ if __name__ == "__main__":
     from core.db_access import open_database
 
     open_database()
-    PROCESS(
+    fpaths = PROCESS(
         make_reports,
         title="Build reports",
         occasion="1. Halbjahr",
-        class_group="12G.R",
+        #class_group="12G.R",
+        class_group="13",
         instance="",
         show_data=True,
     )
+    for f in fpaths:
+        print("--->", f)

@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-12-25
+Last updated:  2022-12-28
 
 Access grade data, read and build grade tables.
 
@@ -124,7 +124,7 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     ### Get subject, pupil and group report-information
     subjects, pupils = get_pupil_grade_matrix(class_group, text_reports=False)
     group_data = get_group_data(occasion, class_group)
-    print("??????", group_data)
+    # print("??????", group_data)
     klass, group = class_group_split(class_group)
     grade_info = get_grade_config()
     composites = {}
@@ -306,12 +306,6 @@ def full_grade_table(occasion, class_group, instance):
                 f" / {occasion} / {instance}"
             )
         DATE_ISSUE, DATE_GRADES, MODIFIED = infolist[0]
-
-#TODO
-#later?
-#        if DATE_GRADES >= Dates.today():
-#            # Assume the list of pupils is fixed at the issue date
-#            pdata_list.clear()
     else:
         # No entry in database, use "today" for initial date values
         DATE_ISSUE = today
@@ -378,6 +372,9 @@ def full_grade_table(occasion, class_group, instance):
         pdata_list = []
         for pid, pinfo in table_info["PUPILS"].items():
             pdata, p_grade_tids = pinfo
+            exit_date = pdata["DATE_EXIT"]
+            if exit_date and DATE_GRADES > exit_date:
+                continue    # pupil has left the school
             pdata_list.append(pdata)
             try:
                 old_level = old_pdata.pop(pid)
@@ -434,8 +431,7 @@ def full_grade_table(occasion, class_group, instance):
         pid = pdata["PID"]
         changes = calculate_row(table_info, pid)
         if pid in pid2level_change:
-#
-            print(f"\n!!!!!!!!!! level changed for {pid}")
+            REPORT("WARNING", T["LEVEL_CHANGED"].format(name=pupil_name(pdata)))
             db_update_field("GRADES", "LEVEL", pdata["LEVEL"],
                 OCCASION=occasion,
                 CLASS_GROUP=class_group,
@@ -447,9 +443,7 @@ def full_grade_table(occasion, class_group, instance):
         if old_grades:
             new_grades = pid2grade_map[pid]
             if new_grades != old_grades:
-#
-                print(f"\n!!!!!!!!!! grades changed for {pid}")
-
+                # print(f"\n!!!!!!!!!! grades changed for {pid}")
                 # The update only occurs if there was already an entry
                 # for the pupil (<old_grades> not empty)
                 db_update_field("GRADES",
@@ -462,7 +456,7 @@ def full_grade_table(occasion, class_group, instance):
                 table_changed = True
         # print("+++++++ CALCULATED CHANGES:", changes)
     if table_changed:
-        print("$$$ Read grade table data done")
+        # print("$$$ Read grade table data done")
         update_grade_time(
             OCCASION=occasion,
             CLASS_GROUP=class_group,
@@ -590,7 +584,7 @@ def update_pupil_grades(grade_table, pid):
             LEVEL=pupil_data(pid)["LEVEL"],
             GRADE_MAP=gstring
         )
-    print("$$$ update grades")
+    # print("$$$ update grades")
     timestamp = update_grade_time(
         OCCASION=OCCASION,
         CLASS_GROUP=CLASS_GROUP,
@@ -606,10 +600,9 @@ def update_grade_time(OCCASION, CLASS_GROUP, INSTANCE):
         CLASS_GROUP=CLASS_GROUP,
         INSTANCE=INSTANCE
     )
-#--
-    print("%%% Update grade timestamp:\n"
-        f"  {CLASS_GROUP}/{OCCASION}/{INSTANCE}: {timestamp}"
-    )
+    # print("%%% Update grade timestamp:\n"
+    #     f"  {CLASS_GROUP}/{OCCASION}/{INSTANCE}: {timestamp}"
+    # )
     return timestamp
 
 
@@ -620,7 +613,7 @@ def update_table_info(field, value, OCCASION, CLASS_GROUP, INSTANCE):
         CLASS_GROUP=CLASS_GROUP,
         INSTANCE=INSTANCE
     )
-    print("$$$ update table info")
+    # print("$$$ update table info")
     timestamp = update_grade_time(
         OCCASION=OCCASION,
         CLASS_GROUP=CLASS_GROUP,
@@ -667,13 +660,14 @@ def make_grade_table(
     info_item: dict
     grade_info = get_grade_config()
     info_transl: dict[str, str] = dict(grade_info["INFO_FIELDS"])
+    date_format = CONFIG["DATEFORMAT"]
     info: dict[str, str] = {
         info_transl["SCHOOLYEAR"]: SCHOOLYEAR,
         info_transl["CLASS_GROUP"]: class_group,
         info_transl["OCCASION"]: occasion,
         info_transl["INSTANCE"]: instance,
-        info_transl["DATE_GRADES"]: DATE_GRADES,
-        info_transl["DATE_ISSUE"]: DATE_ISSUE,
+        info_transl["DATE_GRADES"]: Dates.print_date(DATE_GRADES, date_format),
+        info_transl["DATE_ISSUE"]: Dates.print_date(DATE_ISSUE, date_format),
     }
     table.setInfo(info)
 
@@ -703,6 +697,9 @@ def make_grade_table(
     ### Add pupils and grades
     for pid, pinfo in pupils.items():
         pdata, p_grade_tids = pinfo
+        exit_date = pdata["DATE_EXIT"]
+        if exit_date and DATE_GRADES > exit_date:
+            continue    # pupil has left the school
         pgrades: dict[str, str]
         try:
             pgrades = grades[pid]
@@ -909,7 +906,7 @@ if __name__ == "__main__":
     print("\n???????????????????????????????????????????????????????")
 
     #grade_table = full_grade_table("1. Halbjahr", "12G.R", "").items()
-    grade_table = full_grade_table("2. Halbjahr", "13", "").items()
+    grade_table = full_grade_table("1. Halbjahr", "13", "").items()
 
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 

@@ -1,7 +1,7 @@
 """
 local/grade_functions.py
 
-Last updated:  2022-12-26
+Last updated:  2022-12-28
 
 Functions to perform grade calculations.
 
@@ -123,8 +123,8 @@ def report_name(occasion, group, instance, rtype):
     """Return a suitable file/folder name for a set of reports.
     """
     if instance:
-        instance = '_' + instance
-    return f"{occasion}_{group}{instance}_{rtype}".replace(" ", "")
+        instance = '-' + instance
+    return f"{rtype}-{occasion}-{group}{instance}".replace(" ", "_")
 
 
 def process_grade_data(pdata, grade_info, grade_config):
