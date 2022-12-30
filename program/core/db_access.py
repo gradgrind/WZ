@@ -1,7 +1,7 @@
 """
 core/db_access.py
 
-Last updated:  2022-12-25
+Last updated:  2022-12-30
 
 Helper functions for accessing the database.
 
@@ -47,10 +47,12 @@ T = TRANSLATIONS("core.db_access")
 
 ### +++++
 
+
 from datetime import datetime
 from shutil import copyfile
 from glob import glob
 
+from core.base import Dates
 from ui.ui_base import (
     ### QtSql:
     QSqlDatabase,
@@ -70,6 +72,12 @@ def open_database():
     The QtSql default connection is used.
     """
     dbpath = DATAPATH(DATABASE)
+    bupath = DATAPATH(f"BACKUP/{Dates.today().rsplit('-', 1)[0]}_{DATABASE}")
+    if not os.path.isfile(bupath):
+        os.makedirs(os.path.dirname(bupath), exist_ok=True)
+        copyfile(dbpath, bupath)
+    REPORT("INFO", T["MONTHLY_DB_BACKUP"].format(path=bupath))
+
     con = QSqlDatabase.database()
     if con.isValid():
         if con.databaseName() == dbpath:

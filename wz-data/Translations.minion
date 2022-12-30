@@ -17,6 +17,7 @@ core.db_access: {
     BAD_KEY_VALUE_LIST: "Ungültige Schlüssel-Wert-Liste,\nein Paar pro Zeile, Trennung durch ':':\n{text}"
     BAD_KEY_IN_KV_LIST: "Ungültiger Schlüssel in Schlüssel-Wert-Liste: {key}"
     NEWLINE_TAG_IN_KV_LIST: "Zeilenumbruch-Zeichen (\/n) in Schlüssel-Wert-Liste: {val}"
+    MONTHLY_DB_BACKUP:  "Die monatliche Sicherungskopie der Datenbank wurde angelegt:\n  {path}"
 }
 
 core.basic_data: {
