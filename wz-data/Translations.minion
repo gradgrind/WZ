@@ -88,6 +88,16 @@ grades.gradetable: {
     COMPONENT_NOT_UNIQUE: "Sammelfachkomponente {sid} ist mehreren Sammelfächern zugeordnet"
     COMPOSITE_NO_COMPONENTS: "Sammelfach {name} ({sid}) hat keine Komponenten"
     NO_PUPIL_GRADES: "Keine Schüler bzw. Noten: {report_info}"
+    SCHOOLYEAR_MISMATCH: "Falsches Schuljahr: {val}"
+    OCCASION_MISMATCH:  "Falscher „Anlass“: {val}"
+    CLASS_GROUP_MISMATCH: "Falsche Klasse/Gruppe: {val}"
+    INSTANCE_MISMATCH:  "Falsches Kennzeichen: {val}"
+    CLASS_CHANGED:      "{name} ist jetzt in Klasse {new_class}"
+    NOT_IN_TABLE:       "{name} ist nicht in der importierten Tabelle"
+    LEVEL_MISMATCH:     "{name}: Der Bewertungsmaßstab ({table_level}) in der importierten Tabelle ist nicht aktuell"
+    LEVEL_CHANGED:      "{name}: Der Bewertungsmaßstab war vorher „{db_level}“, die Datenbank wird aktualisiert"
+    PUPIL_NOT_IN_GROUP: "{name} ist (aktuell) nicht in der betrachteten Klasse/Gruppe"
+    REMOVING_PUPIL_GRADES: "{name} ist nicht mehr in dieser Klasse/Gruppe: Die gespeicherten Noten werden gelöscht"
 }
 
 grades.makereports: {
@@ -97,15 +107,15 @@ grades.makereports: {
     BAD_REPORT_TYPE: "Ungültiger Zeugnistyp: '{rtype}'"
     NO_SLOT:        "Kein Platz mehr für Fach mit Kürzel {sid} in Fachgruppe {tag}. Bisher: {done}"
     UNKNOWN_SUBJECT_GROUP: "Zeugnis-Vorlage {path}:\n  Fachgruppe {group} ist ungültig"
-    MISSING_SUBJECT_GRADE: "Fach-Id '{sid}' hat keine Note"
-    BAD_GRADE:      "Ungültige Note ({grade}) für Fach-Id '{sid}'"
-    TOO_FEW_KEYS:   "Zu wenig Felder für Fächer in Gruppe '{tag}'"
+    MISSING_SUBJECT_GRADE: "{pupil}: Fach-Id '{sid}' hat keine Note"
+    BAD_GRADE:      "{pupil}: ungültige Note ({grade}) für Fach-Id '{sid}'"
+    TOO_FEW_KEYS:   "{pupil}: zu wenig Felder für Fächer in Gruppe '{tag}'"
     BAD_SUBJECT_KEY: "Ungültiges Fach-Feld in Vorlage: {key}"
     CHECK_FIELDS:   " >>>>> Datenfelder für {name}:\n{data}"
     USED_KEY:       "Wert eingetragen: {key:<20} = '{val}'"
     UNUSED_KEY:     "(Wert nicht erforderlich: {key:<20} = '{val}')"
     MISSING_KEY:    "Zeugnis für {name}:\n  Kein Wert für Feld {key}"
-    MISSING_SUBJECT_GROUP: "Fachgruppe {tag} ist nicht bekannt"
+    MISSING_SUBJECT_GROUP: "{pupil}: Fachgruppe {tag} ist nicht bekannt"
     ALL_KEYS:       "Alle Felder des Dokuments {path}:\n{keys}"
     PDF_FILE:       "Erstellte PDF-Datei:\n --> {path}"
 }
@@ -392,6 +402,7 @@ ui.modules.grades_manager: {
     MAKE_INPUT_TABLE: "Eingabetabelle erstellen"
     READ_INPUT_TABLE: "Eingabetabelle einlesen"
     MAKE_REPORTS:   "Zeugnisse erstellen"
+    SHOW_DATA:      "zusätzliche Infos anzeigen"
 #    Pupils:         "Schülerinnen und Schüler"
 
     # Messages

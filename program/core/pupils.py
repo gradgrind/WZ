@@ -1,5 +1,5 @@
 """
-core/pupils.py - last updated 2022-12-22
+core/pupils.py - last updated 2022-12-29
 
 Manage pupil data.
 
@@ -65,7 +65,7 @@ def pupil_data(pid, allow_none=False):
     except NoRecord:
         if allow_none:
             return None
-        REPORT("ERROR", T["UNKNOWN_PID"].format(pid=pid))
+        raise Bug(T["UNKNOWN_PID"].format(pid=pid))
     return dict(zip(flist, row))
 
 

@@ -63,7 +63,7 @@ T = TRANSLATIONS("ui.modules.grades_manager")
 ### +++++
 
 from core.db_access import open_database, db_values
-from core.base import class_group_split
+from core.base import class_group_split, Dates
 from core.basic_data import check_group
 from core.pupils import pupils_in_group, pupil_name
 from grades.gradetable import (
@@ -72,6 +72,7 @@ from grades.gradetable import (
     full_grade_table,
     update_pupil_grades,
     update_table_info,
+    load_from_file,
 )
 from grades.makereports import make_reports
 from local.grade_functions import report_name
@@ -84,6 +85,7 @@ from ui.ui_base import (
     QHBoxLayout,
     QVBoxLayout,
     QPushButton,
+    QCheckBox,
     QComboBox,
     QDateEdit,
     # QtCore
@@ -91,6 +93,7 @@ from ui.ui_base import (
     QDate,
     Signal,
     # Other
+    HLine,
     run,
     date2qt,
 )
@@ -269,9 +272,9 @@ class GradeManager(QWidget):
         make_pdf.clicked.connect(self.pupil_data_table.export_pdf)
         vboxr.addWidget(make_pdf)
 
-        # TODO: Generate input tables, read input tables,
-        # generate reports (using only selected pupils? - what about
-        # multiple selection? pop up a checklist?)
+        # TODO: read input tables,
+        # generate reports using only selected pupils? - what about
+        # multiple selection? pop up a checklist?
 
         make_input_table = QPushButton(T["MAKE_INPUT_TABLE"])
         make_input_table.clicked.connect(self.do_make_input_table)
@@ -279,6 +282,10 @@ class GradeManager(QWidget):
         read_input_table = QPushButton(T["READ_INPUT_TABLE"])
         read_input_table.clicked.connect(self.do_read_input_table)
         vboxr.addWidget(read_input_table)
+        vboxr.addWidget(HLine())
+        self.show_data = QCheckBox(T["SHOW_DATA"])
+        self.show_data.setCheckState(Qt.CheckState.Unchecked)
+        vboxr.addWidget(self.show_data)
         make_reports = QPushButton(T["MAKE_REPORTS"])
         make_reports.clicked.connect(self.do_make_reports)
         vboxr.addWidget(make_reports)
@@ -353,11 +360,6 @@ class GradeManager(QWidget):
         self.pupil_data_list = pupils_in_group(new_class_group, date=None)
         # self.pupil_list.clear()
         # self.pupil_list.addItems([pupil_name(p) for p in self.pupil_data_list])
-
-        # TODO: If I am working from an old grade table, the odd pupil may have
-        # changed class – I should probably get the pupil list from the grade
-        # table. If I want to update the pupil list, there could be an update
-        # button to do this?
 
         self.__changes_enabled = False
         try:
@@ -436,16 +438,22 @@ class GradeManager(QWidget):
 
     def do_make_input_table(self):
         table_data = self.pupil_data_table.grade_table
+        grades = {
+            pdata["PID"]: gmap
+            for pdata, gmap in table_data["GRADE_TABLE_PUPILS"]
+        }
         xlsx_bytes = make_grade_table(
             occasion=self.occasion,
             class_group=self.class_group,
             instance=self.instance,
             DATE_ISSUE=table_data["DATE_ISSUE"],
             DATE_GRADES=table_data["DATE_GRADES"],
-            grades=table_data["PUPIL_GRADES"],
+            grades=grades,
         )
         fname = report_name(self.occasion, self.class_group, self.instance, "NOTEN")
         fpath = SAVE_FILE("Excel-Datei (*.xlsx)", start=fname, title=None)
+        if not fpath:
+            return
         if not fpath.endswith(".xlsx"):
             fpath += ".xlsx"
         with open(fpath, 'wb') as fh:
@@ -453,7 +461,27 @@ class GradeManager(QWidget):
         REPORT("INFO", f"Written to {fpath}")
 
     def do_read_input_table(self):
-        print("TODO: do_read_input_table")
+        if Dates.today() > self.pupil_data_table.grade_table["DATE_GRADES"]:
+            SHOW_ERROR("Data after closing date")
+            return
+        path = OPEN_FILE("Tabelle (*.xlsx *.ods *.tsv)")
+        pid2grades = load_from_file(
+            filepath=path,
+            occasion=self.occasion,
+            class_group=self.class_group,
+            instance=self.instance,
+        )
+        # Merge in pupil info
+        for pid, pinfo in pid2grades["__PUPILS__"].items():
+            pid2grades[pid].update(pinfo)
+        grade_table = full_grade_table(
+            occasion=self.occasion,
+            class_group=self.class_group,
+            instance=self.instance,
+            pupil_grades=pid2grades,
+        )
+        self.pupil_data_table.setup(grade_table)
+        self.updated(grade_table["MODIFIED"])
 
     def do_make_reports(self):
         flist = PROCESS(
@@ -462,9 +490,8 @@ class GradeManager(QWidget):
             occasion=self.occasion,
             class_group=self.class_group,
             instance=self.instance,
-            show_data=False
+            show_data=self.show_data.isChecked()
         )
-        print("->", flist)
 
 
 class GradeTableView(GridViewAuto):
@@ -480,7 +507,6 @@ class GradeTableView(GridViewAuto):
         extras_list = grade_table["EXTRAS"]
         all_sids = grade_table["ALL_SIDS"]
         pupils_list = grade_table["GRADE_TABLE_PUPILS"]
-        pid2grades = grade_table["PUPIL_GRADES"]
         grade_config_table = grade_table["GRADES"]
         # grades_table["GRADE_ENTRY"] # partial path ("templates/...") to
         # grade entry template (without data-type ensing)
@@ -511,7 +537,7 @@ class GradeTableView(GridViewAuto):
                     values = [[[v], ""] for v in sdata["VALUES"]]
                     editor = CellEditorTable(values).activate
                 elif handler_type == "CHOICE_MAP":
-                    print("%%%%%%%%%%%%%%", sdata)
+                    # print("%%%%%%%%%%%%%%", sdata)
                     values = [[[v], text] for v, text in sdata["VALUES"]]
                     editor = CellEditorTable(values).activate
                 elif handler_type == "TEXT":
@@ -569,7 +595,7 @@ class GradeTableView(GridViewAuto):
         self.row0 = rowstart
         row = 0
         self.pid2row = {}
-        for pdata in pupils_list:
+        for pdata, pgrades in pupils_list:
             gridrow = row + rowstart
             pid = pdata["PID"]
             self.pid2row[pid] = gridrow
@@ -579,7 +605,6 @@ class GradeTableView(GridViewAuto):
             cell = self.get_cell((gridrow, 1))
             cell.set_text(pdata["LEVEL"])
 
-            pgrades = pid2grades[pid]
             col = 0
             for sid in all_sids:
                 cell = self.get_cell((gridrow, col + colstart))
@@ -611,7 +636,8 @@ class GradeTableView(GridViewAuto):
         new_value = properties["VALUE"]
         pid = properties["PID"]
         sid = properties["SID"]
-        grades = self.grade_table["PUPIL_GRADES"][pid]
+        row = self.grade_table["PID2ROW"][pid]
+        grades = self.grade_table["GRADE_TABLE_PUPILS"][row][1]
         grades[sid] = new_value
         # Update this pupil's grades (etc.) in the database
         changes, timestamp = update_pupil_grades(self.grade_table, pid)

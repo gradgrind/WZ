@@ -1,7 +1,7 @@
 """
 grades/makereports.py
 
-Last updated:  2022-12-28
+Last updated:  2022-12-30
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -61,10 +61,13 @@ from template_engine.template_sub import Template
 from grades.gradetable import full_grade_table, get_grade_config, NO_GRADE
 from local.grade_functions import process_grade_data, report_name
 
+
 class GradeReportError(Exception):
     pass
 
+
 ### -----
+
 
 def make_reports(occasion, class_group, instance, show_data=False):
     """The resulting pdfs will be combined into a single pdf-file for
@@ -83,14 +86,12 @@ def make_reports(occasion, class_group, instance, show_data=False):
     # EXTRAS,
     # GRADES,
     # GRADE_ENTRY,
-    # PUPILS,           // {pid: (pdata, {sid: {tid, ...}}), ...}
     # DATE_ISSUE,
     # DATE_GRADES,
     # MODIFIED,
     # ALL_SIDS,         // {sid: sdata, ...}
     #                   // sdata contains SID, NAME, [GROUP,] etc.
-    # PUPIL_GRADES,
-    # GRADE_TABLE_PUPILS,
+    # GRADE_TABLE_PUPILS, // [(pdata, grade-map), ... ]
     # SYMBOLS
 
     # I can get the template path via the REPORT_TYPE value for each pupil.
@@ -116,16 +117,9 @@ def make_reports(occasion, class_group, instance, show_data=False):
 
     ### Divide the pupils according to report type
     rtypes = {}
-    for pid, data in grade_info["PUPILS"].items():
-        pdata, stdata = data
-        # print("\n", pdata)
-        # print("  ---", stdata)
+    for pdata, grades in grade_info["GRADE_TABLE_PUPILS"]:
         pid = pdata["PID"]
-        try:
-            grades = grade_info["PUPIL_GRADES"][pid]
-        except KeyError:
-            continue
-        # print("  ***", grades)
+        print("  ***", grades)
         rtype = grades["REPORT_TYPE"]
         try:
             rtypes[rtype].append(pid)
@@ -184,9 +178,8 @@ def collect_report_type_data(
         REPORT(
             "INFO",
             T["ALL_KEYS"].format(
-                keys=", ".join(sorted(all_keys)),
-                path=template.template_path
-            )
+                keys=", ".join(sorted(all_keys)), path=template.template_path
+            ),
         )
     subjects, tagmap = group_grades(all_keys)
     # print("\n§§§ SUBJECTS:", subjects)
@@ -206,7 +199,7 @@ def collect_report_type_data(
         for sdata in subject_groups[g]:
             sid = sdata["SID"]
             try:
-                sid0, gsuff = sid.rsplit('.', 1)
+                sid0, gsuff = sid.rsplit(".", 1)
             except ValueError:
                 pass
             else:
@@ -251,11 +244,10 @@ def collect_report_type_data(
     }
     base_data.update(grade_info["SYMBOLS"])
     gmaplist = []
-    for pid in pid_list:
+    for pdata, grades in grade_info["GRADE_TABLE_PUPILS"]:
         rptdata = base_data.copy()
-        data = grade_info["PUPILS"][pid]
-        rptdata.update(data[0])
-        rptdata.update(grade_info["PUPIL_GRADES"][pid])
+        rptdata.update(pdata)
+        rptdata.update(grades)
         sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map)
         # Locality-specific processing:
         process_grade_data(rptdata, grade_info, get_grade_config())
@@ -342,17 +334,27 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
             return grade_map[grade]
         except KeyError:
             if grade:
-                REPORT("ERROR", T["BAD_GRADE"].format(sid=sid, grade=grade))
+                REPORT(
+                    "ERROR",
+                    T["BAD_GRADE"].format(
+                        sid=sid, grade=grade, pupil=pupil_name(rptdata)
+                    ),
+                )
                 return "?"
             return ""
 
-    NOGRADE = grade_map.get(NO_GRADE) or '––––––'
-
+    NOGRADE = grade_map.get(NO_GRADE) or "––––––"
+    # REPORT("OUT", repr(rptdata))
     for sid in subjects:
         try:
             g = rptdata.pop(sid)
         except KeyError:
-            REPORT("WARNING", T["MISSING_SUBJECT_GRADE"].format(sid=sid))
+            REPORT(
+                "WARNING",
+                T["MISSING_SUBJECT_GRADE"].format(
+                    sid=sid, pupil=pupil_name(rptdata)
+                ),
+            )
             g = "/"
         rptdata[f"g.{sid}"] = print_grade(g)
 
@@ -360,7 +362,12 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
         try:
             keys = tagmap[tag].copy()
         except KeyError:
-            REPORT("ERROR", T["MISSING_SUBJECT_GROUP"].format(tag=tag))
+            REPORT(
+                "ERROR",
+                T["MISSING_SUBJECT_GROUP"].format(
+                    tag=tag, pupil=pupil_name(rptdata)
+                ),
+            )
             continue
         for sdata in sdata_list:
             sid = sdata["SID"]
@@ -373,10 +380,15 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
             try:
                 k = keys.pop()
             except IndexError:
-                REPORT("ERROR", T["TOO_FEW_KEYS"].format(tag=tag))
+                REPORT(
+                    "ERROR",
+                    T["TOO_FEW_KEYS"].format(
+                        tag=tag, pupil=pupil_name(rptdata)
+                    ),
+                )
                 continue
             rptdata[f"G.{tag}.{k}"] = print_grade(g)
-            rptdata[f"S.{tag}.{k}"] = sdata["NAME"].split('*', 1)[0]
+            rptdata[f"S.{tag}.{k}"] = sdata["NAME"].split("*", 1)[0]
 
         for k in keys:
             rptdata[f"G.{tag}.{k}"] = NOGRADE
@@ -393,7 +405,7 @@ if __name__ == "__main__":
         make_reports,
         title="Build reports",
         occasion="1. Halbjahr",
-        #class_group="12G.R",
+        # class_group="12G.R",
         class_group="13",
         instance="",
         show_data=True,

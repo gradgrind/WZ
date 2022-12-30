@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-12-27
+Last updated:  2022-12-28
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -53,6 +53,8 @@ from qtpy.QtSql import *
 
 __locale = locale.setlocale(locale.LC_ALL, "")
 print("LOCALE:", __locale)
+import qtpy
+print("qtpy:", qtpy.API_NAME, qtpy.QT_VERSION)
 
 #print("STYLES:", QStyleFactory.keys())
 QApplication.setStyle('Fusion')
