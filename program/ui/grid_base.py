@@ -1,7 +1,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2022-12-10
+Last updated:  2022-12-30
 
 Base functions for table-grids using the QGraphicsView framework.
 
@@ -70,6 +70,7 @@ from qtpy.QtWidgets import (
     QDialog,
     QGraphicsView,
     QGraphicsScene,
+    QGraphicsItemGroup,
     QGraphicsRectItem,
     QGraphicsSimpleTextItem,
     QGraphicsLineItem,
@@ -451,16 +452,19 @@ class GridView(QGraphicsView):
         # Construct grid
         row_list = []
         self.rows = row_list
+        self.grid_group = QGraphicsItemGroup()
+        scene.addItem(self.grid_group)
         for rx in range(len(rowheights)):
             row = []
             for cx in range(len(columnwidths)):
-                row.append(
-                    self.grid_tile(
-                        rx, cx,
-                        border=GRID_COLOUR,
-                        border_width=self.border_width,
-                        grid_cell=True)
+                gtile = self.grid_tile(
+                    rx, cx,
+                    border=GRID_COLOUR,
+                    border_width=self.border_width,
+                    grid_cell=True
                 )
+                row.append(gtile)
+                self.grid_group.addToGroup(gtile)
             row_list.append(row)
 
         # Allow a little margin
@@ -1071,7 +1075,8 @@ if __name__ == "__main__":
     grid.to_pdf(fpath, titleheight=titleheight, footerheight=footerheight)
     # grid.to_pdf(fpath, can_rotate = False, titleheight=titleheight, footerheight=footerheight)
 
-    grid.scene().removeItem(t1)
-    grid.scene().removeItem(h1)
+    #grid.scene().removeItem(t1)
+    #grid.scene().removeItem(h1)
+    #grid.grid_group.hide()
 
     app.exec()
