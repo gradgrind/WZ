@@ -124,7 +124,6 @@ class StyleCache:
             if colour is None:
                 wc = (width, None)
             else:
-
                 wc = (width, colour or GRID_COLOUR)
             try:
                 return cls.__pens[wc]
@@ -269,10 +268,12 @@ class GridView(QGraphicsView):
         self.ldpi = self.logicalDpiX()
         # self.pdpi = self.physicalDpiX()
         # self.MM2PT = self.ldpi / 25.4
+        # print("§§§§§1", self.ldpi)
+        # print("§§§§§2", self.physicalDpiX())
 
     def pt2px(self, pt) -> int:
         px = int(self.ldpi * pt / 72.0 + 0.5)
-        # print(f"pt2px: {pt} -> {px}")
+        print(f"pt2px: {pt} -> {px}")
         return px
 
     def px2mm(self, px):
@@ -520,6 +521,25 @@ class GridView(QGraphicsView):
         converting row + col to x + y point-coordinates for the
         <Tile> constructor.
         """
+        # Allow negative spans (= cells from left/bottom)
+        if cspan < 0:
+            span = len(self.xmarks) + cspan - col
+            if span < 0:
+                raise ValueError(
+                    T["TILE_OUT_OF_BOUNDS"].format(
+                        row=row, col=col, cspan=cspan, rspan=rspan
+                    )
+                )
+            cspan = span or 1
+        if rspan < 0:
+            span = len(self.ymarks) + rspan - row
+            if span < 0:
+                raise ValueError(
+                    T["TILE_OUT_OF_BOUNDS"].format(
+                        row=row, col=col, cspan=cspan, rspan=rspan
+                    )
+                )
+            rspan = span or 1
         # Check bounds
         if (
             row < 0
@@ -909,11 +929,11 @@ class Tile(QGraphicsRectItem):
         else:
             raise ValueError(T["NOT_STRING"].format(val=repr(text)))
         self.textItem.setText(text)
-        self.textItem.setScale(1)
+        #self.textItem.setScale(1)
         tbr = self.textItem.boundingRect()
         w = tbr.width()
         h = tbr.height()
-        margin = h / 5
+        margin = self.__properties.get("MARGIN") or 3
         scale = 1
         yshift = 0
         if text:

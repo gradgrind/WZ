@@ -25,14 +25,14 @@ Copyright 2022 Michael Towers
 
 ROWS = (
     20, 8, 16, 22, 16, 34,
-    14, 8, 14,) + (18, 18, 14,)*4 + (
+    14, 7, 14,) + (18, 18, 14,)*4 + (
     14,) + (18, 14,)*4 + (14, 14,)*5 + (
     24, 14, 16,
 )
 print("A4 is roughly 842pt x 595pt – allow for margins of about 60pt")
 print("HEIGHT TOTAL =", sum(ROWS))
 COLS = (
-    39, 31, 80, 39, 41, 11, 54, 18, 18, 18, 40, 8, 50,
+    39, 31, 80, 39, 41, 11, 54, 18, 18, 40, 8, 50,
     # 9, 28
 )
 print("WIDTH TOTAL =", sum(COLS))
@@ -52,11 +52,47 @@ print("WIDTH TOTAL =", sum(COLS))
 #    "border": None,#GRID_COLOUR,
 #    "border_width": 1,
 
-TEXT_CELLS = (
-    (0, 0, 14, "Abitur-Berechnungsbogen", {"cspan":4, "halign":"l"}),
-    (0, 4, 14, "Freie Waldorfschule Hannover-Bothfeld", {"cspan":8, "halign":"r"}),
-)
+FONT1 = 11
+FONT_TITLE = 14
+FONT_SUBTITLE = 12
 
+TEXT_CELLS = (
+    (   0, 0, FONT_TITLE, "Abitur-Berechnungsbogen",
+        {"bold": True, "cspan":4, "halign":"l", "border_width":0}
+    ),
+    (   0, 4, FONT_TITLE, "Freie Waldorfschule Hannover-Bothfeld",
+        {"bold": True, "cspan":-1, "halign":"r", "border_width":0}
+    ),
+    (   2, 6, FONT_SUBTITLE, "Schuljahr:",
+        {"bold": True, "cspan":3, "halign":"r", "border_width":0}
+    ),
+    (   4, 0, FONT_SUBTITLE, "Name:",
+        {"bold": True, "halign":"l", "border_width":0}
+    ),
+    (   6, 1, FONT1, "Fach", {"cspan": 2, "border_width":0}   ),
+    (   6, 3, FONT1, "Kurspunkte", {"cspan": 2, "border_width":0}   ),
+    (   6, 6, FONT1, "Mittelwert", {"border_width":0}   ),
+    (   6, 9, FONT1, "Berechnungspunkte", {"cspan": 3, "border_width":0}   ),
+    (   8, 11, FONT1, "Fach 1 – 4", {}   ),
+    (   21, 11, FONT1, "Fach 5 – 8", {}   ),
+    (   9, 0, FONT1, "Erhöhtes Anforderungsniveau", {"rspan": 8, "rotate":True}   ),
+
+
+# Pupil details
+    (   2, 9, FONT_SUBTITLE, "2022 – 2023",
+        {"bold": True, "cspan":-1, "fg":"A800C8", "border_width":0}
+    ),
+    (   4, 2, FONT_SUBTITLE, "Michaela Musterfrau",
+        {"bold": True, "cspan":-1, "halign":"l", "fg":"A800C8", "border_width":0}
+    ),
+
+# Grades ...
+
+# Calculated fields ...
+    (   9, 11, FONT1, "412", {"rspan":11, "fg":"05A5A0"}   ),
+    (   22, 11, FONT1, "168", {"rspan":7, "fg":"05A5A0"}   ),
+
+)
 
 ########################################################################
 
@@ -93,6 +129,7 @@ from ui.ui_base import (
     QDateEdit,
     QListWidget,
     QAbstractItemView,
+    QCheckBox,
     # QtCore
     Qt,
     QDate,
@@ -104,6 +141,7 @@ from ui.ui_base import (
 # from ui.grid_base import GridViewAuto as GridView
 from ui.grid_base import GridViewHFit as GridView
 # from ui.grid_base import GridView
+from ui.grid_base import StyleCache
 
 ### -----
 
@@ -187,6 +225,15 @@ class AbiturManager(QWidget):
         )
         vboxr.addWidget(self.pupil_list)
 
+#+++++++++ Show grid
+        def __grid_show(state):
+            self.abiview.grid_group.setVisible(show_grid.isChecked())
+        show_grid = QCheckBox("SHOW_GRID")
+        show_grid.setCheckState(Qt.CheckState.Checked)
+        show_grid.stateChanged.connect(__grid_show)
+        vboxr.addWidget(show_grid)
+#---------
+
 #        make_pdf = QPushButton(T["Export_PDF"])
         make_pdf = QPushButton("Export_PDF")
 #        make_pdf.clicked.connect(self.pupil_data_table.export_pdf)
@@ -194,12 +241,24 @@ class AbiturManager(QWidget):
 
     def init_data(self):
         self.abiview.init(ROWS, COLS)
-
+        for row, col, size, text, style in TEXT_CELLS:
+            self.abiview.add_text_item(row, col, size, text, style)
 
 class AbiturGradeView(GridView):
     def setup(self, grade_table):
         pass
 
+    def add_text_item(self, row, col, size, text, style):
+        if "bg" not in style:
+            style["bg"] = "ffffff"
+        try:
+            bold = style.pop("bold")
+        except KeyError:
+            bold = False
+        style["font"] = StyleCache.getFont(fontSize=size, fontBold=bold)
+        tile = self.grid_tile(row, col, **style)
+        tile.set_property("MARGIN", 1)
+        tile.set_text(text)
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
