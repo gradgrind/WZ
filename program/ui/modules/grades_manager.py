@@ -35,8 +35,6 @@ GRADETABLE_HEADERHEIGHT = 100
 GRADETABLE_PUPILWIDTH = 200
 GRADETABLE_LEVELWIDTH = 50
 
-GRID_COLOUR = "888800"  # rrggbb
-
 COMPONENT_COLOUR = "ffeeff"
 COMPOSITE_COLOUR = "eeffff"
 CALCULATED_COLOUR = "ffffcc"
@@ -158,7 +156,7 @@ class InstanceSelector(QWidget):
     # In that case a line editor could be used.
 
     def do_addnew(self):
-        result = InstanceDialog.popup(
+        InstanceDialog.popup(
             pos=self.mapToGlobal(self.rect().bottomLeft())
         )
 
@@ -446,7 +444,12 @@ class GradeManager(QWidget):
             DATE_GRADES=table_data["DATE_GRADES"],
             grades=grades,
         )
-        fname = report_name(self.occasion, self.class_group, self.instance, "NOTEN")
+        fname = report_name(
+            self.occasion,
+            self.class_group,
+            self.instance,
+            T["GRADES"]
+        ) + ".xlsx"
         fpath = SAVE_FILE("Excel-Datei (*.xlsx)", start=fname, title=None)
         if not fpath:
             return
@@ -480,7 +483,7 @@ class GradeManager(QWidget):
         self.updated(grade_table["MODIFIED"])
 
     def do_make_reports(self):
-        flist = PROCESS(
+        PROCESS(
             make_reports,
             title=T["MAKE_REPORTS"],
             occasion=self.occasion,
@@ -658,10 +661,9 @@ class GradeTableView(GridViewAuto):
         items.append(
             self.set_title(
                 f'{info_fields["CLASS_GROUP"]}: {cgroup}',
-                titleheight // 2,
+                -titleheight // 2,
                 font_scale=1.2,
                 halign="l",
-                y0=0,
             )
         )
         occasion = self.grade_table["OCCASION"]
@@ -669,14 +671,13 @@ class GradeTableView(GridViewAuto):
         if instance:
             occasion = f"{occasion}: {instance}"
         items.append(
-            self.set_title(occasion, titleheight // 2, halign="c", y0=0)
+            self.set_title(occasion, -titleheight // 2, halign="c")
         )
         items.append(
             self.set_title(
                 self.grade_table["DATE_ISSUE"],
-                titleheight // 2,
+                -titleheight // 2,
                 halign="r",
-                y0=0,
             )
         )
         items.append(
@@ -684,7 +685,6 @@ class GradeTableView(GridViewAuto):
                 f'{info_fields["DATE_GRADES"]}: {self.grade_table["DATE_GRADES"]}',
                 footerheight // 2,
                 halign="l",
-                y0=self.grid_height + footerheight,
             )
         )
         items.append(
@@ -692,14 +692,12 @@ class GradeTableView(GridViewAuto):
                 f'{info_fields["MODIFIED"]}: {self.grade_table["MODIFIED"]}',
                 footerheight // 2,
                 halign="r",
-                y0=self.grid_height + footerheight,
             )
         )
         if not fpath:
             fpath = SAVE_FILE(
                 "pdf-Datei (*.pdf)",
-                # TODO: T ...
-                f"Noten_{cgroup}_{occasion}",
+                report_name(occasion, cgroup, instance, T["GRADES"]) + ".pdf"
             )
             if not fpath:
                 return

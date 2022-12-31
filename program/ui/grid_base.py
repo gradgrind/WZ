@@ -60,27 +60,36 @@ TITLE_MARGIN = 15  # Left & right title margin (points)
 # FONT_DEFAULT = "Droid Sans"
 FONT_DEFAULT = ""   # use system default
 FONT_COLOUR = "442222"  # rrggbb
-# MARK_COLOUR = 'E00000'      # rrggbb
 
 #####################################################
 
+if __name__ == "__main__":
+    import sys, os
+
+    this = sys.path[0]
+    appdir = os.path.dirname(this)
+    sys.path[0] = appdir
+    import core.base
+
+#    basedir = os.path.dirname(appdir)
+
+
+#    from core.base import start
+
+    #    start.setup(os.path.join(basedir, 'TESTDATA'))
+#    start.setup(os.path.join(basedir, "DATA-2023"))
+
+T = TRANSLATIONS("ui.grid_base")
+
+### +++++
+
 from qtpy.QtWidgets import (
-    QDialog,
     QGraphicsView,
     QGraphicsScene,
     QGraphicsItemGroup,
     QGraphicsRectItem,
     QGraphicsSimpleTextItem,
     QGraphicsLineItem,
-    QVBoxLayout,
-    QLineEdit,
-    QListWidget,
-    QTableWidget,
-    QTableWidgetItem,
-    QTextEdit,
-    QDialogButtonBox,
-    QCalendarWidget,
-    QLabel
 )
 from qtpy.QtGui import (
     QFont,
@@ -93,15 +102,9 @@ from qtpy.QtGui import (
     QPageLayout,
     QPageSize,
 )
-from qtpy.QtCore import Qt, QMarginsF, QRectF, QPointF, QDate
-
-
-class GridError(Exception):
-    pass
-
+from qtpy.QtCore import Qt, QMarginsF, QRectF, QPointF
 
 ### -----
-
 
 class StyleCache:
     """Manage allocation of style resources using caches."""
@@ -412,7 +415,7 @@ class GridView(QGraphicsView):
 
     ### ---------------
 
-    def init(self, rowheights, columnwidths):
+    def init(self, rowheights, columnwidths, suppress_grid=False):
         """Set the grid size.
             <columnwidths>: a list of column widths (points)
             <rowheights>: a list of row heights (points)
@@ -443,26 +446,28 @@ class GridView(QGraphicsView):
         self.grid_height = y
         self.grid_xpt, self.grid_ypt = (xpt, ypt)
 
-        # print("X:", self.xmarks)
-        # print("Y:", self.ymarks)
-
         # Construct grid
-        row_list = []
-        self.rows = row_list
-        self.grid_group = QGraphicsItemGroup()
-        scene.addItem(self.grid_group)
-        for rx in range(len(rowheights)):
-            row = []
-            for cx in range(len(columnwidths)):
-                gtile = self.grid_tile(
-                    rx, cx,
-                    border=GRID_COLOUR,
-                    border_width=self.border_width,
-                    grid_cell=True
-                )
-                row.append(gtile)
-                self.grid_group.addToGroup(gtile)
-            row_list.append(row)
+        if suppress_grid:
+            #?
+            self.rows = None
+            self.grid_group = None
+        else:
+            row_list = []
+            self.rows = row_list
+            self.grid_group = QGraphicsItemGroup()
+            scene.addItem(self.grid_group)
+            for rx in range(len(rowheights)):
+                row = []
+                for cx in range(len(columnwidths)):
+                    gtile = self.grid_tile(
+                        rx, cx,
+                        border=GRID_COLOUR,
+                        border_width=self.border_width,
+                        grid_cell=True
+                    )
+                    row.append(gtile)
+                    self.grid_group.addToGroup(gtile)
+                row_list.append(row)
 
         # Allow a little margin
         margin = self.pt2px(SCENE_MARGIN)
@@ -478,24 +483,37 @@ class GridView(QGraphicsView):
         self.select = Selection(self)
 
     def grid_line_thick_h(self, row):
+        return self.grid_line_h(row, self.thick_line_width)
+
+    def grid_line_h(self, row, width=None, colour=GRID_COLOUR):
+        # If supplied, width is in pixels
         try:
             y = self.ymarks[row]
         except KeyError:
-            raise ValueError(T["BAD_ROW_FAT_LINE"].format(row=row))
+            raise ValueError(T["BAD_ROW_LINE"].format(row=row))
+        return self.line_h(y, width, colour)
+
+    def line_h(self, y, width, colour):
         line = QGraphicsLineItem(self.xmarks[0], y, self.xmarks[-1], y)
-        line.setPen(StyleCache.getPen(self.thick_line_width, GRID_COLOUR))
+        line.setPen(StyleCache.getPen(width or self.border_width, GRID_COLOUR))
         line.setZValue(10)
         self.scene().addItem(line)
+        return line
 
     def grid_line_thick_v(self, col):
+        return self.grid_line_v(col, self.thick_line_width)
+
+    def grid_line_v(self, col, width=None, colour=GRID_COLOUR):
+        # If supplied, width is in pixels
         try:
             x = self.xmarks[col]
         except KeyError:
-            raise ValueError(T["BAD_COL_FAT_LINE"].format(col=col))
+            raise ValueError(T["BAD_COL_LINE"].format(col=col))
         line = QGraphicsLineItem(x, self.ymarks[0], x, self.ymarks[-1])
-        line.setPen(StyleCache.getPen(self.thick_line_width, GRID_COLOUR))
+        line.setPen(StyleCache.getPen(width or self.border_width, GRID_COLOUR))
         line.setZValue(10)
         self.scene().addItem(line)
+        return line
 
     def grid_tile(self, row, col, cspan=1, rspan=1, grid_cell=False, **kargs):
         """Add a basic tile to the grid, checking coordinates and
@@ -542,7 +560,14 @@ class GridView(QGraphicsView):
 
     ### pdf output
 
-    def set_title(self, text, offset, halign="c", font_scale=None, y0=0):
+    def set_title(self, text, offset=0, halign="c", font_scale=None):
+        """Place a text item above or below the grid area.
+        Thus it may not be (fully) visible in the viewport.
+        It is actually intended only for adding headers and footnotes
+        to pdf exports.
+        """
+        if offset > 0:
+            offset += self.grid_height
         textItem = QGraphicsSimpleTextItem(text)
         self.scene().addItem(textItem)
         font = QFont(StyleCache.getFont())
@@ -560,8 +585,7 @@ class GridView(QGraphicsView):
             x = self.grid_width - margin - w
         else:
             x = (self.grid_width - w) / 2
-        y = y0 - offset - h/2
-        textItem.setPos(x, y)
+        textItem.setPos(x, offset - h/2)
         return textItem
 
     def delete_item(self, item):
@@ -950,116 +974,124 @@ class Tile(QGraphicsRectItem):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
-    from cell_editors import (
+    from ui.cell_editors import (
         CellEditorDate,
         CellEditorTable,
         CellEditorLine,
         CellEditorText,
     )
-    rows = (100, 30, 30, 30, 30, 30, 30, 30)
+    rows = (100,) + (30,) * 12
     cols = (200, 50,) + (25,) * 14 + (40,) * 3
 
     from qtpy.QtWidgets import QApplication
 
     app = QApplication([])
     # grid = GridViewRescaling()
-    # grid = GridViewHFit() # buggy ...
+    # grid = GridViewHFit()
     # grid = GridView()
     grid = GridViewAuto()
-    grid.init(rows, cols)
+
+    # no_grid = True
+    no_grid = False
+    grid.init(rows, cols, suppress_grid=no_grid)
 
     grid.grid_line_thick_v(2)
     grid.grid_line_thick_h(1)
 
-    cell0 = grid.get_cell((0, 0))
-    cell0.set_text("Not rotated")
-    cell0.set_valign("m")
-    cell1 = grid.get_cell((0, 2))
-    cell1.set_text("Deutsch")
-    cell1.set_verticaltext()
-    cell1.set_valign("b")
-    cell2 = grid.get_cell((0, 4))
-    cell2.set_text("English")
-    cell2.set_verticaltext()
+    if not no_grid:
+        cell0 = grid.get_cell((0, 0))
+        cell0.set_text("Not rotated")
+        cell0.set_valign("m")
+        cell1 = grid.get_cell((0, 2))
+        cell1.set_text("Deutsch")
+        cell1.set_verticaltext()
+        cell1.set_valign("b")
+        cell2 = grid.get_cell((0, 4))
+        cell2.set_text("English")
+        cell2.set_verticaltext()
 
-    cell_1 = grid.get_cell((4, 3))
-    cell_1.set_text("A long entry")
-    cell_pid = grid.grid_tile(2, 0, text="left", halign="l")
+        cell_1 = grid.get_cell((4, 3))
+        cell_1.set_text("A long entry")
+        cell_pid = grid.grid_tile(2, 0, text="left", halign="l")
+
+        plain_line_editor = CellEditorLine().activate
+        cell0.set_property("EDITOR", plain_line_editor)
+        grade_editor_I = CellEditorTable(
+            [
+                [   ["1+", "1", "1-"],   "sehr gut"      ],
+                [   ["2+", "2", "2-"],   "gut"           ],
+                [   ["3+", "3", "3-"],   "befriedigend"  ],
+                [   ["4+", "4", "4-"],   "ausreichend"   ],
+                [   ["5+", "5", "5-"],   "mangelhaft"    ],
+                [   ["6"],         "ungenügend"    ],
+                [   ["nt"],        "nicht teilgenommen"],
+                [   ["t"],         "teilgenommen"  ],
+            #    [   ["ne"],        "nicht erteilt" ],
+                [   ["nb"],        "kann nicht beurteilt werden"],
+                [   ["*", "/"],       "––––––"        ],
+            ]
+        ).activate
+        text_editor = CellEditorText().activate
+        #    grade_editor = CellEditorList(
+        #cell_1.set_property("EDITOR", grade_editor_I)
+        cell_1.set_property("EDITOR", text_editor)
+
+        cell3 = grid.get_cell((6, 0))
+        cell3.set_property("EDITOR", CellEditorDate().activate)
+        cell3.set_property("VALUE", "")
+        cell3.set_text("")
+        cell4 = grid.get_cell((7, 0))
+        cell4.set_property("EDITOR", CellEditorDate(empty_ok=True).activate)
+        cell4.set_property("VALUE", "2022-12-01")
+        cell4.set_text("2022-12-01")
+
     grid.grid_tile(3, 0, text="right", halign="r")
     grid.grid_tile(4, 0, text="top", valign="t", cspan=2, bg="ffffaa")
     grid.grid_tile(5, 0, text="bottom", valign="b")
 
-    plain_line_editor = CellEditorLine().activate
-    cell0.set_property("EDITOR", plain_line_editor)
-    grade_editor_I = CellEditorTable(
-        [
-            [   ["1+", "1", "1-"],   "sehr gut"      ],
-            [   ["2+", "2", "2-"],   "gut"           ],
-            [   ["3+", "3", "3-"],   "befriedigend"  ],
-            [   ["4+", "4", "4-"],   "ausreichend"   ],
-            [   ["5+", "5", "5-"],   "mangelhaft"    ],
-            [   ["6"],         "ungenügend"    ],
-            [   ["nt"],        "nicht teilgenommen"],
-            [   ["t"],         "teilgenommen"  ],
-        #    [   ["ne"],        "nicht erteilt" ],
-            [   ["nb"],        "kann nicht beurteilt werden"],
-            [   ["*", "/"],       "––––––"        ],
-        ]
-    ).activate
-    text_editor = CellEditorText().activate
-    #    grade_editor = CellEditorList(
-    #cell_1.set_property("EDITOR", grade_editor_I)
-    cell_1.set_property("EDITOR", text_editor)
-
-    cell3 = grid.get_cell((6, 0))
-    cell3.set_property("EDITOR", CellEditorDate().activate)
-    cell3.set_property("VALUE", "")
-    cell3.set_text("")
-    cell4 = grid.get_cell((7, 0))
-    cell4.set_property("EDITOR", CellEditorDate(empty_ok=True).activate)
-    cell4.set_property("VALUE", "2022-12-01")
-    cell4.set_text("2022-12-01")
     grid.resize(600, 400)
     grid.show()
 
-    # Enable package import if running as module
-    import sys, os
+    print("ymarks:", grid.ymarks)
 
-    # print(sys.path)
-    this = sys.path[0]
-    appdir = os.path.dirname(this)
-    sys.path[0] = appdir
-    from core.base import start
+    ###### TITLES & FOOTNOTES
+    if True:
+        titleheight = grid.pt2px(30)
+        footerheight = grid.pt2px(30)
+        t1 = grid.set_title(
+            "Main Title",
+            offset=-titleheight // 2,
+            font_scale=1.2,
+            halign="c",
+        )
+        h1 = grid.set_title(
+            "A footnote",
+            offset=footerheight // 2,
+            halign="r",
+        )
 
-    basedir = os.path.dirname(appdir)
-    start.setup(os.path.join(basedir, "TESTDATA"))
+        for yl in 0, -titleheight, grid.grid_height, grid.grid_height + footerheight:
+            line = grid.line_h(yl, width=grid.thick_line_width, colour="ff0000")
 
-    fpath = DATAPATH("testing/tmp/grid1.pdf")
-    os.makedirs(os.path.dirname(fpath), exist_ok=True)
+        # grid.scene().removeItem(t1)
+        # grid.scene().removeItem(h1)
+    ###### ------
 
-    titleheight = grid.pt2px(30)
-    titlemiddle = grid.pt2px(15)
-    footerheight = grid.pt2px(30)
-    footermiddle = grid.pt2px(15)
+    # grid.grid_group.hide()
 
-    print("$1", grid.ymarks)
+    def export_to_pdf(can_rotate):
+        basedir = os.path.dirname(appdir)
+        tmpdir = os.path.join(basedir, "tmp")
+        fpath = os.path.join(tmpdir, "grid1.pdf")
+        os.makedirs(os.path.dirname(fpath), exist_ok=True)
+        grid.to_pdf(
+            fpath,
+            can_rotate=can_rotate,
+            titleheight=titleheight,
+            footerheight=footerheight
+        )
+        print(f"Exported to {fpath}")
 
-    for yl in 0, -titleheight, grid.grid_height, grid.grid_height + footerheight:
-        line = QGraphicsLineItem(0, yl, grid.grid_width, yl)
-        line.setPen(StyleCache.getPen(grid.thick_line_width, "ff0000"))
-        line.setZValue(10)
-        grid.scene().addItem(line)
-
-    t1 = grid.set_title("Main Title", offset=titlemiddle, font_scale=1.2)
-    h1 = grid.set_title("A footnote", halign="r",
-        y0=grid.grid_height + footerheight, offset=footermiddle
-    )
-
-    grid.to_pdf(fpath, titleheight=titleheight, footerheight=footerheight)
-    # grid.to_pdf(fpath, can_rotate = False, titleheight=titleheight, footerheight=footerheight)
-
-    #grid.scene().removeItem(t1)
-    #grid.scene().removeItem(h1)
-    #grid.grid_group.hide()
+    export_to_pdf(can_rotate=True)
 
     app.exec()

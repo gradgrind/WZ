@@ -158,8 +158,8 @@ ui.ui_base: {
 }
 
 ui.grid_base: {
-    BAD_ROW_FAT_LINE: "Ungültige Zeile für fette Linie: {row}"
-    BAD_COL_FAT_LINE: "Ungültige Spalte für fette Linie: {col}"
+    BAD_ROW_LINE: "Ungültige Zeile für Linie: {row}"
+    BAD_COL_LINE: "Ungültige Spalte für Linie: {col}"
     TILE_OUT_OF_BOUNDS: "Ungültige Platzierung für Raster-Kachel: Zeile={row}, Spalte={col}, Breite={cspan}, Höhe={rspan}"
     GRID_CELL_RANGE: "Raster-Kachel in Zeile {row}, Spalte {col} darf nicht andere Kacheln überdecken"
     NOT_STRING: "Kachelwert muss eine Zeichenkette sein, nicht: {val}"
@@ -399,7 +399,9 @@ ui.modules.grades_manager: {
     # Labels
     MODULE_NAME:    "Noten"
     MODULE_TITLE:   "Noten verwalten"
+
     Export_PDF:     "als PDF exportieren"
+    GRADES:         "NOTEN"
     MAKE_INPUT_TABLE: "Eingabetabelle erstellen"
     READ_INPUT_TABLE: "Eingabetabelle einlesen"
     MAKE_REPORTS:   "Zeugnisse erstellen"
