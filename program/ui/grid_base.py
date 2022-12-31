@@ -1,7 +1,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2022-12-30
+Last updated:  2022-12-31
 
 Base functions for table-grids using the QGraphicsView framework.
 
@@ -57,10 +57,8 @@ THICK_LINE_WIDTH = 3
 SELECT_WIDTH = 3
 SCENE_MARGIN = 10  # Margin around content in GraphicsView widgets
 TITLE_MARGIN = 15  # Left & right title margin (points)
-
-
-# ?
 # FONT_DEFAULT = "Droid Sans"
+FONT_DEFAULT = ""   # use system default
 FONT_COLOUR = "442222"  # rrggbb
 # MARK_COLOUR = 'E00000'      # rrggbb
 
@@ -133,7 +131,6 @@ class StyleCache:
             if colour is None:
                 pen = QPen(QColor("#00FFFFFF"))
             else:
-
                 pen = QPen(QColor("#FF" + wc[1]))
             pen.setWidth(wc[0])
             cls.__pens[wc] = pen
@@ -167,8 +164,8 @@ class StyleCache:
     @classmethod
     def getFont(
         cls,
-        fontFamily: str = "",
-        fontSize: int = 12,
+        fontFamily: str = FONT_DEFAULT,
+        fontSize: int = FONT_SIZE_DEFAULT,
         fontBold: bool = False,
         fontItalic: bool = False,
     ) -> QFont:
@@ -686,8 +683,8 @@ class GridViewRescaling(GridView):
         # Apparently it is a good idea to disable scrollbars when using
         # this resizing scheme. With this resizing scheme they would not
         # appear anyway, so this doesn't lose any features!
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
     def resizeEvent(self, event):
         self.rescale()
@@ -695,7 +692,10 @@ class GridViewRescaling(GridView):
 
     def rescale(self, qrect=None):
         if qrect == None:
-            qrect = self._sceneRect
+            try:
+                qrect = self._sceneRect
+            except AttributeError:
+                return  # The view hasn't been initialized yet
         self.fitInView(qrect, Qt.KeepAspectRatio)
 
 
@@ -709,8 +709,8 @@ class GridViewAuto(GridView):
         # Apparently it is a good idea to disable scrollbars when using
         # this resizing scheme. With this resizing scheme they would not
         # appear anyway, so this doesn't lose any features!
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
     def resizeEvent(self, event):
         self.rescale()
@@ -728,8 +728,8 @@ class GridViewAuto(GridView):
         h = size.height()
         scale1 = h / qrect.height()
         if scale1 < scale:
-            if scale1 > 1:
-                scale = 1
+            if scale1 > 1.0:
+                scale = 1.0
             else:
                 scale = scale1
         elif scale > 1:
@@ -741,7 +741,8 @@ class GridViewAuto(GridView):
 # Experimental!
 class GridViewHFit(GridView):
     """An QGraphicsView that automatically adjusts the scaling of its
-    scene to fill the width of the viewing window. If
+    scene to fill the width of the viewing window, up to a scale factor
+    of 1.
     """
 
     def __init__(self):
@@ -749,9 +750,12 @@ class GridViewHFit(GridView):
         # Apparently it is a good idea to disable scrollbars when using
         # this resizing scheme. With this resizing scheme they would not
         # appear anyway, so this doesn't lose any features!
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-    #        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # To avoid problematic situation at point where scroll-bar would
+        # appear or disappear, force scrollbar on permanently.
+        # TODO: On systems where this has no effect, the resulting
+        # widget might be unstable – this needs testing.
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
 
     def resizeEvent(self, event):
         self.rescale()
@@ -759,22 +763,20 @@ class GridViewHFit(GridView):
 
     def rescale(self, qrect=None):
         if qrect == None:
-            qrect = self._sceneRect
-        size = self.size()
-        vsb = self.verticalScrollBar()
+            try:
+                qrect = self._sceneRect
+            except AttributeError:
+                return  # The view hasn't been initialized yet
+        size = self.viewport().size()
         w = size.width()
-        # This might be problematic at the point where the scrollbar appears or
-        # disappears ...
-        # Initially the scrollbar is reported as invisible, even when it is
-        # clearly visible, so the calculation is wrong.
-        if vsb.isVisible():
-            w -= vsb.size().width()
+        ## vsb = self.verticalScrollBar()
+        ## if vsb.isVisible():
+        ##     w -= vsb.size().width()
         scale = w / qrect.width()
+        if scale > 1.0:
+            scale = 1.0
         t = QTransform().scale(scale, scale)
         self.setTransform(t)
-
-
-#        self.fitInView(qrect, Qt.KeepAspectRatio)
 
 
 class Tile(QGraphicsRectItem):
@@ -955,26 +957,7 @@ if __name__ == "__main__":
         CellEditorText,
     )
     rows = (100, 30, 30, 30, 30, 30, 30, 30)
-    cols = (
-        200,
-        50,
-        25,
-        25,
-        25,
-        25,
-        25,
-        25,
-        25,
-        25,
-        25,
-        25,
-        25,
-        25,
-        25,
-        40,
-        40,
-        40,
-    )
+    cols = (200, 50,) + (25,) * 14 + (40,) * 3
 
     from qtpy.QtWidgets import QApplication
 

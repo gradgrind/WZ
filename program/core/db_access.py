@@ -76,7 +76,7 @@ def open_database():
     if not os.path.isfile(bupath):
         os.makedirs(os.path.dirname(bupath), exist_ok=True)
         copyfile(dbpath, bupath)
-    REPORT("INFO", T["MONTHLY_DB_BACKUP"].format(path=bupath))
+        REPORT("INFO", T["MONTHLY_DB_BACKUP"].format(path=bupath))
 
     con = QSqlDatabase.database()
     if con.isValid():

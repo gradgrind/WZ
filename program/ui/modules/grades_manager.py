@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-12-28
+Last updated:  2022-12-31
 
 Front-end for managing grade reports.
 
@@ -124,7 +124,10 @@ class ManageGrades(Page):
         self.grade_manager.init_data()
 
     def is_modified(self):
-        return self.grade_manager.modified()
+        """Return <True> if there are unsaved changes.
+        This module always saves changes immediately.
+        """
+        return False
 
 
 # ++++++++++++++ The widget implementation ++++++++++++++
@@ -303,13 +306,6 @@ class GradeManager(QWidget):
         self.__changes_enabled = True
         self.class_group = None
         self.changed_occasion(self.occasion_selector.currentText())
-
-    def modified(self):
-        """Return <True> if there are unsaved changes.
-
-        This module always saves changes immediately.
-        """
-        return False
 
     def updated(self, timestamp):
         self.modified_time.setText(timestamp)

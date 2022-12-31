@@ -1,7 +1,7 @@
 """
 ui/modules/timetable_gui.py
 
-Last updated:  2022-10-08
+Last updated:  2022-12-30
 
 The timetable "main" window.
 
@@ -189,14 +189,14 @@ class GridView(QGraphicsView):
         )
         print("§TABLE SIZE (pixels):", SIZES["TABLEWIDTH"], SIZES["TABLEHEIGHT"])
 
-    def pt2px(self, pt):
-        px = self.ldpi * pt / 72.0
-        print(f"pt2px: {pt} -> {px} (LDPI: {self.ldpi})")
+    def pt2px(self, pt) -> int:
+        px = int(self.ldpi * pt / 72.0 + 0.5)
+        # print(f"pt2px: {pt} -> {px} (LDPI: {self.ldpi})")
         return px
 
     def px2mm(self, px):
         mm = px * 25.4 / self.ldpi
-        print(f"px2mm: {px} -> {mm} (LDPI: {self.ldpi})")
+        # print(f"px2mm: {px} -> {mm} (LDPI: {self.ldpi})")
         return mm
 
 

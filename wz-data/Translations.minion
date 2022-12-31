@@ -411,12 +411,19 @@ ui.modules.grades_manager: {
 }
 
 ui.modules.timetable_editor: {
-    # Messages
-    BLOCK_ROOM_CONFLICT: "Räume nicht unabhängig für Kurs(e) mit Kennzeichen {tag}, Klasse {klass}, Fach {sid}: {rooms}"
-
     # Labels
     MODULE_NAME:    "Stundenplan"
     MODULE_TITLE:   "Stundenplan bearbeiten"
+
+    # Messages
+    BLOCK_ROOM_CONFLICT: "Räume nicht unabhängig für Kurs(e) mit Kennzeichen {tag}, Klasse {klass}, Fach {sid}: {rooms}"
+}
+
+ui.modules.abi_wani: {
+    # Labels
+    MODULE_NAME:    "Abiturnoten"
+    MODULE_TITLE:   "Ergebnisse der Abiturprüfungen"
+    
 }
 
 timetable.activities: {
