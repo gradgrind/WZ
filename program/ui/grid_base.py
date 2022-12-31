@@ -273,7 +273,7 @@ class GridView(QGraphicsView):
 
     def pt2px(self, pt) -> int:
         px = int(self.ldpi * pt / 72.0 + 0.5)
-        print(f"pt2px: {pt} -> {px}")
+        # print(f"pt2px: {pt} -> {px}")
         return px
 
     def px2mm(self, px):
@@ -929,7 +929,7 @@ class Tile(QGraphicsRectItem):
         else:
             raise ValueError(T["NOT_STRING"].format(val=repr(text)))
         self.textItem.setText(text)
-        #self.textItem.setScale(1)
+        self.textItem.setScale(1)
         tbr = self.textItem.boundingRect()
         w = tbr.width()
         h = tbr.height()
@@ -952,7 +952,9 @@ class Tile(QGraphicsRectItem):
                     w = tbr.width()
                     h = tbr.height()
                     scale = maxh / w
-                if scale < 1:
+                if self.__properties.get("NO_SCALE"):
+                    scale = 1
+                elif scale < 1:
                     self.textItem.setScale(scale)
                 self.textItem.setRotation(-90)
                 __h = h
@@ -972,7 +974,9 @@ class Tile(QGraphicsRectItem):
                     w = tbr.width()
                     h = tbr.height()
                     scale = maxw / w
-                if scale < 1:
+                if self.__properties.get("NO_SCALE"):
+                    scale = 1
+                elif scale < 1:
                     self.textItem.setScale(scale)
                 h = h * scale
                 w = w * scale

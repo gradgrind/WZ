@@ -55,6 +55,10 @@ print("WIDTH TOTAL =", sum(COLS))
 FONT1 = 11
 FONT_TITLE = 14
 FONT_SUBTITLE = 12
+#TODO: Maybe rather colour the backgrounds?
+COLOUR_PUPIL_DATA = "A800C8"
+COLOUR_GRADES = "00B000"
+COLOUR_CALCULATED = "05A5A0"
 
 TEXT_CELLS = (
     (   0, 0, FONT_TITLE, "Abitur-Berechnungsbogen",
@@ -80,17 +84,17 @@ TEXT_CELLS = (
 
 # Pupil details
     (   2, 9, FONT_SUBTITLE, "2022 – 2023",
-        {"bold": True, "cspan":-1, "fg":"A800C8", "border_width":0}
+        {"bold": True, "cspan":-1, "fg":COLOUR_PUPIL_DATA, "border_width":0}
     ),
     (   4, 2, FONT_SUBTITLE, "Michaela Musterfrau",
-        {"bold": True, "cspan":-1, "halign":"l", "fg":"A800C8", "border_width":0}
+        {"bold": True, "cspan":-1, "halign":"l", "fg":COLOUR_PUPIL_DATA, "border_width":0}
     ),
 
 # Grades ...
 
 # Calculated fields ...
-    (   9, 11, FONT1, "412", {"rspan":11, "fg":"05A5A0"}   ),
-    (   22, 11, FONT1, "168", {"rspan":7, "fg":"05A5A0"}   ),
+    (   9, 11, FONT1, "412", {"rspan":11, "fg":COLOUR_CALCULATED}   ),
+    (   22, 11, FONT1, "168", {"rspan":7, "fg":COLOUR_CALCULATED}   ),
 
 )
 
@@ -244,6 +248,7 @@ class AbiturManager(QWidget):
         for row, col, size, text, style in TEXT_CELLS:
             self.abiview.add_text_item(row, col, size, text, style)
 
+
 class AbiturGradeView(GridView):
     def setup(self, grade_table):
         pass
@@ -258,6 +263,8 @@ class AbiturGradeView(GridView):
         style["font"] = StyleCache.getFont(fontSize=size, fontBold=bold)
         tile = self.grid_tile(row, col, **style)
         tile.set_property("MARGIN", 1)
+#?
+        tile.set_property("NO_SCALE", True)
         tile.set_text(text)
 
 
