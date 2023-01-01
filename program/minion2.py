@@ -1,12 +1,12 @@
 """
 minion.py
 
-Last updated:  2022-01-04
+Last updated:  2023-01-01
 
 Read MINION-formatted configuration data.
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -258,12 +258,12 @@ class Minion:
                             )
                 else:
                     dmap[key] = val
-                    if sep == _DICT1:
-                        return dmap, rest2
-                    elif sep:
-                        self.report(
-                            _BAD_DICT_LINE, line=self.line_number, text=line
-                        )
+                if sep == _DICT1:
+                    return dmap, rest2
+                elif sep:
+                    self.report(
+                        _BAD_DICT_LINE, line=self.line_number, text=line
+                    )
             elif sep == _STRING:
                 # A complex-string value
                 dmap[key], rest2 = self.STRING(rest2)
