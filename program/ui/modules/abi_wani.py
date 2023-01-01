@@ -27,12 +27,12 @@ ROWS = (
     20, 8, 16, 22, 16, 34,
     14, 7, 14,) + (18, 18, 14,)*4 + (
     14,) + (18, 14,)*4 + (14, 14,)*5 + (
-    24, 14, 16,
+    24, 14, 18,
 )
 print("A4 is roughly 842pt x 595pt – allow for margins of about 60pt")
 print("HEIGHT TOTAL =", sum(ROWS))
 COLS = (
-    39, 31, 80, 39, 41, 11, 54, 18, 18, 40, 8, 50,
+    39, 31, 80, 39, 41, 11, 54, 18, 18, 18, 40, 8, 50,
     # 9, 28
 )
 print("WIDTH TOTAL =", sum(COLS))
@@ -57,15 +57,12 @@ FONT_TITLE = 14
 FONT_SUBTITLE = 12
 #TODO: Maybe rather colour the backgrounds?
 COLOUR_PUPIL_DATA = "A800C8"
-COLOUR_GRADES = "00B000"
+COLOUR_GRADES = "0000B0"
 COLOUR_CALCULATED = "05A5A0"
 
 TEXT_CELLS = (
     (   0, 0, FONT_TITLE, "Abitur-Berechnungsbogen",
         {"bold": True, "cspan":4, "halign":"l", "border_width":0}
-    ),
-    (   0, 4, FONT_TITLE, "Freie Waldorfschule Hannover-Bothfeld",
-        {"bold": True, "cspan":-1, "halign":"r", "border_width":0}
     ),
     (   2, 6, FONT_SUBTITLE, "Schuljahr:",
         {"bold": True, "cspan":3, "halign":"r", "border_width":0}
@@ -76,13 +73,74 @@ TEXT_CELLS = (
     (   6, 1, FONT1, "Fach", {"cspan": 2, "border_width":0}   ),
     (   6, 3, FONT1, "Kurspunkte", {"cspan": 2, "border_width":0}   ),
     (   6, 6, FONT1, "Mittelwert", {"border_width":0}   ),
-    (   6, 9, FONT1, "Berechnungspunkte", {"cspan": 3, "border_width":0}   ),
-    (   8, 11, FONT1, "Fach 1 – 4", {}   ),
-    (   21, 11, FONT1, "Fach 5 – 8", {}   ),
-    (   9, 0, FONT1, "Erhöhtes Anforderungsniveau", {"rspan": 8, "rotate":True}   ),
+    (   6, 10, FONT1, "Berechnungspunkte", {"cspan": 3, "border_width":0}   ),
+    (   8, 12, FONT1, "Fach 1 – 4", {}   ),
+    (   21, 12, FONT1, "Fach 5 – 8", {}   ),
+    (   9, 0, FONT1, "erhöhtes Anforderungsniveau", {"rspan": 8, "rotate":True}   ),
+    (   18, 0, FONT1, "grundlegendes Anforderungsniveau", {"rspan": 11, "rotate":True}   ),
+    (   9, 1, FONT1, "1", {"rspan": 2}   ),
+    (   12, 1, FONT1, "2", {"rspan": 2}   ),
+    (   15, 1, FONT1, "3", {"rspan": 2}   ),
+    (   18, 1, FONT1, "4", {"rspan": 2}   ),
+    (   22, 1, FONT1, "5", {}   ),
+    (   24, 1, FONT1, "6", {}   ),
+    (   26, 1, FONT1, "7", {}   ),
+    (   28, 1, FONT1, "8", {}   ),
+    (   9, 3, FONT1, "schr.", {}   ),
+    (   10, 3, FONT1, "mündl.", {}   ),
+    (   12, 3, FONT1, "schr.", {}   ),
+    (   13, 3, FONT1, "mündl.", {}   ),
+    (   15, 3, FONT1, "schr.", {}   ),
+    (   16, 3, FONT1, "mündl.", {}   ),
+    (   18, 3, FONT1, "schr.", {}   ),
+    (   19, 3, FONT1, "mündl.", {}   ),
+    (   22, 3, FONT1, "mündl.", {}   ),
+    (   24, 3, FONT1, "mündl.", {}   ),
+    (   26, 3, FONT1, "2. Hj.", {}   ),
+    (   28, 3, FONT1, "2. Hj.", {}   ),
+    (   9, 7, FONT1, "x", {"rspan": 2, "border_width":0}   ),
+    (   9, 8, FONT1, "12", {"rspan": 2, "border_width":0}   ),
+    (   9, 9, FONT1, "=", {"rspan": 2, "border_width":0}   ),
+    (   12, 7, FONT1, "x", {"rspan": 2, "border_width":0}   ),
+    (   12, 8, FONT1, "12", {"rspan": 2, "border_width":0}   ),
+    (   12, 9, FONT1, "=", {"rspan": 2, "border_width":0}   ),
+    (   15, 7, FONT1, "x", {"rspan": 2, "border_width":0}   ),
+    (   15, 8, FONT1, "12", {"rspan": 2, "border_width":0}   ),
+    (   15, 9, FONT1, "=", {"rspan": 2, "border_width":0}   ),
+    (   18, 7, FONT1, "x", {"rspan": 2, "border_width":0}   ),
+    (   18, 8, FONT1, "8", {"rspan": 2, "border_width":0}   ),
+    (   18, 9, FONT1, "=", {"rspan": 2, "border_width":0}   ),
+    (   22, 7, FONT1, "x", {"border_width":0}   ),
+    (   22, 8, FONT1, "4", {"border_width":0}   ),
+    (   22, 9, FONT1, "=", {"border_width":0}   ),
+    (   24, 7, FONT1, "x", {"border_width":0}   ),
+    (   24, 8, FONT1, "4", {"border_width":0}   ),
+    (   24, 9, FONT1, "=", {"border_width":0}   ),
+    (   26, 7, FONT1, "x", {"border_width":0}   ),
+    (   26, 8, FONT1, "4", {"border_width":0}   ),
+    (   26, 9, FONT1, "=", {"border_width":0}   ),
+    (   28, 7, FONT1, "x", {"border_width":0}   ),
+    (   28, 8, FONT1, "4", {"border_width":0}   ),
+    (   28, 9, FONT1, "=", {"border_width":0}   ),
+    (   30, 2, FONT1, "Alle > 0P.:", {"halign":"l", "cspan":7, "border_width":0}   ),
+    (   32, 2, FONT1, "Fach 1 – 4, mindestens 2mal ≥ 5P.:", {"halign":"l", "cspan":7, "border_width":0}   ),
+    (   34, 2, FONT1, "Fach 5 – 8, mindestens 2mal ≥ 5P.:", {"halign":"l", "cspan":7, "border_width":0}   ),
+    (   36, 2, FONT1, "Fach 1 – 4 ≥ 220:", {"halign":"l", "cspan":7, "border_width":0}   ),
+    (   38, 2, FONT1, "Fach 5 – 8 ≥ 80:", {"halign":"l", "cspan":7, "border_width":0}   ),
+    (   40, 2, FONT_SUBTITLE, "Summe:",
+        {"bold": True, "halign":"r", "border_width":0}
+    ),
+    (   40, 6, FONT_SUBTITLE, "Note:",
+        {"bold": True, "halign":"r", "cspan":3, "border_width":0}
+    ),
+    (   42, 6, FONT_SUBTITLE, "Datum:",
+        {"bold": True, "halign":"r", "cspan":3, "border_width":0}
+    ),
 
-
-# Pupil details
+# School/Pupil details
+    (   0, 4, FONT_TITLE, "Freie Michaelschule",
+        {"bold": True, "cspan":-1, "halign":"r", "border_width":0}
+    ),
     (   2, 9, FONT_SUBTITLE, "2022 – 2023",
         {"bold": True, "cspan":-1, "fg":COLOUR_PUPIL_DATA, "border_width":0}
     ),
@@ -90,12 +148,66 @@ TEXT_CELLS = (
         {"bold": True, "cspan":-1, "halign":"l", "fg":COLOUR_PUPIL_DATA, "border_width":0}
     ),
 
+# Subjects
+    (   9, 2, FONT1, "Deutsch", {"rspan": 2, "fg":COLOUR_PUPIL_DATA}   ),
+    (   12, 2, FONT1, "Englisch", {"rspan": 2, "fg":COLOUR_PUPIL_DATA}   ),
+    (   15, 2, FONT1, "Geschichte", {"rspan": 2, "fg":COLOUR_PUPIL_DATA}   ),
+    (   18, 2, FONT1, "Mathematik", {"rspan": 2, "fg":COLOUR_PUPIL_DATA}   ),
+    (   22, 2, FONT1, "Biologie", {"fg":COLOUR_PUPIL_DATA}   ),
+    (   24, 2, FONT1, "Französisch", {"fg":COLOUR_PUPIL_DATA}   ),
+    (   26, 2, FONT1, "Musik", {"fg":COLOUR_PUPIL_DATA}   ),
+    (   28, 2, FONT1, "Sport", {"fg":COLOUR_PUPIL_DATA}   ),
+
 # Grades ...
+    (   9, 4, FONT1, "10", {"fg":COLOUR_GRADES}   ),
+    (   10, 4, FONT1, "*", {"fg":COLOUR_GRADES}   ),
+    (   12, 4, FONT1, "05", {"fg":COLOUR_GRADES}   ),
+    (   13, 4, FONT1, "12", {"fg":COLOUR_GRADES}   ),
+    (   15, 4, FONT1, "08", {"fg":COLOUR_GRADES}   ),
+    (   16, 4, FONT1, "13", {"fg":COLOUR_GRADES}   ),
+    (   18, 4, FONT1, "08", {"fg":COLOUR_GRADES}   ),
+    (   19, 4, FONT1, "*", {"fg":COLOUR_GRADES}   ),
+    (   22, 4, FONT1, "09", {"fg":COLOUR_GRADES}   ),
+    (   24, 4, FONT1, "07", {"fg":COLOUR_GRADES}   ),
+    (   26, 4, FONT1, "12", {"fg":COLOUR_GRADES}   ),
+    (   28, 4, FONT1, "14", {"fg":COLOUR_GRADES}   ),
+    (   42, 10, FONT_SUBTITLE, "20.6.2020",
+        {"bold": True, "cspan":-1, "fg":COLOUR_GRADES}
+    ),
 
 # Calculated fields ...
-    (   9, 11, FONT1, "412", {"rspan":11, "fg":COLOUR_CALCULATED}   ),
-    (   22, 11, FONT1, "168", {"rspan":7, "fg":COLOUR_CALCULATED}   ),
+    (   9, 6, FONT1, "10", {"rspan":2, "fg":COLOUR_CALCULATED}   ),
+    (   12, 6, FONT1, "8,5", {"rspan":2, "fg":COLOUR_CALCULATED}   ),
+    (   15, 6, FONT1, "10,5", {"rspan":2, "fg":COLOUR_CALCULATED}   ),
+    (   18, 6, FONT1, "8", {"rspan":2, "fg":COLOUR_CALCULATED}   ),
+    (   22, 6, FONT1, "9", {"fg":COLOUR_CALCULATED}   ),
+    (   24, 6, FONT1, "7", {"fg":COLOUR_CALCULATED}   ),
+    (   26, 6, FONT1, "12", {"fg":COLOUR_CALCULATED}   ),
+    (   28, 6, FONT1, "14", {"fg":COLOUR_CALCULATED}   ),
+    (   9, 10, FONT1, "120", {"rspan":2, "fg":COLOUR_CALCULATED}   ),
+    (   12, 10, FONT1, "102", {"rspan":2, "fg":COLOUR_CALCULATED}   ),
+    (   15, 10, FONT1, "126", {"rspan":2, "fg":COLOUR_CALCULATED}   ),
+    (   18, 10, FONT1, "64", {"rspan":2, "fg":COLOUR_CALCULATED}   ),
+    (   22, 10, FONT1, "36", {"fg":COLOUR_CALCULATED}   ),
+    (   24, 10, FONT1, "28", {"fg":COLOUR_CALCULATED}   ),
+    (   26, 10, FONT1, "48", {"fg":COLOUR_CALCULATED}   ),
+    (   28, 10, FONT1, "56", {"fg":COLOUR_CALCULATED}   ),
 
+    (   9, 12, FONT1, "412", {"rspan":11, "fg":COLOUR_CALCULATED}   ),
+    (   22, 12, FONT1, "168", {"rspan":7, "fg":COLOUR_CALCULATED}   ),
+
+    (   30, 10, FONT1, "Ja", {"fg":COLOUR_CALCULATED}   ),
+    (   32, 10, FONT1, "Ja", {"fg":COLOUR_CALCULATED}   ),
+    (   34, 10, FONT1, "Ja", {"fg":COLOUR_CALCULATED}   ),
+    (   36, 10, FONT1, "Ja", {"fg":COLOUR_CALCULATED}   ),
+    (   38, 10, FONT1, "Ja", {"fg":COLOUR_CALCULATED}   ),
+
+    (   40, 3, FONT_SUBTITLE, "580",
+        {"bold": True, "cspan":2, "border_width":0, "fg":COLOUR_CALCULATED}
+    ),
+    (   40, 10, FONT_SUBTITLE, "2,4",
+        {"bold": True, "cspan":-1, "border_width":0, "fg":COLOUR_CALCULATED}
+    ),
 )
 
 ########################################################################
