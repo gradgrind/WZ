@@ -1,13 +1,13 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2022-12-31
+Last updated:  2023-01-02
 
 Front-end for managing grade reports.
 
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -86,6 +86,7 @@ from ui.ui_base import (
     QCheckBox,
     QComboBox,
     QDateEdit,
+    QGroupBox,
     # QtCore
     Qt,
     QDate,
@@ -97,7 +98,11 @@ from ui.ui_base import (
 )
 
 from ui.grid_base import GridViewAuto
-from ui.cell_editors import CellEditorTable, CellEditorText
+from ui.cell_editors import (
+    CellEditorTable,
+    CellEditorText,
+    CellEditorDate,
+)
 
 ### -----
 
@@ -269,9 +274,11 @@ class GradeManager(QWidget):
         # )
         # vboxr.addWidget(self.pupil_list)
 
+        vboxr.addStretch()
         make_pdf = QPushButton(T["Export_PDF"])
         make_pdf.clicked.connect(self.pupil_data_table.export_pdf)
         vboxr.addWidget(make_pdf)
+        vboxr.addSpacing(20)
 
         # TODO: read input tables,
         # generate reports using only selected pupils? - what about
@@ -280,16 +287,24 @@ class GradeManager(QWidget):
         make_input_table = QPushButton(T["MAKE_INPUT_TABLE"])
         make_input_table.clicked.connect(self.do_make_input_table)
         vboxr.addWidget(make_input_table)
+        vboxr.addSpacing(20)
+
         read_input_table = QPushButton(T["READ_INPUT_TABLE"])
         read_input_table.clicked.connect(self.do_read_input_table)
         vboxr.addWidget(read_input_table)
-        vboxr.addWidget(HLine())
+        vboxr.addSpacing(20)
+
+        vboxr.addStretch()
+        # vboxr.addWidget(HLine())
+        self.make_reports = QGroupBox(T["MAKE_REPORTS"])
+        vboxr.addWidget(self.make_reports)
+        gblayout = QVBoxLayout(self.make_reports)
         self.show_data = QCheckBox(T["SHOW_DATA"])
         self.show_data.setCheckState(Qt.CheckState.Unchecked)
-        vboxr.addWidget(self.show_data)
-        make_reports = QPushButton(T["MAKE_REPORTS"])
-        make_reports.clicked.connect(self.do_make_reports)
-        vboxr.addWidget(make_reports)
+        gblayout.addWidget(self.show_data)
+        pb_make_reports = QPushButton(T["DO_MAKE_REPORTS"])
+        pb_make_reports.clicked.connect(self.do_make_reports)
+        gblayout.addWidget(pb_make_reports)
 
     def init_data(self):
         self.__changes_enabled = False
@@ -390,6 +405,7 @@ class GradeManager(QWidget):
         grade_table = full_grade_table(
             self.occasion, self.class_group, instance
         )
+        self.make_reports.setEnabled("REPORT_TYPE" in grade_table["ALL_SIDS"])
         self.instance = instance
         self.suppress_callbacks = True
         self.issue_date.setDate(
@@ -515,6 +531,7 @@ class GradeTableView(GridViewAuto):
         col2colour = []
         click_handler = []
         grade_click_handler = CellEditorTable(grade_config_table).activate
+        date_click_handler = CellEditorDate(empty_ok=True).activate
         for sdata in subject_list:
             col2colour.append(None)
             click_handler.append(grade_click_handler)
@@ -538,9 +555,14 @@ class GradeTableView(GridViewAuto):
                 elif handler_type == "CHOICE_MAP":
                     # print("%%%%%%%%%%%%%%", sdata)
                     values = [[[v], text] for v, text in sdata["VALUES"]]
+                    # print("%%%%%%%%%%%%%%", values)
                     editor = CellEditorTable(values).activate
                 elif handler_type == "TEXT":
                     editor = CellEditorText().activate
+                elif handler_type == "GRADE":
+                    editor = grade_click_handler
+                elif handler_type == "DATE":
+                    editor = date_click_handler
                 else:
                     # TODO?
                     editor = None
@@ -552,7 +574,9 @@ class GradeTableView(GridViewAuto):
         extra_widths = []
         for sdata in extras_list:
             try:
-                extra_widths.append(int(custom_widths[sdata["SID"]]))
+                extra_widths.append(
+                    int(custom_widths[sdata["SID"]]) or GRADETABLE_SUBJECTWIDTH
+                )
             except:
                 extra_widths.append(GRADETABLE_EXTRAWIDTH)
         __rows = (GRADETABLE_HEADERHEIGHT,) + (GRADETABLE_ROWHEIGHT,) * len(

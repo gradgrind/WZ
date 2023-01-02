@@ -1,9 +1,9 @@
 """
 ui/abi_wani.py
 
-Last updated:  2023-01-01
+Last updated:  2023-01-02
 
-A widget for editing Abitur grades in a Waldorf school in Niedersachsen.
+A "Page" for editing Abitur grades in a Waldorf school in Niedersachsen.
 
 =+LICENCE=============================
 Copyright 2023 Michael Towers
@@ -23,192 +23,8 @@ Copyright 2023 Michael Towers
 =-LICENCE========================================
 """
 
-ROWS = (
-    20, 8, 16, 22, 16, 34,
-    14, 7, 14,) + (18, 18, 14,)*4 + (
-    14,) + (18, 14,)*4 + (14, 14,)*5 + (
-    24, 14, 18,
-)
 print("A4 is roughly 842pt x 595pt – allow for margins of about 60pt")
-print("HEIGHT TOTAL =", sum(ROWS))
-COLS = (
-    39, 31, 80, 39, 41, 11, 54, 18, 18, 18, 40, 8, 50,
-)
-print("WIDTH TOTAL =", sum(COLS))
-
-# row, col, 0 (default) or font-size,
-#  HOW DOES FONT SETTING WORK? grid_base has some constants which are
-# not used, and it is generally unclear ...
-# cspan=1, rspan=1, grid_cell=False,
-# text="", style options
-# style_opts:
-#    "bg": None,
-#    "font": None,
-#    "fg": None,#FONT_COLOUR,
-#    "halign": "c",
-#    "valign": "m",
-#    "rotate": False,
-#    "border": None,#GRID_COLOUR,
-#    "border_width": 1,
-
-FONT1 = 11
-FONT_TITLE = 14
-FONT_SUBTITLE = 12
-#TODO: Maybe rather colour the backgrounds?
-COLOUR_PUPIL_DATA = "A800C8"
-COLOUR_GRADES = "0000B0"
-COLOUR_CALCULATED = "05A5A0"
-COLOUR_INPUT_BORDER = "ff0000"
-
-TEXT_CELLS = (
-    ("", 0, 0, FONT_TITLE, "Abitur-Berechnungsbogen",
-        {"bold": True, "cspan":4, "halign":"l", "border_width":0}
-    ),
-    ("", 2, 6, FONT_SUBTITLE, "Schuljahr:",
-        {"bold": True, "cspan":3, "halign":"r", "border_width":0}
-    ),
-    ("", 4, 0, FONT_SUBTITLE, "Name:",
-        {"bold": True, "halign":"l", "border_width":0}
-    ),
-    ("", 6, 1, FONT1, "Fach", {"cspan": 2, "border_width":0}),
-    ("", 6, 3, FONT1, "Kurspunkte", {"cspan": 2, "border_width":0}),
-    ("", 6, 6, FONT1, "Mittelwert", {"border_width":0}),
-    ("", 6, 10, FONT1, "Berechnungspunkte", {"cspan": 3, "border_width":0}),
-    ("", 8, 12, FONT1, "Fach 1 – 4", {}),
-    ("", 21, 12, FONT1, "Fach 5 – 8", {}),
-    ("", 9, 0, FONT1, "erhöhtes Anforderungsniveau", {"rspan": 8, "rotate":True}),
-    ("", 18, 0, FONT1, "grundlegendes Anforderungsniveau", {"rspan": 11, "rotate":True}),
-    ("", 9, 1, FONT1, "1", {"rspan": 2}),
-    ("", 12, 1, FONT1, "2", {"rspan": 2}),
-    ("", 15, 1, FONT1, "3", {"rspan": 2}),
-    ("", 18, 1, FONT1, "4", {"rspan": 2}),
-    ("", 22, 1, FONT1, "5", {}),
-    ("", 24, 1, FONT1, "6", {}),
-    ("", 26, 1, FONT1, "7", {}),
-    ("", 28, 1, FONT1, "8", {}),
-    ("", 9, 3, FONT1, "schr.", {}),
-    ("", 10, 3, FONT1, "mündl.", {}),
-    ("", 12, 3, FONT1, "schr.", {}),
-    ("", 13, 3, FONT1, "mündl.", {}),
-    ("", 15, 3, FONT1, "schr.", {}),
-    ("", 16, 3, FONT1, "mündl.", {}),
-    ("", 18, 3, FONT1, "schr.", {}),
-    ("", 19, 3, FONT1, "mündl.", {}),
-    ("", 22, 3, FONT1, "mündl.", {}),
-    ("", 24, 3, FONT1, "mündl.", {}),
-    ("", 26, 3, FONT1, "2. Hj.", {}),
-    ("", 28, 3, FONT1, "2. Hj.", {}),
-    ("", 9, 7, FONT1, "x", {"rspan": 2, "border_width":0}),
-    ("", 9, 8, FONT1, "12", {"rspan": 2, "border_width":0}),
-    ("", 9 , 9, FONT1, "=", {"rspan": 2, "border_width":0}),
-    ("", 12, 7, FONT1, "x", {"rspan": 2, "border_width":0}),
-    ("", 12, 8, FONT1, "12", {"rspan": 2, "border_width":0}),
-    ("", 12, 9, FONT1, "=", {"rspan": 2, "border_width":0}),
-    ("", 15, 7, FONT1, "x", {"rspan": 2, "border_width":0}),
-    ("", 15, 8, FONT1, "12", {"rspan": 2, "border_width":0}),
-    ("", 15, 9, FONT1, "=", {"rspan": 2, "border_width":0}),
-    ("", 18, 7, FONT1, "x", {"rspan": 2, "border_width":0}),
-    ("", 18, 8, FONT1, "8", {"rspan": 2, "border_width":0}),
-    ("", 18, 9, FONT1, "=", {"rspan": 2, "border_width":0}),
-    ("", 22, 7, FONT1, "x", {"border_width":0}),
-    ("", 22, 8, FONT1, "4", {"border_width":0}),
-    ("", 22, 9, FONT1, "=", {"border_width":0}),
-    ("", 24, 7, FONT1, "x", {"border_width":0}),
-    ("", 24, 8, FONT1, "4", {"border_width":0}),
-    ("", 24, 9, FONT1, "=", {"border_width":0}),
-    ("", 26, 7, FONT1, "x", {"border_width":0}),
-    ("", 26, 8, FONT1, "4", {"border_width":0}),
-    ("", 26, 9, FONT1, "=", {"border_width":0}),
-    ("", 28, 7, FONT1, "x", {"border_width":0}),
-    ("", 28, 8, FONT1, "4", {"border_width":0}),
-    ("", 28, 9, FONT1, "=", {"border_width":0}),
-    ("", 30, 2, FONT1, "Alle > 0P.:", {"halign":"l", "cspan":7, "border_width":0}),
-    ("", 32, 2, FONT1, "Fach 1 – 4, mindestens 2mal ≥ 5P.:", {"halign":"l", "cspan":7, "border_width":0}),
-    ("", 34, 2, FONT1, "Fach 5 – 8, mindestens 2mal ≥ 5P.:", {"halign":"l", "cspan":7, "border_width":0}),
-    ("", 36, 2, FONT1, "Fach 1 – 4 ≥ 220:", {"halign":"l", "cspan":7, "border_width":0}),
-    ("", 38, 2, FONT1, "Fach 5 – 8 ≥ 80:", {"halign":"l", "cspan":7, "border_width":0}),
-    ("", 40, 2, FONT_SUBTITLE, "Summe:",
-        {"bold": True, "halign":"r", "border_width":0}
-    ),
-    ("", 40, 6, FONT_SUBTITLE, "Note:",
-        {"bold": True, "halign":"r", "cspan":3, "border_width":0}
-    ),
-    ("", 42, 6, FONT_SUBTITLE, "Datum:",
-        {"bold": True, "halign":"r", "cspan":3, "border_width":0}
-    ),
-
-# School/Pupil details
-    ("SCHOOL", 0, 4, FONT_TITLE, "Freie Michaelschule",
-        {"bold": True, "cspan":-1, "halign":"r", "border_width":0}
-    ),
-    ("SCHOOLYEAR", 2, 9, FONT_SUBTITLE, "2022 – 2023",
-        {"bold": True, "cspan":-1, "fg":COLOUR_PUPIL_DATA, "border_width":0}
-    ),
-    ("PUPIL", 4, 2, FONT_SUBTITLE, "Michaela Musterfrau",
-        {"bold": True, "cspan":-1, "halign":"l", "fg":COLOUR_PUPIL_DATA, "border_width":0}
-    ),
-
-# Subjects
-    ("", 9, 2, FONT1, "Deutsch", {"rspan": 2, "fg":COLOUR_PUPIL_DATA}),
-    ("", 12, 2, FONT1, "Englisch", {"rspan": 2, "fg":COLOUR_PUPIL_DATA}),
-    ("", 15, 2, FONT1, "Geschichte", {"rspan": 2, "fg":COLOUR_PUPIL_DATA}),
-    ("", 18, 2, FONT1, "Mathematik", {"rspan": 2, "fg":COLOUR_PUPIL_DATA}),
-    ("", 22, 2, FONT1, "Biologie", {"fg":COLOUR_PUPIL_DATA}),
-    ("", 24, 2, FONT1, "Französisch", {"fg":COLOUR_PUPIL_DATA}),
-    ("", 26, 2, FONT1, "Musik", {"fg":COLOUR_PUPIL_DATA}),
-    ("", 28, 2, FONT1, "Sport", {"fg":COLOUR_PUPIL_DATA}),
-
-# Grades ...
-    ("", 9, 4, FONT1, "10", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 10, 4, FONT1, "*", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 12, 4, FONT1, "05", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 13, 4, FONT1, "12", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 15, 4, FONT1, "08", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 16, 4, FONT1, "13", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 18, 4, FONT1, "08", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 19, 4, FONT1, "*", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 22, 4, FONT1, "09", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 24, 4, FONT1, "07", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 26, 4, FONT1, "12", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 28, 4, FONT1, "14", {"border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}),
-    ("", 42, 10, FONT_SUBTITLE, "20.6.2020",
-        {"bold": True, "cspan":-1, "border":COLOUR_INPUT_BORDER, "fg":COLOUR_GRADES}
-    ),
-
-# Calculated fields ...
-    ("", 9, 6, FONT1, "10", {"rspan":2, "fg":COLOUR_CALCULATED}),
-    ("", 12, 6, FONT1, "8,5", {"rspan":2, "fg":COLOUR_CALCULATED}),
-    ("", 15, 6, FONT1, "10,5", {"rspan":2, "fg":COLOUR_CALCULATED}),
-    ("", 18, 6, FONT1, "8", {"rspan":2, "fg":COLOUR_CALCULATED}),
-    ("", 22, 6, FONT1, "9", {"fg":COLOUR_CALCULATED}),
-    ("", 24, 6, FONT1, "7", {"fg":COLOUR_CALCULATED}),
-    ("", 26, 6, FONT1, "12", {"fg":COLOUR_CALCULATED}),
-    ("", 28, 6, FONT1, "14", {"fg":COLOUR_CALCULATED}),
-    ("", 9, 10, FONT1, "120", {"rspan":2, "fg":COLOUR_CALCULATED}),
-    ("", 12, 10, FONT1, "102", {"rspan":2, "fg":COLOUR_CALCULATED}),
-    ("", 15, 10, FONT1, "126", {"rspan":2, "fg":COLOUR_CALCULATED}),
-    ("", 18, 10, FONT1, "64", {"rspan":2, "fg":COLOUR_CALCULATED}),
-    ("", 22, 10, FONT1, "36", {"fg":COLOUR_CALCULATED}),
-    ("", 24, 10, FONT1, "28", {"fg":COLOUR_CALCULATED}),
-    ("", 26, 10, FONT1, "48", {"fg":COLOUR_CALCULATED}),
-    ("", 28, 10, FONT1, "56", {"fg":COLOUR_CALCULATED}),
-
-    ("", 9, 12, FONT1, "412", {"rspan":11, "fg":COLOUR_CALCULATED}),
-    ("", 22, 12, FONT1, "168", {"rspan":7, "fg":COLOUR_CALCULATED}),
-
-    ("", 30, 10, FONT1, "Ja", {"fg":COLOUR_CALCULATED}),
-    ("", 32, 10, FONT1, "Ja", {"fg":COLOUR_CALCULATED}),
-    ("", 34, 10, FONT1, "Ja", {"fg":COLOUR_CALCULATED}),
-    ("", 36, 10, FONT1, "Ja", {"fg":COLOUR_CALCULATED}),
-    ("", 38, 10, FONT1, "Ja", {"fg":COLOUR_CALCULATED}),
-
-    ("", 40, 3, FONT_SUBTITLE, "580",
-        {"bold": True, "cspan":2, "border_width":0, "fg":COLOUR_CALCULATED}
-    ),
-    ("", 40, 10, FONT_SUBTITLE, "2,4",
-        {"bold": True, "cspan":-1, "border_width":0, "fg":COLOUR_CALCULATED}
-    ),
-)
+ABITUR_FORM = "ABITUR_FORM_WANI"
 
 ########################################################################
 
@@ -228,11 +44,13 @@ if __name__ == "__main__":
 else:
     from ui.ui_base import StackPage as Page
 
-T = TRANSLATIONS("ui.modules.abi_wani")
+T = TRANSLATIONS("ui.modules.abi")
 
 ### +++++
 
+from core.base import class_group_split
 from core.db_access import open_database, db_values
+from core.basic_data import check_group
 from ui.ui_base import (
     QWidget,
     QLabel,
@@ -258,6 +76,11 @@ from ui.ui_base import (
 from ui.grid_base import GridViewHFit as GridView
 # from ui.grid_base import GridView
 from ui.grid_base import StyleCache
+from grades.gradetable import (
+    get_grade_config,
+    full_grade_table,
+)
+from ui.cell_editors import CellEditorTable, CellEditorDate
 
 ### -----
 
@@ -310,9 +133,9 @@ class AbiturManager(QWidget):
 #        self.info_fields = dict(grade_config["INFO_FIELDS"])
         formbox = QFormLayout()
         vboxr.addLayout(formbox)
-        self.class_selector = QComboBox()
-#        self.class_selector.currentTextChanged.connect(self.changed_class)
-        formbox.addRow("CLASS_GROUP", self.class_selector)
+        self.group_selector = QComboBox()
+        self.group_selector.currentTextChanged.connect(self.select_group)
+        formbox.addRow(T["GROUP"], self.group_selector)
 
         # Date fields
         firstday = QDate.fromString(
@@ -356,13 +179,115 @@ class AbiturManager(QWidget):
         vboxr.addWidget(make_pdf)
 
     def init_data(self):
-        self.items = {}
+        gcon = get_grade_config()
+        for ocsn in gcon["OCCASIONS"]:
+            if ocsn[0] == "Abitur":
+                abi_info = ocsn[1]
+                break
+        else:
+            REPORT("ERROR", T["NO_ABITUR_CONFIG"].format(path=gcon["__PATH__"]))
+            return
+        print("?????????", abi_info)
+        grade_config_table = gcon["&ABI_GRADES"]
+        grade_click_handler = CellEditorTable(grade_config_table).activate
+        date_click_handler = CellEditorDate(empty_ok=True).activate
+        self.__changes_enabled = False
+        self.group_selector.clear()
+        groups = []
+        for g in abi_info:
+            if g[0] == "_":
+                # Keys starting with '_' are for additional, non-group
+                # related information.
+                continue
+            klass, group = class_group_split(g)
+            if not check_group(klass, group):
+                REPORT(
+                    "ERROR",
+                    T["BAD_ABI_GROUP_IN_CONFIG"].format(group=g),
+                )
+                continue
+            groups.append(g)
+        groups.sort(reverse=True)
+        self.__changes_enabled = False
+        self.group_selector.clear()
+        self.group_selector.addItems(groups)
+#        self.group_selector.setCurrentText(self.class_group)  # no exception
+        # Enable callbacks
+        self.__changes_enabled = True
+
+
+
+
+
+        self.items = {}     # references to tagged tiles
+        configpath = DATAPATH(f"CONFIG/{ABITUR_FORM}")
+        config = MINION(configpath)
+        ROWS = [int(i) for i in config["ROWS"]]
+        COLS = [int(i) for i in config["COLS"]]
+#--
+        print("HEIGHT TOTAL =", sum(ROWS))
+        print("WIDTH TOTAL =", sum(COLS))
+
         self.abiview.init(ROWS, COLS)
-        for key, row, col, size, text, style in TEXT_CELLS:
-            tile = self.abiview.add_text_item(row, col, size, text, style)
+        for configline in config["TEXT_CELLS"]:
+            try:
+                key, row, col, size, text, style = configline
+            except ValueError:
+                REPORT(
+                    "ERROR",
+                    T["BAD_CONFIGLINE"].format(
+                        path=configpath,
+                        data="\n".join(repr(x) for x in configline)
+                    )
+                )
+            irow = int(row)
+            icol = int(col)
+            isize = int(size)
+            # Convert boolean style values
+            for k in ("bold", "rotate"):
+                try:
+                    if style.pop(k).upper() in ("1", "TRUE"):
+                        style[k] = True
+                except KeyError:
+                    pass
+            # Convert integer style values
+            for k in ("cspan", "rspan", "border_width"):
+                try:
+                    style[k] = int(style.pop(k))
+                except KeyError:
+                    pass
+            tile = self.abiview.add_text_item(irow, icol, isize, text, style)
             if key:
                 self.items[key] = tile
+                if key[0] == "G":
+                    tile.set_property("EDITOR", grade_click_handler)
+                elif key.startswith("DATE_"):
+                    tile.set_property("EDITOR", date_click_handler)
         print("§§§ --->", sorted(self.items))
+
+
+        self.select_group(self.group_selector.currentText())
+
+
+
+    def select_group(self, group):
+        if not self.__changes_enabled:
+            print("Class change handling disabled:", group)
+            return
+        print("§ SELECT GROUP", group)
+#TODO: This probably won't work because of there being no entry for
+# "Abitur" in the OCCASIONS list ...
+# I need the pupils and their subjects, but I should consider the possibility
+# of composites.
+        grade_table = full_grade_table("Abitur", group, "")
+# Of course full_grade_table is also used for making reports, so if I
+# don't manage this, I would need special report generation code ...
+
+# Can't I get the pupils from grade_table?
+#?        self.pupil_data_list = pupils_in_group(new_class_group, date=None)
+        # self.pupil_list.clear()
+        # self.pupil_list.addItems([pupil_name(p) for p in self.pupil_data_list])
+
 
 
 class AbiturGradeView(GridView):
@@ -370,6 +295,7 @@ class AbiturGradeView(GridView):
         pass
 
     def add_text_item(self, row, col, size, text, style):
+#?
         if "bg" not in style:
             style["bg"] = "ffffff"
         try:

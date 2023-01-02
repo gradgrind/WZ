@@ -1,12 +1,12 @@
 """
 grades/gradetable.py
 
-Last updated:  2022-12-30
+Last updated:  2023-01-02
 
 Access grade data, read and build grade tables.
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -86,7 +86,9 @@ def get_grade_config():
         return SHARED_DATA["GRADE_CONFIG"]
     except KeyError:
         pass
-    data = MINION(DATAPATH("CONFIG/GRADE_CONFIG"))
+    path = DATAPATH("CONFIG/GRADE_CONFIG")
+    data = MINION(path)
+    data["__PATH__"] = path
     SHARED_DATA["GRADE_CONFIG"] = data
     return data
 
@@ -428,8 +430,10 @@ def full_grade_table(occasion, class_group, instance, pupil_grades=None):
                 )
             pid_in_db[db_pdata["PID"]] = db_grademap
             # Update the grade map
-            grades = complete_grades(sid2data, sid_tids, db_grademap)
-            pdata_list.append((db_pdata, grades))
+#TODO: Bug, there is no <sid_tids>, and in some cases it can't be known
+#            grades = complete_grades(sid2data, sid_tids, db_grademap)
+#            pdata_list.append((db_pdata, grades))
+            pdata_list.append((db_pdata, db_grademap))
         if not pdata_list:
             REPORT("WARNING", T["NO_PUPIL_GRADES"].format(
                 report_info=f"{class_group} / {occasion} / {instance}"
@@ -1087,7 +1091,8 @@ if __name__ == "__main__":
     print("\n******************************************************")
 
     #grade_table = full_grade_table("1. Halbjahr", "12G.R", "").items()
-    grade_table = full_grade_table("1. Halbjahr", "13", "").items()
+    #grade_table = full_grade_table("1. Halbjahr", "13", "").items()
+    grade_table = full_grade_table("Kursnoten", "13", "Klausur 1").items()
 
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
