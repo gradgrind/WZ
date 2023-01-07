@@ -414,8 +414,9 @@ if __name__ == "__main__":
     print("\nKeys:", sorted(t.all_keys()))
     print("\n----------------------------------------------")
 
-    #    t = Template('grade_reports/Fachhochschulreife')
-    t = Template("grade_reports/SekII-13-Abgang")
+    # t = Template('grade_reports/Fachhochschulreife')
+    # t = Template("grade_reports/SekII-13-Abgang")
+    t = Template("grade_reports/Abitur")
     print("\nMetadata:\n", t.metadata())
     print("\nUser-Info:\n", t.user_info())
 #?    t.FILES_PATH = "GRADE_REPORTS"

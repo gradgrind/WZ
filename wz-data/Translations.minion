@@ -125,6 +125,13 @@ local.grade_functions: {
     UNKNOWN_GRADE_FUNCTION: "In Konfigurationdatei GRADE_CONFIG: unbekannte Notenberechnungsfunktion – {name}"
 }
 
+local.abitur: {
+    INVALID_SID:    "Fachkennzeichen ({sid}) im Abitur: „Fachtyp“ ungültig"
+    NO_SLOT:        "Fach mit Kennzeichen {sid}: zu viele Fächer dieses „Fachtyps“, kein Platz"
+    TOO_FEW_SUBJECTS: "Zu wenig Fächer von Typ „{tag}“"
+    EMPTY_SLOTS:    "Keine Daten für {n} Felder"
+}
+
 ui.ui_base: {
     # Messages
     UNKNOWN_KEY:    "Ungültige Selektion: '{key}'"
@@ -433,6 +440,11 @@ ui.modules.abi: {
     BAD_CONFIGLINE: "Ungültige Konfigurationszeile in {path}, falsche Anzahl an Elementen:\n{data}"
     NO_ABITUR_CONFIG: "Keine Konfigurationsdaten für das Abitur in {path}"
     BAD_ABI_GROUP_IN_CONFIG: "Konfiguration GRADE_ENTRY_TABLES: Ungültige Klasse/Gruppe ({group}) für Abitur"
+
+#TODO: moved to local.abitur
+    INVALID_SID:    "Fachkennzeichen ({sid}) im Abitur: „Fachtyp“ ungültig"
+    NO_SLOT:        "Kein Platz in Vorlage für Fach mit Kennzeichen {sid}"
+    TOO_FEW_SUBJECTS: "Zu wenig Fächer von Typ „{tag}“"
 }
 
 timetable.activities: {

@@ -1,7 +1,7 @@
 """
 grades/makereports.py
 
-Last updated:  2022-12-30
+Last updated:  2023-01-07
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -11,7 +11,7 @@ In the templates there are grouped and numbered slots for subject names
 and the corresponding grades.
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -238,7 +238,7 @@ def collect_report_type_data(
     base_data = {
         "SCHOOL": CONFIG["SCHOOL_NAME"],
         "SCHOOLBIG": CONFIG["SCHOOL_NAME"].upper(),
-        "SCHOOLYEAR": CALENDAR["~SCHOOLYEAR_PRINT"],
+        "SCHOOLYEAR": CALENDAR["SCHOOLYEAR_PRINT"],
         "DATE_ISSUE": grade_info["DATE_ISSUE"],
         "DATE_GRADES": grade_info["DATE_GRADES"],
     }

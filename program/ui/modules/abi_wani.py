@@ -1,7 +1,7 @@
 """
 ui/abi_wani.py
 
-Last updated:  2023-01-02
+Last updated:  2023-01-07
 
 A "Page" for editing Abitur grades in a Waldorf school in Niedersachsen.
 
@@ -39,7 +39,6 @@ if __name__ == "__main__":
     from ui.ui_base import StandalonePage as Page
 
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
-    #    start.setup(os.path.join(basedir, 'DATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 else:
     from ui.ui_base import StackPage as Page
@@ -48,9 +47,10 @@ T = TRANSLATIONS("ui.modules.abi")
 
 ### +++++
 
-from core.base import class_group_split
+from core.base import class_group_split, Dates
 from core.db_access import open_database, db_values
 from core.basic_data import check_group
+from core.pupils import pupil_name
 from ui.ui_base import (
     QWidget,
     QLabel,
@@ -80,6 +80,7 @@ from grades.gradetable import (
     get_grade_config,
     full_grade_table,
 )
+from local.abitur_wani import choose_pupil, calculate
 from ui.cell_editors import CellEditorTable, CellEditorDate
 
 ### -----
@@ -113,6 +114,16 @@ class Abitur(Page):
 
 # ++++++++++++++ The widget implementation ++++++++++++++
 
+
+def date_printer(properties):
+    date = properties["VALUE"]
+    if date:
+        properties["TEXT"] = Dates.print_date(date, CONFIG["DATEFORMAT"])
+    else:
+        properties["TEXT"] = ""
+    return True
+
+
 class AbiturManager(QWidget):
     def __init__(self):
         super().__init__()
@@ -125,6 +136,7 @@ class AbiturManager(QWidget):
 
         # The class data table
         self.abiview = AbiturGradeView()
+        self.abiview.setup(self.cell_changed)
         vboxl.addWidget(self.abiview)
 #        self.pupil_data_table.signal_modified.connect(self.updated)
 
@@ -162,6 +174,7 @@ class AbiturManager(QWidget):
         self.pupil_list.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
         )
+        self.pupil_list.currentRowChanged.connect(self.select_pupil)
         vboxr.addWidget(self.pupil_list)
 
 #+++++++++ Show grid
@@ -177,6 +190,33 @@ class AbiturManager(QWidget):
         make_pdf = QPushButton("Export_PDF")
         make_pdf.clicked.connect(self.abiview.export_pdf)
         vboxr.addWidget(make_pdf)
+
+    def cell_changed(self, properties: dict):
+        print("\nTODO: cell modified", properties)
+        if self.current_pid:
+            new_value = properties["VALUE"]
+
+#        sid = properties["SID"]
+#        self.grademap[sid] = new_value
+#        pid = self.pdata["PID"]
+#        self.calculate()
+#TODO
+        return
+
+        # Update this pupil's grades (etc.) in the database
+        changes, timestamp = update_pupil_grades(self.grade_table, pid)
+        self.set_modified_time(timestamp)
+        if changes:
+            # Update changed display cells
+            row = self.pid2row[pid]
+            for sid, oldval in changes:
+                self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
+
+#TODO
+    def set_modified_time(self, timestamp):
+        self.grade_table["MODIFIED"] = timestamp
+# update db ...
+
 
     def init_data(self):
         gcon = get_grade_config()
@@ -219,7 +259,7 @@ class AbiturManager(QWidget):
 
 
 
-        self.items = {}     # references to tagged tiles
+        self.tilemap = {}     # references to tagged tiles
         configpath = DATAPATH(f"CONFIG/{ABITUR_FORM}")
         config = MINION(configpath)
         ROWS = [int(i) for i in config["ROWS"]]
@@ -258,41 +298,104 @@ class AbiturManager(QWidget):
                     pass
             tile = self.abiview.add_text_item(irow, icol, isize, text, style)
             if key:
-                self.items[key] = tile
+                self.tilemap[key] = tile
                 if key[0] == "G":
                     tile.set_property("EDITOR", grade_click_handler)
                 elif key.startswith("DATE_"):
                     tile.set_property("EDITOR", date_click_handler)
-        print("§§§ --->", sorted(self.items))
+                    tile.set_property("DELEGATE", date_printer)
+        print("§§§ --->", sorted(self.tilemap))
 
-
+        self.set_tile("SCHOOLYEAR", CALENDAR["SCHOOLYEAR_PRINT"])
         self.select_group(self.group_selector.currentText())
-
-
 
     def select_group(self, group):
         if not self.__changes_enabled:
             print("Class change handling disabled:", group)
             return
         print("§ SELECT GROUP", group)
-#TODO: This probably won't work because of there being no entry for
-# "Abitur" in the OCCASIONS list ...
-# I need the pupils and their subjects, but I should consider the possibility
-# of composites.
-        grade_table = full_grade_table("Abitur", group, "")
-# Of course full_grade_table is also used for making reports, so if I
-# don't manage this, I would need special report generation code ...
+        self.current_pid = None
+        self.grade_table = full_grade_table("Abitur", group, "")
 
 # Can't I get the pupils from grade_table?
-#?        self.pupil_data_list = pupils_in_group(new_class_group, date=None)
-        # self.pupil_list.clear()
-        # self.pupil_list.addItems([pupil_name(p) for p in self.pupil_data_list])
+        self.pupil_data_list = self.grade_table["GRADE_TABLE_PUPILS"]
+        # [(pdata, grademap), ... ]
+#--
+        print("FIELDS", list(self.grade_table))
 
+        self.pupil_list.clear()
+        for item in self.pupil_data_list:
+            self.pupil_list.addItem(pupil_name(item[0]))
+
+    def select_pupil(self, index):
+        data = choose_pupil(self.grade_table, index)
+        pdata = data["__PUPIL__"]
+        self.current_pid = pdata["PID"]
+        self.set_tile("PUPIL", pupil_name(pdata))
+        self.set_tile("DATE_END", data["DATE_END"])
+        for i in range(1,9):
+            tag = f"S{i}"
+            self.set_tile(tag, data[tag])
+        for sid, g in calculate(data).items():
+            self.set_tile(sid, g)
+
+    def set_tile(self, key, value):
+        try:
+            tile = self.tilemap[key]
+        except KeyError:
+            return None
+        print("\n$$$", key, value)
+        if value and key.startswith("DATE_"):
+            value = Dates.print_date(value)
+            print("\n  ++-->", key, value)
+        tile.set_text(value)
+        return tile
+
+    def read_tile(self, key):
+        return self.tilemap[key].get_property("VALUE")
+
+    def calculate(self):
+        print("\nTODO: calculate", self.grademap)
+
+        totalA = 0
+        for i in 1,2,3,4:
+            try:
+                g = int(self.read_tile(f"G{i}"))
+            except ValueError:
+                g = 0
+            gn = self.read_tile(f"G{i}n")
+            if gn and gn != '*':
+                avn10 = (g + int(gn)) * 5
+            else:
+                avn10 = g * 10
+            if avn10 % 10 == 0:
+                avns = str(avn10 // 10)
+            else:
+                avns = str(avn10 // 10) + ",5"
+            self.set_tile(f"AVE_{i}", avns)
+            s = 8 if i == 4 else 12
+            scl = (avn10 * s) // 10
+            scls = str(scl)
+            self.set_tile(f"SCALED_{i}", scls)
+            totalA += scl
+        self.set_tile("SUM_A", str(totalA))
+
+        totalB = 0
+        for i in 5,6,7,8:
+            try:
+                g = int(self.read_tile(f"G{i}"))
+            except ValueError:
+                g = 0
+            self.set_tile(f"AVE_{i}", str(g))
+            scl = g * 4
+            self.set_tile(f"SCALED_{i}", str(scl))
+            totalB += scl
+        self.set_tile("SUM_B", str(totalB))
 
 
 class AbiturGradeView(GridView):
-    def setup(self, grade_table):
-        pass
+    def setup(self, callback):
+        self.callback_cell_changed = callback
 
     def add_text_item(self, row, col, size, text, style):
 #?
@@ -309,6 +412,10 @@ class AbiturGradeView(GridView):
         tile.set_property("NO_SCALE", True)
         tile.set_text(text)
         return tile
+
+    def cell_modified(self, properties: dict):
+        """Override base method in grid_base.GridView."""
+        self.callback_cell_changed(properties)
 
     def export_pdf(self, fpath=None):
         if not fpath:

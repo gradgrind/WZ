@@ -1,12 +1,12 @@
 """
 ui/grid_base.py
 
-Last updated:  2022-12-31
+Last updated:  2023-01-07
 
 Base functions for table-grids using the QGraphicsView framework.
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -880,7 +880,14 @@ class Tile(QGraphicsRectItem):
         view = self.scene().views()[0]
         point = view.screen_coordinates(self.scenePos())
         if editor(point, self.__properties):
-            self.set_text(None)
+            try:
+                # Allow use of a display delegate
+                delegate = self.__properties["DELEGATE"]
+            except KeyError:
+                self.set_text(None)
+            else:
+                if delegate(self.__properties):
+                    self.set_text(None)
             # Return the data needed for handling changes to this cell
             return self.__properties
         return None
@@ -923,7 +930,10 @@ class Tile(QGraphicsRectItem):
 
     def set_text(self, text):
         if text is None:
-            text = self.__properties["VALUE"]
+            try:
+                text = self.__properties["TEXT"]
+            except KeyError:
+                text = self.__properties["VALUE"]
         elif type(text) == str:
             self.__properties["VALUE"] = text
         else:

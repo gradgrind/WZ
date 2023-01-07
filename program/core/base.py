@@ -1,12 +1,12 @@
 """
 core/base.py
 
-Last updated:  2022-12-24
+Last updated:  2023-01-07
 
 Basic configuration and structural stuff.
 
 =+LICENCE=================================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -268,7 +268,9 @@ class Dates:
                 ):
                     continue
             else:
-                # single day, check validity
+                # single day or year field, check validity
+                if "SCHOOLYEAR" in k:
+                    continue
                 if k[0] == "~" or cls.check_schoolyear(schoolyear, v):
                     continue
             raise DataError(T["BAD_DATE_CAL"].format(line="%s: %s" % (k, v)))

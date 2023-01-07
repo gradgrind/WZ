@@ -1,12 +1,12 @@
 """
 ui/cell_editors.py
 
-Last updated:  2022-12-25
+Last updated:  2023-01-07
 
 Pop-up editors for table grids.
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -174,7 +174,7 @@ class CellEditorDate(QDialog):
         if self.exec():
             if self.date != date0:
                 properties["VALUE"] = self.date
-                properties["TEXT"] = self.lbl.text()
+#?                properties["TEXT"] = self.lbl.text()
                 return True
         return False
 
