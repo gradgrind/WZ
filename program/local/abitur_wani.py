@@ -1,7 +1,7 @@
 """
 local/abitur_wani.py
 
-Last updated:  2023-01-06
+Last updated:  2023-01-07
 
 Handling Abitur qualifications in a Waldorf school in Niedersachsen.
 
@@ -69,10 +69,11 @@ def choose_pupil(grade_table:dict, index:int) -> dict:
         'm': [5, 2],
         'n': [7, 2]
     }
-    sidmap = {} # map result key to subject tag
+    sidmap = {} # map field tag to subject id
     result = {
         "__SIDMAP__": sidmap,
-        "__PUPIL__": pdata
+        "__PUPIL__": pdata,
+        "__GRADES__": grademap,
     }
     empty_slots = 0
     for sid, g in grademap.items():

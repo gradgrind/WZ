@@ -435,6 +435,10 @@ ui.modules.abi: {
     MODULE_TITLE:   "Ergebnisse der Abiturprüfungen"
 
     GROUP:          "Schülergruppe"
+    MODIFIED_TIME:  "zuletzt geändert"
+    Pupils:         "Schüler"
+    Export_PDF:     "als PDF exportieren"
+    Make_Certificate: "Zeugnis erstellen"
 
     # Messages
     BAD_CONFIGLINE: "Ungültige Konfigurationszeile in {path}, falsche Anzahl an Elementen:\n{data}"

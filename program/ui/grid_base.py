@@ -880,14 +880,7 @@ class Tile(QGraphicsRectItem):
         view = self.scene().views()[0]
         point = view.screen_coordinates(self.scenePos())
         if editor(point, self.__properties):
-            try:
-                # Allow use of a display delegate
-                delegate = self.__properties["DELEGATE"]
-            except KeyError:
-                self.set_text(None)
-            else:
-                if delegate(self.__properties):
-                    self.set_text(None)
+            self.set_text(None)
             # Return the data needed for handling changes to this cell
             return self.__properties
         return None
@@ -928,16 +921,17 @@ class Tile(QGraphicsRectItem):
         self.rotated = rot90
         self.set_text(None)
 
-    def set_text(self, text):
-        if text is None:
-            try:
-                text = self.__properties["TEXT"]
-            except KeyError:
-                text = self.__properties["VALUE"]
-        elif type(text) == str:
-            self.__properties["VALUE"] = text
+    def set_text(self, value):
+        if type(value) == str:
+            self.__properties["VALUE"] = value
+        elif value is not None:
+            raise ValueError(T["NOT_STRING"].format(val=repr(value)))
+        try:
+            delegate = self.__properties["DELEGATE"]
+        except KeyError:
+            text = self.__properties["VALUE"]
         else:
-            raise ValueError(T["NOT_STRING"].format(val=repr(text)))
+            text = delegate(self.__properties)
         self.textItem.setText(text)
         self.textItem.setScale(1)
         tbr = self.textItem.boundingRect()

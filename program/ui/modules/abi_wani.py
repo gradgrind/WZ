@@ -79,6 +79,7 @@ from ui.grid_base import StyleCache
 from grades.gradetable import (
     get_grade_config,
     full_grade_table,
+    update_pupil_grades,
 )
 from local.abitur_wani import choose_pupil, calculate
 from ui.cell_editors import CellEditorTable, CellEditorDate
@@ -116,12 +117,12 @@ class Abitur(Page):
 
 
 def date_printer(properties):
+    """Display delegate for dates."""
     date = properties["VALUE"]
     if date:
-        properties["TEXT"] = Dates.print_date(date, CONFIG["DATEFORMAT"])
+        return Dates.print_date(date, CONFIG["DATEFORMAT"])
     else:
-        properties["TEXT"] = ""
-    return True
+        return ""
 
 
 class AbiturManager(QWidget):
@@ -164,12 +165,11 @@ class AbiturManager(QWidget):
 #        self.grade_date.dateChanged.connect(self.grade_date_changed)
         self.modified_time = QLineEdit()
         self.modified_time.setReadOnly(True)
-        formbox.addRow("MODIFIED", self.modified_time)
+        formbox.addRow(T["MODIFIED_TIME"], self.modified_time)
 
         vboxr.addWidget(HLine())
 
-#        vboxr.addWidget(QLabel(T["Pupils"]))
-        vboxr.addWidget(QLabel("Pupils"))
+        vboxr.addWidget(QLabel(T["Pupils"]))
         self.pupil_list = QListWidget()
         self.pupil_list.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
@@ -177,46 +177,41 @@ class AbiturManager(QWidget):
         self.pupil_list.currentRowChanged.connect(self.select_pupil)
         vboxr.addWidget(self.pupil_list)
 
-#+++++++++ Show grid
-        def __grid_show(state):
-            self.abiview.grid_group.setVisible(show_grid.isChecked())
-        show_grid = QCheckBox("SHOW_GRID")
-        show_grid.setCheckState(Qt.CheckState.Checked)
-        show_grid.stateChanged.connect(__grid_show)
-        vboxr.addWidget(show_grid)
-#---------
+        #+++++++++ Show/Hide grid
+        # Assumes grid not suppressed ...
+        # def __grid_show(state):
+        #    self.abiview.grid_group.setVisible(show_grid.isChecked())
+        # show_grid = QCheckBox("SHOW_GRID")
+        # show_grid.setCheckState(Qt.CheckState.Checked)
+        # show_grid.stateChanged.connect(__grid_show)
+        # vboxr.addWidget(show_grid)
+        #---------
 
-#        make_pdf = QPushButton(T["Export_PDF"])
-        make_pdf = QPushButton("Export_PDF")
+        vboxr.addSpacing(10)
+        make_pdf = QPushButton(T["Export_PDF"])
         make_pdf.clicked.connect(self.abiview.export_pdf)
         vboxr.addWidget(make_pdf)
+        vboxr.addSpacing(10)
+        make_cert = QPushButton(T["Make_Certificate"])
+        make_cert.clicked.connect(self.make_certificate)
+        vboxr.addWidget(make_cert)
 
     def cell_changed(self, properties: dict):
         print("\nTODO: cell modified", properties)
         if self.current_pid:
             new_value = properties["VALUE"]
-
-#        sid = properties["SID"]
-#        self.grademap[sid] = new_value
-#        pid = self.pdata["PID"]
-#        self.calculate()
-#TODO
-        return
-
-        # Update this pupil's grades (etc.) in the database
-        changes, timestamp = update_pupil_grades(self.grade_table, pid)
-        self.set_modified_time(timestamp)
-        if changes:
-            # Update changed display cells
-            row = self.pid2row[pid]
-            for sid, oldval in changes:
-                self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
-
-#TODO
-    def set_modified_time(self, timestamp):
-        self.grade_table["MODIFIED"] = timestamp
-# update db ...
-
+            sidmap = self.data["__SIDMAP__"]
+            grades = self.data["__GRADES__"]
+            tag = properties["TAG"]
+            sid = sidmap[tag]
+            self.data[tag] = new_value
+            grades[sid] = new_value
+            print("§ ->", grades)
+            self.recalculate()
+            # Update this pupil's grades (etc.) in the database
+            changes, timestamp = update_pupil_grades(self.grade_table, self.current_pid)
+            self.grade_table["MODIFIED"] = timestamp
+            self.modified_time.setText(timestamp)
 
     def init_data(self):
         gcon = get_grade_config()
@@ -255,10 +250,7 @@ class AbiturManager(QWidget):
         # Enable callbacks
         self.__changes_enabled = True
 
-
-
-
-
+        ## Set up grid cells
         self.tilemap = {}     # references to tagged tiles
         configpath = DATAPATH(f"CONFIG/{ABITUR_FORM}")
         config = MINION(configpath)
@@ -268,7 +260,7 @@ class AbiturManager(QWidget):
         print("HEIGHT TOTAL =", sum(ROWS))
         print("WIDTH TOTAL =", sum(COLS))
 
-        self.abiview.init(ROWS, COLS)
+        self.abiview.init(ROWS, COLS, suppress_grid=True)
         for configline in config["TEXT_CELLS"]:
             try:
                 key, row, col, size, text, style = configline
@@ -304,6 +296,7 @@ class AbiturManager(QWidget):
                 elif key.startswith("DATE_"):
                     tile.set_property("EDITOR", date_click_handler)
                     tile.set_property("DELEGATE", date_printer)
+                tile.set_property("TAG", key)
         print("§§§ --->", sorted(self.tilemap))
 
         self.set_tile("SCHOOLYEAR", CALENDAR["SCHOOLYEAR_PRINT"])
@@ -313,30 +306,30 @@ class AbiturManager(QWidget):
         if not self.__changes_enabled:
             print("Class change handling disabled:", group)
             return
-        print("§ SELECT GROUP", group)
+        # print("§ SELECT GROUP", group)
         self.current_pid = None
         self.grade_table = full_grade_table("Abitur", group, "")
-
-# Can't I get the pupils from grade_table?
         self.pupil_data_list = self.grade_table["GRADE_TABLE_PUPILS"]
         # [(pdata, grademap), ... ]
-#--
-        print("FIELDS", list(self.grade_table))
-
+        # print("FIELDS", list(self.grade_table))
+        self.modified_time.setText(self.grade_table["MODIFIED"])
         self.pupil_list.clear()
         for item in self.pupil_data_list:
             self.pupil_list.addItem(pupil_name(item[0]))
 
     def select_pupil(self, index):
-        data = choose_pupil(self.grade_table, index)
-        pdata = data["__PUPIL__"]
+        self.data = choose_pupil(self.grade_table, index)
+        pdata = self.data["__PUPIL__"]
         self.current_pid = pdata["PID"]
         self.set_tile("PUPIL", pupil_name(pdata))
-        self.set_tile("DATE_END", data["DATE_END"])
+        self.set_tile("DATE_END", self.data["DATE_END"])
         for i in range(1,9):
             tag = f"S{i}"
-            self.set_tile(tag, data[tag])
-        for sid, g in calculate(data).items():
+            self.set_tile(tag, self.data[tag])
+        self.recalculate()
+
+    def recalculate(self):
+        for sid, g in calculate(self.data).items():
             self.set_tile(sid, g)
 
     def set_tile(self, key, value):
@@ -344,53 +337,15 @@ class AbiturManager(QWidget):
             tile = self.tilemap[key]
         except KeyError:
             return None
-        print("\n$$$", key, value)
-        if value and key.startswith("DATE_"):
-            value = Dates.print_date(value)
-            print("\n  ++-->", key, value)
+        # print("\n$$$", key, value)
         tile.set_text(value)
         return tile
 
     def read_tile(self, key):
         return self.tilemap[key].get_property("VALUE")
 
-    def calculate(self):
-        print("\nTODO: calculate", self.grademap)
-
-        totalA = 0
-        for i in 1,2,3,4:
-            try:
-                g = int(self.read_tile(f"G{i}"))
-            except ValueError:
-                g = 0
-            gn = self.read_tile(f"G{i}n")
-            if gn and gn != '*':
-                avn10 = (g + int(gn)) * 5
-            else:
-                avn10 = g * 10
-            if avn10 % 10 == 0:
-                avns = str(avn10 // 10)
-            else:
-                avns = str(avn10 // 10) + ",5"
-            self.set_tile(f"AVE_{i}", avns)
-            s = 8 if i == 4 else 12
-            scl = (avn10 * s) // 10
-            scls = str(scl)
-            self.set_tile(f"SCALED_{i}", scls)
-            totalA += scl
-        self.set_tile("SUM_A", str(totalA))
-
-        totalB = 0
-        for i in 5,6,7,8:
-            try:
-                g = int(self.read_tile(f"G{i}"))
-            except ValueError:
-                g = 0
-            self.set_tile(f"AVE_{i}", str(g))
-            scl = g * 4
-            self.set_tile(f"SCALED_{i}", str(scl))
-            totalB += scl
-        self.set_tile("SUM_B", str(totalB))
+    def make_certificate(self):
+        print("TODO: make_certificate")
 
 
 class AbiturGradeView(GridView):
@@ -429,12 +384,12 @@ class AbiturGradeView(GridView):
         if not fpath.endswith(".pdf"):
             fpath += ".pdf"
         os.makedirs(os.path.dirname(fpath), exist_ok=True)
-#TODO: Actually, I guess the grid would normally not be shown (perhaps
-# it would even be suppressed):
-        grid_shown = self.grid_group.isVisible()
-        self.grid_group.setVisible(False)
-        self.to_pdf(fpath, can_rotate = False)
-        self.grid_group.setVisible(grid_shown)
+        ## I guess the grid would normally not be shown (perhaps
+        ## it would even be suppressed):
+        # grid_shown = self.grid_group.isVisible()
+        # self.grid_group.setVisible(False)
+        self.to_pdf(fpath, can_rotate = True)
+        # self.grid_group.setVisible(grid_shown)
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
