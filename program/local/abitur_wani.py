@@ -1,7 +1,7 @@
 """
 local/abitur_wani.py
 
-Last updated:  2023-01-07
+Last updated:  2023-01-08
 
 Handling Abitur qualifications in a Waldorf school in Niedersachsen.
 
@@ -207,9 +207,6 @@ def calculate(grades:dict[str,str]) -> dict[str,str]:
     ## The final result
     total = totalA + totalB
     fields["TOTAL"] = str(total)
-
-#TODO
-
     fields["RESULT"] = "–––"
     if ok:
         # Calculate final grade using a formula. To avoid rounding

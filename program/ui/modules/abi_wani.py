@@ -189,7 +189,7 @@ class AbiturManager(QWidget):
 
         vboxr.addSpacing(10)
         make_pdf = QPushButton(T["Export_PDF"])
-        make_pdf.clicked.connect(self.abiview.export_pdf)
+        make_pdf.clicked.connect(self.to_pdf)
         vboxr.addWidget(make_pdf)
         vboxr.addSpacing(10)
         make_cert = QPushButton(T["Make_Certificate"])
@@ -329,7 +329,11 @@ class AbiturManager(QWidget):
         self.recalculate()
 
     def recalculate(self):
+        print("\nPUPIL")
+        for k, v in self.data.items():
+            print(" ..", k, v)
         for sid, g in calculate(self.data).items():
+            print("  CALC:", sid, g)
             self.set_tile(sid, g)
 
     def set_tile(self, key, value):
@@ -343,6 +347,15 @@ class AbiturManager(QWidget):
 
     def read_tile(self, key):
         return self.tilemap[key].get_property("VALUE")
+
+    def to_pdf(self):
+        pdata = self.data["__PUPIL__"]
+        sortname = pdata["SORT_NAME"]
+        fpath = SAVE_FILE(
+            T["PDF_FILE"],
+            T["pdf_filename"].format(name=sortname)
+        )
+        self.abiview.export_pdf(fpath)
 
     def make_certificate(self):
         print("TODO: make_certificate")

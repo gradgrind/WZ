@@ -438,8 +438,12 @@ ui.modules.abi: {
     MODIFIED_TIME:  "zuletzt geändert"
     Pupils:         "Schüler"
     Export_PDF:     "als PDF exportieren"
+    PDF_FILE:       "pdf-Datei (*.pdf)"
     Make_Certificate: "Zeugnis erstellen"
 
+    # Other
+    pdf_filename:   "ABITUR-ERGEBNIS-{name}.pdf"
+    
     # Messages
     BAD_CONFIGLINE: "Ungültige Konfigurationszeile in {path}, falsche Anzahl an Elementen:\n{data}"
     NO_ABITUR_CONFIG: "Keine Konfigurationsdaten für das Abitur in {path}"

@@ -344,20 +344,20 @@ if __name__ == "__main__":
         "Zeugnis": "Zeugnis",
         "LEVEL": "Maßstab Gymnasium",  # Sek I, not Abschluss
         "issue_d": "2020-07-15",  # for file names ...
-        "ISSUE_D": "15.07.2020",  # always
-        "GRADES_D": "06.07.2020",  # Versetzung only (Zeugnis 11.Gym, 12.Gym)
+        "DATE_ISSUE": "15.07.2020",  # always
+        "DATE_GRADES": "06.07.2020",  # Versetzung only (Zeugnis 11.Gym, 12.Gym)
         "COMMENT": "",
         "NOCOMMENT": "––––––––––",
         "GS": "",  # Abgang only
         "GSVERMERK": "",  # Abgang SekI only
         # Pupil data
-        "POB": "Hannover",
-        "DOB_D": "12.02.2002",
-        "ENTRY_D": "01.08.2009",
+        "BIRTHPLACE": "Hannover",
+        "DATE_BIRTH": "12.02.2002",
+        "DATE_ENTRY": "01.08.2009",
         "FIRSTNAMES": "Elena Susanne",
         "LASTNAME": "Blender",
-        "PSORT": "Blender_Elena",
-        "EXIT_D": "15.07.2020",  # Abschluss / Abgang only
+        "SORT_NAME": "Blender_Elena",
+        "DATE_EXIT": "15.07.2020",  # Abschluss / Abgang only
         "S.V.01": "Deutsch",
         "G.V.01": "sehr gut",
         "S.V.02": "Englisch",
@@ -426,7 +426,7 @@ if __name__ == "__main__":
     #    quit(0)
 
     wdir = DATAPATH("testing/tmp")
-    file_name = "%s_%s" % (sdict0["PSORT"], sdict0["issue_d"])
+    file_name = "%s_%s" % (sdict0["SORT_NAME"], sdict0["issue_d"])
     fpath = t.make1pdf(sdict0, os.path.join(wdir, file_name))
     #    pdf_bytes = t.make_pdf1(sdict0, file_name)
     #    fpath = os.path.join(wdir, file_name) + '.pdf'
@@ -436,7 +436,7 @@ if __name__ == "__main__":
     print("\nGenerated", fpath)
 
     sdict1 = sdict0.copy()
-    sdict1["PSORT"] = "Blender_Eleni"
+    sdict1["SORT_NAME"] = "Blender_Eleni"
     sdict1["FIRSTNAMES"] = "Eleni Marie"
     dir_name = "11_2"
     print("\nGenerated", t.make_pdf([sdict0, sdict1], dir_name, wdir))

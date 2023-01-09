@@ -1,12 +1,12 @@
 """
 local/grade_functions.py
 
-Last updated:  2022-12-28
+Last updated:  2023-01-08
 
 Functions to perform grade calculations.
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -129,7 +129,7 @@ def report_name(occasion, group, instance, rtype):
 
 def process_grade_data(pdata, grade_info, grade_config):
 #TODO
-    pdata["NOCOMMENT"] = "" if pdata["REMARKS"] else "––––––––––"
+    pdata["NOCOMMENT"] = "" if pdata.get("REMARKS") else "––––––––––"
     try:
         level = pdata["LEVEL"]
     except KeyError:
