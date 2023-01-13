@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2023-01-02
+Last updated:  2023-01-11
 
 Access grade data, read and build grade tables.
 
@@ -273,7 +273,7 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     result["SYMBOLS"] = group_data["SYMBOLS"]
     pupil_map = {}  # ordered dict!
     result["PUPILS"] = pupil_map
-    for pdata, p_atoms, p_grade_tids in pupils:
+    for pdata, p_grade_tids in pupils:
         pupil_map[pdata["PID"]] = (pdata, p_grade_tids)
     return result
 

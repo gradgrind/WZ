@@ -67,7 +67,16 @@ template_engine.template_sub: {
     BAD_FIELD_INFO: "Ungültige Feld-Info ({error}) in:\n  {path}"
 }
 
+grades.grades_base: {
+
+    # Messages
+    DUPLICATE_OCCASION_IN_GROUP: "„Anlass“ {occasion} wiederholt in Konfigurationsdaten für Gruppe {group}:\n  {path}"
+    COMPONENT_NOT_UNIQUE: "Sammelfachkomponente {sid} ist mehreren Sammelfächern zugeordnet"
+    COMPOSITE_NO_COMPONENTS: "Sammelfach {name} ({sid}) hat keine Komponenten"
+}
+
 grades.gradetable: {
+#TODO: to be replaced by grades_base?
     TITLE:          "Notentabelle, erstellt {time}"
     PID:            "ID"
     PUPIL:          "Schüler(in)"

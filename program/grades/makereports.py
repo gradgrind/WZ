@@ -404,7 +404,8 @@ if __name__ == "__main__":
     fpaths = PROCESS(
         make_reports,
         title="Build reports",
-        occasion="1. Halbjahr",
+        # occasion="1. Halbjahr",
+        occasion="Abitur",
         # class_group="12G.R",
         class_group="13",
         instance="",

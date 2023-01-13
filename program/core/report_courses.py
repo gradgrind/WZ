@@ -1,12 +1,12 @@
 """
 core/report_courses.py
 
-Last updated:  2022-11-05
+Last updated:  2023-01-11
 
 Access course/subject data for reports.
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -173,22 +173,22 @@ def get_class_subjects(klass):
 
 
 def get_pupil_grade_matrix(class_group, text_reports=True):
-    """Return a list of report subjects for the given group and for each
-    subject the relevant teachers for each pupil in the group.
-    <subject_set> is a mapping, {sid ->
-        [
-            subject-index,  # for ordering
-            sid,
-            subject-name,
-            subject-group,
-            (extra-)report-info or None
-        ]
-    }
+    """Return a list of report subjects for the given group.
+    Also return for each pupil in the group the relevant teachers for
+    each subject.
+    The subjects are returned as a mapping:
+        {sid: [
+                subject-index,  # for ordering
+                sid,
+                subject-name,
+                subject-group,
+                (extra-)report-info or None
+            ]
+        }
     The extra report info (text reports only) is a pair:
         (special report-subject, special report-authors)
-    <pupils is a list, [
-        pupil-data, "pupil-group-atoms", {tid, ...}
-    ]
+    The pupil info is returned as a list of pairs:
+        [(pupil-data, {tid, ...}), ... ]
     """
     subject_map = get_subjects_with_sorting()
     # If I select the whole class, I want all courses (with pupils).
@@ -204,6 +204,7 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
     atoms = group_info["MINIMAL_SUBGROUPS"]
     group2atoms = atomic_maps(atoms, list(group_info["GROUP_MAP"]))
     pupils = []
+
     for pdata in pupils_in_group(class_group):
         pgroups = pdata["GROUPS"]
         if pgroups:
@@ -295,7 +296,7 @@ def get_pupil_grade_matrix(class_group, text_reports=True):
                             p_grade_tids[sid].add(tid)
                         except KeyError:
                             p_grade_tids[sid] = {tid}
-    return subject_set, pupils
+    return subject_set, [(p[0], p[2]) for p in pupils]
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
@@ -314,8 +315,8 @@ if __name__ == "__main__":
             print("  ---", rsdata)
     '''
 
-    kg = "12G.R"
-    kg = "12G.G"
+#    kg = "12G.R"
+#    kg = "12G.G"
     kg = "13"
     subjects, pupils = get_pupil_grade_matrix(kg, text_reports=False)
     print("\n SUBJECTS FOR GROUP", kg)
@@ -323,7 +324,7 @@ if __name__ == "__main__":
         print(" +++", s)
 
     print("\n PUPILS:")
-    for pdata, p_atoms, p_grade_tids in pupils:
+    for pdata, p_grade_tids in pupils:
         print(f'\n +++ {pupil_name(pdata)} ({pdata["PID"]}) [{pdata["GROUPS"]}]')
         print("            ", p_grade_tids)
 
