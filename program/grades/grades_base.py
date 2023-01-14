@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2023-01-13
+Last updated:  2023-01-14
 
 Access grade data, read and build grade tables.
 
@@ -73,7 +73,7 @@ from core.pupils import pupil_name, pupil_data
 from core.report_courses import get_pupil_grade_matrix
 from tables.spreadsheet import read_DataTable
 from tables.matrix import KlassMatrix
-from local.grade_functions import grade_function
+from local.grade_processing import grade_function, special_handler
 
 class GradeTableError(Exception):
     pass
@@ -145,10 +145,48 @@ def get_group_data(occasion: str, class_group: str):
         )
 
 
+class SubjectColumns(list):
+    """A custom representation of the column data ("subjects").
+    It is a list, but with a look-up function ("get") for sid keys.
+    Only indexing and the methods below are supported, using others
+    might well make a mess ...
+    """
+    def __init__(self):
+        super().__init__()
+        self.__map = {}
+
+    def append(self, subject_data):
+        self.__map[subject_data["SID"]] = len(self)
+        super().append(subject_data)
+
+    def get(self, sid):
+        return self[self.__map[sid]]
+
+    def column(self, sid):
+        return self.__map[sid]
 
 
+class PupilRows(list):
+    """A custom representation of the row data (pupils).
+    It is a list, but with a look-up function ("get") for pid keys.
+    Only indexing and the methods below are supported, using others
+    might well make a mess ...
+    """
+    def __init__(self):
+        super().__init__()
+        self.__map = {}
 
-#TODO ...
+    def append(self, pupil_data, grade_map):
+        self.__map[pupil_data["PID"]] = len(self)
+        super().append((pupil_data, grade_map))
+
+    def get(self, pid):
+        return self[self.__map[pid]]
+
+    def column(self, pid):
+        return self.__map[pid]
+
+
 def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     """Get subject, pupil and group report-information for the given
     parameters.
@@ -163,168 +201,164 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     ### Complete the "subjects" list, including "composite" subjects,
     ### calculated fields and additional input fields.
     extra_fields = group_data["EXTRA_FIELDS"]
-
-
-#TODO: This is of course specific to the locality!
-    if occasion == "Abitur":
-        nsid = 1000
-        for sdata in sorted(subjects.values()):
-            if sdata [3] in ('E', 'G'):
-                name = sdata[2].split('*', 1)[0] + "*nach"
-                sid = sdata[1].split('.', 1)[0] + ".x"
-                subjects[sid] = [nsid, sid, name, 'X', None]
-                nsid += 1
+    try:
+        sfun = group_data["SUBJECT_FUNCTION"]
+    except KeyError:
+        pass
+    else:
+        special_handler(sfun, subjects=subjects)
 
     # print("\n????? subjects:\n", subjects)
 
-
-#TODO ...
-
-    """
-    if True:
-
-        # Get "composites" and "calculates", check sid not in subjects table:
-        sid_map = get_subjects_with_sorting()
-        composite_map = grade_info["COMPOSITES"]
-        for sid in composite_map:
-            if sid in sid_map:
-                raise GradeTableError(T["BAD_COMPOSITE_SID"].format(sid=sid))
-        extras_map = grade_info["CALCULATES"]
-        for sid in extras_map:
-            if sid in sid_map:
-                raise GradeTableError(T["BAD_CALCULATE_SID"].format(sid=sid))
-        try:
-            __clist = __extra_info["COMPOSITE"]
-        except KeyError:
-            __clist = []
-        try:
-            __alist = __extra_info["CALCULATE"]
-        except KeyError:
-            __alist = []
-        try:
-            __ginfo = __extra_info[group]
-        except KeyError:
-            pass
-        else:
-            try:
-                __clist += __ginfo["COMPOSITE"]
-            except KeyError:
-                pass
-            try:
-                __alist += __ginfo["CALCULATE"]
-            except KeyError:
-                pass
-        for sid, fn in __clist:
-            try:
-                name, sorting, components = composite_map[sid]
-            except KeyError:
-                raise GradeTableError(T["UNKNOWN_COMPOSITE"].format(sid=sid))
-            composites[sid] = (name, fn, sorting)
-            composite_references[sid] = []
-            for cmpn in components:
-                if cmpn in composite_components:
-                    raise GradeTableError(
-                        T["COMPONENT_NOT_UNIQUE"].format(sid=cmpn)
-                    )
-                composite_components[cmpn] = sid
-        averages = {}
-        for sid, fn in __alist:
-            try:
-                name, subject_list = extras_map[sid]
-            except KeyError:
-                raise GradeTableError(T["UNKNOWN_CALCULATE"].format(sid=sid))
-            averages[sid] = (name, fn, subject_list)
-
-    """
-
     subject_map = {}
-    column_list = []
+    column_list = SubjectColumns()
     for sdata in sorted(subjects.values()):
         sid = sdata[1]
         sname = sdata[2]
         zgroup = sdata[3]
         # sdata[4] is the text-report custom settings, which are
         # not relevant here.
-        value = {"SID": sid, "NAME": sname, "TYPE": "SUBJECT", "GROUP": zgroup}
+        value = {
+            "SID": sid,
+            "NAME": sname,
+            "TYPE": "SUBJECT",
+            "GROUP": zgroup,
+        }
         subject_map[sid] = value
         column_list.append(value)
     result = {
         "OCCASION": occasion,
         "CLASS_GROUP": class_group,
         "INSTANCE": instance,
-        "SUBJECTS": subject_map,
+#?        "SUBJECTS": subject_map,
         "COLUMNS": column_list,
     }
 
     for odata in extra_fields:
         otype = odata["TYPE"]
         osid = odata["SID"]
-        if otype == "COMPOSITE":
-            component_list = []
-            for cmpsid in odata["COMPONENTS"]:
-                try:
-                    cmpdata = subject_map[cmpsid]
-                except KeyError:
-                    # This potential component sid is not used
-                    continue
-                if "COMPOSITE" in cmpdata:
-                    REPORT(
-                        "ERROR",
-                        T["COMPONENT_NOT_UNIQUE"].format(sid=cmpsid)
+        ## Collect "components"
+        component_list = []
+        cmplist = odata.get("COMPONENTS")
+        if cmplist:
+            if isinstance(cmplist, list):
+                for cmpsid in odata["COMPONENTS"]:
+                    try:
+                        cmpdata = subject_map[cmpsid]
+                    except KeyError:
+                        # This potential component sid is not used
+                        continue
+                    if "COMPOSITE" in cmpdata:
+                        REPORT(
+                            "ERROR",
+                            T["COMPONENT_OF_COMPOSITE"].format(
+                                path=get_grade_config()["__PATH__"],
+                                group=class_group,
+                                occasion=occasion,
+                                sid=osid,
+                                name=odata["NAME"],
+                                csid=cmpsid,
+                                cname=cmpdata["NAME"]
+                            )
+                        )
+                        continue # Don't include this component
+                    component_list.append(cmpsid)
+            else:
+                REPORT(
+                    "ERROR",
+                    T["COMPONENTS_NOT_LIST"].format(
+                        path=get_grade_config()["__PATH__"],
+                        group=class_group,
+                        occasion=occasion,
+                        sid=osid,
+                        name=odata["NAME"],
                     )
-                    continue # Don't include this component
-                component_list.append(cmpsid)
-                cmpdata["COMPOSITE"] = osid
+                )
+                continue
+
+        if otype == "COMPOSITE":
             if not component_list:
                 REPORT(
                     "WARNING",
                     T["COMPOSITE_NO_COMPONENTS"].format(
-                        sid=osid, name=odata["NAME"]
+                        path=get_grade_config()["__PATH__"],
+                        group=class_group,
+                        occasion=occasion,
+                        sid=osid,
+                        name=odata["NAME"]
                     )
                 )
                 continue # Don't include this composite subject
+            for cmpsid in component_list:
+                subject_map[cmpsid]["COMPOSITE"] = osid
             column_list.append(
                 {
                     "SID": osid,
                     "NAME": odata["NAME"],
-                    "TYPE": "COMPOSITE",
+                    "TYPE": "SUBJECT",
                     "FUNCTION": odata["FUNCTION"],
                     "GROUP": odata["GROUP"],
                     "COMPONENTS": component_list
                 }
             )
+            continue
 
+        if otype == "CALCULATE":
+            if not component_list:
+                # Collect all non-component subjects
+                component_list = {
+                    item["SID"]
+                    for item in column_list
+                    if item["TYPE"] == "SUBJECT" and "COMPOSITE" not in item
+                }
+                if not component_list:
+                    REPORT(
+                        "WARNING",
+                        T["CALCULATE_NO_COMPONENTS"].format(
+                            path=get_grade_config()["__PATH__"],
+                            group=class_group,
+                            occasion=occasion,
+                            sid=osid,
+                            name=odata["NAME"]
+                        )
+                    )
+                    continue # Don't include this calcuöated field
+            column_list.append(
+                {
+                    "SID": osid,
+                    "NAME": odata["NAME"],
+                    "TYPE": "CALCULATE",
+                    "FUNCTION": odata["FUNCTION"],
+                    "COMPONENTS": component_list,
+                    "PARAMETERS": odata.get("PARAMEMETERS") or {}
+                }
+            )
+            continue
 
-    return result
+        if otype == "INPUT":
+            column_list.append(
+                {
+                    "SID": osid,
+                    "NAME": odata["NAME"],
+                    "TYPE": "INPUT",
+                    "METHOD": odata["METHOD"],
+                    "PARAMETERS": odata.get("PARAMEMETERS") or {}
+                }
+            )
+            continue
 
-
-#TODO ...
-    # Now all the extra fields
-    extra_list = []
-    result["EXTRAS"] = extra_list
-    for k, v in averages.items():
-        extra_list.append(
-            {
-                "SID": k,
-                "NAME": v[0],
-                "TYPE": "CALCULATE",
-                "FUNCTION": v[1],
-                "COMPONENTS": v[2]
-            }
+        REPORT(
+            "ERROR",
+            T["INVALID_EXTRA_FIELD"].format(
+                path=get_grade_config()["__PATH__"],
+                group=class_group,
+                occasion=occasion,
+                sid=osid,
+                name=odata["NAME"],
+            )
         )
-    for k, v in group_data.items():
-        if k[0] == "?":
-            node = {
-                "SID": k[1:],
-                "NAME": v[0],
-                "TYPE": v[1]
-            }
-            try:
-                node["VALUES"] = v[2]
-            except IndexError:
-                node["VALUES"] = []
-            extra_list.append(node)
-    result["GRADES"] = group_data["GRADES"]
+
+    result["GRADE_VALUES"] = group_data["GRADES"]
     result["GRADE_ENTRY"] = group_data.get("GRADE_ENTRY", "")
     result["SYMBOLS"] = group_data.get("SYMBOLS") or {}
     pupil_map = {}  # ordered dict!
@@ -334,21 +368,37 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     return result
 
 
+#TODO: Break up this enormous function to make it more understandable!
 def full_grade_table(occasion, class_group, instance, pupil_grades=None):
     """Return full pupil and grade information – including calculated
     field values – for the given parameters.
     This may cause changes to the database, so that its contents
-    correspond to the returned data. Pupils with no grade data will not
-    be added to the database.
+    correspond to the returned data.
+    Pupils with no grade data will not be added to the database.
+    The parameter <pupil_grades> is provided to enable the grades to be
+    updated from an external sourde. This should be a mapping:
+        {pid: {sid: grade, ...}, ...}
+        The grade mapping should, however, also include "PUPIL" (name)
+        and "LEVEL" entries.
     """
-#TODO: Remove pupil entries when they are changed to have no grade data?
+    table = pupil_subject_grade_info(occasion, class_group, instance)
+    prepare_pupil_list(table)
+
+
+def pupil_subject_grade_info(occasion, class_group, instance):
+    """Collate basic data for the report instance:
+        configuration data for the subjects,
+        pupil data list,
+        stored grade info
+    """
     ### Get config info, including pupil list ({key: value/data})
     table_info = grade_table_info(occasion, class_group, instance)
     ### Get database records for pupils and grades:
     ###     {pid: (pdata, grade-map), ... }
     ### Note that CLASS and LEVEL fields are taken from the database
     ### GRADES record.
-    db_pupil_grades = {
+#    db_pupil_grades = {
+    table_info["STORED_GRADES"] = {
         pdata["PID"]: (pdata, grademap)
         for pdata, grademap in read_stored_grades(
             occasion, class_group, instance
@@ -362,7 +412,6 @@ def full_grade_table(occasion, class_group, instance, pupil_grades=None):
         OCCASION=occasion,
         INSTANCE=instance
     )[1]
-    today = Dates.today()
     if infolist:
         if len(infolist) > 1:
             # This should not be possible
@@ -374,7 +423,7 @@ def full_grade_table(occasion, class_group, instance, pupil_grades=None):
     else:
         # No entry in database, add a new one using "today" for initial
         # date values
-        DATE_ISSUE = today
+        DATE_ISSUE = Dates.today()
         DATE_GRADES = DATE_ISSUE
         MODIFIED = "–––––"
         if pdata_list:
@@ -391,54 +440,160 @@ def full_grade_table(occasion, class_group, instance, pupil_grades=None):
     table_info["DATE_ISSUE"] = DATE_ISSUE
     table_info["DATE_GRADES"] = DATE_GRADES
     table_info["MODIFIED"] = MODIFIED
+    return table_info
 
-    ### Construct an ordered mapping {sid: subject-data, ...} including
-    ### all sid types
-    subject_list = table_info["SUBJECTS"]
-    ## Fields: SID:str, NAME:str, TYPE:str=SUBJECT, GROUP:str
-    components_list = table_info["COMPONENTS"]
-    ## Fields: SID:str, NAME:str, TYPE:str=SUBJECT, GROUP:str, COMPOSITE:str
-    composites_list = table_info["COMPOSITES"]
-    ## Fields: SID:str, NAME:str, TYPE:str=COMPOSITE, GROUP:str, FUNCTION:str, COMPONENTS:list[str]
-    extras_list = table_info["EXTRAS"]
-    ## Fields: SID:str, NAME:str, TYPE:str=CALCULATE, FUNCTION:str, COMPONENTS:list[str]
-    ## Fields: SID:str, NAME:str, TYPE:str=CALCULATE, FUNCTION:str, COMPONENTS:'*'
-    ## Fields: SID:str, NAME:str, TYPE:str=CHOICE, VALUES:list[str]
-    ## Fields: SID:str, NAME:str, TYPE:str=CHOICE_MAP, VALUES:list[list[str,str]]
-    ## Fields: SID:str, NAME:str, TYPE:str=TEXT
-    sid2data = {
-        sdata["SID"]: sdata
-        for sdata in (
-            subject_list + components_list + composites_list + extras_list
-        )
-    }
 
-# The list of pupils from the database (<db_pupil_grades>) is needed to
-# determine for which pupils an update and for which a new entry is needed.
-# The complete list of pupils from <table_info> determines which are to
-# be inspected and included. If there is a pupil in the db grades table
-# but not in the "master" list, the entry should probably be deleted.
-# If there is external data (<pupil_grades>), then any pupils in that
-# which are not in the "master" list should not be included – perhaps
-# issue a warning.
+def prepare_pupil_list(table_info):
+    """Tweak the list of pupils taking the current date into account.
+    If the grading date (DATE_GRADES) is before "today", only the pupils
+    with grades stored in the database will be included – this is
+    regarded as a "closed category" (report-set instance), the group data
+    is assumed to have been correct at the grading date. For closed
+    category data only inspection of the data or possibly minor tweaks
+    are expected.
+    The database grade entries do not include pupils' personal data, this
+    must be taken from the standard (current) pupils table. It is
+    assumed that this won't change in the course of a year, with one or
+    two exceptions:
+     - A pupil might leave (and so be absent from later lists, but the
+       other data should still be there).
+     - There might be fixes (which I assume should also be incorporated
+       in older data, if relevant).
+     - The LEVEL field might change (for old data keep the old version).
+       To enable retention, this field is added to the grade mapping.
+    Finally, the field values are recalculated and the database entries
+    updated if there has been a change.
+    """
+    table_changed = False
+    pdata_list = PupilRows()    # [(pdata, grades),  ... ]
+    grades0 = {}   # for change detection, decision update vs. insert, etc.
+    #    {pid: initial grade-map, ... }
+    DATE_GRADES = table_info["DATE_GRADES"]
+    if DATE_GRADES < Dates.today():
+        # Closed category: include only pupils with stored grade entries,
+        # i.e. assume the list of pupils is fixed at the grading date.
+#        if pupil_grades:
+#            raise Bug("Shouldn't be called with <pupil_grades>")
+        for db_pdata, db_grademap in table_info["STORED_GRADES"].values():
+            pname = pupil_name(db_pdata)
+            if db_pdata["CLASS"] != db_pdata["__CLASS__"]:
+                REPORT(
+                    "WARNING",
+                    T["CLASS_CHANGED"].format(
+                        name=pname,
+                        new_class=db_pdata["__CLASS__"]
+                    )
+                )
+            if db_pdata["LEVEL"] != db_pdata["__LEVEL__"]:
+                REPORT(
+                    "WARNING",
+                    T["LEVEL_CHANGED"].format(
+                        name=pname,
+                        db_level=db_pdata["LEVEL"],
+                        new_level=db_pdata["__LEVEL__"]
+                    )
+                )
+            grades0[db_pdata["PID"]] = db_grademap
+            # Update the grade map
+            grades = complete_grademap(
+                table_info["COLUMNS"],
+                db_grademap,
+                pname   # just for messages
+            )
+            pdata_list.append(db_pdata, grades)
+        if not pdata_list:
+            REPORT("WARNING", T["NO_PUPIL_GRADES"].format(
+                report_info=f"{class_group} / {occasion} / {instance}"
+            ))
 
-# Closed (old) "categories" (occasion, group, instance)
-# -----------------------------------------------------
-# Note that there is the possiblilty that the report category has
-# already been closed (DATE_GRADES < today). In this case, the
-# database list should not be changed – I assume that the pupil list
-# was correct at the time of closure. Here only inspection of the
-# data or possibly minor tweaks are expected.
-# The database grade entries do not include pupils' personal data, this
-# must be taken from the standard (current) pupils table. It is
-# assumed that this won't change in the course of a year, with one or
-# two exceptions:
-#  - A pupil might leave (and so be absent from later lists, but the
-#    other data should still be there).
-#  - There might be fixes (which I assume should also be incorporated
-#    in older data, if relevant).
-#  - The LEVEL field might change (for old data keep the old version).
-#    To enable retention, this field is added to the grade mapping.
+    else:
+        # Category still open, use current pupil list, grades from database
+        for pid, data in table_info.pop("PUPILS").items():
+            pdata, sid_tids = data
+            exit_date = pdata["DATE_EXIT"]
+            if exit_date and DATE_GRADES > exit_date:
+                continue    # pupil has left the school
+            pname = pupil_name(pdata)
+            try:
+                db_pdata, db_grademap = table_info["STORED_GRADES"].pop(pid)
+                grades0[pid] = db_grademap
+            except KeyError:
+                db_grademap = {}
+            else:
+                if db_pdata["LEVEL"] != pdata["LEVEL"]:
+                    REPORT(
+                        "WARNING",
+                        T["LEVEL_UPDATED"].format(
+                            name=pname,
+                            db_level=db_pdata["LEVEL"],
+                            new_level=pdata["LEVEL"],
+                        )
+                    )
+                    # Update db field
+                    db_update_field("GRADES", "LEVEL", pdata["LEVEL"],
+                        OCCASION=occasion,
+                        CLASS_GROUP=class_group,
+                        INSTANCE=instance,
+                        PID=pid
+                    )
+                    table_changed = True
+            # Update the grade map
+            grades = complete_grademap(
+                table_info["COLUMNS"],
+                db_grademap,
+                pname,  # just for messages
+                sid_tids
+            )
+            pdata_list.append(pdata, grades)
+        # Remove pupils from grade table if they are no longer in the group.
+        # This must be done because otherwise they would be "reinstated"
+        # as soon as the date-of-issue is past.
+        for pid, data in table_info["STORED_GRADES"].items():
+            REPORT(
+                "WARNING",
+                T["REMOVING_PUPIL_GRADES"].format(
+                    name=pupil_name(data[0])
+                )
+            )
+            db_delete_rows("GRADES",
+                OCCASION=occasion,
+                CLASS_GROUP=class_group,
+                INSTANCE=instance,
+                PID=pid
+            )
+            table_changed = True
+
+    del(table_info["STORED_GRADES"])
+    table_info["PUPIL_LIST"] = pdata_list
+
+    ### Recalculate contents of all cells with FUNCTION parameter
+    for pdata, grades in pdata_list:
+        pid = pdata["PID"]
+        changes = calculate_pid_grades(table_info, pid)
+        try:
+            old_grades = grades0[pid]
+        except KeyError:
+            continue
+        if old_grades != grades:
+            print(
+                f'\n*** TODO: UPDATE_GRADE_RECORD:\n'
+                f'1) {write_pairs_dict(old_grades)}\n'
+                f'2) {write_pairs_dict(grades)}'
+            )
+            continue
+            # Update database record
+            db_update_field("GRADES",
+                "GRADE_MAP", write_pairs_dict(grades),
+                OCCASION=occasion,
+                CLASS_GROUP=class_group,
+                INSTANCE=instance,
+                PID=pid
+            )
+            table_changed = True
+    if table_changed:
+        set_grade_update_time(table_info)
+    return table_info
+
 
 # Grades supplied externally
 # --------------------------
@@ -456,45 +611,8 @@ def full_grade_table(occasion, class_group, instance, pupil_grades=None):
 # data (presumably resetting the date afterwards).
 # If the LEVEL doesn't match, issue a warning but use the internal value.
 
-    table_changed = False
-#    master_pupils = table_info["PUPILS"]    # {pid: (pdata, sid_tids), ... }
-    master_pupils = table_info.pop("PUPILS") # {pid: (pdata, sid_tids), ... }
-    pdata_list = []     # [(pdata, grades),  ... ]
-    pid_in_db = {}   # for decision update vs. insert:
-    #    {pid: initial grade-map, ... }
-    if DATE_GRADES < today:
-        # closed category – only pupils with database entries
-        # Assume the list of pupils is fixed at the grading date.
-        if pupil_grades:
-            raise Bug("Shouldn't be called with <pupil_grades>")
-        for db_pdata, db_grademap in db_pupil_grades.values():
-            if db_pdata["CLASS"] != db_pdata["__CLASS__"]:
-                REPORT(
-                    "WARNING",
-                    T["CLASS_CHANGED"].format(
-                        name=pupil_name(db_pdata),
-                        new_class=db_pdata["__CLASS__"]
-                    )
-                )
-            if db_pdata["LEVEL"] != db_pdata["__LEVEL__"]:
-                REPORT(
-                    "WARNING",
-                    T["LEVEL_CHANGED"].format(
-                        name=pupil_name(db_pdata),
-                        new_level=db_pdata["__LEVEL__"]
-                    )
-                )
-            pid_in_db[db_pdata["PID"]] = db_grademap
-            # Update the grade map
-#TODO: Bug, there is no <sid_tids>, and in some cases it can't be known
-#            grades = complete_grades(sid2data, sid_tids, db_grademap)
-#            pdata_list.append((db_pdata, grades))
-            pdata_list.append((db_pdata, db_grademap))
-        if not pdata_list:
-            REPORT("WARNING", T["NO_PUPIL_GRADES"].format(
-                report_info=f"{class_group} / {occasion} / {instance}"
-            ))
-    else:
+#?
+    if True:
         # Use the current master list of pupils for this group
         # ... but look for changed pupils (,CLASS) and LEVEL fields
         if pupil_grades: # externally supplied grade table
@@ -508,8 +626,8 @@ def full_grade_table(occasion, class_group, instance, pupil_grades=None):
                 # list is still needed to decide for update vs insert.
                 # Also outdated entries need removing
                 try:
-                    db_pdata, db_grademap = db_pupil_grades.pop(pid)
-                    pid_in_db[pid] = db_grademap
+                    db_pdata, db_grademap = table_info["STORED_GRADES"].pop(pid)
+                    grades0[pid] = db_grademap
                 except KeyError:
                     db_grademap = {}
                 try:
@@ -535,7 +653,7 @@ def full_grade_table(occasion, class_group, instance, pupil_grades=None):
                         )
                 # Update the grade map
                 grades = complete_grades(sid2data, sid_tids, new_grade_data)
-                pdata_list.append((pdata, grades))
+                pdata_list.append(pdata, grades)
             for pid, new_grade_data in pupil_grades.items():
                 if pid[0] != '_':
                     REPORT(
@@ -552,13 +670,14 @@ def full_grade_table(occasion, class_group, instance, pupil_grades=None):
                     continue    # pupil has left the school
                 try:
                     db_pdata, db_grademap = db_pupil_grades.pop(pid)
-                    pid_in_db[pid] = db_grademap
+                    grades0[pid] = db_grademap
                 except KeyError:
                     db_grademap = {}
                 else:
                     if db_pdata["LEVEL"] != pdata["LEVEL"]:
                         REPORT(
                             "WARNING",
+#TODO: Probably need a different message:
                             T["LEVEL_CHANGED"].format(
                                 name=pupil_name(pdata),
                                 db_level=db_pdata["LEVEL"]
@@ -574,7 +693,7 @@ def full_grade_table(occasion, class_group, instance, pupil_grades=None):
                         table_changed = True
                 # Update the grade map
                 grades = complete_grades(sid2data, sid_tids, db_grademap)
-                pdata_list.append((pdata, grades))
+                pdata_list.append(pdata, grades)
         # Remove pupils from grade table if they are no longer in the group.
         # This must be done because otherwise they would be "reinstated"
         # as soon as the date-of-issue is past.
@@ -592,60 +711,54 @@ def full_grade_table(occasion, class_group, instance, pupil_grades=None):
                 PID=pid
             )
             table_changed = True
-    table_info["ALL_SIDS"] = sid2data
+#?    table_info["ALL_SIDS"] = sid2data
     pid2row = {}
     table_info["PID2ROW"] = pid2row
     table_info["GRADE_TABLE_PUPILS"] = pdata_list
-    # Calculate contents of all cells with FUNCTION parameter
-    row = 0
-    try:
-        imported_pids = pupil_grades["__PUPILS__"]
-    except:
-        imported_pids = {}
-    for pdata, grades in pdata_list:
-        changes = calculate_row(table_info, row)
-        pid = pdata["PID"]
-        pid2row[pid] = row
-        try:
-            old_grades = pid_in_db[pid]
-        except KeyError:
-            if pid in imported_pids:
-                # New rows should only be added for imported data
-                db_new_row("GRADES",
-                    GRADE_MAP=write_pairs_dict(grades),
-                    OCCASION=occasion,
-                    CLASS_GROUP=class_group,
-                    INSTANCE=instance,
-                    PID=pid,
-                    LEVEL=pdata["LEVEL"]
-                )
-                table_changed = True
-        else:
-            if old_grades != grades or pid in imported_pids:
-                # update database record
-                db_update_field("GRADES",
-                    "GRADE_MAP", write_pairs_dict(grades),
-                    OCCASION=occasion,
-                    CLASS_GROUP=class_group,
-                    INSTANCE=instance,
-                    PID=pid
-                )
-                table_changed = True
-        row += 1
-    if table_changed:
-        table_info["MODIFIED"] = update_grade_time(
-            OCCASION=occasion,
-            CLASS_GROUP=class_group,
-            INSTANCE=instance,
-        )
-    return table_info
 
 
-def complete_grades(sid2data, p_grade_tids, grades):
+def set_grade_update_time(table_info):
+    """Set the modification date+time for a report instance.
+    Call after changes to the grade information.
+    """
+    timestamp = Dates.timestamp()
+    db_update_field("GRADES_INFO", "MODIFIED", timestamp,
+        OCCASION=table_info["OCCASION"],
+        CLASS_GROUP=table_info["CLASS_GROUP"],
+        INSTANCE=table_info["INSTANCE"]
+    )
+    table_info["MODIFIED"] = timestamp
+
+
+def complete_grademap(sid2data, grades, name, p_grade_tids=None):
+    """Ensure that the given grade data is "complete", according to
+    the subjects list for the group and the subjects for which this
+    pupil has a teacher (if this data is available).
+    """
     grade_map = {}
-    for sid, sdata in sid2data.items():
-        if sdata["TYPE"] == "SUBJECT" and not p_grade_tids.get(sid):
-            grade_map[sid] = NO_GRADE
+    for sdata in sid2data:
+        sid = sdata["SID"]
+        if sdata["TYPE"] == "SUBJECT":
+            if p_grade_tids is None:
+                try:
+                    grade_map[sid] = grades[sid]
+                except KeyError:
+                    grade_map[sid] = NO_GRADE
+            elif p_grade_tids.get(sid):
+                grade_map[sid] = grades.get(sid) or ""
+            else:
+                g = grades.get(sid)
+                if g and g != NO_GRADE:
+                    REPORT(
+                        "WARNING",
+                        T["GRADE_WITH_NO_TEACHER"].format(
+                            sid=sid,
+                            sname=sdata["NAME"],
+                            grade=grades[sid],
+                            pupil=name,
+                        )
+                    )
+                grade_map[sid] = NO_GRADE
         else:
             try:
                 grade_map[sid] = grades[sid]
@@ -666,57 +779,34 @@ def complete_grades(sid2data, p_grade_tids, grades):
                         grade_map[sid] = default[0]
                     else:
                         grade_map[sid] = default
-    return grade_map
     # Delay the comparison with the old data until after the
     # computations. This allows for changes in the calculations.
+    return grade_map
 
 
-def calculate_row(table, row):
-    """Calculate the evaluated cells of the row from "left to right"
-    (lower to higher index).
+def calculate_pid_grades(table, pid):
+    """Calculate the evaluated cells of the pupil data from "left to
+    right" (lower to higher index).
     A calculation may depend on the value in an evaluated cell, but
     not on evaluated cells to the right (because of the order of
     evaluation).
-    "Composite" subjects are evaluated first.
+    The set of grades should be complete before calling this function,
+    i.e. all subjects should have entries (such as is achieved by
+    calling <complete_grademap>).
     """
-    grades = table["GRADE_TABLE_PUPILS"][row][1]
-    subjects = table["SUBJECTS"]
-    final_grades = [grades.get(sdata["SID"]) for sdata in subjects]
-    composites = table["COMPOSITES"]
-    extras = table["EXTRAS"]
+    grades = table["PUPIL_LIST"].get(pid)[1]
+    subjects = table["COLUMNS"]
     changed_grades = []
-
-    for sdata in composites:
+    for sdata in subjects:
         sid = sdata["SID"]
-        f = sdata["FUNCTION"]
-        components = sdata["COMPONENTS"]
-        value = grades[sid]
-        glist = [grades.get(__sid) for __sid in components]
-        new_value = grade_function(f, glist)
-        final_grades.append(new_value)
-        if new_value != value:
-            grades[sid] = new_value
-            changed_grades.append((sid, value))
-
-    for sdata in extras:
         try:
-            f = sdata["FUNCTION"]
+            fn = sdata["FUNCTION"]
         except KeyError:
             continue
-        sid = sdata["SID"]
-        components = sdata["COMPONENTS"]
-        value = grades[sid]
-        if components == '*':
-            glist = final_grades
-        else:
-#TODO: Would it be better to exclude not-yet-calculated entries? At present
-# all entries are available, but might not be up-to-date.
-            glist = [grades.get(__sid) for __sid in components]
-        new_value = grade_function(f, glist)
-        if new_value != value:
-            grades[sid] = new_value
-            changed_grades.append((sid, value))
-
+        # The function modifies <grades>
+#TODO: Is that enough data for the functions? Would subject data for other
+# subjects be needed?
+        changed_grades.append(grade_function(fn, sdata, grades))
     return changed_grades
 
 
@@ -790,16 +880,6 @@ def update_pupil_grades(grade_table, pid):
         INSTANCE=INSTANCE
     )
     return changed_grades, timestamp
-
-
-def update_grade_time(OCCASION, CLASS_GROUP, INSTANCE):
-    timestamp = Dates.timestamp()
-    db_update_field("GRADES_INFO", "MODIFIED", timestamp,
-        OCCASION=OCCASION,
-        CLASS_GROUP=CLASS_GROUP,
-        INSTANCE=INSTANCE
-    )
-    return timestamp
 
 
 def update_table_info(field, value, OCCASION, CLASS_GROUP, INSTANCE):
@@ -1089,24 +1169,22 @@ if __name__ == "__main__":
     # gtinfo = grade_table_info("1. Halbjahr", "12G.R")
     gtinfo = grade_table_info("Abitur", "13")
     # gtinfo = grade_table_info("2. Halbjahr", "12G.R")
-    print("\n*** SUBJECTS")
-    for val in gtinfo["SUBJECTS"]:
-        print("    ---", val)
-    print("\n*** COMPOSITE-COMPONENTS")
-    for val in gtinfo["COMPONENTS"]:
-        print("    ---", val)
-    print("\n*** COMPOSITES")
-    for val in gtinfo["COMPOSITES"]:
-        print("    ---", val)
-    print("\n*** EXTRA COLUMNS")
-    for val in gtinfo["EXTRAS"]:
-        print("    ---", val)
-    print("\n*** GRADES", gtinfo["GRADES"])
+#    print("\n*** SUBJECTS")
+#    for val in gtinfo["SUBJECTS"]:
+#        print("    ---", val)
+    print("\n*** COLUMNS")
+    for item in gtinfo.pop("COLUMNS"):
+        print("\n    ---", item)
+    print("\n*** GRADE_VALUES", gtinfo.pop("GRADE_VALUES"))
     print("\n*** PUPILS")
-    for pid, pinfo in gtinfo["PUPILS"].items():
+    for pid, pinfo in gtinfo.pop("PUPILS").items():
         pdata, p_grade_tids = pinfo
         print(f"\n +++ {pdata}")
         print(" .........", p_grade_tids)
+
+    print("\n\n REMAINDER:\n", gtinfo)
+
+    full_grade_table("Abitur", "13", "")
 
     quit(0)
 
