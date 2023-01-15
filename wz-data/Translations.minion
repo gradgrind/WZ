@@ -78,6 +78,10 @@ grades.grades_base: {
     CLASS_CHANGED:      "{name} ist jetzt in Klasse {new_class}"
     LEVEL_CHANGED:      "{name}: Der Bewertungsmaßstab ist inzwischen anders („{new_level}“). Der alte Wert, „{db_level}“, wird verwendet."
     LEVEL_UPDATED:      "{name}: Der Bewertungsmaßstab war früher anders („{db_level}“). Der neue Wert, „{new_level}“, wird verwendet."
+    REMOVING_PUPIL_GRADES: "{name} ist nicht mehr in dieser Klasse/Gruppe: Die gespeicherten Noten werden gelöscht"
+    NOT_IN_TABLE:       "{name} ist nicht in der importierten Tabelle"
+    LEVEL_MISMATCH:     "{name}: Der Bewertungsmaßstab ({table_level}) in der importierten Tabelle ist nicht aktuell"
+    PUPIL_NOT_IN_GROUP: "{name} ist (aktuell) nicht in der betrachteten Klasse/Gruppe"
 }
 
 grades.gradetable: {
@@ -134,7 +138,12 @@ grades.makereports: {
 }
 
 local.grade_functions: {
-    UNKNOWN_GRADE_FUNCTION: "In Konfigurationdatei GRADE_CONFIG: unbekannte Notenberechnungsfunktion – {name}"
+#TODO: to be replaced by grade_processing?
+    UNKNOWN_GRADE_FUNCTION: "In Konfigurationdatei GRADE_CONFIG: unbekannte Notenberechnungsfunktion – „{name}“"
+}
+
+local.grade_processing: {
+    UNKNOWN_GRADE_FUNCTION: "In Konfigurationdatei GRADE_CONFIG: unbekannte Notenberechnungsfunktion – „{name}“"
 }
 
 local.abitur: {
