@@ -776,11 +776,9 @@ def FullGradeTableUpdate(table, pupil_grades):
     It is possible that the list of pupils doesn't correspond to that in
     the database (though that shouldn't be the normal case!). Warnings
     will be issued for such mismatches.
-#TODO
     There is also a warning if there is an attempt to place a grade in
     a "forbidden" (NO_GRADE) slot, or if trying to overwrite a grade
     with a NO_GRADE.
-
     If the LEVEL doesn't match, issue a warning but use the value from
     the database, not the new one.
 
@@ -858,113 +856,9 @@ def FullGradeTableUpdate(table, pupil_grades):
             T["PUPIL_NOT_IN_GROUP"].format(name=pinfo[pid]["PUPIL"])
         )
 
-#TODO
-    return
 
-
-#?
-    if True:
-        # Use the current master list of pupils for this group
-        # ... but look for changed pupils (,CLASS) and LEVEL fields
-        if pupil_grades: # externally supplied grade table
-            # Don't use db_grades
-            for pid, data in master_pupils.items():
-                pdata, sid_tids = data
-                exit_date = pdata["DATE_EXIT"]
-                if exit_date and DATE_GRADES > exit_date:
-                    continue    # pupil has left the school
-                # Although the database entries are not needed, the pid
-                # list is still needed to decide for update vs insert.
-                # Also outdated entries need removing
-                try:
-                    db_pdata, db_grademap = table_info["STORED_GRADES"].pop(pid)
-                    grades0[pid] = db_grademap
-                except KeyError:
-                    db_grademap = {}
-                try:
-                    new_grade_data = pupil_grades.pop(pid)
-                except KeyError:
-                    new_grade_data = {}
-                    REPORT(
-                        "WARNING",
-                        T["NOT_IN_TABLE"].format(
-                            name=pupil_name(pdata)
-                        )
-                    )
-                else:
-                    name = new_grade_data.pop("PUPIL")
-                    table_level = new_grade_data.pop("LEVEL")
-                    if table_level != pdata["LEVEL"]:
-                        REPORT(
-                            "WARNING",
-                            T["LEVEL_MISMATCH"].format(
-                                name=pupil_name(pdata),
-                                table_level=table_level
-                            )
-                        )
-                # Update the grade map
-                grades = complete_grades(sid2data, sid_tids, new_grade_data)
-                pdata_list.append(pdata, grades)
-            for pid, new_grade_data in pupil_grades.items():
-                if pid[0] != '_':
-                    REPORT(
-                        "WARNING",
-                        T["PUPIL_NOT_IN_GROUP"].format(
-                            name=new_grade_data["PUPIL"]
-                        )
-                    )
-        else:   # grades from database
-            for pid, data in master_pupils.items():
-                pdata, sid_tids = data
-                exit_date = pdata["DATE_EXIT"]
-                if exit_date and DATE_GRADES > exit_date:
-                    continue    # pupil has left the school
-                try:
-                    db_pdata, db_grademap = db_pupil_grades.pop(pid)
-                    grades0[pid] = db_grademap
-                except KeyError:
-                    db_grademap = {}
-                else:
-                    if db_pdata["LEVEL"] != pdata["LEVEL"]:
-                        REPORT(
-                            "WARNING",
-#TODO: Probably need a different message:
-                            T["LEVEL_CHANGED"].format(
-                                name=pupil_name(pdata),
-                                db_level=db_pdata["LEVEL"]
-                            )
-                        )
-                        # Update db field
-                        db_update_field("GRADES", "LEVEL", pdata["LEVEL"],
-                            OCCASION=occasion,
-                            CLASS_GROUP=class_group,
-                            INSTANCE=instance,
-                            PID=pid
-                        )
-                        table_changed = True
-                # Update the grade map
-                grades = complete_grades(sid2data, sid_tids, db_grademap)
-                pdata_list.append(pdata, grades)
-        # Remove pupils from grade table if they are no longer in the group.
-        # This must be done because otherwise they would be "reinstated"
-        # as soon as the date-of-issue is past.
-        for pid, data in db_pupil_grades.items():
-            REPORT(
-                "WARNING",
-                T["REMOVING_PUPIL_GRADES"].format(
-                    name=pupil_name(data[0])
-                )
-            )
-            db_delete_rows("GRADES",
-                OCCASION=occasion,
-                CLASS_GROUP=class_group,
-                INSTANCE=instance,
-                PID=pid
-            )
-            table_changed = True
-
-
-#TODO
+#TODO: <update_grade_time> has been replaced by <set_grade_update_time>,
+# which requires the table_info mapping ...
 def UpdateTableInfo(field, value, OCCASION, CLASS_GROUP, INSTANCE):
     timestamp = Dates.timestamp()
     db_update_field("GRADES_INFO", field, value,
