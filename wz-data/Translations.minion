@@ -82,6 +82,9 @@ grades.grades_base: {
     NOT_IN_TABLE:       "{name} ist nicht in der importierten Tabelle"
     LEVEL_MISMATCH:     "{name}: Der Bewertungsmaßstab ({table_level}) in der importierten Tabelle ist nicht aktuell"
     PUPIL_NOT_IN_GROUP: "{name} ist (aktuell) nicht in der betrachteten Klasse/Gruppe"
+    UNKNOWN_SID:        "Unerwartetes Fachkennzeichen: „{sid}“ in der Tabelle"
+    GRADE_STOMPED:      "{name}, Fachkennzeichen {sid}: vorhandene Note ({grade}) soll durch „/“ ersetzt werden"
+    NO_GRADE_VALUE:     "{name}, Fachkennzeichen {sid}: Note ({grade}) nicht erwartet, da „/“ vorhanden"
 }
 
 grades.gradetable: {

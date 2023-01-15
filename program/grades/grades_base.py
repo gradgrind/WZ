@@ -762,32 +762,31 @@ def UpdatePupilGrades(table, pid):
     return changed_grades
 
 
-#TODO
 def FullGradeTableUpdate(table, pupil_grades):
-    """As <full_grade_table>, but ... ?
-    The parameter <pupil_grades> is provided to enable the grades to be
-    updated from an external sourde. This should be a mapping:
+    """Update the grades in a report category (a <FullGradeTable>) from
+    an external source.
+    The parameter <pupil_grades> should be a mapping:
         {pid: {sid: grade, ...}, ...}
         with special entries:
             "__INFO__": general info
         and
             "__PUPILS__": {pid: {"PUPIL": name, "LEVEL": level}, ... }
+    This structure can be obtained by reading a table using <LoadFromFile>.
+
+    It is possible that the list of pupils doesn't correspond to that in
+    the database (though that shouldn't be the normal case!). Warnings
+    will be issued for such mismatches.
+#TODO
+    There is also a warning if there is an attempt to place a grade in
+    a "forbidden" (NO_GRADE) slot, or if trying to overwrite a grade
+    with a NO_GRADE.
+
+    If the LEVEL doesn't match, issue a warning but use the value from
+    the database, not the new one.
+
+    This function should not be used to update a "closed category", it
+    might not work.
     """
-# Grades supplied externally
-# --------------------------
-# A table of grades can be loaded from an external source. It is
-# possible that the list of pupils doesn't correspond to that in
-# the database (though that shouldn't be the normal case!). If that
-# contains a pupil not in the master list, there should be a warning.
-# Perhaps there should also be a warning if there is an attempt to
-# place a grade in a "forbidden" (NO_GRADE) slot? I could skip such an
-# automatic allocation, but allow it manually, or via dialog? That
-# might also apply to the importing of grades from the database?
-# Normally external grades should not be entered into a closed category.
-# Should there be exceptions? Perhaps not – if it was really necessary,
-# I could reopen the category by changing the date before importing the
-# data (presumably resetting the date afterwards).
-# If the LEVEL doesn't match, issue a warning but use the internal value.
     pinfo = pupil_grades.pop("__PUPILS__")
     info = pupil_grades.pop("__INFO__")
     for pdata, grades in table["PUPIL_LIST"]:
@@ -812,7 +811,7 @@ def FullGradeTableUpdate(table, pupil_grades):
                 )
             )
 
-        print("\n§§§§§", pupil_name(pdata), new_grades)
+        # print("\n§§§§§", pupil_name(pdata), new_grades)
         bad_sids = set()
         grades_x = {}    # updated grades
         for s, g in new_grades.items():
@@ -830,7 +829,17 @@ def FullGradeTableUpdate(table, pupil_grades):
             if g == NO_GRADE and not g0:
                 REPORT(
                     "ERROR",
-                    T["GRADE_STOMP"].format(
+                    T["GRADE_STOMPED"].format(
+                        name=pupil_name(pdata),
+                        sid=s,
+                        grade=g0
+                    )
+                )
+                continue
+            elif g0 == NO_GRADE and not g:
+                REPORT(
+                    "ERROR",
+                    T["NO_GRADE_VALUE"].format(
                         name=pupil_name(pdata),
                         sid=s,
                         grade=g0
@@ -839,7 +848,7 @@ def FullGradeTableUpdate(table, pupil_grades):
                 continue
             grades_x[s] = g
         if grades_x:
-            print("§§§§§§§ Updating", pupil_name(pdata))
+            # print("§§§§§§§ Updating", pupil_name(pdata))
             grades.update(grades_x)
             UpdatePupilGrades(table, pid)
     ### Excess pupils:
