@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2023-01-15
+Last updated:  2023-01-16
 
 Access grade data, read and build grade tables.
 
@@ -344,7 +344,7 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
                     "NAME": odata["NAME"],
                     "TYPE": "INPUT",
                     "METHOD": odata["METHOD"],
-                    "PARAMETERS": odata.get("PARAMEMETERS") or {}
+                    "PARAMETERS": odata.get("PARAMETERS") or {}
                 }
             )
             continue
@@ -370,17 +370,12 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     return result
 
 
-def FullGradeTable(occasion, class_group, instance, pupil_grades=None):
+def FullGradeTable(occasion, class_group, instance):
     """Return full pupil and grade information – including calculated
     field values – for the given parameters.
     This may cause changes to the database, so that its contents
     correspond to the returned data.
     Pupils with no grade data will not be added to the database.
-    The parameter <pupil_grades> is provided to enable the grades to be
-    updated from an external sourde. This should be a mapping:
-        {pid: {sid: grade, ...}, ...}
-        The grade mapping should, however, also include "PUPIL" (name)
-        and "LEVEL" entries.
     """
     table = pupil_subject_grade_info(occasion, class_group, instance)
     prepare_pupil_list(table)
@@ -597,7 +592,7 @@ def prepare_pupil_list(table_info):
     return table_info
 
 
-def set_grade_update_time(table_info):
+def set_grade_update_time(table_info) -> str:
     """Set the modification date+time for a report instance.
     Call after changes to the grade information.
     """
@@ -608,6 +603,7 @@ def set_grade_update_time(table_info):
         INSTANCE=table_info["INSTANCE"]
     )
     table_info["MODIFIED"] = timestamp
+    return timestamp
 
 
 def complete_grademap(sid2data, grades, name, p_grade_tids=None):
@@ -857,21 +853,18 @@ def FullGradeTableUpdate(table, pupil_grades):
         )
 
 
-#TODO: <update_grade_time> has been replaced by <set_grade_update_time>,
-# which requires the table_info mapping ...
-def UpdateTableInfo(field, value, OCCASION, CLASS_GROUP, INSTANCE):
+def UpdateTableInfo(table, field, value) -> str:
+    """Update a single field in the current (for <table>) GRADES_INFO
+    entry.
+    Return the new "modified" timestamp.
+    """
     timestamp = Dates.timestamp()
     db_update_field("GRADES_INFO", field, value,
-        OCCASION=OCCASION,
-        CLASS_GROUP=CLASS_GROUP,
-        INSTANCE=INSTANCE
+        OCCASION=table["OCCASION"],
+        CLASS_GROUP=table["CLASS_GROUP"],
+        INSTANCE=table["INSTANCE"]
     )
-    timestamp = update_grade_time(
-        OCCASION=OCCASION,
-        CLASS_GROUP=CLASS_GROUP,
-        INSTANCE=INSTANCE
-    )
-    return timestamp
+    return set_grade_update_time(table)
 
 
 #TODO

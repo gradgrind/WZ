@@ -1,7 +1,7 @@
 """
 local/grade_processing.py
 
-Last updated:  2023-01-15
+Last updated:  2023-01-16
 
 Functions to perform grade calculations.
 
@@ -187,7 +187,7 @@ GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 
 
 #TODO
-def ABITUR_NIWA_RESULT():
+def ABITUR_NIWA_RESULT(grades, sdata):
     pass
 
 GRADE_FUNCTIONS["ABITUR_NIWA_RESULT"] = ABITUR_NIWA_RESULT

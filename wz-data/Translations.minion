@@ -442,6 +442,9 @@ ui.modules.grades_manager: {
 
     # Messages
     BAD_GROUP_IN_CONFIG: "Konfiguration GRADE_ENTRY_TABLES: Ungültige Klasse/Gruppe ({group}) für Anlass „{occasion}“"
+    BAD_CUSTOM_WIDTH: "In Konfigurationsdatei {path}:\n Wert for EXTRA_FIELD_WIDTHS, Fachkürzel {sid} ist keine gültige Spaltenbreite."
+    UNKNOWN_INPUT_METHOD: "In Konfigurationsdatei {path}:\n  GROUP_DATA für {group}, Anlass {occasion}, EXTRA_FIELDS, SID={sid}:\n METHOD „{method}“ ist ungültig"
+    UNKNOWN_COLUMN_TYPE: "In Konfigurationsdatei {path}:\n  GROUP_DATA für {group}, Anlass {occasion}, EXTRA_FIELDS, SID={sid}:\n TYPE „{ctype}“ ist ungültig"
 }
 
 ui.modules.timetable_editor: {
