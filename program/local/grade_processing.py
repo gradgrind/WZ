@@ -1,7 +1,7 @@
 """
 local/grade_processing.py
 
-Last updated:  2023-01-16
+Last updated:  2023-01-17
 
 Functions to perform grade calculations.
 
@@ -26,6 +26,7 @@ AVERAGE_DP = 2  # decimal places for averages
 
 ########################################################################
 
+from typing import Optional
 T = TRANSLATIONS("local.grade_processing")
 
 ### +++++
@@ -57,9 +58,13 @@ NUMBER_GRADE = {v: k for k, v in GRADE_NUMBER.items()}
 
 ### -----
 
-def grade_function(
+def GradeFunction(
     fname:str, sdata:dict, grades:dict[str,str]
 ) -> tuple[str,str]:
+    """Perform the given function to calculate the value of the field
+    specified by <sdata>.
+    Return (sid, old-value).
+    """
     if not fname:
         return []
     try:
@@ -70,7 +75,7 @@ def grade_function(
     return fn(grades, sdata)
 
 
-def special_handler(fname, **kargs) -> None:
+def SpecialHandler(fname, **kargs) -> None:
     try:
         fn = SPECIAL_HANDLERS[fname]
     except KeyError:
@@ -81,7 +86,7 @@ def special_handler(fname, **kargs) -> None:
 
 def ROUNDED_AVERAGE_I(
     grades: dict[str:str], sdata:dict
-) -> list[tuple[str,str]]:
+) -> Optional[tuple[str,str]]:
     """Calculate the value of a "composite" subject from its component
     subject grades. This is using grades 1 – 6 (with +/-).
     Return a list of changes: (sid, grade) pairs.
@@ -107,18 +112,19 @@ def ROUNDED_AVERAGE_I(
         astr = '*'
         # print("%%%%%%%%% ROUNDED_AVERAGE_I:", astr)
     sid = sdata["SID"]
-    if grades[sid] == astr:
-        return []
+    og = grades[sid]
+    if og == astr:
+        return None
     else:
         grades[sid] = astr
-        return [(sid, astr)]
+        return [(sid, og)]
 
 GRADE_FUNCTIONS["ROUNDED_AVERAGE_I"] = ROUNDED_AVERAGE_I
 
 
 def ROUNDED_AVERAGE_II(
     grades: dict[str:str], sdata:dict
-) -> list[tuple[str,str]]:
+) -> Optional[tuple[str,str]]:
     """Calculate the value of a "composite" subject from its component
     subject grades. This is using grades 15 – 0.
     Return a list of changes: (sid, grade) pairs.
@@ -141,18 +147,19 @@ def ROUNDED_AVERAGE_II(
         astr = '*'
     # print("%%%%%%%%% ROUNDED_AVERAGE_II:", astr)
     sid = sdata["SID"]
-    if grades[sid] == astr:
-        return []
+    og = grades[sid]
+    if og == astr:
+        return None
     else:
         grades[sid] = astr
-        return [(sid, astr)]
+        return [(sid, og)]
 
 GRADE_FUNCTIONS["ROUNDED_AVERAGE_II"] = ROUNDED_AVERAGE_II
 
 
 def AVERAGE_I(
     grades: dict[str:str], sdata:dict
-) -> list[tuple[str,str]]:
+) -> Optional[tuple[str,str]]:
     """This calculates an average of a set of grades (1 – 6, ignoring
     +/-) to a number (AVERAGE_DP) of decimal places without rounding –
     for calculation of qualifications.
@@ -177,18 +184,21 @@ def AVERAGE_I(
         astr = '*'
         # print("%%%%%%%%% AVERAGE_I:", astr)
     sid = sdata["SID"]
-    if grades[sid] == astr:
-        return []
+    og = grades[sid]
+    if og == astr:
+        return None
     else:
         grades[sid] = astr
-        return [(sid, astr)]
+        return [(sid, og)]
 
 GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 
 
 #TODO
-def ABITUR_NIWA_RESULT(grades, sdata):
-    pass
+def ABITUR_NIWA_RESULT(
+    grades: dict[str:str], sdata:dict
+) -> Optional[tuple[str,str]]:
+    return None
 
 GRADE_FUNCTIONS["ABITUR_NIWA_RESULT"] = ABITUR_NIWA_RESULT
 
@@ -209,15 +219,17 @@ SPECIAL_HANDLERS["ABI_WANI_SUBJECTS"] = abi_extra_subjects
 
 #TODO: Building reports
 
-def report_name(occasion, group, instance, rtype):
+def ReportName(grade_table, rtype):
     """Return a suitable file/folder name for a set of reports.
     """
-    if instance:
+    if instance:= grade_table["INSTANCE"]:
         instance = '-' + instance
+    occasion = grade_table["OCCASION"]
+    group = grade_table["CLASS_GROUP"]
     return f"{rtype}-{occasion}-{group}{instance}".replace(" ", "_")
 
 
-def process_grade_data(pdata, grade_info, grade_config):
+def ProcessGradeData(pdata, grade_info, grade_config):
 #TODO
     pdata["NOCOMMENT"] = "" if pdata.get("REMARKS") else "––––––––––"
     try:

@@ -73,7 +73,7 @@ from core.pupils import pupil_name, pupil_data
 from core.report_courses import get_pupil_grade_matrix
 from tables.spreadsheet import read_DataTable
 from tables.matrix import KlassMatrix
-from local.grade_processing import grade_function, special_handler
+from local.grade_processing import GradeFunction, SpecialHandler
 
 NO_GRADE = "/"
 
@@ -202,7 +202,7 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     except KeyError:
         pass
     else:
-        special_handler(sfun, subjects=subjects)
+        SpecialHandler(sfun, subjects=subjects)
 
     # print("\n????? subjects:\n", subjects)
 
@@ -666,7 +666,7 @@ def complete_grademap(sid2data, grades, name, p_grade_tids=None):
     return grade_map
 
 
-def calculate_pid_grades(table, pid):
+def calculate_pid_grades(table, pid) -> list[tuple[str,str]]:
     """Calculate the evaluated cells of the pupil data from "left to
     right" (lower to higher index).
     A calculation may depend on the value in an evaluated cell, but
@@ -687,7 +687,9 @@ def calculate_pid_grades(table, pid):
         # The function modifies <grades>
 #TODO: Is that enough data for the functions? Would subject data for other
 # subjects be needed?
-        changed_grades.append(grade_function(fn, sdata, grades))
+        gx = GradeFunction(fn, sdata, grades)
+        if gx:
+            changed_grades.append(gx)
     return changed_grades
 
 

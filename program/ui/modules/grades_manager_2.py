@@ -73,8 +73,8 @@ from grades.grades_base import (
     UpdateTableInfo,
     LoadFromFile,
 )
-from grades.makereports import make_reports
-from local.grade_functions import report_name
+from grades.make_grade_reports import MakeReports
+from local.grade_processing import ReportName
 
 from ui.ui_base import (
     QWidget,
@@ -454,24 +454,8 @@ class GradeManager(QWidget):
 
     def do_make_input_table(self):
         table_data = self.pupil_data_table.grade_table
-        grades = {
-            pdata["PID"]: gmap
-            for pdata, gmap in table_data["GRADE_TABLE_PUPILS"]
-        }
-        xlsx_bytes = MakeGradeTable(
-            occasion=self.occasion,
-            class_group=self.class_group,
-            instance=self.instance,
-            DATE_ISSUE=table_data["DATE_ISSUE"],
-            DATE_GRADES=table_data["DATE_GRADES"],
-            grades=grades,
-        )
-        fname = report_name(
-            self.occasion,
-            self.class_group,
-            self.instance,
-            T["GRADES"]
-        ) + ".xlsx"
+        xlsx_bytes = MakeGradeTable(table_data)
+        fname = ReportName(table_data, T["GRADES"]) + ".xlsx"
         fpath = SAVE_FILE("Excel-Datei (*.xlsx)", start=fname, title=None)
         if not fpath:
             return
@@ -488,9 +472,9 @@ class GradeManager(QWidget):
         path = OPEN_FILE("Tabelle (*.xlsx *.ods *.tsv)")
         pid2grades = LoadFromFile(
             filepath=path,
-            occasion=self.occasion,
-            class_group=self.class_group,
-            instance=self.instance,
+            OCCASION=self.occasion,
+            CLASS_GROUP=self.class_group,
+            INSTANCE=self.instance,
         )
         grade_table = FullGradeTable(
             occasion=self.occasion,
@@ -503,11 +487,9 @@ class GradeManager(QWidget):
 
     def do_make_reports(self):
         PROCESS(
-            make_reports,
+            MakeReports,
             title=T["MAKE_REPORTS"],
-            occasion=self.occasion,
-            class_group=self.class_group,
-            instance=self.instance,
+            full_grade_table=self.pupil_data_table.grade_table,
             show_data=self.show_data.isChecked()
         )
 
@@ -683,8 +665,6 @@ class GradeTableView(GridViewAuto):
         grades[sid] = new_value
         # Update this pupil's grades (etc.) in the database
         changes, timestamp = UpdatePupilGrades(self.grade_table, pid)
-#TODO: changes == [None] !!!???
-        print("??????????", changes, timestamp)
         self.set_modified_time(timestamp)
         if changes:
             # Update changed display cells
@@ -743,7 +723,7 @@ class GradeTableView(GridViewAuto):
         if not fpath:
             fpath = SAVE_FILE(
                 "pdf-Datei (*.pdf)",
-                report_name(occasion, cgroup, instance, T["GRADES"]) + ".pdf"
+                ReportName(self.grade_table, T["GRADES"]) + ".pdf"
             )
             if not fpath:
                 return
