@@ -68,6 +68,8 @@ template_engine.template_sub: {
 }
 
 grades.grades_base: {
+    TITLE:          "Notentabelle, erstellt {time}"
+
     # Messages
     DUPLICATE_OCCASION_IN_GROUP: "„Anlass“ {occasion} wiederholt in Konfigurationsdaten für Gruppe {group}:\n  {path}"
     COMPONENT_OF_COMPOSITE: "Konfigurationsdatei:\n  {path}.\n\nGROUP_DATA-Feld für Gruppe {group}, Anlass{occasion}:\n  {name} ({sid}) hat Komponente {cname} ({csid}), die schon Sammelfachkomponente ist"
@@ -85,6 +87,7 @@ grades.grades_base: {
     UNKNOWN_SID:        "Unerwartetes Fachkennzeichen: „{sid}“ in der Tabelle"
     GRADE_STOMPED:      "{name}, Fachkennzeichen {sid}: vorhandene Note ({grade}) soll durch „/“ ersetzt werden"
     NO_GRADE_VALUE:     "{name}, Fachkennzeichen {sid}: Note ({grade}) nicht erwartet, da „/“ vorhanden"
+    NO_GRADE_ENTRY_FILE: "Konfigurationsdatei {path}\n\nGROUP_DATA-Feld für Gruppe {group}, Anlass{occasion}:\n  Keine GRADE_ENTRY-Datei (Vorlage für Noteneingabetabelle) angegeben"
 }
 
 grades.gradetable: {

@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-01-16
+Last updated:  2023-01-17
 
 Front-end for managing grade reports.
 
@@ -679,11 +679,12 @@ class GradeTableView(GridViewAuto):
         new_value = properties["VALUE"]
         pid = properties["PID"]
         sid = properties["SID"]
-        row = self.grade_table["PID2ROW"][pid]
-        grades = self.grade_table["GRADE_TABLE_PUPILS"][row][1]
+        grades = self.grade_table["PUPIL_LIST"].get(pid)[1]
         grades[sid] = new_value
         # Update this pupil's grades (etc.) in the database
         changes, timestamp = UpdatePupilGrades(self.grade_table, pid)
+#TODO: changes == [None] !!!???
+        print("??????????", changes, timestamp)
         self.set_modified_time(timestamp)
         if changes:
             # Update changed display cells
@@ -693,7 +694,7 @@ class GradeTableView(GridViewAuto):
 
 #?
     def set_modified_time(self, timestamp):
-        self.grade_table["MODIFIED"] = timestamp
+#        self.grade_table["MODIFIED"] = timestamp
         # Signal change
         self.signal_modified.emit(timestamp)
 

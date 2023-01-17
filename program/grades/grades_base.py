@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2023-01-16
+Last updated:  2023-01-17
 
 Access grade data, read and build grade tables.
 
@@ -573,7 +573,7 @@ def prepare_pupil_list(table_info):
             continue
         if old_grades != grades:
             # print(
-            #     f'\n*** TODO: UPDATE_GRADE_RECORD:\n'
+            #     f'\n*** UPDATE_GRADE_RECORD:\n'
             #     f'1) {write_pairs_dict(old_grades)}\n'
             #     f'2) {write_pairs_dict(grades)}'
             # )
@@ -754,8 +754,8 @@ def UpdatePupilGrades(table, pid):
             LEVEL=pupil_data(pid)["LEVEL"],
             GRADE_MAP=gstring
         )
-    set_grade_update_time(table)
-    return changed_grades
+    timestamp = set_grade_update_time(table)
+    return changed_grades, timestamp
 
 
 def FullGradeTableUpdate(table, pupil_grades):
@@ -867,107 +867,100 @@ def UpdateTableInfo(table, field, value) -> str:
     return set_grade_update_time(table)
 
 
-#TODO
-def MakeGradeTable(
-    occasion: str,
-    class_group: str,
-    instance: str = "",
-    DATE_ISSUE: str = "",
-    DATE_GRADES: str = "",
-    grades: Optional[dict[str, dict[str, str]]] = None,
-) -> bytes:
+def MakeGradeTable(table:dict, clear:bool=False) -> bytes:
     """Build a basic pupil/subject table for grade input using a
     template appropriate for the given group.
-    Existing grades can be included in the table by passing an appropriate
-    structure as <grades>: {pid -> {sid -> grade}}
     """
-    ### Get subject, pupil and group information
-    gtinfo = grade_table_info(occasion, class_group)
-    subjects = gtinfo["SUBJECTS"]
-    components = gtinfo["COMPONENTS"]
-    pupils = gtinfo["PUPILS"]
+    grade_info = GetGradeConfig()
 
     ### Get template file
-    template_path = RESOURCEPATH("templates/" + gtinfo["GRADE_ENTRY"])
-    table = KlassMatrix(template_path)
+    try:
+        gefile = table["GRADE_ENTRY"]
+    except KeyError:
+        REPORT(
+            "ERROR",
+            T["NO_GRADE_ENTRY_FILE"].format(
+                path=grade_info["__PATH__"],
+                OCCASION=table["OCCASION"],
+                CLASS_GROUP=table["CLASS_GROUP"],
+            )
+        )
+        return b''
+    template_path = RESOURCEPATH("templates/" + gefile)
+    gtable = KlassMatrix(template_path)
 
     ### Set title line
-    table.setTitle(
+    gtable.setTitle(
         T["TITLE"].format(
             time=datetime.datetime.now().isoformat(sep=" ", timespec="minutes")
         )
     )
 
     ### Gather general info
+    DATE_ISSUE = table["DATE_ISSUE"]
     if not DATE_ISSUE:
         DATE_ISSUE = Dates.today()
+    DATE_GRADES = table["DATE_GRADES"]
     if not DATE_GRADES:
         DATE_GRADES = DATE_ISSUE
     info_item: dict
-    grade_info = GetGradeConfig()
     info_transl: dict[str, str] = dict(grade_info["INFO_FIELDS"])
     date_format = CONFIG["DATEFORMAT"]
     info: dict[str, str] = {
         info_transl["SCHOOLYEAR"]: SCHOOLYEAR,
-        info_transl["CLASS_GROUP"]: class_group,
-        info_transl["OCCASION"]: occasion,
-        info_transl["INSTANCE"]: instance,
+        info_transl["CLASS_GROUP"]: table["CLASS_GROUP"],
+        info_transl["OCCASION"]: table["OCCASION"],
+        info_transl["INSTANCE"]: table["INSTANCE"],
         info_transl["DATE_GRADES"]: Dates.print_date(DATE_GRADES, date_format),
         info_transl["DATE_ISSUE"]: Dates.print_date(DATE_ISSUE, date_format),
     }
-    table.setInfo(info)
+    gtable.setInfo(info)
 
     ### Go through the template columns and check if they are needed:
-    rowix: list[int] = table.header_rowindex  # indexes of header rows
+    rowix: list[int] = gtable.header_rowindex  # indexes of header rows
     if len(rowix) != 2:
-        raise GradeTableError(
+        REPORT(
+            "ERROR",
             T["TEMPLATE_HEADER_WRONG"].format(path=template_path)
         )
+        return b''
     sidcol: list[tuple[str, int]] = []
     sid: str
     sdata: dict
-    for sdata in subjects + components:
-        sid = sdata["SID"]
-        # Add subject
-        col: int = table.nextcol()
-        sidcol.append((sid, col))
-        table.write(rowix[0], col, sid)
-        table.write(rowix[1], col, sdata["NAME"])
+    for sdata in table["COLUMNS"]:
+        if sdata["TYPE"] == "SUBJECT" and "FUNCTION" not in sdata:
+            # Add subject
+            sid = sdata["SID"]
+            col: int = gtable.nextcol()
+            sidcol.append((sid, col))
+            gtable.write(rowix[0], col, sid)
+            gtable.write(rowix[1], col, sdata["NAME"])
     # Enforce minimum number of columns
     while col < 18:
-        col = table.nextcol()
-        table.write(rowix[0], col, "")
+        col = gtable.nextcol()
+        gtable.write(rowix[0], col, "")
     # Delete excess columns
-    table.delEndCols(col + 1)
+    gtable.delEndCols(col + 1)
 
     ### Add pupils and grades
-    for pid, pinfo in pupils.items():
-        pdata, p_grade_tids = pinfo
-        exit_date = pdata["DATE_EXIT"]
-        if exit_date and DATE_GRADES > exit_date:
-            continue    # pupil has left the school
-        pgrades: dict[str, str]
-        try:
-            pgrades = grades[pid]
-        except:
-            pgrades = {}
-        row = table.nextrow()
-        table.write(row, 0, pid)
-        table.write(row, 1, pupil_name(pdata))
-        table.write(row, 2, pdata["LEVEL"])
+    for pdata, pgrades in table["PUPIL_LIST"]:
+        row = gtable.nextrow()
+        gtable.write(row, 0, pdata["PID"])
+        gtable.write(row, 1, pupil_name(pdata))
+        gtable.write(row, 2, pdata["LEVEL"])
         for sid, col in sidcol:
-            if p_grade_tids.get(sid):
-                if g := pgrades.get(sid):
-                    table.write(row, col, g)
-            else:
-                table.write(row, col, NO_GRADE, protect=True)
+            g = pgrades.get(sid)
+            if g == NO_GRADE:
+                gtable.write(row, col, NO_GRADE, protect=True)
+            elif g and not clear:
+                gtable.write(row, col, g)
     # Delete excess rows
-    row = table.nextrow()
-    table.delEndRows(row)
+    row = gtable.nextrow()
+    gtable.delEndRows(row)
 
     ### Save file
-    table.protectSheet()
-    return table.save_bytes()
+    gtable.protectSheet()
+    return gtable.save_bytes()
 
 
 def LoadFromFile(
@@ -1185,6 +1178,18 @@ if __name__ == "__main__":
             #    print("\n $$$", k, v)
             FullGradeTableUpdate(fgtable, itable)
 
+    for __cg in ("13", "11G", "12G.G", "12G.R"):
+        fgtable = FullGradeTable("1. Halbjahr", __cg, "")
+        tbytes = MakeGradeTable(fgtable, True)
+        tpath = DATAPATH(f"testing/tmp/GradeInput-{__cg}.xlsx")
+        tdir = os.path.dirname(tpath)
+        if not os.path.isdir(tdir):
+            os.makedirs(tdir)
+        with open(tpath, "wb") as _fh:
+            _fh.write(tbytes)
+        print(f"\nWROTE GRADE TABLE TO {tpath}\n")
+
+    print("\n *************************************************\n")
 
     quit(0)
 
