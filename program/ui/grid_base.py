@@ -1,7 +1,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2023-01-07
+Last updated:  2023-01-20
 
 Base functions for table-grids using the QGraphicsView framework.
 
@@ -204,6 +204,16 @@ class Selection(QGraphicsRectItem):
         grid.scene().addItem(self)
         self.clear()
 
+    def on_context_menu(self):
+        if self.is_active():
+            print("§§CONTAINED")
+            view = self.scene().views()[0]
+            point = view.screen_coordinates(self.scenePos())
+#TODO:
+            # return handler(point)
+#?
+        return False
+
     def clear(self):
         self.start_cellrc = (-1, -1)
         self.end_cellrc = (-1, -1)
@@ -302,6 +312,8 @@ class GridView(QGraphicsView):
             point = event.pos()  # Qt5
         # print("§§????????", point)
         self.point0 = point
+        if event.button() != Qt.LeftButton:
+            return
         self.select.clear()
         #        self.end_cell = None
         # print("POS:", point, self.mapToGlobal(point), self.itemAt(point))
@@ -372,18 +384,8 @@ class GridView(QGraphicsView):
         except:
             point = event.pos()  # Qt5
             pointf = QPointF(point)
-
-        # TODO: If within active selection, call it on this somehow?
-        # Otherwise clear selection?
-        if self.select.is_active():
-            # print("§§????", pointf, self.select.rect())
-            if self.select.contains(pointf):
-                print("§§CONTAINED")
-            else:
-                self.select.clear()
-        # ?
-
         items = self.items(point)
+        clear = True
         if items:
             for item in items:
                 # Find the topmost <Tile> which responds to the event
@@ -391,8 +393,11 @@ class GridView(QGraphicsView):
                     click_handler = item.on_context_menu
                 except AttributeError:
                     continue
-                click_handler()
+                clear = click_handler()
                 break
+#?
+        if clear:
+            self.select.clear()
 
     def cell_modified(self, row_col):
         print("CELL MODIFIED:", row_col)
@@ -889,10 +894,13 @@ class Tile(QGraphicsRectItem):
         try:
             handler = self.__properties["CONTEXT_MENU"]
         except KeyError:
-            return
+#?
+            return True
         view = self.scene().views()[0]
         point = view.screen_coordinates(self.scenePos())
         handler(point, self.__properties)
+#?
+        return True
 
     def set_property(self, key, value):
         self.__properties[key] = value

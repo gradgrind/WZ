@@ -126,19 +126,21 @@ grades.gradetable: {
 grades.makereports: {
     # Messages
     INVALID_REPORT_TYPE: "Ungültige Zeugnis-Art ({rtype}) für Schüler:\n  {pids}"
+    NO_REPORT_TYPE: "Keine Zeugnis-Art für Schüler:\n  {pids}"
     
     BAD_REPORT_TYPE: "Ungültiger Zeugnistyp: '{rtype}'"
     NO_SLOT:        "Kein Platz mehr für Fach mit Kürzel {sid} in Fachgruppe {tag}. Bisher: {done}"
     UNKNOWN_SUBJECT_GROUP: "Zeugnis-Vorlage {path}:\n  Fachgruppe {group} ist ungültig"
-    MISSING_SUBJECT_GRADE: "{pupil}: Fach-Id '{sid}' hat keine Note"
+    MISSING_SUBJECT_GRADE: "{pupil}: Note für Fach-Id '{sid}' fehlt"
+    EMPTY_SUBJECT_GRADE: "{pupil}: Fach-Id '{sid}' hat noch keine Note"
     BAD_GRADE:      "{pupil}: ungültige Note ({grade}) für Fach-Id '{sid}'"
     TOO_FEW_KEYS:   "{pupil}: zu wenig Felder für Fächer in Gruppe '{tag}'"
-    BAD_SUBJECT_KEY: "Ungültiges Fach-Feld in Vorlage: {key}"
+    BAD_SUBJECT_KEY: "In Notenzeugnisvorlage {path},\n  ungültiges Fach-Feld: „{key}“"
     CHECK_FIELDS:   " >>>>> Datenfelder für {name}:\n{data}"
     USED_KEY:       "Wert eingetragen: {key:<20} = '{val}'"
     UNUSED_KEY:     "(Wert nicht erforderlich: {key:<20} = '{val}')"
     MISSING_KEY:    "Zeugnis für {name}:\n  Kein Wert für Feld {key}"
-    MISSING_SUBJECT_GROUP: "{pupil}: Fachgruppe {tag} ist nicht bekannt"
+    MISSING_SUBJECT_GROUP: "{pupil}: Fachgruppe „{tag}“ ist nicht bekannt"
     ALL_KEYS:       "Alle Felder des Dokuments {path}:\n{keys}"
     PDF_FILE:       "Erstellte PDF-Datei:\n --> {path}"
 }

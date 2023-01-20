@@ -1,7 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-01-17
+Last updated:  2023-01-20
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -61,11 +61,6 @@ from template_engine.template_sub import Template
 from grades.grades_base import FullGradeTable, GetGradeConfig, NO_GRADE
 from local.grade_processing import ProcessGradeData, ReportName
 
-#TODO--
-class GradeReportError(Exception):
-    pass
-
-
 ### -----
 
 
@@ -99,6 +94,8 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
     for sdata in full_grade_table["COLUMNS"]:
         try:
             group = sdata["GROUP"]
+            if not group:
+                continue
         except KeyError:
             continue
         try:
@@ -115,7 +112,7 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
     rtypes = {}
     for pdata, grades in full_grade_table["PUPIL_LIST"]:
         pid = pdata["PID"]
-        print("  ***", grades)
+        # print("  ***", pupil_name(pdata), grades)
         rtype = grades["REPORT_TYPE"]
         try:
             rtypes[rtype].append(pid)
@@ -128,18 +125,23 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
     )
     fplist = []
     for rtype, pid_list in rtypes.items():
-#TODO: Empty is not invalid? And why is the report being generated anyway???
         try:
             tpath = rtype_path[rtype]
         except KeyError:
-            REPORT(
-                "ERROR",
-                T["INVALID_REPORT_TYPE"].format(
-                    rtype=rtype, pids=", ".join(pid_list)
-                ),
-            )
-            return ""
-        # print("\nTEMPLATE:", rtype, tpath, pid_list)
+            if rtype:
+                REPORT(
+                    "ERROR",
+                    T["INVALID_REPORT_TYPE"].format(
+                        rtype=rtype, pids=", ".join(pid_list)
+                    ),
+                )
+            else:
+                REPORT(
+                    "WARNING",
+                    T["NO_REPORT_TYPE"].format(pids=", ".join(pid_list))
+                )
+            continue
+        # print(f"\nTEMPLATE: '{rtype}' for {pid_list}\n  {tpath}")
         template = Template(tpath)
         gmaplist = collect_report_type_data(
             template, pid_list, subject_groups, full_grade_table, show_data
@@ -172,10 +174,11 @@ def collect_report_type_data(
         REPORT(
             "INFO",
             T["ALL_KEYS"].format(
-                keys=", ".join(sorted(all_keys)), path=template.template_path
+                keys=", ".join(sorted(all_keys)),
+                path=template.template_path
             ),
         )
-    subjects, tagmap = group_grades(all_keys)
+    subjects, tagmap = group_grades(all_keys, template)
     # print("\n§§§ SUBJECTS:", subjects)
     # print("\n§§§ TAGMAP:", tagmap)
 
@@ -239,6 +242,8 @@ def collect_report_type_data(
     base_data.update(grade_info["SYMBOLS"])
     gmaplist = []
     for pdata, grades in grade_info["PUPIL_LIST"]:
+        if pdata["PID"] not in pid_list:
+            continue
         rptdata = base_data.copy()
         rptdata.update(pdata)
         rptdata.update(grades)
@@ -278,7 +283,10 @@ def collect_report_type_data(
     return gmaplist
 
 
-def group_grades(all_keys: set[str]) -> tuple[set[str], dict[str, list[str]]]:
+def group_grades(
+    all_keys: set[str],
+    template: Template, # just for error reporting
+) -> tuple[set[str], dict[str, list[str]]]:
     """Determine the subject and grade slots in the template.
     <all_keys> is the complete set of template slots/keys.
     Keys of the form 'G.k.n' are sought: k is the group-tag, n is a number.
@@ -296,7 +304,13 @@ def group_grades(all_keys: set[str]) -> tuple[set[str], dict[str, list[str]]]:
             try:
                 tag, index = key[2:].rsplit(".", 1)
             except ValueError:
-                raise GradeReportError(T["BAD_SUBJECT_KEY"].format(key=key))
+                REPORT(
+                    "ERROR",
+                    T["BAD_SUBJECT_KEY"].format(
+                        key=key,
+                        path=template.template_path,
+                    )
+                )
             try:
                 tags[tag].add(index)
             except KeyError:
@@ -350,7 +364,16 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
                 ),
             )
             g = "/"
-        rptdata[f"g.{sid}"] = print_grade(g)
+        if g:
+            rptdata[f"g.{sid}"] = print_grade(g)
+        else:
+            REPORT(
+                "WARNING",
+                T["EMPTY_SUBJECT_GRADE"].format(
+                    sid=sid, pupil=pupil_name(rptdata)
+                ),
+            )
+            rptdata[f"g.{sid}"] = "???"
 
     for tag, sdata_list in sgroups.items():
         try:
@@ -381,8 +404,18 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
                     ),
                 )
                 continue
-            rptdata[f"G.{tag}.{k}"] = print_grade(g)
+
             rptdata[f"S.{tag}.{k}"] = sdata["NAME"].split("*", 1)[0]
+            if g:
+                rptdata[f"G.{tag}.{k}"] = print_grade(g)
+            else:
+                REPORT(
+                    "WARNING",
+                    T["EMPTY_SUBJECT_GRADE"].format(
+                        sid=sid, pupil=pupil_name(rptdata)
+                    ),
+                )
+                rptdata[f"G.{tag}.{k}"] = "???"
 
         for k in keys:
             rptdata[f"G.{tag}.{k}"] = NOGRADE

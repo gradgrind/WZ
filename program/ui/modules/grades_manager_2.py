@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-01-17
+Last updated:  2023-01-20
 
 Front-end for managing grade reports.
 
@@ -470,6 +470,8 @@ class GradeManager(QWidget):
             SHOW_ERROR("Data after closing date")
             return
         path = OPEN_FILE("Tabelle (*.xlsx *.ods *.tsv)")
+        if not path:
+            return
         pid2grades = LoadFromFile(
             filepath=path,
             OCCASION=self.occasion,
