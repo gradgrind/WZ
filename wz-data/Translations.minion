@@ -194,6 +194,11 @@ ui.ui_base: {
 }
 
 ui.grid_base: {
+    # Labels
+    Copy:           Kopieren
+    Paste:          Einfügen
+    
+    # Messages
     BAD_ROW_LINE: "Ungültige Zeile für Linie: {row}"
     BAD_COL_LINE: "Ungültige Spalte für Linie: {col}"
     TILE_OUT_OF_BOUNDS: "Ungültige Platzierung für Raster-Kachel: Zeile={row}, Spalte={col}, Breite={cspan}, Höhe={rspan}"

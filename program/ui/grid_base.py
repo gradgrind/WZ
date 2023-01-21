@@ -1,7 +1,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2023-01-20
+Last updated:  2023-01-21
 
 Base functions for table-grids using the QGraphicsView framework.
 
@@ -71,8 +71,7 @@ if __name__ == "__main__":
     sys.path[0] = appdir
     import core.base
 
-#    basedir = os.path.dirname(appdir)
-
+    basedir = os.path.dirname(appdir)
 
 #    from core.base import start
 
@@ -84,12 +83,14 @@ T = TRANSLATIONS("ui.grid_base")
 ### +++++
 
 from qtpy.QtWidgets import (
+    QApplication,
     QGraphicsView,
     QGraphicsScene,
     QGraphicsItemGroup,
     QGraphicsRectItem,
     QGraphicsSimpleTextItem,
     QGraphicsLineItem,
+    QMenu,
 )
 from qtpy.QtGui import (
     QFont,
@@ -101,8 +102,97 @@ from qtpy.QtGui import (
     QPdfWriter,
     QPageLayout,
     QPageSize,
+    QKeySequence,
+    QCursor,
+    QIcon,
 )
 from qtpy.QtCore import Qt, QMarginsF, QRectF, QPointF
+try:
+    from qtpy.QtGui import QAction      # Qt6
+except:
+    from qtpy.QtWidgets import QAction  # Qt5
+
+### *****
+
+### Conversion functions between lists of lists and tab-separated-values
+### strings
+
+def tsv2table(text):
+    """Parse a "tsv" (tab separated value) string into a list of lists
+    of strings (a "table").
+
+    The input text is tabulated using tabulation characters to separate
+    the fields of a row and newlines to separate columns.
+
+    The output lines are padded with '' values to ensure that all lines
+    have the same length.
+
+    This can cope with various forms of newlines.
+    """
+    # 'splitlines' normally strips a trailing newline, so add one
+    # before splitting.
+    rows = (text + "\n").splitlines()
+    table_data = []
+    max_len = 0
+    for row in rows:
+        line = row.split("\t")
+        l = len(line)
+        if l > max_len:
+            max_len = l
+        table_data.append((line, l))
+    result = []
+    for line, l in table_data:
+        if l < max_len:
+            line += [""] * (max_len - l)
+        result.append(line)
+    return result
+
+
+def table2tsv(table):
+    """Represent a list of lists of strings (a "table") as a "tsv"
+    (tab separated value) string.
+    """
+#TODO: Would the newline string need to be dependent on the platform?
+    return "\n".join(["\t".join(row) for row in table])
+
+
+### Parse html to extract a table – this is used to help pasting,
+### especially from LibreOffice, which produces quite odd clipboard
+### content when copying.
+
+from html.parser import HTMLParser
+
+class TableParser(HTMLParser):
+    def get_table(self, html):
+        self.table_rows = []
+        self.table_cols = None
+        self.data_tag = None
+        self.feed(html)
+        return self.table_rows
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "tr":
+            self.table_cols = []
+            self.table_rows.append(self.table_cols)
+        elif tag == "td":
+            self.data_tag = []
+
+    def handle_endtag(self, tag):
+        if tag == "tr":
+            self.table_cols = None
+        elif tag == "td":
+            if self.data_tag:
+                if len(self.data_tag) != 1:
+                    raise Bug
+                self.table_cols.append("".join(self.data_tag))
+            else:
+                self.table_cols.append("")
+
+    def handle_data(self, data):
+        if self.data_tag is not None:
+            self.data_tag.append(data)
+
+table_parser = TableParser()
 
 ### -----
 
@@ -205,13 +295,11 @@ class Selection(QGraphicsRectItem):
         self.clear()
 
     def on_context_menu(self):
-        if self.is_active():
-            print("§§CONTAINED")
-            view = self.scene().views()[0]
-            point = view.screen_coordinates(self.scenePos())
-#TODO:
-            # return handler(point)
-#?
+        """Return false value to indicate that the selection context menu
+        should be shown.
+        This method will only be called when the selection is active
+        (shown) and at the top of the item stack at the cursor position.
+        """
         return False
 
     def clear(self):
@@ -294,6 +382,11 @@ class GridView(QGraphicsView):
         viewp = self.mapFromScene(scene_pointf)
         return self.mapToGlobal(viewp)
 
+#TODO???
+    def keyPressEvent(self, event):
+        print(f"%%% <{event.text()}> %%%")
+        event.ignore()
+
     def mousePressEvent(self, event):
         # Qt5
         #        print("POS:", event.pos())
@@ -361,7 +454,7 @@ class GridView(QGraphicsView):
         except:
             point = event.pos()
         if self.select.is_active():
-            print("§?§?§?§?§ SELECT ACTIVE:", self.select.range())
+            # print("§?§?§?§?§ SELECT ACTIVE:", self.select.range())
             return
         items = self.items(point)
         if items:
@@ -389,13 +482,17 @@ class GridView(QGraphicsView):
         if items:
             for item in items:
                 # Find the topmost <Tile> which responds to the event
+                # Under normal circumstances this should be the
+                # selection, if this is active.
                 try:
                     click_handler = item.on_context_menu
                 except AttributeError:
                     continue
                 clear = click_handler()
+                if (not clear) and self.select.is_active():
+                    # show context menu
+                    self.actions.exec(self.mapToGlobal(point))
                 break
-#?
         if clear:
             self.select.clear()
 
@@ -488,6 +585,111 @@ class GridView(QGraphicsView):
         # Add a "selection" rectangle to the scene
         self.select = Selection(self)
 
+        ## Add a context menu for the selection
+        self.actions = QMenu()
+        # Copy
+        copyAct = QAction(parent=self.actions)
+        keyseq = QKeySequence(QKeySequence.StandardKey.Copy)
+        copyAct.setText(T["Copy"])
+        copyAct.setIcon(QIcon.fromTheme("copy"))
+        copyAct.setShortcut(keyseq)
+#        copyAct.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        copyAct.triggered.connect(self.copysel)
+        self.actions.addAction(copyAct)
+        # Paste
+        pasteAct = QAction(parent=self.actions)
+        keyseq = QKeySequence(QKeySequence.StandardKey.Paste)
+        pasteAct.setText(T["Paste"])
+        pasteAct.setIcon(QIcon.fromTheme("paste"))
+        pasteAct.setShortcut(keyseq)
+#        pasteAct.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        pasteAct.triggered.connect(self.pastesel)
+        self.actions.addAction(pasteAct)
+
+    def copysel(self):
+        if self.select.is_active:
+            self.do_copy(*self.select.range())
+
+    def pastesel(self):
+        if self.select.is_active:
+            self.do_paste(*self.select.range())
+
+    def do_copy(self, row, col, nrows, ncols):
+        """Copy the values of the selected cells (only the grid cells!)
+        to the clipboard formatted as tab-separated-value.
+        """
+        # print("§COPY§  ... TODO:", (row, col, nrows, ncols))
+        rlist = [
+            [
+                self.get_cell((row + r, col + c)).get_property("VALUE")
+                for c in range(ncols)
+            ]
+            for r in range(nrows)
+        ]
+        qapp = QApplication.instance()
+        qapp.clipboard().setText(table2tsv(rlist))
+
+    def do_paste(self, row, col, nrows, ncols):
+        print("§PASTE§ ... TODO", (row, col, nrows, ncols))
+        qapp = QApplication.instance()
+        clipboard = qapp.clipboard()
+        mimeData = clipboard.mimeData()
+        if mimeData.hasHtml():
+            table_data = table_parser.get_table(mimeData.html())
+        elif mimeData.hasText():
+            table_data = tsv2table(mimeData.text())
+        else:
+            return
+        print(" --->", table_data)
+
+#TODO --
+        return
+        paste_data = Paste_fit(table_data, row, col, nrows, ncols)
+        for r in range(nrows):
+            for c in range(ncols):
+                cell = self.get_cell((row + r, col + c))
+                cell.set_text(paste_data[r][c])
+#TODO: trap errors?
+
+
+#TODO: Adjust the paste data to fit the destination, if necessary
+# This should probably be in a utility module ...
+    def Paste_fit(table_data, row, col, nrows, ncols):
+        paste_rows = len(table_data)
+        row0 = table_data[0]
+        paste_cols = len(row0)
+        if paste_rows == 1:     # paste a single row
+            if paste_cols == 1: # paste a single cell
+                row0 = row0 * ncols # copy value for each column
+            elif paste_cols != ncols:
+#TODO: T...
+                SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
+                    h0=paste_rows, w0=paste_cols, h1=nrows, w1=ncols
+                ))
+                return None
+            return [row0] * nrows
+        if paste_cols == 1:     # paste a single column
+            if paste_rows != nrows:
+#TODO: T...
+                SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
+                    h0=paste_rows, w0=paste_cols, h1=nrows, w1=ncols
+                ))
+                return None
+            # copy the column
+            return [r * ncols for r in table_data]
+        if ncols != rowlen or nrows != collen:  # paste a block
+#TODO: T...
+            SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
+                h0=paste_rows, w0=paste_cols, h1=nrows, w1=ncols
+            ))
+            return None
+        return table_data
+
+#TODO???
+
+
+
+
     def grid_line_thick_h(self, row):
         return self.grid_line_h(row, self.thick_line_width)
 
@@ -572,16 +774,6 @@ class GridView(QGraphicsView):
 
     def get_cell(self, cellrc):
         return self.rows[cellrc[0]][cellrc[1]]
-
-    # TODO
-    def tile_right_clicked(self, tile):
-        try:
-            cmen = tile.get_property("CONTEXT_MENU")
-        except KeyError:
-            print("NO CONTEXT MENU")
-            return True
-        print("CONTEXT MENU:", cmen)
-        return True
 
     ### pdf output
 
@@ -891,15 +1083,19 @@ class Tile(QGraphicsRectItem):
         return None
 
     def on_context_menu(self):
+        """This method will only be called when this item is at the top
+        of the item stack at the cursor position.
+        Return true value to indicate that the selection should be
+        cleared. If a false value is returned, the selection context
+        menu will be shown, if the selection is active.
+        """
         try:
             handler = self.__properties["CONTEXT_MENU"]
         except KeyError:
-#?
             return True
         view = self.scene().views()[0]
         point = view.screen_coordinates(self.scenePos())
         handler(point, self.__properties)
-#?
         return True
 
     def set_property(self, key, value):
@@ -1010,6 +1206,8 @@ class Tile(QGraphicsRectItem):
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
+    QIcon.setFallbackSearchPaths([os.path.join(basedir, "wz-data", "icons")])
+
     from ui.cell_editors import (
         CellEditorDate,
         CellEditorTable,
@@ -1018,8 +1216,6 @@ if __name__ == "__main__":
     )
     rows = (100,) + (30,) * 12
     cols = (200, 50,) + (25,) * 14 + (40,) * 3
-
-    from qtpy.QtWidgets import QApplication
 
     app = QApplication([])
     # grid = GridViewRescaling()
