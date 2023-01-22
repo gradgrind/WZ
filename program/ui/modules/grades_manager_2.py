@@ -672,6 +672,7 @@ class GradeTableView(GridViewAuto):
         self.set_modified_time(timestamp)
         if changes:
             # Update changed display cells
+            print("??? CHANGES", changes)
             row = self.pid2row[pid]
             for sid, oldval in changes:
                 self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
@@ -682,12 +683,12 @@ class GradeTableView(GridViewAuto):
         # Signal change
         self.signal_modified.emit(timestamp)
 
-#TODO
     def write_to_row(self, row, col, values):
         """Write a list of values to a position (<col>) in a given row.
+        This is called when pasting.
         """
-# Only write to cells when all are editable, and check the values!
-# Then do an UpdatePupilGrades ...
+        # Only write to cells when all are editable, and check the values!
+        # Then do an UpdatePupilGrades ...
         prow = row - self.row0
         pupil_list = self.grade_table["PUPIL_LIST"]
         if prow < 0 or prow >= len(pupil_list):

@@ -1,7 +1,7 @@
 """
 local/grade_processing.py
 
-Last updated:  2023-01-17
+Last updated:  2023-01-22
 
 Functions to perform grade calculations.
 
@@ -117,7 +117,7 @@ def ROUNDED_AVERAGE_I(
         return None
     else:
         grades[sid] = astr
-        return [(sid, og)]
+        return (sid, og)
 
 GRADE_FUNCTIONS["ROUNDED_AVERAGE_I"] = ROUNDED_AVERAGE_I
 
@@ -152,7 +152,7 @@ def ROUNDED_AVERAGE_II(
         return None
     else:
         grades[sid] = astr
-        return [(sid, og)]
+        return (sid, og)
 
 GRADE_FUNCTIONS["ROUNDED_AVERAGE_II"] = ROUNDED_AVERAGE_II
 
@@ -189,7 +189,7 @@ def AVERAGE_I(
         return None
     else:
         grades[sid] = astr
-        return [(sid, og)]
+        return (sid, og)
 
 GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 

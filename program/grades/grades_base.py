@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2023-01-17
+Last updated:  2023-01-22
 
 Access grade data, read and build grade tables.
 
@@ -465,6 +465,9 @@ def prepare_pupil_list(table_info):
     pdata_list = PupilRows()    # [(pdata, grades),  ... ]
     grades0 = {}   # for change detection, decision update vs. insert, etc.
     #    {pid: initial grade-map, ... }
+    class_group = table_info["CLASS_GROUP"]
+    occasion = table_info["OCCASION"]
+    instance = table_info["INSTANCE"]
     DATE_GRADES = table_info["DATE_GRADES"]
     if DATE_GRADES < Dates.today():
         # Closed category: include only pupils with stored grade entries,
@@ -500,6 +503,7 @@ def prepare_pupil_list(table_info):
             pdata_list.append(db_pdata, grades)
         if not pdata_list:
             REPORT("WARNING", T["NO_PUPIL_GRADES"].format(
+#TODO: unknown variables
                 report_info=f"{class_group} / {occasion} / {instance}"
             ))
 

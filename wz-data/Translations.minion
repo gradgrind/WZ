@@ -88,6 +88,7 @@ grades.grades_base: {
     GRADE_STOMPED:      "{name}, Fachkennzeichen {sid}: vorhandene Note ({grade}) soll durch „/“ ersetzt werden"
     NO_GRADE_VALUE:     "{name}, Fachkennzeichen {sid}: Note ({grade}) nicht erwartet, da „/“ vorhanden"
     NO_GRADE_ENTRY_FILE: "Konfigurationsdatei {path}\n\nGROUP_DATA-Feld für Gruppe {group}, Anlass{occasion}:\n  Keine GRADE_ENTRY-Datei (Vorlage für Noteneingabetabelle) angegeben"
+    NO_PUPIL_GRADES:    "Keine Schüler bzw. Noten: {report_info}"
 }
 
 grades.gradetable: {
