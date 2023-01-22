@@ -108,7 +108,6 @@ from ui.ui_base import (
     QPageLayout,
     QPageSize,
     QKeySequence,
-    QCursor,
     QIcon,
     QAction,    # in QtWidgets in Qt5
     ## QtCore

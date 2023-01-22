@@ -56,28 +56,15 @@ def TSV2Table(text:str) -> list[list[str]]:
     The input text is tabulated using tabulation characters to separate
     the fields of a row and newlines to separate columns.
 
-    The output lines are padded with '' values to ensure that all lines
-    have the same length.
-
     This can cope with various forms of newlines.
     """
     # 'splitlines' normally strips a trailing newline, so add one
     # before splitting.
     rows = (text + "\n").splitlines()
-    table_data = []
-    max_len = 0
-    for row in rows:
-        line = row.split("\t")
-        l = len(line)
-        if l > max_len:
-            max_len = l
-        table_data.append((line, l))
-    result = []
-    for line, l in table_data:
-        if l < max_len:
-            line += [""] * (max_len - l)
-        result.append(line)
-    return result
+    return [
+        row.split("\t")
+        for row in rows
+    ]
 
 
 def ToRectangle(table: list[list[str]], test_only: bool = False) -> int:
@@ -103,9 +90,9 @@ def ToRectangle(table: list[list[str]], test_only: bool = False) -> int:
 def Table2TSV(table):
     """Represent a list of lists of strings (a "table") as a "tsv"
     (tab separated value) string.
+    The lines are separated by "\r\n".
     """
-#TODO: Would the newline string need to be dependent on the platform?
-    return "\n".join(["\t".join(row) for row in table])
+    return "\r\n".join(["\t".join(row) for row in table])
 
 
 ### Parse html to extract a table – this is used to help pasting,
@@ -116,6 +103,8 @@ class __TableParser(HTMLParser):
     _singleton = None
 
     def get_table(self, html):
+        """This is the main function.
+        """
         self.table_rows = []
         self.table_cols = None
         self.data_tag = None
@@ -240,8 +229,12 @@ if __name__ == "__main__":
     </html>
     """
     print("Parse paste data (html):\n  ", TableParser(html))
-    t = [["", "1"], ["A", "B", "C"], []]
+    t = []
     print("\n ============================\n")
+    print("ToRectangle TABLE:", t)
+    print("  ... CHANGES:", ToRectangle(t))
+    print("  ->", t)
+    t = [["", "1"], ["A", "B", "C"], []]
     print("ToRectangle TABLE:", t)
     print("  ... CHANGES:", ToRectangle(t))
     print("  ->", t)

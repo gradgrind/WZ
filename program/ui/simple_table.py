@@ -1,14 +1,14 @@
 """
 ui/simple_table.py
 
-Last updated:  2022-12-17
+Last updated:  2023-01-22
 
 A fairly simple table widget, which supports (single) range selection.
 Cell editing is possible using external pop-up editors.
 
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -42,6 +42,13 @@ T = TRANSLATIONS("ui.simple_table")
 
 ### +++++
 
+from tables.table_utilities import (
+    TSV2Table,
+    Table2TSV,
+    ToRectangle,
+    TableParser,
+    PasteFit,
+)
 from ui.ui_base import (
     ## QtWidgets
     QApplication,
@@ -49,7 +56,7 @@ from ui.ui_base import (
     QTableWidgetItem,
     QAbstractItemView,
     QAction,
-    QMenu,
+    # QMenu,
     ## QtGui
     QKeySequence,
     ## QtCore
@@ -134,21 +141,21 @@ class TableWidget(QTableWidget):
     ##### Actions: copy/paste
 
     def add_actions(self):
-        self.selection_menu = QMenu(self)
+        # self.selection_menu = QMenu(self)
         action = QAction(T["COPY_SELECTION"], parent=self)
         action.setShortcut(QKeySequence.Copy)
         action.setShortcutVisibleInContextMenu(True)
         action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
         action.triggered.connect(self.read_from_selection)
         self.addAction(action)
-        self.selection_menu.addAction(action)
+        # self.selection_menu.addAction(action)
         action = QAction(T["PASTE_SELECTION"], parent=self)
         action.setShortcut(QKeySequence.Paste)
         action.setShortcutVisibleInContextMenu(True)
         action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
         action.triggered.connect(self.write_to_selection)
         self.addAction(action)
-        self.selection_menu.addAction(action)
+        # self.selection_menu.addAction(action)
         # Enable context menu
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
 
@@ -191,77 +198,42 @@ class TableWidget(QTableWidget):
             while j < ncols:
                 row.append(self.read_cell(r0 + i, c0 + j))
                 j += 1
-            rows.append('\t'.join(row))
+            rows.append(row)
             i += 1
-        tsv = '\n'.join(rows)
         # Put this data into clipboard
-        QApplication.instance().clipboard().setText(tsv)
+        QApplication.instance().clipboard().setText(Table2TSV(rows))
 
     def write_to_selection(self):
-        """Paste text from clipboard into the table.
-        Pasting to more than one selected cell is possible if the data
-        to be pasted has "compatible" dimensions:
-            A single cell can be pasted to any block.
-            A single row of cells can be pasted to a block of cells with
-            the same width.
-            A single column of cells can be pasted to a block of cells
-            with the same height.
-            Otherwise a block of cells can only be pasted to a block of
-            cells with the same dimensions.
+        """Paste the clipboard to the selected grid cells.
+        The clipboard will be interpreted as a table.
+        See <PasteFit> for details on dimension compatibility.
         """
         nrows, r0, ncols, c0 = self.get_selection()
         if not nrows:
             SHOW_WARNING(T["NO_SELECTION"])
             return
-        rows = []
-        rowlen = -1
-        # Get data from clipboard
-        tsv = QApplication.instance().clipboard().text().rstrip('\n')
-        if not tsv:
-            SHOW_WARNING(T["CLIPBOARD_EMPTY"])
+        clipboard = QApplication.instance().clipboard()
+        mimeData = clipboard.mimeData()
+        if mimeData.hasHtml():
+            table_data = TableParser(mimeData.html())
+        elif mimeData.hasText():
+            table_data = TSV2Table(mimeData.text())
+        else:
             return
-        for line in tsv.splitlines():
-            rowlist = line.split('\t')
-            if rowlen < 0:
-                rowlen = len(rowlist)
-            elif len(rowlist) != rowlen:
-                SHOW_ERROR(T["PASTE_RANGE_NOT_RECTANGULAR"])
-                return
-            rows.append(rowlist)
-        collen = len(rows)
-        if collen == 1:     # paste a single row
-            row = rows[0]
-            if rowlen == 1:      # paste a single cell
-                val = row[0]
-                if ncols == 1:
-                    for i in range(nrows):  # iterate over selected rows
-                        self.write_cell(r0 + i, c0, val)
-                    return
-                row = row * ncols   # copy value for each column
-            elif ncols != rowlen:
-                SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
-                    h0=collen, w0=rowlen, h1=nrows, w1=ncols
-                ))
-                return
+        if (n := ToRectangle(table_data)) > 0:
+            SHOW_WARNING(T["PASTE_NOT_RECTANGULAR"].format(n=n))
+        if PasteFit(table_data, nrows, ncols):
             for i in range(nrows):  # iterate over selected rows
-                self.write_cells_to_row(r0 + i, c0, row)
-            return
-        if rowlen == 1:   # paste a single column
-            if nrows != collen:
-                SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
-                    h0=collen, w0=rowlen, h1=nrows, w1=ncols
-                ))
-                return
-            for i in range(nrows):  # iterate over selected rows
-                self.write_cells_to_row(r0 + i, c0, rows[i] * ncols)
-            return
-        if ncols != rowlen or nrows != collen:  # paste a block
-            SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
-                h0=collen, w0=rowlen, h1=nrows, w1=ncols
-            ))
-            return
-        for i in range(nrows):  # iterate over selected rows
-            self.write_cells_to_row(r0 + i, c0, rows[i])
+                self.write_cells_to_row(r0 + i, c0, table_data[i])
+        else:
+            SHOW_ERROR(
+                T["BAD_PASTE_RANGE"].format(
+                    h0=len(table_data),
+                    w0=len(table_data[0]),
+                    h1=nrows,
+                    w1=ncols
+                )
+            )
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
