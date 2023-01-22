@@ -1,7 +1,7 @@
 """
 ui/grid_base.py
 
-Last updated:  2023-01-21
+Last updated:  2023-01-22
 
 Base functions for table-grids using the QGraphicsView framework.
 
@@ -69,20 +69,26 @@ if __name__ == "__main__":
     this = sys.path[0]
     appdir = os.path.dirname(this)
     sys.path[0] = appdir
-    import core.base
-
     basedir = os.path.dirname(appdir)
 
+    import core.base
 #    from core.base import start
-
-    #    start.setup(os.path.join(basedir, 'TESTDATA'))
 #    start.setup(os.path.join(basedir, "DATA-2023"))
+#    start.setup(os.path.join(basedir, "TESTDATA"))
 
 T = TRANSLATIONS("ui.grid_base")
 
 ### +++++
 
-from qtpy.QtWidgets import (
+from tables.table_utilities import (
+    TSV2Table,
+    Table2TSV,
+    ToRectangle,
+    TableParser,
+    PasteFit,
+)
+from ui.ui_base import (
+    ## QtWidgets
     QApplication,
     QGraphicsView,
     QGraphicsScene,
@@ -91,8 +97,7 @@ from qtpy.QtWidgets import (
     QGraphicsSimpleTextItem,
     QGraphicsLineItem,
     QMenu,
-)
-from qtpy.QtGui import (
+    ## QtGui
     QFont,
     QPen,
     QColor,
@@ -105,94 +110,13 @@ from qtpy.QtGui import (
     QKeySequence,
     QCursor,
     QIcon,
+    QAction,    # in QtWidgets in Qt5
+    ## QtCore
+    Qt,
+    QMarginsF,
+    QRectF,
+    QPointF,
 )
-from qtpy.QtCore import Qt, QMarginsF, QRectF, QPointF
-try:
-    from qtpy.QtGui import QAction      # Qt6
-except:
-    from qtpy.QtWidgets import QAction  # Qt5
-
-### *****
-
-### Conversion functions between lists of lists and tab-separated-values
-### strings
-
-def tsv2table(text):
-    """Parse a "tsv" (tab separated value) string into a list of lists
-    of strings (a "table").
-
-    The input text is tabulated using tabulation characters to separate
-    the fields of a row and newlines to separate columns.
-
-    The output lines are padded with '' values to ensure that all lines
-    have the same length.
-
-    This can cope with various forms of newlines.
-    """
-    # 'splitlines' normally strips a trailing newline, so add one
-    # before splitting.
-    rows = (text + "\n").splitlines()
-    table_data = []
-    max_len = 0
-    for row in rows:
-        line = row.split("\t")
-        l = len(line)
-        if l > max_len:
-            max_len = l
-        table_data.append((line, l))
-    result = []
-    for line, l in table_data:
-        if l < max_len:
-            line += [""] * (max_len - l)
-        result.append(line)
-    return result
-
-
-def table2tsv(table):
-    """Represent a list of lists of strings (a "table") as a "tsv"
-    (tab separated value) string.
-    """
-#TODO: Would the newline string need to be dependent on the platform?
-    return "\n".join(["\t".join(row) for row in table])
-
-
-### Parse html to extract a table – this is used to help pasting,
-### especially from LibreOffice, which produces quite odd clipboard
-### content when copying.
-
-from html.parser import HTMLParser
-
-class TableParser(HTMLParser):
-    def get_table(self, html):
-        self.table_rows = []
-        self.table_cols = None
-        self.data_tag = None
-        self.feed(html)
-        return self.table_rows
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "tr":
-            self.table_cols = []
-            self.table_rows.append(self.table_cols)
-        elif tag == "td":
-            self.data_tag = []
-
-    def handle_endtag(self, tag):
-        if tag == "tr":
-            self.table_cols = None
-        elif tag == "td":
-            if self.data_tag:
-                if len(self.data_tag) != 1:
-                    raise Bug
-                self.table_cols.append("".join(self.data_tag))
-            else:
-                self.table_cols.append("")
-
-    def handle_data(self, data):
-        if self.data_tag is not None:
-            self.data_tag.append(data)
-
-table_parser = TableParser()
 
 ### -----
 
@@ -369,6 +293,29 @@ class GridView(QGraphicsView):
         # print("§§§§§1", self.ldpi)
         # print("§§§§§2", self.physicalDpiX())
 
+        ## Add a context menu for the selection
+        # Copy
+        copyAct = QAction(parent=self)
+        keyseq = QKeySequence(QKeySequence.StandardKey.Copy)
+        copyAct.setText(T["Copy"])
+        copyAct.setIcon(QIcon.fromTheme("copy"))
+        copyAct.setShortcut(keyseq)
+        copyAct.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        copyAct.triggered.connect(self.copysel)
+        self.addAction(copyAct)
+        # Paste
+        pasteAct = QAction(parent=self)
+        keyseq = QKeySequence(QKeySequence.StandardKey.Paste)
+        pasteAct.setText(T["Paste"])
+        pasteAct.setIcon(QIcon.fromTheme("paste"))
+        pasteAct.setShortcut(keyseq)
+        pasteAct.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        pasteAct.triggered.connect(self.pastesel)
+        self.addAction(pasteAct)
+        # Make menu for showing actions
+        self.action_menu = QMenu()
+        self.action_menu.addActions(self.actions())
+
     def pt2px(self, pt) -> int:
         px = int(self.ldpi * pt / 72.0 + 0.5)
         # print(f"pt2px: {pt} -> {px}")
@@ -383,9 +330,10 @@ class GridView(QGraphicsView):
         return self.mapToGlobal(viewp)
 
 #TODO???
-    def keyPressEvent(self, event):
-        print(f"%%% <{event.text()}> %%%")
-        event.ignore()
+#    def keyPressEvent(self, event):
+#        print(f"%%% <{event.text()} | {event.key()}> %%%")
+#        #event.ignore()
+#        super().keyPressEvent(event)
 
     def mousePressEvent(self, event):
         # Qt5
@@ -491,7 +439,7 @@ class GridView(QGraphicsView):
                 clear = click_handler()
                 if (not clear) and self.select.is_active():
                     # show context menu
-                    self.actions.exec(self.mapToGlobal(point))
+                    self.action_menu.exec(self.mapToGlobal(point))
                 break
         if clear:
             self.select.clear()
@@ -585,40 +533,22 @@ class GridView(QGraphicsView):
         # Add a "selection" rectangle to the scene
         self.select = Selection(self)
 
-        ## Add a context menu for the selection
-        self.actions = QMenu()
-        # Copy
-        copyAct = QAction(parent=self.actions)
-        keyseq = QKeySequence(QKeySequence.StandardKey.Copy)
-        copyAct.setText(T["Copy"])
-        copyAct.setIcon(QIcon.fromTheme("copy"))
-        copyAct.setShortcut(keyseq)
-#        copyAct.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
-        copyAct.triggered.connect(self.copysel)
-        self.actions.addAction(copyAct)
-        # Paste
-        pasteAct = QAction(parent=self.actions)
-        keyseq = QKeySequence(QKeySequence.StandardKey.Paste)
-        pasteAct.setText(T["Paste"])
-        pasteAct.setIcon(QIcon.fromTheme("paste"))
-        pasteAct.setShortcut(keyseq)
-#        pasteAct.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
-        pasteAct.triggered.connect(self.pastesel)
-        self.actions.addAction(pasteAct)
-
     def copysel(self):
-        if self.select.is_active:
+        if self.select.is_active():
             self.do_copy(*self.select.range())
+        else:
+            SHOW_WARNING(T["COPY_NO_SELECTION"])
 
     def pastesel(self):
-        if self.select.is_active:
+        if self.select.is_active():
             self.do_paste(*self.select.range())
+        else:
+            SHOW_WARNING(T["PASTE_NO_SELECTION"])
 
     def do_copy(self, row, col, nrows, ncols):
         """Copy the values of the selected cells (only the grid cells!)
         to the clipboard formatted as tab-separated-value.
         """
-        # print("§COPY§  ... TODO:", (row, col, nrows, ncols))
         rlist = [
             [
                 self.get_cell((row + r, col + c)).get_property("VALUE")
@@ -627,68 +557,53 @@ class GridView(QGraphicsView):
             for r in range(nrows)
         ]
         qapp = QApplication.instance()
-        qapp.clipboard().setText(table2tsv(rlist))
+        qapp.clipboard().setText(Table2TSV(rlist))
 
     def do_paste(self, row, col, nrows, ncols):
-        print("§PASTE§ ... TODO", (row, col, nrows, ncols))
+        """Paste the clipboard to the selected grid cells.
+        The clipboard will be interpreted as a table.
+        See <PasteFit> for details on dimension compatibility.
+        """
         qapp = QApplication.instance()
         clipboard = qapp.clipboard()
         mimeData = clipboard.mimeData()
         if mimeData.hasHtml():
-            table_data = table_parser.get_table(mimeData.html())
+            table_data = TableParser(mimeData.html())
         elif mimeData.hasText():
-            table_data = tsv2table(mimeData.text())
+            table_data = TSV2Table(mimeData.text())
         else:
             return
-        print(" --->", table_data)
+        if (n := ToRectangle(table_data)) > 0:
+            SHOW_WARNING(T["PASTE_NOT_RECTANGULAR"].format(n=n))
+        if PasteFit(table_data, nrows, ncols):
+            for vals in table_data:
+                self.write_to_row(row, col, vals)
+                row += 1
+        else:
+            SHOW_ERROR(
+                T["BAD_PASTE_RANGE"].format(
+                    h0=len(table_data),
+                    w0=len(table_data[0]),
+                    h1=nrows,
+                    w1=ncols
+                )
+            )
 
-#TODO --
-        return
-        paste_data = Paste_fit(table_data, row, col, nrows, ncols)
-        for r in range(nrows):
-            for c in range(ncols):
-                cell = self.get_cell((row + r, col + c))
-                cell.set_text(paste_data[r][c])
-#TODO: trap errors?
+    def write_to_row(self, row, col, values):
+        """Write a list of values to a position (<col>) in a given row.
+        Override this if special behaviour, e.g. value-checking, is
+        required.
+        """
+        for v in values:
+            self.write_to_cell(row, col, v)
+            col += 1
 
-
-#TODO: Adjust the paste data to fit the destination, if necessary
-# This should probably be in a utility module ...
-    def Paste_fit(table_data, row, col, nrows, ncols):
-        paste_rows = len(table_data)
-        row0 = table_data[0]
-        paste_cols = len(row0)
-        if paste_rows == 1:     # paste a single row
-            if paste_cols == 1: # paste a single cell
-                row0 = row0 * ncols # copy value for each column
-            elif paste_cols != ncols:
-#TODO: T...
-                SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
-                    h0=paste_rows, w0=paste_cols, h1=nrows, w1=ncols
-                ))
-                return None
-            return [row0] * nrows
-        if paste_cols == 1:     # paste a single column
-            if paste_rows != nrows:
-#TODO: T...
-                SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
-                    h0=paste_rows, w0=paste_cols, h1=nrows, w1=ncols
-                ))
-                return None
-            # copy the column
-            return [r * ncols for r in table_data]
-        if ncols != rowlen or nrows != collen:  # paste a block
-#TODO: T...
-            SHOW_ERROR(T["BAD_PASTE_RANGE"].format(
-                h0=paste_rows, w0=paste_cols, h1=nrows, w1=ncols
-            ))
-            return None
-        return table_data
-
-#TODO???
-
-
-
+    def write_to_cell(self, row, col, value):
+        """Write a value to a position (<col>) in a given row.
+        Override this if special behaviour, e.g. value-checking, is
+        required.
+        """
+        self.get_cell((row, col)).set_text(value)
 
     def grid_line_thick_h(self, row):
         return self.grid_line_h(row, self.thick_line_width)
@@ -1231,16 +1146,16 @@ if __name__ == "__main__":
     grid.grid_line_thick_h(1)
 
     if not no_grid:
+        for c in range(2, len(cols)):
+            grid.get_cell((0, c)).set_verticaltext()
         cell0 = grid.get_cell((0, 0))
         cell0.set_text("Not rotated")
         cell0.set_valign("m")
         cell1 = grid.get_cell((0, 2))
         cell1.set_text("Deutsch")
-        cell1.set_verticaltext()
         cell1.set_valign("b")
         cell2 = grid.get_cell((0, 4))
         cell2.set_text("English")
-        cell2.set_verticaltext()
 
         cell_1 = grid.get_cell((4, 3))
         cell_1.set_text("A long entry")

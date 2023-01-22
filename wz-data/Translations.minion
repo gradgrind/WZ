@@ -204,6 +204,10 @@ ui.grid_base: {
     TILE_OUT_OF_BOUNDS: "Ungültige Platzierung für Raster-Kachel: Zeile={row}, Spalte={col}, Breite={cspan}, Höhe={rspan}"
     GRID_CELL_RANGE: "Raster-Kachel in Zeile {row}, Spalte {col} darf nicht andere Kacheln überdecken"
     NOT_STRING: "Kachelwert muss eine Zeichenkette sein, nicht: {val}"
+    PASTE_NOT_RECTANGULAR: "Die einzufügenden Daten sind nicht „rechteckig“, sie werden an {n} Stellen mit leeren Elementen ergänzt"
+    BAD_PASTE_RANGE: "Die Dimensionen der einzufügenden Daten sind nicht kompatibel mit dem ausgewählten Bereich: {h0}x{w0} -> {h1}x{w1}"
+    COPY_NO_SELECTION: "Keine Zellen ausgewählt zum Kopieren"
+    PASTE_NO_SELECTION: "Einfügen: Kein Zielbereich (Auswahl)"
 }
 
 ui.simple_table: {
