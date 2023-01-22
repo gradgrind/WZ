@@ -1,7 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-01-20
+Last updated:  2023-01-22
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -102,11 +102,13 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
             subject_groups[group].append(sdata)
         except KeyError:
             subject_groups[group] = [sdata]
-    #    print("\n$$$$$$$$$ GROUPED SUBJECTS:")
-    #    for group, slist in subject_groups.items():
-    #        print("  ***", group)
-    #        for sdata in slist:
-    #            print("        ---", sdata)
+
+    if False:
+        print("\n$$$$$$$$$ GROUPED SUBJECTS:")
+        for group, slist in subject_groups.items():
+            print("  ***", group)
+            for sdata in slist:
+                print("        ---", sdata)
 
     ### Divide the pupils according to report type
     rtypes = {}
@@ -191,9 +193,11 @@ def collect_report_type_data(
     ## Transform subject groups?
     sgmap = template_field_info.get("SUFFIX_GROUP_MAP") or {}
     gmap = template_field_info.get("GROUP_MAP") or {}
+    # print("\n ??? TEMPLATE GROUP MAP:", gmap)
     sgroups = {}
     for g in sorted(subject_groups):
         for sdata in subject_groups[g]:
+            # print(f"\n ??? SUBJECT GROUP {g}:", sdata)
             sid = sdata["SID"]
             try:
                 sid0, gsuff = sid.rsplit(".", 1)
@@ -376,6 +380,7 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
             rptdata[f"g.{sid}"] = "???"
 
     for tag, sdata_list in sgroups.items():
+        REPORT("OUT", f'### S-Group {tag}, {[sd["SID"] for sd in sdata_list]}')
         try:
             keys = tagmap[tag].copy()
         except KeyError:
@@ -428,7 +433,7 @@ if __name__ == "__main__":
     from core.db_access import open_database
 
     open_database()
-    fgtable = FullGradeTable(occasion="1. Halbjahr", class_group="12G.R", instance="")
+    fgtable = FullGradeTable(occasion="1. Halbjahr", class_group="12G.G", instance="")
 
     fpaths = PROCESS(
         MakeReports,
