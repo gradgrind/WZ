@@ -594,15 +594,8 @@ class GridView(QGraphicsView):
         required.
         """
         for v in values:
-            self.write_to_cell(row, col, v)
+            self.get_cell((row, col)).set_text(v)
             col += 1
-
-    def write_to_cell(self, row, col, value):
-        """Write a value to a position (<col>) in a given row.
-        Override this if special behaviour, e.g. value-checking, is
-        required.
-        """
-        self.get_cell((row, col)).set_text(value)
 
     def grid_line_thick_h(self, row):
         return self.grid_line_h(row, self.thick_line_width)
@@ -990,7 +983,7 @@ class Tile(QGraphicsRectItem):
             return None
         view = self.scene().views()[0]
         point = view.screen_coordinates(self.scenePos())
-        if editor(point, self.__properties):
+        if editor.activate(point, self.__properties):
             self.set_text(None)
             # Return the data needed for handling changes to this cell
             return self.__properties
@@ -1160,7 +1153,7 @@ if __name__ == "__main__":
         cell_1.set_text("A long entry")
         cell_pid = grid.grid_tile(2, 0, text="left", halign="l")
 
-        plain_line_editor = CellEditorLine().activate
+        plain_line_editor = CellEditorLine()
         cell0.set_property("EDITOR", plain_line_editor)
         grade_editor_I = CellEditorTable(
             [
@@ -1176,18 +1169,18 @@ if __name__ == "__main__":
                 [   ["nb"],        "kann nicht beurteilt werden"],
                 [   ["*", "/"],       "––––––"        ],
             ]
-        ).activate
-        text_editor = CellEditorText().activate
+        )
+        text_editor = CellEditorText()
         #    grade_editor = CellEditorList(
         #cell_1.set_property("EDITOR", grade_editor_I)
         cell_1.set_property("EDITOR", text_editor)
 
         cell3 = grid.get_cell((6, 0))
-        cell3.set_property("EDITOR", CellEditorDate().activate)
+        cell3.set_property("EDITOR", CellEditorDate())
         cell3.set_property("VALUE", "")
         cell3.set_text("")
         cell4 = grid.get_cell((7, 0))
-        cell4.set_property("EDITOR", CellEditorDate(empty_ok=True).activate)
+        cell4.set_property("EDITOR", CellEditorDate(empty_ok=True))
         cell4.set_property("VALUE", "2022-12-01")
         cell4.set_text("2022-12-01")
 

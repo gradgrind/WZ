@@ -1,7 +1,7 @@
 """
 ui/cell_editors.py
 
-Last updated:  2023-01-07
+Last updated:  2023-01-22
 
 Pop-up editors for table grids.
 
@@ -22,6 +22,9 @@ Copyright 2023 Michael Towers
 
 =-LICENCE========================================
 """
+
+#TODO: More validators ...
+
 
 from qtpy.QtWidgets import (
     QApplication,
@@ -97,7 +100,7 @@ class CellEditorTable(QDialog):
             if comment:
                 item = QTableWidgetItem(comment)
                 item.setFlags(Qt.ItemFlag.NoItemFlags)
-                #                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                # item.setFlags(Qt.ItemFlag.ItemIsEnabled)
                 self.table.setItem(r, coln, item)
                 item._text = None
             r += 1
@@ -137,6 +140,10 @@ class CellEditorTable(QDialog):
                 properties["VALUE"] = self._value
                 return True
         return False
+
+    def validator(self, value):
+        # print("§§§ VALIDATE:", value in self.val2item, list(self.val2item))
+        return value in self.val2item
 
 
 class CellEditorDate(QDialog):

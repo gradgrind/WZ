@@ -459,6 +459,9 @@ ui.modules.grades_manager: {
     BAD_CUSTOM_WIDTH: "In Konfigurationsdatei {path}:\n Wert for EXTRA_FIELD_WIDTHS, Fachkürzel {sid} ist keine gültige Spaltenbreite."
     UNKNOWN_INPUT_METHOD: "In Konfigurationsdatei {path}:\n  GROUP_DATA für {group}, Anlass {occasion}, EXTRA_FIELDS, SID={sid}:\n METHOD „{method}“ ist ungültig"
     UNKNOWN_COLUMN_TYPE: "In Konfigurationsdatei {path}:\n  GROUP_DATA für {group}, Anlass {occasion}, EXTRA_FIELDS, SID={sid}:\n TYPE „{ctype}“ ist ungültig"
+    ROW_NOT_EDITABLE: "Diese Zeile kann nicht geändert werden"
+    INVALID_VALUE:  "Dieser Wert ({val}) ist ungültig für Feld „{field}“"
+    CELL_NOT_EDITABLE: "Feld „{field}“ darf nicht geändert werden"
 }
 
 ui.modules.timetable_editor: {

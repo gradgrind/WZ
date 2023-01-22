@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-01-20
+Last updated:  2023-01-22
 
 Front-end for managing grade reports.
 
@@ -511,8 +511,8 @@ class GradeTableView(GridViewAuto):
         column_widths = []  # as it says ...
         # Customized "extra-field" widths
         custom_widths = GetGradeConfig().get("EXTRA_FIELD_WIDTHS")
-        grade_click_handler = CellEditorTable(grade_config_table).activate
-        date_click_handler = CellEditorDate(empty_ok=True).activate
+        grade_click_handler = CellEditorTable(grade_config_table)
+        date_click_handler = CellEditorDate(empty_ok=True)
         column_data = grade_table["COLUMNS"]
         for sdata in column_data:
             ctype = sdata["TYPE"]
@@ -550,12 +550,12 @@ class GradeTableView(GridViewAuto):
                     parms = sdata["PARAMETERS"]
                     if method == "CHOICE":
                         values = [[[v], ""] for v in parms["CHOICES"]]
-                        editor = CellEditorTable(values).activate
+                        editor = CellEditorTable(values)
                     elif method == "CHOICE_MAP":
                         values = [[[v], text] for v, text in parms["CHOICES"]]
-                        editor = CellEditorTable(values).activate
+                        editor = CellEditorTable(values)
                     elif method == "TEXT":
-                        editor = CellEditorText().activate
+                        editor = CellEditorText()
                     elif method == "DATE":
                         editor = date_click_handler
                     else:
@@ -659,7 +659,9 @@ class GradeTableView(GridViewAuto):
         self.rescale()
 
     def cell_modified(self, properties: dict):
-        """Override base method in grid_base.GridView."""
+        """Override base method in grid_base.GridView.
+        A single cell is to be written.
+        """
         new_value = properties["VALUE"]
         pid = properties["PID"]
         sid = properties["SID"]
@@ -679,6 +681,47 @@ class GradeTableView(GridViewAuto):
 #        self.grade_table["MODIFIED"] = timestamp
         # Signal change
         self.signal_modified.emit(timestamp)
+
+#TODO
+    def write_to_row(self, row, col, values):
+        """Write a list of values to a position (<col>) in a given row.
+        """
+# Only write to cells when all are editable, and check the values!
+# Then do an UpdatePupilGrades ...
+        prow = row - self.row0
+        pupil_list = self.grade_table["PUPIL_LIST"]
+        if prow < 0 or prow >= len(pupil_list):
+            SHOW_ERROR(T["ROW_NOT_EDITABLE"])
+            return
+        for i in range(len(values)):
+            cell = self.get_cell((row, col + i))
+            try:
+                validator = cell.get_property("EDITOR").validator
+            except KeyError:
+                SHOW_ERROR(T["CELL_NOT_EDITABLE"].format(
+                    field=self.get_cell((0, col + i)).get_property("VALUE")
+                ))
+                return
+            if not validator(values[i]):
+                SHOW_ERROR(T["INVALID_VALUE"].format(
+                    field=self.get_cell((0, col + i)).get_property("VALUE"),
+                    val=values[i]
+                ))
+                return
+        pdata, grades = pupil_list[prow]
+        for i in range(len(values)):
+            cell = self.get_cell((row, col + i))
+            sid = cell.get_property("SID")
+            grades[sid] = values[i]
+        # Update this pupil's grades (etc.) in the database
+        pid = pdata["PID"]
+        changes, timestamp = UpdatePupilGrades(self.grade_table, pid)
+        self.set_modified_time(timestamp)
+        super().write_to_row(row, col, values)
+        if changes:
+            # Update changed display cells
+            for sid, oldval in changes:
+                self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
 
     def export_pdf(self, fpath=None):
         titleheight = self.pt2px(GRADETABLE_TITLEHEIGHT)
