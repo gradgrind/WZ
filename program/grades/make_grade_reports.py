@@ -1,7 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-01-22
+Last updated:  2023-01-24
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -36,6 +36,13 @@ Copyright 2023 Michael Towers
 #       Sozialpraktikum:        3 Wochen
 # TODO: Maybe component courses (& eurythmy?) merely as "teilgenommen"?
 
+### Regular expression for embedded expressions in symbol values:
+###     {VALUE_KEY} or {FUNCTION:VALUE_KEY}
+### VALUE_KEY can contain '/' characters, which act as separators
+### so that keying of mappings and indexing of arrays is possible.
+RE_VALUE_KEY = r'\{(?:([A-Za-z][A-Za-z0-9_]*):)?([A-Za-z0-9_./]+)\}'
+
+
 ###############################################################
 
 import sys, os
@@ -55,6 +62,7 @@ T = TRANSLATIONS("grades.makereports")
 
 ### +++++
 
+import re
 from core.base import Dates
 from core.pupils import pupil_name
 from template_engine.template_sub import Template
@@ -242,8 +250,10 @@ def collect_report_type_data(
         "SCHOOLYEAR": CALENDAR["SCHOOLYEAR_PRINT"],
         "DATE_ISSUE": grade_info["DATE_ISSUE"],
         "DATE_GRADES": grade_info["DATE_GRADES"],
+        "FUNCTIONS": {
+            "DATE": lambda d: Dates.print_date(d, date_format),
+        }
     }
-    base_data.update(grade_info["SYMBOLS"])
     gmaplist = []
     for pdata, grades in grade_info["PUPIL_LIST"]:
         if pdata["PID"] not in pid_list:
@@ -254,7 +264,9 @@ def collect_report_type_data(
         sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map)
         # Locality-specific processing:
         ProcessGradeData(rptdata, grade_info, GetGradeConfig())
-
+        # Add symbols
+        for k, v in grade_info["SYMBOLS"].items():
+            rptdata[k] = substitute_symbol(rptdata, v)
         # Format dates
         for k, v in rptdata.items():
             if k.startswith("DATE_"):
@@ -263,7 +275,6 @@ def collect_report_type_data(
                 else:
                     v = ""
                 rptdata[k] = v
-
         lines = []
         pname = pupil_name(rptdata)
         for k in sorted(all_keys):
@@ -271,7 +282,6 @@ def collect_report_type_data(
                 lines.append(T["USED_KEY"].format(key=k, val=rptdata[k]))
             else:
                 REPORT("ERROR", T["MISSING_KEY"].format(name=pname, key=k))
-
         if show_data:
             for k in sorted(rptdata):
                 if k not in all_keys:
@@ -282,7 +292,6 @@ def collect_report_type_data(
                     name=pupil_name(rptdata), data="\n".join(lines)
                 ),
             )
-
         gmaplist.append(rptdata)
     return gmaplist
 
@@ -380,7 +389,7 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
             rptdata[f"g.{sid}"] = "???"
 
     for tag, sdata_list in sgroups.items():
-        REPORT("OUT", f'### S-Group {tag}, {[sd["SID"] for sd in sdata_list]}')
+        # REPORT("OUT", f'### S-Group {tag}, {[sd["SID"] for sd in sdata_list]}')
         try:
             keys = tagmap[tag].copy()
         except KeyError:
@@ -427,9 +436,77 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
             rptdata[f"S.{tag}.{k}"] = NOGRADE
 
 
+def substitute_symbol(report_data_mapping:dict, symbol:str):
+    """Evaluate all embedded variables (between curly brackets) in
+    <symbol>.
+    <report_data_mapping> provides the environment for the item
+    evaluation. The available functions are provided in the element
+    with key "FUNCTIONS".
+    """
+    def do_sub(rem):
+        # print(":::", rem.group(0), "->")
+        fn = rem.group(1)
+        tag = rem.group(2)
+        taglist = tag.split("/")
+        try:
+            item = report_data_mapping[taglist.pop(0)]
+            while not isinstance(item, str):
+                arg = taglist.pop(0)    # possible IndexError
+                if isinstance(item, dict):
+                    item = item[arg]    # possible KeyError
+                elif isinstance(item, list):
+                    if (i := int(arg)) < 0:     # possible ValueError
+                        raise ValueError
+                    item = item[i]      # possible ValueError
+                else:
+                    raise ValueError
+        except (KeyError, ValueError, IndexError):
+            REPORT(
+                "ERROR",
+                T["UNDEFINED_SYMBOL"].format(symbol=sym, element=tag)
+            )
+            return rem.group(0)
+        if fn:
+            try:
+                f = report_data_mapping["FUNCTIONS"][fn]
+            except KeyError:
+                REPORT(
+                    "ERROR",
+                    T["UNDEFINED_FUNCTION"].format(symbol=sym, fn=fn)
+                )
+                return rem.group(0)
+            return f(item)
+        else:
+            return item
+
+    return re.sub(RE_VALUE_KEY, do_sub, symbol)
+
+
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
 
 if __name__ == "__main__":
+
+    symbols = {
+        "HJ": "1. und 2. Halbjahr",
+        "QP12": ("hat den 12. Jahrgang der Qualifikationsphase vom"
+            + " {DATE_QPHASE} bis zum {DATE:CALENDAR/LAST_DAY} besucht.")
+    }
+    report_symbols = {
+        "DATE_QPHASE": "26.08.2022",
+        "CALENDAR": CALENDAR,
+        "FUNCTIONS": {
+            # A bodge for testing!
+            "DATE": lambda d: Dates.print_date(d, CONFIG["DATEFORMAT"]),
+        }
+    }
+    print("§§§ REPORT SYMBOLS:")
+    print(report_symbols)
+    print("\n ===========================================\n")
+    for sym, val in symbols.items():
+        print(f"{sym}: {substitute_symbol(report_symbols, val)}")
+
+#    quit(0)
+
     from core.db_access import open_database
 
     open_database()

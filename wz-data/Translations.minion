@@ -144,6 +144,8 @@ grades.makereports: {
     MISSING_SUBJECT_GROUP: "{pupil}: Fachgruppe „{tag}“ ist nicht bekannt"
     ALL_KEYS:       "Alle Felder des Dokuments {path}:\n{keys}"
     PDF_FILE:       "Erstellte PDF-Datei:\n --> {path}"
+    UNDEFINED_SYMBOL: "Das Element „{element}“ des Symbols „{symbol}“ ist nicht definiert oder ist fehlerhaft"
+    UNDEFINED_FUNCTION: "Auswerten des Symbols „{symbol}“: Funktion „{fn}“ ist unbekannt"
 }
 
 local.grade_functions: {
