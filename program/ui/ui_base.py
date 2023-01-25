@@ -1,13 +1,13 @@
 """
 ui/ui_base.py
 
-Last updated:  2022-12-28
+Last updated:  2023-01-25
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -837,12 +837,22 @@ class __Reporter(QDialog):
         txt = f'+++ {T["PROCESSING"]} ...'
         self.reportview.append(f'<span style="color:#d406e3;">{txt}</span>')
         self.reportview.append('')
+        self.errorcount = 0
+        self.warningcount = 0
         self.__close_pending = False
         time.sleep(0.01)
         QCoreApplication.processEvents()
         result = task(**kargs)
         txt = f'+++ ... {T["DONE"]}'
         self.reportview.append(f'<span style="color:#d406e3;">{txt}</span>')
+        if self.errorcount:
+            clr = self.colours["ERROR"]
+            txt = T["ERRORS"].format(n=self.errorcount)
+            self.reportview.append(f'<span style="color:{clr};">{txt}</span>')
+        if self.warningcount:
+            clr = self.colours["WARNING"]
+            txt = T["WARNINGS"].format(n=self.warningcount)
+            self.reportview.append(f'<span style="color:{clr};">{txt}</span>')
         self.__active = False
         self.bt_done.setEnabled(True)
         QApplication.restoreOverrideCursor()
@@ -861,6 +871,10 @@ class __Reporter(QDialog):
         if self.__active:
             if mtype or text:
                 if mtype:
+                    if mtype == "ERROR":
+                        self.errorcount += 1
+                    elif mtype == "WARNING":
+                        self.warningcount += 1
                     clr = self.colours.get(mtype) or "#800080"
                     t0 = f'<span style="color:{clr};">*** {ttype} ***</span>'
                     self.reportview.append(t0)

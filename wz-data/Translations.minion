@@ -188,6 +188,8 @@ ui.ui_base: {
     ERROR:          Fehler
     PROCESSING:     "Daten werden verarbeitet"
     DONE:           "fertig!"
+    ERRORS:         "Es gab allerdings {n} Fehler ..."
+    WARNINGS:       "Warnungen: {n}"
 
     FILEOPEN:       "Datei öffnen"
     DIROPEN:        "Ordner öffnen"
