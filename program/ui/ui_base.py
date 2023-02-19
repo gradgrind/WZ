@@ -50,6 +50,7 @@ from qtpy.QtWidgets import *
 from qtpy.QtGui import *
 from qtpy.QtCore import *
 from qtpy.QtSql import *
+from qtpy import uic
 
 __locale = locale.setlocale(locale.LC_ALL, "")
 print("LOCALE:", __locale)

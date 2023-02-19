@@ -1,13 +1,13 @@
 """
 core/db_access.py
 
-Last updated:  2022-12-30
+Last updated:  2023-02-18
 
 Helper functions for accessing the database.
 
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -533,7 +533,7 @@ def migrate_db(path:str, sql_extra: list[str]):
     print("\n ++++++++\n")
     db_query(f"ATTACH '{dp}' AS newdb")
 #TODO: Maybe more tables to copy?
-    for t in ("CLASSES", "SUBJECTS", "TEACHERS", "COURSES", "LESSONS"):
+    for t in ("CLASSES", "SUBJECTS", "TEACHERS", "COURSES", "BLOLCKS", "LESSONS"):
         print(" ++", t)
         db_query(f"INSERT INTO newdb.{t} SELECT * FROM main.{t}")
     db_query("DETACH newdb")
