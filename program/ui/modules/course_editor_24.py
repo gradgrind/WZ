@@ -1,7 +1,7 @@
 """
 ui/modules/course_editor.py
 
-Last updated:  2023-02-19
+Last updated:  2023-02-21
 
 Edit course and blocks+lessons data.
 
@@ -126,6 +126,7 @@ from ui.course_dialogs import (
 )
 
 # Course table fields
+#TODO: still needed?
 COURSE_COLS = [
     (f, T[f])
     for f in (
@@ -138,6 +139,7 @@ COURSE_COLS = [
         "GRADES",
         "REPORT_SUBJECT",
         "AUTHORS",
+        "NOTES",
     )
 ]
 # SUBJECT, CLASS and TEACHER are foreign keys with:
@@ -160,6 +162,7 @@ COURSE_TABLE_FIELDS = ( # the fields shown in the course table
     ("TEACHER", 1, -1),
     ("REPORT", -1, 0),
     ("GRADES", -1, 0),
+    ("INFO", 0, -1),
 )
 
 #FILTER_FIELDS = [cc for cc in COURSE_COLS if cc[0] in FOREIGN_FIELDS]
@@ -177,6 +180,7 @@ class COURSE_KEY(NamedTuple):
 
 # print("§§§§§§§§§§§", COURSE_KEY._fields, str(COURSE_KEY("10G", "*", "Ma", "EA")))
 
+#TODO: deprecated?
 BLOCK_COLS = [
     (f, T[f])
     for f in (
@@ -189,6 +193,7 @@ BLOCK_COLS = [
     )
 ]
 
+#TODO: deprecated?
 BLOCKCOLS_SHOW = ("LESSON_TAG", "PAYMENT", "NOTES")
 
 ### -----
@@ -212,6 +217,13 @@ class CourseEditorPage(Page):
 #        hbox = QHBoxLayout(self)
 #        hbox.setContentsMargins(0, 0, 0, 0)
 #        hbox.addWidget(self.course_editor)
+
+        self.icons = {
+            "LESSON": self.lesson_new.icon(),
+            "BLOCK": self.lesson_block.icon(),
+            "PAY": self.lesson_pay.icon(),
+        }
+
 
     def enter(self):
 #TODO?
@@ -256,8 +268,7 @@ class CourseEditorPage(Page):
             return
         # class, subject, teacher
         self.filter_field = FOREIGN_FIELDS[i]
-#TODO --
-        print("§§§ on_combo_filter_currentIndexChanged", i, self.filter_field)
+        # print("§§§ on_combo_filter_currentIndexChanged", i, self.filter_field)
         self.select_list = self.filter_list[self.filter_field]
         self.combo_class.clear()
         for kv in self.select_list:
@@ -272,20 +283,18 @@ class CourseEditorPage(Page):
         if i < 0:
             return
         key, val = self.select_list[i]
-#TODO --
-        print("§§§ on_combo_class_currentIndexChanged", key, val)
+        # print("§§§ on_combo_class_currentIndexChanged", key, val)
         self.suppress_handlers = True
         fields, records = db_read_full_table(
             "COURSES", sort_field="SUBJECT", **{self.filter_field: key}
         )
+        # Populate the course table
         self.course_table.setRowCount(len(records))
         self.courses = []
         for r, rec in enumerate(records):
             rdict = {fields[i]: val for i, val in enumerate(rec)}
             self.courses.append(rdict)
-#TODO --
-            print("  --", rdict)
-
+            # print("  --", rdict)
             c = 0
             for cid, ctype, align in COURSE_TABLE_FIELDS:
                 cell_value = rdict[cid]
@@ -349,18 +358,14 @@ class CourseEditorPage(Page):
                         raise Bug(f"Invalid ctype ({ctype}) in COURSE_TABLE_FIELDS")
                 c += 1
         self.suppress_handlers = False
-
-
-
+        if len(records) > 0:
+            self.course_table.setCurrentCell(0, 0)
 
     def on_report_toggle(self, on):
         if self.suppress_handlers:
             return
         row = self.course_table.currentRow()
         course_dict = self.courses[row]
-#TODO --
-        print("§§§ REPORT toggle", on, row, course_dict)
-
         cnum = course_dict["course"]
         if not db_update_field(
             "COURSES",
@@ -379,9 +384,6 @@ class CourseEditorPage(Page):
             return
         row = self.course_table.currentRow()
         course_dict = self.courses[row]
-#TODO --
-        print("§§§ GRADES toggle", on, row, course_dict)
-
         cnum = course_dict["course"]
         if not db_update_field(
             "COURSES",
@@ -395,13 +397,242 @@ class CourseEditorPage(Page):
                 f"Couldn't update GRADES field of course {cnum}"
             )
 
+    def on_course_table_itemSelectionChanged(self):
+        row = self.course_table.currentRow()
+        print("§§§ on_course_table_itemSelectionChanged", row)
+
+#TODO
+#    def course_selected(self, row):
+#?        self.current_row = row
+        if row >= 0:
+            self.pb_delete_course.setEnabled(True)
+            self.course_dict = self.courses[row]
+            self.set_course(self.course_dict["course"])
+#?            set_coursedata(
+#                COURSE_KEY(*[record.value(f) for f in COURSE_KEY._fields])
+#            )
+            self.frame_r.setEnabled(True)
+
+        else:
+            # e.g. when entering an empty table
+            # print("EMPTY TABLE")
+#?            self.set_course(0)
+            self.pb_delete_course.setEnabled(False)
+            self.course_dict = None
+            # TODO: This could cause problems when an attempt is made to use the value?
+#?            set_coursedata(None)
+            # Actually, the right hand pane should probably be disabled.
+            self.frame_r.setEnabled(False)
+
+#TODO
+    def set_course(self, course: int):
+        print("SET COURSE:", repr(course))
+#?        self.course_id = course
+
+        fields, records = db_read_full_table(
+            "COURSE_LESSONS", course=course
+        )
+        print("§§§ COURSE_LESSONS:", fields)
+
+        self.lesson_table.setRowCount(0)
+        self.course_lessons = []
+        row = 0
+        ### Build a list of entries
+        ## First loop through entries in COURSE_LESSONS
+#NOTE: There should be at most one COURSE_LESSONS entry for "lesson"
+# types and "payment" types. For "block" types there can be more than
+# one entry, but they should be connected with LESSON_GROUP entries
+# with distinct (non-empty) BLOCK_NAME values.
+# If violations are discovered, there should be an error report. It
+# might be helpful to delete the offending entries, but as they are
+# really not expected – and should not be possible – it is perhaps
+# better to report the offending entries, but not to delete them, so
+# that they are available for debugging purposes – the report could
+# be via a bug exception?
+
+#TODO: One thing I haven't considered is how to remove a course from a
+# block. Perhaps the editor for block lessons should be separate?
+# The copy function may not make sense – for payments it is not
+# allowed; for lessons it is more or less superfluous (~same as add);
+# for blocks it has no purpose if these are handled separately.
+# Also note how the parameters are set in various tables. The room
+# wish and pay details apply to all lesson components as they are set in
+# COURSE_LESSONS. Only the time wish is set in the lesson component.
+# This may be a bit restrictive, but is perhaps reasonable for most
+# cases. If it is really essential to have a particular room for a
+# particular lesson (and another one, or a choice, for another lesson),
+# perhaps some additional constraint could be added ...
+
+#?
+        self.course_lesson_map = {}
+        # key = block name; value = display row
+        self.course_lesson_payment = 0 # for payment-only entries
+
+        for rec in records:
+            cldict = {fields[i]: val for i, val in enumerate(rec)}
+            # <cldict> contains workload/payment and room-wish fields
+            lg = cldict["lesson_group"]
+            if lg:
+                lgfields, lgrecord = db_read_unique_entry(
+                    "LESSON_GROUP", lesson_group=lg
+                )
+                lgdata = {
+                    lgfields[i]: val for i, val in enumerate(lgrecord)
+                }
+                # This contains the block-name, if any
+                block_name = lgdata["BLOCK_NAME"]
+                # Check uniqueness
+                if block_name in self.course_lesson_map:
+                    raise Bug("Multiple entries in COURSE_LESSONS"
+                        f"for block '{block_name}', course {course}"
+                    )
+                    self.course_lesson_map[block_name] = row
+
+                if block_name:
+                    etype = 1
+                    icon = self.icons["BLOCK"]
+                else:
+                    etype = 0
+                    icon = self.icons["LESSON"]
+                lfields, lrecords = db_read_full_table(
+                    "LESSONS", lesson_group=lg
+                )
+                for lrec in lrecords:
+                    self.lesson_table.insertRow(row)
+                    ldata = {lfields[i]: val for i, val in enumerate(lrec)}
+                    w = QTableWidgetItem(icon, "")
+                    self.lesson_table.setItem(row, 0, w)
+                    ln = ldata["LENGTH"]
+                    w = QTableWidgetItem(ln)
+                    self.lesson_table.setItem(row, 1, w)
+                    if block_name:
+                        w = QTableWidgetItem(block_name)
+                        self.lesson_table.setItem(row, 2, w)
+                    self.course_lessons.append((etype, cldict, lgdata, ldata))
+                    row += 1
+            else:
+                # payment item
+                if self.course_lesson_payment != 0:
+                    raise Bug("Multiple entries in COURSE_LESSONS"
+                        f"for payment-only item, course {course}"
+                    )
+#?
+                self.course_lesson_payment = row
+
+                self.lesson_table.insertRow(row)
+                w = QTableWidgetItem(self.icons["PAY"], "")
+                self.lesson_table.setItem(row, 0, w)
+                w = QTableWidgetItem("–")
+                self.lesson_table.setItem(row, 1, w)
+                self.course_lessons.append((-1, cldict, lgdata, None))
+                row += 1
+
+#TODO: Is something like this needed?
+# Toggle the stretch on the last section because of a possible bug in
+# Qt, where the stretch can be lost when repopulating.
+#        hh = table.horizontalHeader()
+#        hh.setStretchLastSection(False)
+#        hh.setStretchLastSection(True)
+
+    def on_lesson_table_itemSelectionChanged(self):
+        row = self.course_table.currentRow()
+        print("§§§ on_lesson_table_itemSelectionChanged", row)
+#TODO: populate the form fields
+        etype, cldata, lgdata, ldata = self.course_lessons[row]
+        if etype == -1:
+            # payment entry
+            self.lesson_length.clear()
+            self.lesson_length.setEnabled(False)
+            self.wish_room.clear()
+            self.wish_room.setEnabled(False)
+            self.block_name.clear()
+            self.block_name.setEnabled(False)
+            self.wish_time.clear()
+            self.wish_time.setEnabled(False)
+            self.parallel.clear()
+            self.parallel.setEnabled(False)
+            self.notes.clear()
+            self.notes.setEnabled(False)
+        else:
+            self.lesson_length.setText(ldata["LENGTH"])
+            self.lesson_length.setEnabled(True)
+            self.wish_room.setText(cldata["ROOM"])
+            self.wish_room.setEnabled(True)
+            self.block_name.setText(lgdata["BLOCK_NAME"])
+            self.block_name.setEnabled(True)
+            self.wish_time.setText(ldata["TIME"])
+            self.wish_time.setEnabled(True)
+            records = db_read_table(
+                "PARALLEL_LESSONS", ["TAG", "WEIGHTING"], lesson_id=ldata["id"]
+            )
+            if len(records) == 0:
+                self.parallel.clear()
+            elif len(records) == 1:
+                t, w = records[0]
+                self.parallel.setText(f'{t} @ {w}')
+            else:
+                raise Bug(
+                    "Multiple PARALLEL_LESSONS entries for lesson"
+                    f" with id {ldata['id']}"
+                )
+            self.parallel.setEnabled(True)
+            self.notes.setPlainText(lgdata["NOTES"])
+            self.notes.setEnabled(True)
+
+        self.payment.setText(f'{cldata["WORKLOAD"]} * {cldata["PAY_FACTOR"]}')
+
+
+
+
+#TODO
+    def course_delete(self):
+        """Delete the current course."""
+        model = self.coursemodel
+        if not SHOW_CONFIRM(T["REALLY_DELETE"]):
+            return
+        # course = self.editors["course"].text()
+        index = self.coursetable.currentIndex()
+        row = index.row()
+
+        ## The BLOCKS table should have its "course" field (foreign
+        ## key) defined as "ON DELETE CASCADE" to ensure that when
+        ## a course is deleted also the associated activities are
+        ## removed. Unfortunately this cannot propagate to the
+        ## LESSONS table as the tags (LESSON_TAG) are not unique
+        ## (so a foreign key constraint can't be used).
+        ## This is handled by a "clean-up" function.
+        # Get lesson tags:
+        tags = set()
+        for r in range(self.blockmodel.rowCount()):
+            tag = self.blockmodel.record(r).value("LESSON_TAG")
+            if tag:
+                tags.add(tag)
+
+        model.removeRow(row)
+        if model.submitAll():
+            # print("DELETED:", course)
+
+            # Clean up LESSONS table
+            for tag in tags:
+                clean_lessons_table(tag)
+
+            # Select a new row
+            if row >= model.rowCount():
+                row = model.rowCount() - 1
+            self.coursetable.selectRow(row)
+            if not self.coursetable.currentIndex().isValid():
+                self.course_changed(-1)
+        else:
+            error = model.lastError()
+            SHOW_ERROR(error.text())
+            model.revertAll()
 
 
 #### Below is old code! ####
 
 
 
-class CourseEditor(QSplitter):
+class _CourseEditor(QSplitter):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setChildrenCollapsible(False)
@@ -606,86 +837,6 @@ class CourseEditor(QSplitter):
             self.course_changed(-1)
         self.coursetable.resizeColumnsToContents()
 
-    def course_changed(self, row):
-        self.current_row = row
-        if row >= 0:
-            # print("EXEC COURSE CHANGED:", row)
-            record = self.coursemodel.record(row)
-            self.set_course(record.value(0))
-            self.course_delete_button.setEnabled(True)
-            set_coursedata(
-                COURSE_KEY(*[record.value(f) for f in COURSE_KEY._fields])
-            )
-        else:
-            # e.g. when entering an empty table
-            # print("EMPTY TABLE")
-            self.set_course(0)
-            self.course_delete_button.setEnabled(False)
-            # TODO: This could cause problems when an attempt is made to use the value?
-            set_coursedata(None)
-
-    def course_delete(self):
-        """Delete the current course."""
-        model = self.coursemodel
-        if not SHOW_CONFIRM(T["REALLY_DELETE"]):
-            return
-        # course = self.editors["course"].text()
-        index = self.coursetable.currentIndex()
-        row = index.row()
-
-        ## The BLOCKS table should have its "course" field (foreign
-        ## key) defined as "ON DELETE CASCADE" to ensure that when
-        ## a course is deleted also the associated activities are
-        ## removed. Unfortunately this cannot propagate to the
-        ## LESSONS table as the tags (LESSON_TAG) are not unique
-        ## (so a foreign key constraint can't be used).
-        ## This is handled by a "clean-up" function.
-        # Get lesson tags:
-        tags = set()
-        for r in range(self.blockmodel.rowCount()):
-            tag = self.blockmodel.record(r).value("LESSON_TAG")
-            if tag:
-                tags.add(tag)
-
-        model.removeRow(row)
-        if model.submitAll():
-            # print("DELETED:", course)
-
-            # Clean up LESSONS table
-            for tag in tags:
-                clean_lessons_table(tag)
-
-            # Select a new row
-            if row >= model.rowCount():
-                row = model.rowCount() - 1
-            self.coursetable.selectRow(row)
-            if not self.coursetable.currentIndex().isValid():
-                self.course_changed(-1)
-        else:
-            error = model.lastError()
-            SHOW_ERROR(error.text())
-            model.revertAll()
-
-    def set_course(self, course):
-        # print("SET COURSE:", course)
-        self.this_course = course
-        self.blockmodel.setFilter(f"course = {course}")
-        # print("SELECT:", self.blockmodel.selectStatement())
-        self.blockmodel.select()
-        self.blocktable.selectRow(0)
-        self.blocktable.resizeColumnsToContents()
-        if not self.blockmodel.rowCount():
-            # If there are no entries, method <block_selected> won't be
-            # called automatically, so do it here.
-            self.block_selected(-1)
-        #        self.block_add_button.setEnabled(course > 0)
-
-        # Toggle the stretch on the last section here because of a
-        # possible bug in Qt, where the stretch can be lost when
-        # repopulating.
-        hh = self.blocktable.horizontalHeader()
-        hh.setStretchLastSection(False)
-        hh.setStretchLastSection(True)
 
     def redisplay(self):
         """Call this after updates to the current lesson data in the
@@ -868,7 +1019,7 @@ def clean_lessons_table(tag=None):
             db_delete_rows("LESSONS", TAG=tag)
 
 
-class BlockLesson(QWidget):
+class _BlockLesson(QWidget):
     def __init__(self, main_widget, parent=None):
         self.main_widget = main_widget
         super().__init__(parent=parent)
@@ -1050,7 +1201,7 @@ class BlockLesson(QWidget):
             SHOW_WARNING(T["DELETE_SELECTED"])
 
 
-class NonLesson(QWidget):
+class _NonLesson(QWidget):
     def __init__(self, main_widget, parent=None):
         self.main_widget = main_widget
         super().__init__(parent=parent)
@@ -1074,7 +1225,7 @@ class NonLesson(QWidget):
         return False
 
 
-class CourseEditorForm(QDialog):
+class _CourseEditorForm(QDialog):
     def __init__(self):
         super().__init__()
         vbox0 = QVBoxLayout(self)

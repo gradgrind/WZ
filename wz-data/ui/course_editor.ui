@@ -142,6 +142,9 @@
          <property name="editTriggers">
           <set>QAbstractItemView::NoEditTriggers</set>
          </property>
+         <property name="alternatingRowColors">
+          <bool>true</bool>
+         </property>
          <property name="selectionMode">
           <enum>QAbstractItemView::SingleSelection</enum>
          </property>
@@ -150,6 +153,9 @@
          </property>
          <attribute name="horizontalHeaderDefaultSectionSize">
           <number>120</number>
+         </attribute>
+         <attribute name="horizontalHeaderStretchLastSection">
+          <bool>true</bool>
          </attribute>
          <column>
           <property name="text">
@@ -179,6 +185,11 @@
          <column>
           <property name="text">
            <string>Noten</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Anmerkung</string>
           </property>
          </column>
         </widget>
@@ -217,6 +228,9 @@
       </layout>
      </widget>
      <widget class="QFrame" name="frame_r">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
       <property name="maximumSize">
        <size>
         <width>320</width>
@@ -336,12 +350,7 @@
          </column>
          <column>
           <property name="text">
-           <string>Dep.</string>
-          </property>
-         </column>
-         <column>
-          <property name="text">
-           <string/>
+           <string>Blockfach</string>
           </property>
          </column>
          <item row="0" column="0">
@@ -363,7 +372,7 @@
          </item>
          <item row="0" column="2">
           <property name="text">
-           <string>1</string>
+           <string/>
           </property>
           <property name="textAlignment">
            <set>AlignCenter</set>
@@ -388,7 +397,7 @@
          </item>
          <item row="1" column="2">
           <property name="text">
-           <string>2</string>
+           <string/>
           </property>
           <property name="textAlignment">
            <set>AlignCenter</set>
@@ -413,7 +422,7 @@
          </item>
          <item row="2" column="2">
           <property name="text">
-           <string>2,4</string>
+           <string>GHW @ 07G</string>
           </property>
           <property name="textAlignment">
            <set>AlignCenter</set>
@@ -438,7 +447,7 @@
          </item>
          <item row="3" column="2">
           <property name="text">
-           <string>2</string>
+           <string/>
           </property>
           <property name="textAlignment">
            <set>AlignCenter</set>
@@ -449,7 +458,7 @@
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_5">
          <item>
-          <widget class="QToolButton" name="lesson_block">
+          <widget class="QToolButton" name="lesson_new">
            <property name="toolTip">
             <string>normale Unterrichtsstunde hinzufügen</string>
            </property>
@@ -469,7 +478,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QToolButton" name="lesson_pay">
+          <widget class="QToolButton" name="lesson_block">
            <property name="toolTip">
             <string>Blockunterricht bzw. Epoche hinzufügen</string>
            </property>
@@ -489,7 +498,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QToolButton" name="lesson_delete">
+          <widget class="QToolButton" name="lesson_pay">
            <property name="toolTip">
             <string>Deputatseintrag ohne Unterrichtsstunden hinzufügen</string>
            </property>
@@ -509,7 +518,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QToolButton" name="copyLesson">
+          <widget class="QToolButton" name="lesson_copy">
            <property name="toolTip">
             <string notr="true">aktuelles Element kopieren</string>
            </property>
@@ -568,7 +577,7 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QToolButton" name="lesson_add">
+             <widget class="QToolButton" name="lesson_delete">
               <property name="toolTip">
                <string notr="true">aktuelles Element löschen</string>
               </property>
@@ -595,71 +604,104 @@
        <item>
         <layout class="QFormLayout" name="formLayout">
          <item row="0" column="0">
-          <widget class="QLabel" name="label_6">
+          <widget class="QLabel" name="label_7">
            <property name="text">
-            <string>Dauer</string>
+            <string>Deputat</string>
            </property>
           </widget>
          </item>
          <item row="0" column="1">
-          <widget class="QSpinBox" name="spinBox">
-           <property name="maximum">
-            <number>9</number>
+          <widget class="QLineEdit" name="payment">
+           <property name="readOnly">
+            <bool>true</bool>
            </property>
           </widget>
          </item>
          <item row="1" column="0">
-          <widget class="QLabel" name="label_7">
+          <widget class="QLabel" name="label_8">
            <property name="text">
             <string>Raum</string>
            </property>
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="QLineEdit" name="lineEdit_2"/>
+          <widget class="QLineEdit" name="wish_room">
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
          </item>
          <item row="2" column="0">
-          <widget class="QLabel" name="label_8">
-           <property name="text">
-            <string>Zeit</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="QLineEdit" name="lineEdit_3"/>
-         </item>
-         <item row="3" column="0">
           <widget class="QLabel" name="label_9">
-           <property name="text">
-            <string>Deputat</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="1">
-          <widget class="QLineEdit" name="lineEdit"/>
-         </item>
-         <item row="4" column="0">
-          <widget class="QLabel" name="label_11">
-           <property name="toolTip">
-            <string notr="true">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Insbesondere für Epochenunterricht geeignet.&lt;/p&gt;&lt;p&gt;Jeder Block hat einen eigenen Kennzeichen.&lt;/p&gt;&lt;p&gt;Die Unterrichtsstunden können von mehreren Lehrern – parallel oder über das Jahr verteilt – gegeben.&lt;/p&gt;&lt;p&gt;Auch verschiedene Schülergruppen können betroffen sein.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
            <property name="text">
             <string>Kennung</string>
            </property>
           </widget>
          </item>
+         <item row="2" column="1">
+          <widget class="QLineEdit" name="block_name">
+           <property name="text">
+            <string/>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0" colspan="2">
+          <widget class="Line" name="line">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <widget class="QLabel" name="label_4">
+           <property name="text">
+            <string>Dauer</string>
+           </property>
+          </widget>
+         </item>
          <item row="4" column="1">
-          <widget class="QLineEdit" name="lineEdit_6"/>
+          <widget class="QLineEdit" name="lesson_length">
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
          </item>
          <item row="5" column="0">
+          <widget class="QLabel" name="label_11">
+           <property name="toolTip">
+            <string notr="true">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Insbesondere für Epochenunterricht geeignet.&lt;/p&gt;&lt;p&gt;Jeder Block hat einen eigenen Kennzeichen.&lt;/p&gt;&lt;p&gt;Die Unterrichtsstunden können von mehreren Lehrern – parallel oder über das Jahr verteilt – gegeben.&lt;/p&gt;&lt;p&gt;Auch verschiedene Schülergruppen können betroffen sein.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string>Zeit</string>
+           </property>
+          </widget>
+         </item>
+         <item row="5" column="1">
+          <widget class="QLineEdit" name="wish_time">
+           <property name="text">
+            <string/>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="6" column="0">
           <widget class="QLabel" name="label_10">
            <property name="text">
             <string>parallel</string>
            </property>
           </widget>
          </item>
-         <item row="5" column="1">
-          <widget class="QLineEdit" name="lineEdit_4"/>
+         <item row="6" column="1">
+          <widget class="QLineEdit" name="parallel">
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
          </item>
         </layout>
        </item>
@@ -695,7 +737,7 @@
            <number>0</number>
           </property>
           <item>
-           <widget class="QTextEdit" name="textEdit">
+           <widget class="QTextEdit" name="notes">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
               <horstretch>0</horstretch>
@@ -707,6 +749,9 @@
               <width>16777215</width>
               <height>60</height>
              </size>
+            </property>
+            <property name="readOnly">
+             <bool>true</bool>
             </property>
             <property name="acceptRichText">
              <bool>false</bool>
