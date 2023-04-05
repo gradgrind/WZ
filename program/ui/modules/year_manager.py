@@ -1,13 +1,13 @@
 """
 ui/modules/year_manager.py
 
-Last updated:  2022-12-23
+Last updated:  2023-03-17
 
 Front-end for managing year data, migrations, etc.
 
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ from ui.ui_base import (
 
 
 def init():
-    MAIN_WIDGET.add_tab(ManagePupils())
+    MAIN_WIDGET.add_tab(ManageYears())
 
 
 class ManageYears(Page):

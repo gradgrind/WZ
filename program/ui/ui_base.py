@@ -1,7 +1,7 @@
 """
 ui/ui_base.py
 
-Last updated:  2023-01-25
+Last updated:  2023-04-05
 
 Support stuff for the GUI: application initialization, dialogs, etc.
 
@@ -118,6 +118,11 @@ def date2qt(strftime):
         else:
             l.append(c)
     return "".join(l)
+
+
+def qdate2date(qdate):
+    """Convert a qdate to ISO-format."""
+    return qdate.toString(Qt.DateFormat.ISODate)
 
 
 class HLine(QFrame):

@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-01-22
+Last updated:  2023-04-05
 
 Front-end for managing grade reports.
 
@@ -23,6 +23,8 @@ Copyright 2023 Michael Towers
 
 =-LICENCE========================================
 """
+
+#TODO: This supersedes grades_manager.py and should replace it at some point.
 
 ##### Configuration #####################
 # Some sizes in points

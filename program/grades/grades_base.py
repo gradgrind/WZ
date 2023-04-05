@@ -508,6 +508,7 @@ def prepare_pupil_list(table_info):
             ))
 
     else:
+        # print("%grades_base: table open")
         # Category still open, use current pupil list, grades from database
         for pid, data in table_info.pop("PUPILS").items():
             pdata, sid_tids = data
@@ -545,6 +546,7 @@ def prepare_pupil_list(table_info):
                 pname,  # just for messages
                 sid_tids
             )
+            print(f"%%% grades_base, GRADES {pname}", grades)
             pdata_list.append(pdata, grades)
         # Remove pupils from grade table if they are no longer in the group.
         # This must be done because otherwise they would be "reinstated"

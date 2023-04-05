@@ -146,6 +146,7 @@ grades.makereports: {
     PDF_FILE:       "Erstellte PDF-Datei:\n --> {path}"
     UNDEFINED_SYMBOL: "Das Element „{element}“ des Symbols „{symbol}“ ist nicht definiert oder ist fehlerhaft"
     UNDEFINED_FUNCTION: "Auswerten des Symbols „{symbol}“: Funktion „{fn}“ ist unbekannt"
+    MISSING_DOC_MAPPING: "In Notenzeugnisvorlage {path},\n  Feld {field1} (in „MAPPINGS“): kein Wert für {value1}"
 }
 
 local.grade_functions: {

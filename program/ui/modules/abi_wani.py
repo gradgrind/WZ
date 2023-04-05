@@ -1,7 +1,7 @@
 """
 ui/abi_wani.py
 
-Last updated:  2023-01-07
+Last updated:  2023-04-05
 
 A "Page" for editing Abitur grades in a Waldorf school in Niedersachsen.
 
@@ -23,7 +23,7 @@ Copyright 2023 Michael Towers
 =-LICENCE========================================
 """
 
-print("A4 is roughly 842pt x 595pt – allow for margins of about 60pt")
+# A4 is roughly 842pt x 595pt – allow for margins of about 60pt
 ABITUR_FORM = "ABITUR_FORM_WANI"
 
 ########################################################################
@@ -71,15 +71,18 @@ from ui.ui_base import (
     run,
     HLine,
     date2qt,
+    qdate2date,
 )
 # from ui.grid_base import GridViewAuto as GridView
 from ui.grid_base import GridViewHFit as GridView
 # from ui.grid_base import GridView
 from ui.grid_base import StyleCache
+#TODO: migrate to grades_base?
 from grades.gradetable import (
     get_grade_config,
     full_grade_table,
     update_pupil_grades,
+    update_table_info,
 )
 from local.abitur_wani import choose_pupil, calculate
 from ui.cell_editors import CellEditorTable, CellEditorDate
@@ -162,7 +165,7 @@ class AbiturManager(QWidget):
         self.grade_date.setCalendarPopup(True)
         self.grade_date.setDisplayFormat(date_format)
         formbox.addRow("DATE_GRADES", self.grade_date)
-#        self.grade_date.dateChanged.connect(self.grade_date_changed)
+        self.grade_date.dateChanged.connect(self.grade_date_changed)
         self.modified_time = QLineEdit()
         self.modified_time.setReadOnly(True)
         formbox.addRow(T["MODIFIED_TIME"], self.modified_time)
@@ -195,6 +198,14 @@ class AbiturManager(QWidget):
         make_cert = QPushButton(T["Make_Certificate"])
         make_cert.clicked.connect(self.make_certificate)
         vboxr.addWidget(make_cert)
+
+    def grade_date_changed(self, qdate):
+        if not self.__changes_enabled:
+            return
+        date = qdate2date(qdate)
+        cg = self.grade_table["CLASS_GROUP"]
+        print("§§§ DATE_GRADES:", cg, date)
+        update_table_info("DATE_GRADES", date, "Abitur", cg, "")
 
     def cell_changed(self, properties: dict):
         print("\nTODO: cell modified", properties)
@@ -306,9 +317,16 @@ class AbiturManager(QWidget):
         if not self.__changes_enabled:
             print("Class change handling disabled:", group)
             return
-        # print("§ SELECT GROUP", group)
+        print("§ SELECT GROUP", group)
         self.current_pid = None
         self.grade_table = full_grade_table("Abitur", group, "")
+        self.__changes_enabled = False
+        self.grade_date.setDate(
+            QDate.fromString(
+                self.grade_table["DATE_GRADES"],
+                Qt.DateFormat.ISODate
+            )
+        )
         self.pupil_data_list = self.grade_table["GRADE_TABLE_PUPILS"]
         # [(pdata, grademap), ... ]
         # print("FIELDS", list(self.grade_table))
@@ -316,6 +334,7 @@ class AbiturManager(QWidget):
         self.pupil_list.clear()
         for item in self.pupil_data_list:
             self.pupil_list.addItem(pupil_name(item[0]))
+        self.__changes_enabled = True
 
     def select_pupil(self, index):
         self.data = choose_pupil(self.grade_table, index)

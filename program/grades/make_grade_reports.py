@@ -1,7 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-01-24
+Last updated:  2023-04-05
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -275,6 +275,27 @@ def collect_report_type_data(
                 else:
                     v = ""
                 rptdata[k] = v
+        # Additional field/value mappings
+        mappings = template_field_info.get("MAPPINGS")
+        if mappings:
+            for f, f2, m in mappings:
+                try:
+                    v = rptdata[f]
+                except KeyError:
+                    continue
+                try:
+                    v2 = m[v]
+                except KeyError:
+                    REPORT(
+                        "ERROR",
+                        T["MISSING_DOC_MAPPING"].format(
+                            path=template.template_path,
+                            field1=f,
+                            value1=v
+                        )
+                    )
+                    continue
+                rptdata[f2] = v2
         lines = []
         pname = pupil_name(rptdata)
         for k in sorted(all_keys):

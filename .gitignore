@@ -3,7 +3,11 @@ __pycache__
 tmp
 todo
 logs
-
+program_old
+*0.py
+test*
+old-*
+wz/
 git_info
 DATA*
 NEXT
