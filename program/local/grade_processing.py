@@ -1,7 +1,7 @@
 """
 local/grade_processing.py
 
-Last updated:  2023-01-22
+Last updated:  2023-04-06
 
 Functions to perform grade calculations.
 
@@ -30,6 +30,8 @@ from typing import Optional
 T = TRANSLATIONS("local.grade_processing")
 
 ### +++++
+
+from local.abi_wani_calc import abi_calc
 
 GRADE_FUNCTIONS = {}
 
@@ -194,17 +196,23 @@ def AVERAGE_I(
 GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 
 
-#TODO
 def ABITUR_NIWA_RESULT(
     grades: dict[str:str], sdata:dict
 ) -> Optional[tuple[str,str]]:
-    return None
+    g = abi_calc(grades, sdata)
+    old = grades["REPORT_TYPE"]
+    grades.update(g)
+    return ("REPORT_TYPE", old)
 
 GRADE_FUNCTIONS["ABITUR_NIWA_RESULT"] = ABITUR_NIWA_RESULT
 
 
 def abi_extra_subjects(subjects):
     """Add grade slots for additional exam results in Abitur.
+    It is important that the third field of each entry ("GROUP") is "X".
+    This signals to the grade reader that the grades should not be
+    regarded as "spurious" (no teacher) – otherwise they would be
+    deleted and the subject regarded as "not taken".
     """
     nsid = 1000
     for sdata in sorted(subjects.values()):

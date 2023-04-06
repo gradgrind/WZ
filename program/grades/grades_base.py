@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2023-01-22
+Last updated:  2023-04-06
 
 Access grade data, read and build grade tables.
 
@@ -546,7 +546,8 @@ def prepare_pupil_list(table_info):
                 pname,  # just for messages
                 sid_tids
             )
-            print(f"%%% grades_base, GRADES {pname}", grades)
+            print(f"\n%%% grades_base, GRADES {pname}", grades)
+            print("   sid_tids:", sid_tids)
             pdata_list.append(pdata, grades)
         # Remove pupils from grade table if they are no longer in the group.
         # This must be done because otherwise they would be "reinstated"
@@ -627,7 +628,9 @@ def complete_grademap(sid2data, grades, name, p_grade_tids=None):
                 except KeyError:
                     # Should be replaced in the calculation:
                     grade_map[sid] = "?"
-            elif p_grade_tids is None:
+            elif (p_grade_tids is None) or (sdata["GROUP"] == "X"):
+                # for "closed" data-sets, or "extra" subjects added
+                # automatically – without teachers
                 try:
                     grade_map[sid] = grades[sid]
                 except KeyError:
@@ -1147,8 +1150,8 @@ if __name__ == "__main__":
     print(get_group_data("Abitur", "13"))
 
 
-    gtinfo = grade_table_info("1. Halbjahr", "12G.R")
-    # gtinfo = grade_table_info("Abitur", "13")
+    # gtinfo = grade_table_info("1. Halbjahr", "12G.R")
+    gtinfo = grade_table_info("Abitur", "13")
     # gtinfo = grade_table_info("2. Halbjahr", "12G.R")
 #    print("\n*** SUBJECTS")
 #    for val in gtinfo["SUBJECTS"]:
@@ -1167,11 +1170,14 @@ if __name__ == "__main__":
 
     print("\n\n Full Grade Table:")
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-    # fgtable = FullGradeTable("Abitur", "13", "")
-    fgtable = FullGradeTable("1. Halbjahr", "12G.R", "")
+    fgtable = FullGradeTable("Abitur", "13", "")
+    # fgtable = FullGradeTable("1. Halbjahr", "12G.R", "")
 
     for k, v in fgtable.items():
         print("\n =======", k, "\n", v)
+
+#TODO--
+    quit(0)
 
     ipath = OPEN_FILE(
         filetype="Tabelle (*.xlsx *.ods *.tsv)",

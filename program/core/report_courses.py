@@ -305,7 +305,7 @@ if __name__ == "__main__":
     from core.db_access import open_database
     open_database()
 
-    for rsdata in get_class_subjects("12G"):
+    for rsdata in get_class_subjects("13"):
         print("  ---", rsdata)
 
     '''data = get_subjects_data()
@@ -321,7 +321,7 @@ if __name__ == "__main__":
     subjects, pupils = get_pupil_grade_matrix(kg, text_reports=False)
     print("\n SUBJECTS FOR GROUP", kg)
     for s in sorted(subjects.values()):
-        print(" +++", s)
+        print(" ***", s)
 
     print("\n PUPILS:")
     for pdata, p_grade_tids in pupils:

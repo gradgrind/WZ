@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-04-05
+Last updated:  2023-04-06
 
 Front-end for managing grade reports.
 
@@ -699,18 +699,23 @@ class GradeTableView(GridViewAuto):
         for i in range(len(values)):
             cell = self.get_cell((row, col + i))
             try:
-                validator = cell.get_property("EDITOR").validator
+                editor = cell.get_property("EDITOR")
             except KeyError:
                 SHOW_ERROR(T["CELL_NOT_EDITABLE"].format(
                     field=self.get_cell((0, col + i)).get_property("VALUE")
                 ))
                 return
-            if not validator(values[i]):
-                SHOW_ERROR(T["INVALID_VALUE"].format(
-                    field=self.get_cell((0, col + i)).get_property("VALUE"),
-                    val=values[i]
-                ))
-                return
+            try:
+                validator = editor.validator
+            except AttributeError:
+                pass
+            else:
+                if not validator(values[i]):
+                    SHOW_ERROR(T["INVALID_VALUE"].format(
+                        field=self.get_cell((0, col + i)).get_property("VALUE"),
+                        val=values[i]
+                    ))
+                    return
         pdata, grades = pupil_list[prow]
         for i in range(len(values)):
             cell = self.get_cell((row, col + i))
