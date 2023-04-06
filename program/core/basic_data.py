@@ -1,5 +1,5 @@
 """
-core/basic_data.py - last updated 2022-11-05
+core/basic_data.py - last updated 2023-04-06
 
 Handle caching of the basic data sources
 
@@ -305,7 +305,7 @@ def get_group_info(klass):
 
 def check_group(klass, group=None):
     try:
-        groups = get_classes().group_info(klass)["GROUP_MAP"]
+        groups = get_group_info(klass)["GROUP_MAP"]
     except KeyError:
         return False
     if group and group != "*":

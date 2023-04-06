@@ -61,10 +61,10 @@ NUMBER_GRADE = {v: k for k, v in GRADE_NUMBER.items()}
 ### -----
 
 def GradeFunction(
-    fname:str, sdata:dict, grades:dict[str,str]
+    fname:str, subjects:list[dict], index:int, grades:dict[str,str]
 ) -> tuple[str,str]:
     """Perform the given function to calculate the value of the field
-    specified by <sdata>.
+    specified by <subjects[index]>.
     Return (sid, old-value).
     """
     if not fname:
@@ -74,7 +74,7 @@ def GradeFunction(
     except KeyError:
         REPORT("ERROR", T["UNKNOWN_GRADE_FUNCTION"].format(name=fname))
         return []
-    return fn(grades, sdata)
+    return fn(grades, subjects, index)
 
 
 def SpecialHandler(fname, **kargs) -> None:
@@ -87,12 +87,13 @@ def SpecialHandler(fname, **kargs) -> None:
 
 
 def ROUNDED_AVERAGE_I(
-    grades: dict[str:str], sdata:dict
+    grades: dict[str:str], subjects:list[dict], index:int
 ) -> Optional[tuple[str,str]]:
     """Calculate the value of a "composite" subject from its component
     subject grades. This is using grades 1 – 6 (with +/-).
     Return a list of changes: (sid, grade) pairs.
     """
+    sdata = subjects[index]
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
     # print("\n === ROUNDED_AVERAGE_I:", grades, "\n ++", COMPONENTS)
     ilist = []
@@ -125,12 +126,13 @@ GRADE_FUNCTIONS["ROUNDED_AVERAGE_I"] = ROUNDED_AVERAGE_I
 
 
 def ROUNDED_AVERAGE_II(
-    grades: dict[str:str], sdata:dict
+    grades: dict[str:str], subjects:list[dict], index:int
 ) -> Optional[tuple[str,str]]:
     """Calculate the value of a "composite" subject from its component
     subject grades. This is using grades 15 – 0.
     Return a list of changes: (sid, grade) pairs.
     """
+    sdata = subjects[index]
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
     # print("\n === ROUNDED_AVERAGE_II:", grades, "\n ++", COMPONENTS)
     ilist = []
@@ -160,12 +162,13 @@ GRADE_FUNCTIONS["ROUNDED_AVERAGE_II"] = ROUNDED_AVERAGE_II
 
 
 def AVERAGE_I(
-    grades: dict[str:str], sdata:dict
+    grades: dict[str:str], subjects:list[dict], index:int
 ) -> Optional[tuple[str,str]]:
     """This calculates an average of a set of grades (1 – 6, ignoring
     +/-) to a number (AVERAGE_DP) of decimal places without rounding –
     for calculation of qualifications.
     """
+    sdata = subjects[index]
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
     ilist = []
     for sid in COMPONENTS:
@@ -197,11 +200,10 @@ GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 
 
 def ABITUR_NIWA_RESULT(
-    grades: dict[str:str], sdata:dict
+    grades: dict[str:str], subjects:list[dict], index:int
 ) -> Optional[tuple[str,str]]:
-    g = abi_calc(grades, sdata)
     old = grades["REPORT_TYPE"]
-    grades.update(g)
+    abi_calc(grades, subjects, index)
     return ("REPORT_TYPE", old)
 
 GRADE_FUNCTIONS["ABITUR_NIWA_RESULT"] = ABITUR_NIWA_RESULT

@@ -37,12 +37,11 @@ T = TRANSLATIONS("local.abitur")
 
 ### +++++
 
-from core.basic_data import get_subjects
-
 ### -----
 
 
-def sort_pupil_grades(grades:dict[str,str]) -> dict:
+def sort_pupil_grades(grades:dict[str,str], slist:list[tuple[str,str]]
+) -> tuple[dict,dict]:
     """Sort the subjects and grades into the groups required for the
     calculations and certificate. This is based on the (necessary!)
     suffixes of the subject-ids (after '.'):
@@ -51,7 +50,6 @@ def sort_pupil_grades(grades:dict[str,str]) -> dict:
         2 courses with compulsory oral examinations         (.m)
         2 courses without compulsory examination            (.n)
     """
-    subjects = get_subjects()   # for subject names
     gslots = {
         # The '.'-suffixes of the subjects: [start index, number of slots]
         'e': [1, 3],
@@ -61,27 +59,20 @@ def sort_pupil_grades(grades:dict[str,str]) -> dict:
     }
     sidmap = {} # map field tag to subject-id
     sidindex = {} # map basic subject-id (before '.') to subject index
-    result = {
-        "__SIDMAP__": sidmap,
-        "__INDEX__": sidindex,
-    }
     empty_slots = 0
     xsids = {}
-    for sid, g in grades.items():
+    for sid, sname in slist:
         if sid.endswith(".x"):
             if sid not in xsids:
                 xsids[sid] = '/'
             continue
+        g = grades.get(sid) or ''
         if g == '/': continue
         try:
             s0, x = sid.rsplit('.', 1)
             type_info = gslots[x]
         except ValueError:
             # Non-grade field
-#            sidmap[sid] = sid
-#            result[sid] = g
-#            if (not g) and (sid != "REPORT_TYPE"):
-#                empty_slots += 1
             continue
         except KeyError:
             REPORT("ERROR", T["INVALID_SID"].format(sid=sid))
@@ -96,7 +87,7 @@ def sort_pupil_grades(grades:dict[str,str]) -> dict:
         type_info[0] = n + 1
         tag = f"G{n}"
         sidmap[tag] = sid
-        result[tag] = g
+        grades[tag] = g
         sidindex[s0] = n    # for FHS-calculations
         if not g:
             empty_slots += 1
@@ -112,37 +103,35 @@ def sort_pupil_grades(grades:dict[str,str]) -> dict:
             except KeyError:
                 gn = ''
             xsids[sn] = gn
-            result[tn] = gn
+            grades[tn] = gn
         # Subject name without '*'-suffix
-        result[f"S{n}"] = subjects.map(sid).split('*', 1)[0]
+        grades[f"S{n}"] = sname.split('*', 1)[0]
     for k, v in gslots.items():
         if v[1] != 0:
             REPORT("ERROR", T["TOO_FEW_SUBJECTS"].format(tag=k))
     if empty_slots:
         REPORT("ERROR", T["EMPTY_SLOTS"].format(n=str(empty_slots)))
     grades.update(xsids)
-    return result
+    return (sidmap, sidindex)
 
 
-def abi_calc(grades:dict[str,str], sdata:dict) -> dict[str,str]:
+def abi_calc(grades:dict[str,str], subjects:list[dict], index:int):
     """Perform the calculations to determine the result of the Abitur.
     """
-    abi_grades = sort_pupil_grades(grades)
-    fields = {}
+    slist = [(s["SID"], s["NAME"]) for s in subjects if s["TYPE"] == "SUBJECT"]
+    sidmap, sidindex = sort_pupil_grades(grades, slist)
     scaled = []
     ## Subjects 1 – 4
     totalA = 0
     for i in 1,2,3,4:
         gtag = f"G{i}"
-        gs = abi_grades[gtag]
-        fields[gtag] = gs
+        gs = grades[gtag]
         try:
             g = int(gs)
         except ValueError:
             g = 0
         gtag += "n"
-        gn = abi_grades[gtag]
-        fields[gtag] = gn
+        gn = grades[gtag]
         if gn and gn != '*':
             avn10 = (g + int(gn)) * 5
         else:
@@ -151,30 +140,29 @@ def abi_calc(grades:dict[str,str], sdata:dict) -> dict[str,str]:
             avns = str(avn10 // 10)
         else:
             avns = str(avn10 // 10) + ",5"
-        fields[f"AVE_{i}"] = avns
+        grades[f"AVE_{i}"] = avns
         s = 8 if i == 4 else 12
         scl = (avn10 * s) // 10
         scaled.append(scl)
         scls = str(scl)
-        fields[f"SCALED_{i}"] = scls
+        grades[f"SCALED_{i}"] = scls
         totalA += scl
-    fields["SUM_A"] = str(totalA)
+    grades["SUM_A"] = str(totalA)
     ## Subjects 5 – 8
     totalB = 0
     for i in 5,6,7,8:
         gtag = f"G{i}"
-        gs = abi_grades[gtag]
-        fields[gtag] = gs
+        gs = grades[gtag]
         try:
             g = int(gs)
         except ValueError:
             g = 0
-        fields[f"AVE_{i}"] = str(g)
+        grades[f"AVE_{i}"] = str(g)
         scl = g * 4
         scaled.append(scl)
-        fields[f"SCALED_{i}"] = str(scl)
+        grades[f"SCALED_{i}"] = str(scl)
         totalB += scl
-    fields["SUM_B"] = str(totalB)
+    grades["SUM_B"] = str(totalB)
     ## The pass checks
     ok = True
     # Check 1: none with 0 points
@@ -182,7 +170,7 @@ def abi_calc(grades:dict[str,str], sdata:dict) -> dict[str,str]:
         if i == 0:
             ok = False
             break
-    fields["COND_1"] = COND_PRINT[ok]
+    grades["COND_1"] = COND_PRINT[ok]
     # Check 2: at least two of first four >= 5 points
     n = 0
     for i in range(3):
@@ -191,7 +179,7 @@ def abi_calc(grades:dict[str,str], sdata:dict) -> dict[str,str]:
     if scaled[3] and scaled[3] >= 40:
         n += 1
     yes = n >= 2
-    fields["COND_2"] = COND_PRINT[yes]
+    grades["COND_2"] = COND_PRINT[yes]
     ok &= yes
     # Check 3: at least two of last four >= 5 points
     n = 0
@@ -199,20 +187,20 @@ def abi_calc(grades:dict[str,str], sdata:dict) -> dict[str,str]:
         if scaled[i] and scaled[i] >= 20:
             n += 1
     yes = n >= 2
-    fields["COND_3"] = COND_PRINT[yes]
+    grades["COND_3"] = COND_PRINT[yes]
     ok &= yes
     # Check 4: <scaled14> >= 220
     yes = totalA >= 220
-    fields["COND_4"] = COND_PRINT[yes]
+    grades["COND_4"] = COND_PRINT[yes]
     ok &= yes
     # Check 5: <scaled58> >= 80
     yes = totalB >= 80
-    fields["COND_5"] = COND_PRINT[yes]
+    grades["COND_5"] = COND_PRINT[yes]
     ok &= yes
     ## The final result
     total = totalA + totalB
-    fields["TOTAL"] = str(total)
-    fields["RESULT"] = "–––"
+    grades["TOTAL"] = str(total)
+    grades["RESULT"] = "–––"
     if ok:
         # Calculate final grade using a formula. To avoid rounding
         # errors, use integer arithmetic.
@@ -223,16 +211,15 @@ def abi_calc(grades:dict[str,str], sdata:dict) -> dict[str,str]:
             g2 = "0"
         else:
             g2 = str ((g180 % 180) // 18)
-        fields["Grade1"] = g1
-        fields["Grade2"] = g2
-        fields["GradeT"] = GRADE_TEXT[g1] + ", " + GRADE_TEXT[g2]
-        fields["RESULT"] = g1 + "," + g2
-        fields["REPORT_TYPE"] = "Abi"
-    elif fhs(fields, abi_grades["__INDEX__"], sdata["PARAMETERS"]["FHS"]):
-        fields["REPORT_TYPE"] = "FHS"
+        grades["Grade1"] = g1
+        grades["Grade2"] = g2
+        grades["GradeT"] = GRADE_TEXT[g1] + ", " + GRADE_TEXT[g2]
+        grades["RESULT"] = g1 + "," + g2
+        grades["REPORT_TYPE"] = "Abi"
+    elif fhs(grades, sidindex, subjects[index]["PARAMETERS"]["FHS"]):
+        grades["REPORT_TYPE"] = "FHS"
     else:
-        fields["REPORT_TYPE"] = "NA"
-    return fields
+        grades["REPORT_TYPE"] = "NA"
 
 
 #TODO

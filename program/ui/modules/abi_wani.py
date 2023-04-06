@@ -1,7 +1,7 @@
 """
 ui/abi_wani.py
 
-Last updated:  2023-04-05
+Last updated:  2023-04-06
 
 A "Page" for editing Abitur grades in a Waldorf school in Niedersachsen.
 
@@ -77,14 +77,19 @@ from ui.ui_base import (
 from ui.grid_base import GridViewHFit as GridView
 # from ui.grid_base import GridView
 from ui.grid_base import StyleCache
-#TODO: migrate to grades_base?
-from grades.gradetable import (
-    get_grade_config,
-    full_grade_table,
-    update_pupil_grades,
-    update_table_info,
+#TODO: migrate to grades_base
+#from grades.gradetable import (
+#    get_grade_config,
+#    full_grade_table,
+#    update_pupil_grades,
+#    update_table_info,
+#)
+from grades.grades_base import (
+    GetGradeConfig,
+    FullGradeTable,
 )
-from local.abitur_wani import choose_pupil, calculate
+
+from local.abi_wani_calc import abi_calc
 from ui.cell_editors import CellEditorTable, CellEditorDate
 
 ### -----
@@ -159,13 +164,6 @@ class AbiturManager(QWidget):
         )
         lastday = QDate.fromString(CALENDAR["LAST_DAY"], Qt.DateFormat.ISODate)
         date_format = date2qt(CONFIG["DATEFORMAT"])
-        self.grade_date = QDateEdit()
-        self.grade_date.setMinimumDate(firstday)
-        self.grade_date.setMaximumDate(lastday)
-        self.grade_date.setCalendarPopup(True)
-        self.grade_date.setDisplayFormat(date_format)
-        formbox.addRow("DATE_GRADES", self.grade_date)
-        self.grade_date.dateChanged.connect(self.grade_date_changed)
         self.modified_time = QLineEdit()
         self.modified_time.setReadOnly(True)
         formbox.addRow(T["MODIFIED_TIME"], self.modified_time)
@@ -199,14 +197,6 @@ class AbiturManager(QWidget):
         make_cert.clicked.connect(self.make_certificate)
         vboxr.addWidget(make_cert)
 
-    def grade_date_changed(self, qdate):
-        if not self.__changes_enabled:
-            return
-        date = qdate2date(qdate)
-        cg = self.grade_table["CLASS_GROUP"]
-        print("§§§ DATE_GRADES:", cg, date)
-        update_table_info("DATE_GRADES", date, "Abitur", cg, "")
-
     def cell_changed(self, properties: dict):
         print("\nTODO: cell modified", properties)
         if self.current_pid:
@@ -225,26 +215,26 @@ class AbiturManager(QWidget):
             self.modified_time.setText(timestamp)
 
     def init_data(self):
-        gcon = get_grade_config()
-        for ocsn in gcon["OCCASIONS"]:
-            if ocsn[0] == "Abitur":
-                abi_info = ocsn[1]
-                break
-        else:
-            REPORT("ERROR", T["NO_ABITUR_CONFIG"].format(path=gcon["__PATH__"]))
-            return
-        print("?????????", abi_info)
-        grade_config_table = gcon["&ABI_GRADES"]
-        grade_click_handler = CellEditorTable(grade_config_table).activate
-        date_click_handler = CellEditorDate(empty_ok=True).activate
-        self.__changes_enabled = False
+        gcon = GetGradeConfig()
+        grade_click_handler = CellEditorTable(gcon["&ABI_GRADES"])
+        date_click_handler = CellEditorDate(empty_ok=True)
+        self.suppress_callbacks = True
         self.group_selector.clear()
+        self.pupil_list.clear()
+        # Collect pupil groups with Abitur configuration
+        abigroups = {}
+        try:
+            g = ""
+            tag = ""
+            for g, dlist in gcon["GROUP_DATA"].items():
+                for tag, data in dlist:
+                    if tag == "Abitur":
+                        abigroups[g] = data
+        except:
+            REPORT("ERROR", T["GROUP_DATA_STRUCTURE"].format(g=g, tag=tag))
+            return
         groups = []
-        for g in abi_info:
-            if g[0] == "_":
-                # Keys starting with '_' are for additional, non-group
-                # related information.
-                continue
+        for g in abigroups:
             klass, group = class_group_split(g)
             if not check_group(klass, group):
                 REPORT(
@@ -253,13 +243,10 @@ class AbiturManager(QWidget):
                 )
                 continue
             groups.append(g)
-        groups.sort(reverse=True)
-        self.__changes_enabled = False
-        self.group_selector.clear()
-        self.group_selector.addItems(groups)
+        self.group_selector.addItems(sorted(groups))
 #        self.group_selector.setCurrentText(self.class_group)  # no exception
         # Enable callbacks
-        self.__changes_enabled = True
+        self.suppress_callbacks = False
 
         ## Set up grid cells
         self.tilemap = {}     # references to tagged tiles
@@ -314,38 +301,43 @@ class AbiturManager(QWidget):
         self.select_group(self.group_selector.currentText())
 
     def select_group(self, group):
-        if not self.__changes_enabled:
+        if self.suppress_callbacks:
             print("Class change handling disabled:", group)
             return
         print("§ SELECT GROUP", group)
         self.current_pid = None
-        self.grade_table = full_grade_table("Abitur", group, "")
-        self.__changes_enabled = False
-        self.grade_date.setDate(
-            QDate.fromString(
-                self.grade_table["DATE_GRADES"],
-                Qt.DateFormat.ISODate
-            )
-        )
-        self.pupil_data_list = self.grade_table["GRADE_TABLE_PUPILS"]
+        self.grade_table = FullGradeTable("Abitur", group, "")
+        self.suppress_callbacks = True
+        self.pupil_data_list = self.grade_table["PUPIL_LIST"]
         # [(pdata, grademap), ... ]
         # print("FIELDS", list(self.grade_table))
         self.modified_time.setText(self.grade_table["MODIFIED"])
         self.pupil_list.clear()
         for item in self.pupil_data_list:
             self.pupil_list.addItem(pupil_name(item[0]))
-        self.__changes_enabled = True
+        self.suppress_callbacks = False
 
     def select_pupil(self, index):
-        self.data = choose_pupil(self.grade_table, index)
-        pdata = self.data["__PUPIL__"]
+#?
+        self.line_data = self.pupil_data_list[index]
+        pdata, gdata = self.line_data
+        print("\n1)", pdata)
+        print("2", gdata)
         self.current_pid = pdata["PID"]
         self.set_tile("PUPIL", pupil_name(pdata))
-        self.set_tile("DATE_END", self.data["DATE_END"])
+        self.set_tile("DATE_END", gdata["DATE_END"])
         for i in range(1,9):
             tag = f"S{i}"
-            self.set_tile(tag, self.data[tag])
+
+#?
+            self.set_tile(tag, gdata[tag])
+#?
         self.recalculate()
+
+
+
+
+
 
     def recalculate(self):
         print("\nPUPIL")
@@ -354,6 +346,19 @@ class AbiturManager(QWidget):
         for sid, g in calculate(self.data).items():
             print("  CALC:", sid, g)
             self.set_tile(sid, g)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def set_tile(self, key, value):
         try:

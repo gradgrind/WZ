@@ -688,15 +688,13 @@ def calculate_pid_grades(table, pid) -> list[tuple[str,str]]:
     grades = table["PUPIL_LIST"].get(pid)[1]
     subjects = table["COLUMNS"]
     changed_grades = []
-    for sdata in subjects:
+    for i, sdata in enumerate(subjects):
         try:
             fn = sdata["FUNCTION"]
         except KeyError:
             continue
         # The function modifies <grades>
-#TODO: Is that enough data for the functions? Would subject data for other
-# subjects be needed?
-        gx = GradeFunction(fn, sdata, grades)
+        gx = GradeFunction(fn, subjects, i, grades)
         if gx:
             changed_grades.append(gx)
     return changed_grades

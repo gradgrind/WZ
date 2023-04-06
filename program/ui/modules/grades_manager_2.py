@@ -310,7 +310,7 @@ class GradeManager(QWidget):
         gblayout.addWidget(pb_make_reports)
 
     def init_data(self):
-        self.__changes_enabled = False
+        self.suppress_callbacks = True
         # Set up "occasions" here, from config
         self.occasion_selector.clear()
         ### The configuration data should be based first on the "occasion",
@@ -324,7 +324,7 @@ class GradeManager(QWidget):
                     self.occasion2data[o] = {g: data}
                     self.occasion_selector.addItem(o)
         # Enable callbacks
-        self.__changes_enabled = True
+        self.suppress_callbacks = False
         self.class_group = None
         self.changed_occasion(self.occasion_selector.currentText())
 
@@ -332,7 +332,7 @@ class GradeManager(QWidget):
         self.modified_time.setText(timestamp)
 
     def changed_occasion(self, new_occasion: str):
-        if not self.__changes_enabled:
+        if self.suppress_callbacks:
             return
         print("NEW OCCASION:", new_occasion)
         # A change of occasion should preserve the class-group, if this
@@ -356,16 +356,16 @@ class GradeManager(QWidget):
                 continue
             groups.append(g)
         groups.sort(reverse=True)
-        self.__changes_enabled = False
+        self.suppress_callbacks = True
         self.class_selector.clear()
         self.class_selector.addItems(groups)
         self.class_selector.setCurrentText(self.class_group)  # no exception
         # Enable callbacks
-        self.__changes_enabled = True
+        self.suppress_callbacks = False
         self.changed_class(self.class_selector.currentText())
 
     def changed_class(self, new_class_group):
-        if not self.__changes_enabled:
+        if self.suppress_callbacks:
             print("Class change handling disabled:", new_class_group)
             return
         print("NEW GROUP:", new_class_group)
@@ -378,7 +378,7 @@ class GradeManager(QWidget):
         # self.pupil_list.clear()
         # self.pupil_list.addItems([pupil_name(p) for p in self.pupil_data_list])
 
-        self.__changes_enabled = False
+        self.suppress_callbacks = True
         try:
             instance_data = self.group_data["INSTANCE"]
         except KeyError:
@@ -397,7 +397,7 @@ class GradeManager(QWidget):
                     OCCASION=self.occasion,
                 )
                 self.instance_selector.set_list(instances, 1)
-        self.__changes_enabled = True
+        self.suppress_callbacks = False
         self.select_instance()
 
     def select_instance(self, instance=""):
