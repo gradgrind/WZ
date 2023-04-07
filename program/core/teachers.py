@@ -1,10 +1,10 @@
 """
-core/teachers.py - last updated 2022-07-10
+core/teachers.py - last updated 2023-04-07
 
 Manage teacher data.
 
 =+LICENCE=================================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -92,7 +92,6 @@ class Teachers(dict):
         data = self[tid]
         return f"{data.firstname} {data.lastname}"
 
-    # deprecated?
     def list_teachers(self):
         return list(self)
 

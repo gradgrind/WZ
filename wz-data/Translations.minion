@@ -165,6 +165,10 @@ local.abitur: {
     EMPTY_SLOTS:    "Keine Daten für {n} Felder"
 }
 
+tables.pdf_table: {
+    Repeated_page_title: "In PDF-Dokument, wiederholte Kopfzeile / Seitenkennung: „{ref}“"
+}
+
 ui.ui_base: {
     # Messages
     UNKNOWN_KEY:    "Ungültige Selektion: '{key}'"
