@@ -512,85 +512,86 @@ class GradeTableView(GridViewAuto):
         col2colour = []     # allows colouring of the columns
         click_handler = []  # set the editor function for each column
         column_widths = []  # as it says ...
+        column_headers = [] # [(sid, name),  ... ]
         # Customized "extra-field" widths
         custom_widths = GetGradeConfig().get("EXTRA_FIELD_WIDTHS")
         grade_click_handler = CellEditorTable(grade_config_table)
         date_click_handler = CellEditorDate(empty_ok=True)
-#TODO! was just a single list? ...
+        ## Deal with the column types separately
+        # Collect column widths, colours, headers and click-handlers
         column_data = grade_table["COLUMNS"]
-        for sdata in column_data:
-            print("^^^^^^^^^^", sdata)
-            ctype = sdata["TYPE"]
-            if ctype == "SUBJECT":
-                column_widths.append(GRADETABLE_SUBJECTWIDTH)
-                if "COMPOSITE" in sdata:
-                    col2colour.append(COMPONENT_COLOUR)
-                    click_handler.append(grade_click_handler)
-                elif "FUNCTION" in sdata:
-                    col2colour.append(COMPOSITE_COLOUR)
-                    click_handler.append(None)
-                else:
-                    col2colour.append(None)
-                    click_handler.append(grade_click_handler)
+        for sdata in column_data["subjects"]:
+            column_headers.append((sdata["SID"], sdata["NAME"]))
+            column_widths.append(GRADETABLE_SUBJECTWIDTH)
+            if "COMPOSITE" in sdata:
+                col2colour.append(COMPONENT_COLOUR)
+                click_handler.append(grade_click_handler)
             else:
-                try:
-                    column_widths.append(int(custom_widths[sdata["SID"]]))
-                except KeyError:
-                    column_widths.append(GRADETABLE_EXTRAWIDTH)
-                except ValueError:
-                    REPORT(
-                        "ERROR",
-                        T["BAD_CUSTOM_WIDTH"].format(
-                            sid = sdata["SID"],
-                            path=GetGradeConfig()["__PATH__"],
-                        )
+                col2colour.append(None)
+                click_handler.append(grade_click_handler)
+        for sdata in column_data["composites"]:
+            column_headers.append((sdata["SID"], sdata["NAME"]))
+            column_widths.append(GRADETABLE_SUBJECTWIDTH)
+            col2colour.append(COMPOSITE_COLOUR)
+            click_handler.append(None)
+        for sdata in column_data["calculates"]:
+            column_headers.append((sdata["SID"], sdata["NAME"]))
+            try:
+                column_widths.append(int(custom_widths[sdata["SID"]]))
+            except KeyError:
+                column_widths.append(GRADETABLE_EXTRAWIDTH)
+            except ValueError:
+                REPORT(
+                    "ERROR",
+                    T["BAD_CUSTOM_WIDTH"].format(
+                        sid = sdata["SID"],
+                        path=GetGradeConfig()["__PATH__"],
                     )
-                    column_widths.append(GRADETABLE_EXTRAWIDTH)
-
-                if ctype == "CALCULATE":
-                    col2colour.append(CALCULATED_COLOUR)
-                    click_handler.append(None)
-                elif ctype == "INPUT":
-                    method = sdata["METHOD"]
-                    parms = sdata["PARAMETERS"]
-                    if method == "CHOICE":
-                        values = [[[v], ""] for v in parms["CHOICES"]]
-                        editor = CellEditorTable(values)
-                    elif method == "CHOICE_MAP":
-                        values = [[[v], text] for v, text in parms["CHOICES"]]
-                        editor = CellEditorTable(values)
-                    elif method == "TEXT":
-                        editor = CellEditorText()
-                    elif method == "DATE":
-                        editor = date_click_handler
-                    else:
-                        REPORT(
-                            "ERROR",
-                            T["UNKNOWN_INPUT_METHOD"].format(
-                                path=GetGradeConfig()["__PATH__"],
-                                group=grade_table["CLASS_GROUP"],
-                                occasion=grade_table["OCCASION"],
-                                sid=sdata["SID"],
-                                method=method
-                            )
-                        )
-                        editor = None
-                    col2colour.append(None)
-                    click_handler.append(editor)
-                else:
-                    REPORT(
-                        "ERROR",
-                        T["UNKNOWN_COLUMN_TYPE"].format(
-                            path=GetGradeConfig()["__PATH__"],
-                            group=grade_table["CLASS_GROUP"],
-                            occasion=grade_table["OCCASION"],
-                            sid=sdata["SID"],
-                            ctype=ctype
-                        )
+                )
+                column_widths.append(GRADETABLE_EXTRAWIDTH)
+            col2colour.append(CALCULATED_COLOUR)
+            click_handler.append(None)
+        for sdata in column_data["inputs"]:
+            column_headers.append((sdata["SID"], sdata["NAME"]))
+            try:
+                column_widths.append(int(custom_widths[sdata["SID"]]))
+            except KeyError:
+                column_widths.append(GRADETABLE_EXTRAWIDTH)
+            except ValueError:
+                REPORT(
+                    "ERROR",
+                    T["BAD_CUSTOM_WIDTH"].format(
+                        sid = sdata["SID"],
+                        path=GetGradeConfig()["__PATH__"],
                     )
-                    col2colour.append(None)
-                    click_handler.append(None)
-
+                )
+                column_widths.append(GRADETABLE_EXTRAWIDTH)
+            method = sdata["METHOD"]
+            parms = sdata["PARAMETERS"]
+            if method == "CHOICE":
+                values = [[[v], ""] for v in parms["CHOICES"]]
+                editor = CellEditorTable(values)
+            elif method == "CHOICE_MAP":
+                values = [[[v], text] for v, text in parms["CHOICES"]]
+                editor = CellEditorTable(values)
+            elif method == "TEXT":
+                editor = CellEditorText()
+            elif method == "DATE":
+                editor = date_click_handler
+            else:
+                REPORT(
+                    "ERROR",
+                    T["UNKNOWN_INPUT_METHOD"].format(
+                        path=GetGradeConfig()["__PATH__"],
+                        group=grade_table["CLASS_GROUP"],
+                        occasion=grade_table["OCCASION"],
+                        sid=sdata["SID"],
+                        method=method
+                    )
+                )
+                editor = None
+            col2colour.append(None)
+            click_handler.append(editor)
         __rows = (GRADETABLE_HEADERHEIGHT,) + (GRADETABLE_ROWHEIGHT,) * len(
             pupils_list
         )
@@ -603,25 +604,23 @@ class GradeTableView(GridViewAuto):
         self.grid_line_thick_v(2)
         self.grid_line_thick_h(1)
 
-        # The column headers
+        ### The column headers
         hheaders = dict(GetGradeConfig()["HEADERS"])
         self.get_cell((0, 0)).set_text(hheaders["PUPIL"])
         self.get_cell((0, 1)).set_text(hheaders["LEVEL"])
         colstart = 2
         self.col0 = colstart
-        col = 0
         self.sid2col = {}
-        for sdata in column_data:
+        for col, sn in enumerate(column_headers):
             gridcol = col + colstart
-            self.sid2col[sdata["SID"]] = gridcol
+            self.sid2col[sn[0]] = gridcol
             cell = self.get_cell((0, gridcol))
             cell.set_verticaltext()
             cell.set_valign("b")
             cell.set_background(col2colour[col])
-            cell.set_text(sdata["NAME"])
-            col += 1
+            cell.set_text(sn[1])
 
-        # The rows
+        ### The data rows
         rowstart = 1
         self.row0 = rowstart
         row = 0
@@ -636,29 +635,29 @@ class GradeTableView(GridViewAuto):
             cell = self.get_cell((gridrow, 1))
             cell.set_text(pdata["LEVEL"])
 
-            col = 0
-            for sdata in column_data:
+            for col, sn in enumerate(column_headers):
                 cell = self.get_cell((gridrow, col + colstart))
                 cell.set_background(col2colour[col])
                 # ?
-                # This is not taking possible value delegates into account – which would
-                # allow the display of a text distinct from the actual value of the cell.
-                # At the moment it is not clear that I would need such a thing, but it
-                # might be useful to have it built in to the base functionality in base_grid.
-                # For editor types CHOICE_MAP it might come in handy, for instance.
-
-                # That is not quite the intended use of CHOICE_MAP – the "key"
-                # is displayed, but it is the "value" that is needed for further processing.
+                # This is not taking possible value delegates into
+                # account – which would allow the display of a text
+                # distinct from the actual value of the cell.
+                # At the moment it is not clear that I would need such
+                # a thing, but it might be useful to have it built in
+                # to the base functionality in base_grid.
+                # For editor types CHOICE_MAP it might come in handy,
+                # for instance ... though that is not quite the intended
+                # use of CHOICE_MAP – the "key" is displayed, but it is
+                # the "value" that is needed for further processing.
                 # For this it would be enough to set the "VALUE" property.
 
-                sid = sdata["SID"]
+                sid = s[0]
                 cell.set_property("PID", pid)
                 cell.set_property("SID", sid)
                 cell.set_text(pgrades.get(sid, ""))
                 handler = click_handler[col]
                 if handler:
                     cell.set_property("EDITOR", handler)
-                col += 1
             row += 1
 
         self.rescale()
@@ -693,6 +692,7 @@ class GradeTableView(GridViewAuto):
         This is called when pasting.
         """
         # Only write to cells when all are editable, and check the values!
+# Maybe just skip non-writable cells?
         # Then do an UpdatePupilGrades ...
         prow = row - self.row0
         pupil_list = self.grade_table["PUPIL_LIST"]

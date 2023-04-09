@@ -531,7 +531,6 @@ def prepare_pupil_list(table_info):
                         INSTANCE=instance,
                         PID=pid
                     )
-                    table_changed = True
             # Update the grade map and add to pupil list
             complete_gradetable(table_info, db_pdata, db_grademap)
         # Remove pupils from grade table if they are no longer in the group.

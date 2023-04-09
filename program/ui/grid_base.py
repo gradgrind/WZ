@@ -411,7 +411,7 @@ class GridView(QGraphicsView):
                     click_handler = item.on_left_click
                 except AttributeError:
                     continue
-                point = self.screen_coordinates(item.scenePos())
+#                point = self.screen_coordinates(item.scenePos())
                 value = click_handler()
                 if value is not None:
                     self.cell_modified(value)
