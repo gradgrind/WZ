@@ -1,8 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-04-05
-
+Last updated:  2023-04-09
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
 Fields in template files are replaced by the report information.
@@ -66,7 +65,7 @@ import re
 from core.base import Dates
 from core.pupils import pupil_name
 from template_engine.template_sub import Template
-from grades.grades_base import FullGradeTable, GetGradeConfig, NO_GRADE
+from grades.grades_base_0 import FullGradeTable, GetGradeConfig, NO_GRADE
 from local.grade_processing import ProcessGradeData, ReportName
 
 ### -----
@@ -99,6 +98,7 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
 
     ### Divide the subjects into groups
     subject_groups = {}
+#TODO! was just a single list? ...
     for sdata in full_grade_table["COLUMNS"]:
         try:
             group = sdata["GROUP"]
@@ -131,6 +131,7 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
 
     ### Build reports for each report-type separately
     rtype_path = dict(
+#TODO! was just a single list? ...
         full_grade_table["COLUMNS"].get("REPORT_TYPE")["PARAMETERS"]["CHOICES"]
     )
     fplist = []

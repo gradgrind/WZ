@@ -149,22 +149,6 @@ grades.makereports: {
     MISSING_DOC_MAPPING: "In Notenzeugnisvorlage {path},\n  Feld {field1} (in „MAPPINGS“): kein Wert für {value1}"
 }
 
-local.grade_functions: {
-#TODO: to be replaced by grade_processing?
-    UNKNOWN_GRADE_FUNCTION: "In Konfigurationdatei GRADE_CONFIG: unbekannte Notenberechnungsfunktion – „{name}“"
-}
-
-local.grade_processing: {
-    UNKNOWN_GRADE_FUNCTION: "In Konfigurationdatei GRADE_CONFIG: unbekannte Notenberechnungsfunktion – „{name}“"
-}
-
-local.abitur: {
-    INVALID_SID:    "Fachkennzeichen ({sid}) im Abitur: „Fachtyp“ ungültig"
-    NO_SLOT:        "Fach mit Kennzeichen {sid}: zu viele Fächer dieses „Fachtyps“, kein Platz"
-    TOO_FEW_SUBJECTS: "Zu wenig Fächer von Typ „{tag}“"
-    EMPTY_SLOTS:    "Keine Daten für {n} Felder"
-}
-
 tables.pdf_table: {
     Repeated_page_title: "In PDF-Dokument, wiederholte Kopfzeile / Seitenkennung: „{ref}“"
 }

@@ -1,7 +1,7 @@
 """
 local/grade_processing.py
 
-Last updated:  2023-04-06
+Last updated:  2023-04-09
 
 Functions to perform grade calculations.
 
@@ -22,20 +22,21 @@ Copyright 2023 Michael Towers
 =-LICENCE========================================
 """
 
-AVERAGE_DP = 2  # decimal places for averages
-
-########################################################################
-
-from typing import Optional
-T = TRANSLATIONS("local.grade_processing")
+UNKNOWN_GRADE_FUNCTION = (
+    "In Konfigurationdatei GRADE_CONFIG: unbekannte"
+    " Notenberechnungsfunktion – „{name}“"
+)
 
 ### +++++
 
-from local.abi_wani_calc import abi_calc
+from typing import Optional
+from local.abi_wani_calc import Abi_calc
+
+AVERAGE_DP = 2  # decimal places for averages
 
 GRADE_FUNCTIONS = {}
 
-SPECIAL_HANDLERS = {}
+#SPECIAL_HANDLERS = {}
 
 GRADE_NUMBER = {
     "1+": 15,
@@ -61,10 +62,14 @@ NUMBER_GRADE = {v: k for k, v in GRADE_NUMBER.items()}
 ### -----
 
 def GradeFunction(
-    fname:str, subjects:list[dict], index:int, grades:dict[str,str]
-) -> tuple[str,str]:
+    fname: str,
+    columns: dict[str, list[dict]],
+    subject: dict,
+    grades: dict[str, str],
+    raw_grades: dict[str, str],
+) -> tuple[str, str]:
     """Perform the given function to calculate the value of the field
-    specified by <subjects[index]>.
+    specified by <subject>.
     Return (sid, old-value).
     """
     if not fname:
@@ -72,28 +77,30 @@ def GradeFunction(
     try:
         fn = GRADE_FUNCTIONS[fname]
     except KeyError:
-        REPORT("ERROR", T["UNKNOWN_GRADE_FUNCTION"].format(name=fname))
+        REPORT("ERROR", UNKNOWN_GRADE_FUNCTION.format(name=fname))
         return []
-    return fn(grades, subjects, index)
+    return fn(grades, raw_grades, columns, subject)
 
 
-def SpecialHandler(fname, **kargs) -> None:
-    try:
-        fn = SPECIAL_HANDLERS[fname]
-    except KeyError:
-        REPORT("ERROR", T["UNKNOWN_SPECIAL_FUNCTION"].format(name=fname))
-        return
-    fn(**kargs)
+#def SpecialHandler(fname, **kargs) -> None:
+#    try:
+#        fn = SPECIAL_HANDLERS[fname]
+#    except KeyError:
+#        REPORT("ERROR", T["UNKNOWN_SPECIAL_FUNCTION"].format(name=fname))
+#        return
+#    fn(**kargs)
 
 
 def ROUNDED_AVERAGE_I(
-    grades: dict[str:str], subjects:list[dict], index:int
-) -> Optional[tuple[str,str]]:
+    grades: dict[str, str],
+    raw_grades:dict[str, str],
+    columns: dict[str, list[dict]],
+    sdata: dict,
+) -> Optional[tuple[str, str]]:
     """Calculate the value of a "composite" subject from its component
     subject grades. This is using grades 1 – 6 (with +/-).
     Return a list of changes: (sid, grade) pairs.
     """
-    sdata = subjects[index]
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
     # print("\n === ROUNDED_AVERAGE_I:", grades, "\n ++", COMPONENTS)
     ilist = []
@@ -115,7 +122,7 @@ def ROUNDED_AVERAGE_I(
         astr = '*'
         # print("%%%%%%%%% ROUNDED_AVERAGE_I:", astr)
     sid = sdata["SID"]
-    og = grades[sid]
+    og = grades.get(sid) or ""
     if og == astr:
         return None
     else:
@@ -126,13 +133,15 @@ GRADE_FUNCTIONS["ROUNDED_AVERAGE_I"] = ROUNDED_AVERAGE_I
 
 
 def ROUNDED_AVERAGE_II(
-    grades: dict[str:str], subjects:list[dict], index:int
-) -> Optional[tuple[str,str]]:
+    grades: dict[str, str],
+    raw_grades:dict[str, str],
+    columns: dict[str, list[dict]],
+    sdata: dict,
+) -> Optional[tuple[str, str]]:
     """Calculate the value of a "composite" subject from its component
     subject grades. This is using grades 15 – 0.
     Return a list of changes: (sid, grade) pairs.
     """
-    sdata = subjects[index]
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
     # print("\n === ROUNDED_AVERAGE_II:", grades, "\n ++", COMPONENTS)
     ilist = []
@@ -151,7 +160,7 @@ def ROUNDED_AVERAGE_II(
         astr = '*'
     # print("%%%%%%%%% ROUNDED_AVERAGE_II:", astr)
     sid = sdata["SID"]
-    og = grades[sid]
+    og = grades.get(sid) or ""
     if og == astr:
         return None
     else:
@@ -162,13 +171,15 @@ GRADE_FUNCTIONS["ROUNDED_AVERAGE_II"] = ROUNDED_AVERAGE_II
 
 
 def AVERAGE_I(
-    grades: dict[str:str], subjects:list[dict], index:int
-) -> Optional[tuple[str,str]]:
+    grades: dict[str, str],
+    raw_grades:dict[str, str],
+    columns: dict[str, list[dict]],
+    sdata: dict,
+) -> Optional[tuple[str, str]]:
     """This calculates an average of a set of grades (1 – 6, ignoring
     +/-) to a number (AVERAGE_DP) of decimal places without rounding –
     for calculation of qualifications.
     """
-    sdata = subjects[index]
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
     ilist = []
     for sid in COMPONENTS:
@@ -189,7 +200,7 @@ def AVERAGE_I(
         astr = '*'
         # print("%%%%%%%%% AVERAGE_I:", astr)
     sid = sdata["SID"]
-    og = grades[sid]
+    og = grades.get(sid) or ""
     if og == astr:
         return None
     else:
@@ -199,32 +210,26 @@ def AVERAGE_I(
 GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 
 
-def ABITUR_NIWA_RESULT(
-    grades: dict[str:str], subjects:list[dict], index:int
-) -> Optional[tuple[str,str]]:
-    old = grades["REPORT_TYPE"]
-    abi_calc(grades, subjects, index)
-    return ("REPORT_TYPE", old)
-
-GRADE_FUNCTIONS["ABITUR_NIWA_RESULT"] = ABITUR_NIWA_RESULT
+# Abitur calculations -> report type (success, etc.)
+GRADE_FUNCTIONS["ABITUR_NIWA_RESULT"] = Abi_calc
 
 
-def abi_extra_subjects(subjects):
-    """Add grade slots for additional exam results in Abitur.
-    It is important that the third field of each entry ("GROUP") is "X".
-    This signals to the grade reader that the grades should not be
-    regarded as "spurious" (no teacher) – otherwise they would be
-    deleted and the subject regarded as "not taken".
-    """
-    nsid = 1000
-    for sdata in sorted(subjects.values()):
-        if sdata [3] in ('E', 'G'):
-            name = sdata[2].split('*', 1)[0] + "*nach"
-            sid = sdata[1].split('.', 1)[0] + ".x"
-            subjects[sid] = [nsid, sid, name, 'X', None]
-            nsid += 1
-
-SPECIAL_HANDLERS["ABI_WANI_SUBJECTS"] = abi_extra_subjects
+#def abi_extra_subjects(subjects):
+#    """Add grade slots for additional exam results in Abitur.
+#    It is important that the third field of each entry ("GROUP") is "X".
+#    This signals to the grade reader that the grades should not be
+#    regarded as "spurious" (no teacher) – otherwise they would be
+#    deleted and the subject regarded as "not taken".
+#    """
+#    nsid = 1000
+#    for sdata in sorted(subjects.values()):
+#        if sdata [3] in ('E', 'G'):
+#            name = sdata[2].split('*', 1)[0] + "*nach"
+#            sid = sdata[1].split('.', 1)[0] + ".x"
+#            subjects[sid] = [nsid, sid, name, 'X', None]
+#            nsid += 1
+#
+#SPECIAL_HANDLERS["ABI_WANI_SUBJECTS"] = abi_extra_subjects
 
 
 #TODO: Building reports

@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-04-06
+Last updated:  2023-04-09
 
 Front-end for managing grade reports.
 
@@ -66,7 +66,7 @@ from core.db_access import open_database, db_values
 from core.base import class_group_split, Dates
 from core.basic_data import check_group
 from core.pupils import pupils_in_group, pupil_name
-from grades.grades_base import (
+from grades.grades_base_0 import (
     GetGradeConfig,
     MakeGradeTable,
     FullGradeTable,
@@ -414,6 +414,7 @@ class GradeManager(QWidget):
             self.occasion, self.class_group, instance
         )
         try:
+#TODO! was just a single list? ...
             grade_table["COLUMNS"].get("REPORT_TYPE")
             self.make_reports.setEnabled(True)
         except KeyError:
@@ -515,8 +516,10 @@ class GradeTableView(GridViewAuto):
         custom_widths = GetGradeConfig().get("EXTRA_FIELD_WIDTHS")
         grade_click_handler = CellEditorTable(grade_config_table)
         date_click_handler = CellEditorDate(empty_ok=True)
+#TODO! was just a single list? ...
         column_data = grade_table["COLUMNS"]
         for sdata in column_data:
+            print("^^^^^^^^^^", sdata)
             ctype = sdata["TYPE"]
             if ctype == "SUBJECT":
                 column_widths.append(GRADETABLE_SUBJECTWIDTH)

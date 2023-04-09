@@ -1,7 +1,7 @@
 """
 ui/abi_wani.py
 
-Last updated:  2023-04-06
+Last updated:  2023-04-09
 
 A "Page" for editing Abitur grades in a Waldorf school in Niedersachsen.
 
@@ -89,7 +89,7 @@ from grades.grades_base import (
     FullGradeTable,
 )
 
-from local.abi_wani_calc import abi_calc
+from local.abi_wani_calc import abi_calc, NO_GRADE
 from ui.cell_editors import CellEditorTable, CellEditorDate
 
 ### -----
@@ -476,17 +476,17 @@ if __name__ == "__main__":
     cell0.set_property("EDITOR", plain_line_editor)
     grade_editor_I = CellEditorTable(
         [
-            [   ["1+", "1", "1-"],   "sehr gut"      ],
-            [   ["2+", "2", "2-"],   "gut"           ],
-            [   ["3+", "3", "3-"],   "befriedigend"  ],
-            [   ["4+", "4", "4-"],   "ausreichend"   ],
-            [   ["5+", "5", "5-"],   "mangelhaft"    ],
-            [   ["6"],         "ungenügend"    ],
-            [   ["nt"],        "nicht teilgenommen"],
-            [   ["t"],         "teilgenommen"  ],
-        #    [   ["ne"],        "nicht erteilt" ],
-            [   ["nb"],        "kann nicht beurteilt werden"],
-            [   ["*", "/"],       "––––––"        ],
+            [   ["1+", "1", "1-"],  "sehr gut"      ],
+            [   ["2+", "2", "2-"],  "gut"           ],
+            [   ["3+", "3", "3-"],  "befriedigend"  ],
+            [   ["4+", "4", "4-"],  "ausreichend"   ],
+            [   ["5+", "5", "5-"],  "mangelhaft"    ],
+            [   ["6"],              "ungenügend"    ],
+            [   ["nt"],             "nicht teilgenommen"],
+            [   ["t"],              "teilgenommen"  ],
+            #[   ["ne"],             "nicht erteilt" ],
+            [   ["nb"],             "kann nicht beurteilt werden"],
+            [   ["*", NO_GRADE],    "––––––"        ],
         ]
     ).activate
     text_editor = CellEditorText().activate
