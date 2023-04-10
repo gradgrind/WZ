@@ -41,7 +41,8 @@ COMPONENT_COLOUR = "ffeeff"
 COMPOSITE_COLOUR = "eeffff"
 CALCULATED_COLOUR = "ffffcc"
 
-NO_GRADE = "/"
+NO_GRADE = "–"  # shown in cells which are not defined for a pupil ...
+# e.g. subjects not taken
 
 #########################################
 

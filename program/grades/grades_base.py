@@ -485,7 +485,6 @@ def prepare_pupil_list(table_info):
     Finally, the field values are recalculated and the database entries
     updated if there has been a change.
     """
-    table_changed = False
     pdata_list = PupilRows()    # [(pdata, grades),  ... ]
     table_info["PUPIL_LIST"] = pdata_list
     class_group = table_info["CLASS_GROUP"]
@@ -534,6 +533,8 @@ def prepare_pupil_list(table_info):
             try:
                 db_pdata, db_grademap = table_info["STORED_GRADES"].pop(pid)
             except KeyError:
+#TODO: Is this right???
+                db_pdata = pdata
                 db_grademap = {}
             else:
                 if db_pdata["LEVEL"] != pdata["LEVEL"]:
@@ -553,7 +554,7 @@ def prepare_pupil_list(table_info):
                         PID=pid
                     )
             # Update the grade map and add to pupil list
-            complete_gradetable(table_info, db_pdata, db_grademap)
+            complete_gradetable(table_info, db_pdata, db_grademap, sid_tids)
         # Remove pupils from grade table if they are no longer in the group.
         # This must be done because otherwise they would be "reinstated"
         # as soon as the date-of-issue is past.
@@ -588,7 +589,7 @@ def set_grade_update_time(table_info) -> str:
     return timestamp
 
 
-def complete_grademap(column_lists, grades, name, p_grade_tids=None):
+def complete_grademap(column_lists, grades, name, p_grade_tids):
     """Ensure that the given grade data is "complete", according to
     the subjects list for the group and the subjects for which this
     pupil has a teacher (if this data is available).
@@ -599,9 +600,8 @@ def complete_grademap(column_lists, grades, name, p_grade_tids=None):
     grade_map = {}
     for sdata in column_lists["SUBJECT"]:
         sid = sdata["SID"]
-#        if (p_grade_tids is None) or (sdata["GROUP"] == "X"):
-#            # for "closed" data-sets, or "extra" subjects added
-#            # automatically – without teachers
+        # print("\n$$$$$$$$", sid, p_grade_tids, grades)
+#TODO: Check validity?
         if p_grade_tids is None:
             # for "closed" data-sets
             try:
@@ -649,7 +649,7 @@ def complete_grademap(column_lists, grades, name, p_grade_tids=None):
     return grade_map
 
 
-def complete_gradetable(table, db_pdata, db_grademap):
+def complete_gradetable(table, db_pdata, db_grademap, p_grade_tids=None):
     """Process the raw grades from the database when the data for a
     pupil group is loaded. It ensures that all necessary "columns" and
     grades are present.
@@ -660,7 +660,8 @@ def complete_gradetable(table, db_pdata, db_grademap):
     grades = complete_grademap(
         column_lists,
         db_grademap,
-        pupil_name(db_pdata)   # just for messages
+        pupil_name(db_pdata),  # just for messages
+        p_grade_tids
     )
     table["PUPIL_LIST"].append(db_pdata, grades)
     # It cannot be assumed that all the subjects have grades – some
@@ -673,8 +674,7 @@ def complete_gradetable(table, db_pdata, db_grademap):
 
 def UpdatePupilGrades(table: dict, pid: str):
     """Recalculate table row."""
-#TODO--
-    print("§UPDATE", pid, grades := table["PUPIL_LIST"].get(pid)[1])
+    # print("§UPDATE", pid, grades := table["PUPIL_LIST"].get(pid)[1])
     return calculate_grades(table, pid, None)
 
 
@@ -695,21 +695,18 @@ def calculate_grades(
             # The function modifies <grades>
             newsubjects = GradeFunction(fn, sdata, grades, old_grades)
             # Any column additions?
-            ctset = set()
-            for ctype, cdata in newsubjects:
-                cl = column_lists[ctype]
-                cl.append(cdata)
-                ctset.add(ctype)
-#TODO--
-                print("§§§ added COLUMN:", ctype, cdata)
-            for ctype in ctset:
-                # Re-sort the column list
-                column_lists[ctype].sort(
-                    key=lambda k: (k["GROUP"], k["NAME"])
-                )
-
-
-
+            if newsubjects:
+                ctset = set()
+                for ctype, cdata in newsubjects:
+                    cl = column_lists[ctype]
+                    cl.append(cdata)
+                    ctset.add(ctype)
+                for ctype in ctset:
+                    if ctype in ("SUBJECT", "COMPOSITE"):
+                        # Re-sort the column list
+                        column_lists[ctype].sort(
+                            key=lambda k: (k["GROUP"], k["NAME"])
+                        )
     ## Collect changes to (existing) entries in the initial grade set
     changes0 = []
     for sid, g0 in grades0:
@@ -796,6 +793,7 @@ def FullGradeTableUpdate(table, pupil_grades):
     It is possible that the list of pupils doesn't correspond to that in
     the database (though that shouldn't be the normal case!). Warnings
     will be issued for such mismatches.
+#TODO?
     There is also a warning if there is an attempt to place a grade in
     a "forbidden" (NO_GRADE) slot, or if trying to overwrite a grade
     with a NO_GRADE.
@@ -805,6 +803,7 @@ def FullGradeTableUpdate(table, pupil_grades):
     This function should not be used to update a "closed category", it
     might not work.
     """
+    assert False, "TODO: needs updating"
     pinfo = pupil_grades.pop("__PUPILS__")
 #    info = pupil_grades.pop("__INFO__")
     for pdata, grades in table["PUPIL_LIST"]:
@@ -976,10 +975,16 @@ def MakeGradeTable(table:dict, clear:bool=False) -> bytes:
         gtable.write(row, 1, pupil_name(pdata))
         gtable.write(row, 2, pdata["LEVEL"])
         for sid, col in sidcol:
-            g = pgrades.get(sid)
-            if g == NO_GRADE:
+            try:
+                g = pgrades[sid]
+            except KeyError:
+#TODO: Does this work? How?
                 gtable.write(row, col, NO_GRADE, protect=True)
-            elif g and not clear:
+            else:
+                assert(g != NO_GRADE)
+#            if g == NO_GRADE:
+#                gtable.write(row, col, NO_GRADE, protect=True)
+#            elif g and not clear:
                 gtable.write(row, col, g)
     # Delete excess rows
     row = gtable.nextrow()
@@ -1188,8 +1193,10 @@ if __name__ == "__main__":
 
     print("\n\n Full Grade Table:")
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-    fgtable = FullGradeTable("Abitur", "13", "")
+    # fgtable = FullGradeTable("Abitur", "13", "")
     # fgtable = FullGradeTable("1. Halbjahr", "12G.R", "")
+    # fgtable = FullGradeTable("1. Halbjahr", "13", "")
+    fgtable = FullGradeTable("2. Halbjahr", "12G.R", "")
 
     for k, v in fgtable.items():
         print("\n =======", k, "\n", v)
@@ -1298,11 +1305,12 @@ if __name__ == "__main__":
 
     #grade_table = full_grade_table("1. Halbjahr", "12G.R", "").items()
     #grade_table = full_grade_table("1. Halbjahr", "13", "").items()
-    grade_table = full_grade_table("Kursnoten", "13", "Klausur 1").items()
+    #grade_table = full_grade_table("Kursnoten", "13", "Klausur 1").items()
+    grade_table = full_grade_table("2. Halbjahr", "12G.R", "").items()
 
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
     for k, v in grade_table:
         print("\n =======", k, "\n", v)
 
-    #print("\n&&&&&&&&&&&&&&&&&", get_group_data("1. Halbjahr", "13"))
+    print("\n&&&&&&&&&&&&&&&&&", get_group_data("1. Halbjahr", "13"))

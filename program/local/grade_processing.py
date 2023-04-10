@@ -64,10 +64,11 @@ def GradeFunction(
     subject: dict,
     grades: dict[str, str],
     raw_grades: Optional[dict[str, str]],
-) -> tuple[str, str]:
+) -> Optional[list[tuple[str, dict]]]:
     """Perform the given function to calculate the value of the field
     specified by <subject>.
-    Return (sid, old-value).
+    Return <None> or a list of new column list entries:
+        [(column type, column data), ... ]
     """
     if not fname:
         return []
@@ -83,10 +84,10 @@ def ROUNDED_AVERAGE_I(
     grades: dict[str, str],
     sdata: dict,
     raw_grades: Optional[dict[str, str]],
-) -> Optional[tuple[str, str]]:
+):
     """Calculate the value of a "composite" subject from its component
     subject grades. This is using grades 1 – 6 (with +/-).
-    Return a list of changes: (sid, grade) pairs.
+    No return.
     """
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
     # print("\n === ROUNDED_AVERAGE_I:", grades, "\n ++", COMPONENTS)
@@ -110,11 +111,8 @@ def ROUNDED_AVERAGE_I(
         # print("%%%%%%%%% ROUNDED_AVERAGE_I:", astr)
     sid = sdata["SID"]
     og = grades.get(sid) or ""
-    if og == astr:
-        return None
-    else:
+    if og != astr:
         grades[sid] = astr
-        return (sid, og)
 
 GRADE_FUNCTIONS["ROUNDED_AVERAGE_I"] = ROUNDED_AVERAGE_I
 
@@ -123,10 +121,10 @@ def ROUNDED_AVERAGE_II(
     grades: dict[str, str],
     sdata: dict,
     raw_grades: Optional[dict[str, str]],
-) -> Optional[tuple[str, str]]:
+):
     """Calculate the value of a "composite" subject from its component
     subject grades. This is using grades 15 – 0.
-    Return a list of changes: (sid, grade) pairs.
+    No return.
     """
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
     # print("\n === ROUNDED_AVERAGE_II:", grades, "\n ++", COMPONENTS)
@@ -147,11 +145,8 @@ def ROUNDED_AVERAGE_II(
     # print("%%%%%%%%% ROUNDED_AVERAGE_II:", astr)
     sid = sdata["SID"]
     og = grades.get(sid) or ""
-    if og == astr:
-        return None
-    else:
+    if og != astr:
         grades[sid] = astr
-        return (sid, og)
 
 GRADE_FUNCTIONS["ROUNDED_AVERAGE_II"] = ROUNDED_AVERAGE_II
 
@@ -160,10 +155,11 @@ def AVERAGE_I(
     grades: dict[str, str],
     sdata: dict,
     raw_grades: Optional[dict[str, str]],
-) -> Optional[tuple[str, str]]:
+):
     """This calculates an average of a set of grades (1 – 6, ignoring
     +/-) to a number (AVERAGE_DP) of decimal places without rounding –
     for calculation of qualifications.
+    No return.
     """
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
     ilist = []
@@ -186,11 +182,8 @@ def AVERAGE_I(
         # print("%%%%%%%%% AVERAGE_I:", astr)
     sid = sdata["SID"]
     og = grades.get(sid) or ""
-    if og == astr:
-        return None
-    else:
+    if og != astr:
         grades[sid] = astr
-        return (sid, og)
 
 GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 

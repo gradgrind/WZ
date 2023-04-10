@@ -69,7 +69,7 @@ from grades.grades_base import FullGradeTable, GetGradeConfig
 from local.grade_processing import ProcessGradeData, ReportName
 
 # Used to access string for "subject not taken" in grade configuration
-NO_GRADE = "/"
+#NO_GRADE = "/"
 
 ### -----
 
@@ -96,31 +96,19 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
         # SYMBOLS
 
     # I can get the template path via the REPORT_TYPE value for each pupil.
-    # full_grade_table["COLUMNS"].get("REPORT_TYPE")["PARAMETERS"]["CHOICES"]
+    # full_grade_table["COLUMNS"][type].get(["REPORT_TYPE"])["PARAMETERS"]["CHOICES"]
     # is a list of [key, path] pairs.
 
     ### Divide the subjects into groups
     subject_groups = {}
-#TODO! was just a single list? ...
-    for sdata in full_grade_table["COLUMNS"]:
-        try:
-            group = sdata["GROUP"]
-            if not group:
-                continue
-        except KeyError:
-            continue
-        try:
-            subject_groups[group].append(sdata)
-        except KeyError:
-            subject_groups[group] = [sdata]
-
-    if False:
-        print("\n$$$$$$$$$ GROUPED SUBJECTS:")
-        for group, slist in subject_groups.items():
-            print("  ***", group)
-            for sdata in slist:
-                print("        ---", sdata)
-
+    column_lists = full_grade_table["COLUMNS"]
+    for stype in ("SUBJECT", "COMPOSITE"):
+        for sdata in column_lists[stype]:
+            if (group := sdata["GROUP"]):
+                try:
+                    subject_groups[group].append(sdata)
+                except KeyError:
+                    subject_groups[group] = [sdata]
     ### Divide the pupils according to report type
     rtypes = {}
     for pdata, grades in full_grade_table["PUPIL_LIST"]:
@@ -131,12 +119,12 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
             rtypes[rtype].append(pid)
         except KeyError:
             rtypes[rtype] = [pid]
-
     ### Build reports for each report-type separately
-    rtype_path = dict(
-#TODO! was just a single list? ...
-        full_grade_table["COLUMNS"].get("REPORT_TYPE")["PARAMETERS"]["CHOICES"]
-    )
+    try:
+        rtdata = column_lists["INPUT"].get("REPORT_TYPE")
+    except KeyError:
+        rtdata = column_lists["CALCULATE"].get("REPORT_TYPE")
+    rtype_path = dict(rtdata["PARAMETERS"]["CHOICES"])
     fplist = []
     for rtype, pid_list in rtypes.items():
         try:
@@ -388,30 +376,34 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
                 )
                 return "?"
             return ""
-
-    NOGRADE = grade_map.get(NO_GRADE) or "––––––"
+#TODO: use string from config for this occasion, etc.?
+# At present this config is not available here ...
+    NOGRADE = "––––––"
     # REPORT("OUT", repr(rptdata))
     for sid in subjects:
         try:
             g = rptdata.pop(sid)
         except KeyError:
+#TODO: Is this possible?
+            assert(False)
             REPORT(
                 "WARNING",
                 T["MISSING_SUBJECT_GRADE"].format(
                     sid=sid, pupil=pupil_name(rptdata)
                 ),
             )
-            g = "/"
-        if g:
-            rptdata[f"g.{sid}"] = print_grade(g)
+            rptdata[f"g.{sid}"] = "XXX"
         else:
-            REPORT(
-                "WARNING",
-                T["EMPTY_SUBJECT_GRADE"].format(
-                    sid=sid, pupil=pupil_name(rptdata)
-                ),
-            )
-            rptdata[f"g.{sid}"] = "???"
+            if g:
+                rptdata[f"g.{sid}"] = print_grade(g)
+            else:
+                REPORT(
+                    "WARNING",
+                    T["EMPTY_SUBJECT_GRADE"].format(
+                        sid=sid, pupil=pupil_name(rptdata)
+                    ),
+                )
+                rptdata[f"g.{sid}"] = "???"
 
     for tag, sdata_list in sgroups.items():
         # REPORT("OUT", f'### S-Group {tag}, {[sd["SID"] for sd in sdata_list]}')

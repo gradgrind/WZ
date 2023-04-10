@@ -94,8 +94,6 @@ def sort_pupil_grades(
             g = grades[sid]
         except KeyError:
             continue
-#TODO--
-        print("GRADE:", sid, g, empty_slots)
         sname = subjects.map(sid)
         try:
             s0, x = sid.rsplit('.', 1)
@@ -163,21 +161,10 @@ def Abi_calc(
         [(column type, column data),  ... ]
     """
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
-#TODO--
-    print("++++++++++++++++++++++++++++++++++++++++++++++++++++")
-
-#    slist = [(s["SID"], s["NAME"]) for s in columns["SUBJECT"]]
-#    if columns["composites"]:
-#        REPORT("ERROR", COMPOSITES_NOT_SUPPORTED.format(
-#            names=", ".join(s["NAME"] for s in columns["composites"])
-#        ))
-#    sidmap, sidindex, newsids = sort_pupil_grades(grades, slist, raw_grades)
     sidmap, sidindex, newsids = sort_pupil_grades(grades, COMPONENTS, raw_grades)
     ## Extend subject list if necessary ('.x' grades)
     newsubjects = []
     for sid, sname in newsids:
-#TODO--
-        print("newsid:", sid, sname)
         COMPONENTS.append(sid)
         newsubjects.append(
             ("SUBJECT",
@@ -188,16 +175,6 @@ def Abi_calc(
                 }
             )
         )
-#        columns["SUBJECT"].append(
-#            {
-#                "SID": sid,
-#                "NAME": sname,
-#                "TYPE": "SUBJECT",
-#                "GROUP": "X",
-#            }
-#        )
-    # Sort (again)
-#    columns["SUBJECT"].sort(key=lambda k: (k["GROUP"], k["NAME"]))
     ## Now do the calculations
     scaled = []
     ## Subjects 1 – 4
@@ -306,7 +283,6 @@ def Abi_calc(
     return newsubjects
 
 
-#TODO: clean up (I think it is functional)
 def fhs(fields, indexes, fhs_subjects):
     """Calculations for "Fachhochschulreife".
     """
@@ -324,19 +300,14 @@ def fhs(fields, indexes, fhs_subjects):
         del(s2g[s])
         subjects.append(s)
         grades.append(g)
-
-
-    print("\n%%%%%%%%%%%% FHS:", fields)
-    print("   ++", indexes)
-    print("   --", fhs_subjects)
-
+    # print("\n%%%%%%%%%%%% FHS:", fields)
+    # print("   ++", indexes)
+    # print("   --", fhs_subjects)
     s2g = {
         s: float(fields[f"AVE_{i}"].replace(',', '.'))
         for s, i in indexes.items()
     }
-    print("   ~~", s2g)
-
-
+    # print("   ~~", s2g)
     subjects = []
     grades = []
     # Get the best of each group
@@ -352,15 +323,13 @@ def fhs(fields, indexes, fhs_subjects):
         bestof(fhs_subjects["BlockB"])
     except:
         raise Bug("Missing subject/grade")
-
-    print("   1:", s2g)
+    # print("   1:", s2g)
     bestof(s2g)
-    print("   1:", s2g)
+    # print("   1:", s2g)
     bestof(s2g)
-    print("   1:", s2g)
-    print("   subjects:", subjects)
-    print("   grades:", grades)
-
+    # print("   1:", s2g)
+    # print("   subjects:", subjects)
+    # print("   grades:", grades)
     n5 = 0  # grades under 5 points
     e5 = 0  # eA-grades under 5 points
     z = False   # subject with 0 points?
@@ -380,8 +349,7 @@ def fhs(fields, indexes, fhs_subjects):
     fields["sum"] = str(points35)
     points20fail = points20 < 20
     points35fail = points35 < 35
-
-    print("&&&&&& fhs:", z, l5g3, l5e2, points20, points35)
+    # print("&&&&&& fhs:", z, l5g3, l5e2, points20, points35)
     if z or l5g3 or l5e2 or points20fail or points35fail:
         return False
     if points35 >= 97:
@@ -397,6 +365,5 @@ def fhs(fields, indexes, fhs_subjects):
     fields["Grade2"] = g2
     fields["GradeT"] = GRADE_TEXT[g1] + ", " + GRADE_TEXT[g2]
     fields["RESULT"] = "FHS: " + g1 + "," + g2
-
-    print("&&&&&& fhs ok:", fields)
+    # print("&&&&&& fhs ok:", fields)
     return True
