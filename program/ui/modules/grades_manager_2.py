@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-04-09
+Last updated:  2023-04-10
 
 Front-end for managing grade reports.
 
@@ -41,6 +41,8 @@ COMPONENT_COLOUR = "ffeeff"
 COMPOSITE_COLOUR = "eeffff"
 CALCULATED_COLOUR = "ffffcc"
 
+NO_GRADE = "/"
+
 #########################################
 
 if __name__ == "__main__":
@@ -66,7 +68,7 @@ from core.db_access import open_database, db_values
 from core.base import class_group_split, Dates
 from core.basic_data import check_group
 from core.pupils import pupils_in_group, pupil_name
-from grades.grades_base_0 import (
+from grades.grades_base import (
     GetGradeConfig,
     MakeGradeTable,
     FullGradeTable,
@@ -414,11 +416,14 @@ class GradeManager(QWidget):
             self.occasion, self.class_group, instance
         )
         try:
-#TODO! was just a single list? ...
-            grade_table["COLUMNS"].get("REPORT_TYPE")
+            grade_table["COLUMNS"]["INPUT"].get("REPORT_TYPE")
             self.make_reports.setEnabled(True)
         except KeyError:
-            self.make_reports.setEnabled(False)
+            try:
+                grade_table["COLUMNS"]["CALCULATE"].get("REPORT_TYPE")
+                self.make_reports.setEnabled(True)
+            except KeyError:
+                self.make_reports.setEnabled(False)
         self.instance = instance
         self.suppress_callbacks = True
         self.issue_date.setDate(
@@ -520,7 +525,7 @@ class GradeTableView(GridViewAuto):
         ## Deal with the column types separately
         # Collect column widths, colours, headers and click-handlers
         column_data = grade_table["COLUMNS"]
-        for sdata in column_data["subjects"]:
+        for sdata in column_data["SUBJECT"]:
             column_headers.append((sdata["SID"], sdata["NAME"]))
             column_widths.append(GRADETABLE_SUBJECTWIDTH)
             if "COMPOSITE" in sdata:
@@ -529,12 +534,12 @@ class GradeTableView(GridViewAuto):
             else:
                 col2colour.append(None)
                 click_handler.append(grade_click_handler)
-        for sdata in column_data["composites"]:
+        for sdata in column_data["COMPOSITE"]:
             column_headers.append((sdata["SID"], sdata["NAME"]))
             column_widths.append(GRADETABLE_SUBJECTWIDTH)
             col2colour.append(COMPOSITE_COLOUR)
             click_handler.append(None)
-        for sdata in column_data["calculates"]:
+        for sdata in column_data["CALCULATE"]:
             column_headers.append((sdata["SID"], sdata["NAME"]))
             try:
                 column_widths.append(int(custom_widths[sdata["SID"]]))
@@ -551,7 +556,7 @@ class GradeTableView(GridViewAuto):
                 column_widths.append(GRADETABLE_EXTRAWIDTH)
             col2colour.append(CALCULATED_COLOUR)
             click_handler.append(None)
-        for sdata in column_data["inputs"]:
+        for sdata in column_data["INPUT"]:
             column_headers.append((sdata["SID"], sdata["NAME"]))
             try:
                 column_widths.append(int(custom_widths[sdata["SID"]]))
@@ -651,13 +656,16 @@ class GradeTableView(GridViewAuto):
                 # the "value" that is needed for further processing.
                 # For this it would be enough to set the "VALUE" property.
 
-                sid = s[0]
+                sid = sn[0]
                 cell.set_property("PID", pid)
                 cell.set_property("SID", sid)
-                cell.set_text(pgrades.get(sid, ""))
-                handler = click_handler[col]
-                if handler:
-                    cell.set_property("EDITOR", handler)
+                try:
+                    cell.set_text(pgrades[sid])
+                except KeyError:
+                    cell.set_text(NO_GRADE)
+                else:
+                    if (handler := click_handler[col]):
+                        cell.set_property("EDITOR", handler)
             row += 1
 
         self.rescale()
@@ -676,10 +684,15 @@ class GradeTableView(GridViewAuto):
         self.set_modified_time(timestamp)
         if changes:
             # Update changed display cells
+#TODO--
             print("??? CHANGES", changes)
             row = self.pid2row[pid]
             for sid, oldval in changes:
-                self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
+                try:
+                    col = self.sid2col[sid]
+                except KeyError:
+                    continue
+                self.get_cell((row, col)).set_text(grades[sid])
 
 #?
     def set_modified_time(self, timestamp):

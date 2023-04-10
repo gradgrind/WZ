@@ -1,7 +1,7 @@
 """
 local/grade_processing.py
 
-Last updated:  2023-04-09
+Last updated:  2023-04-10
 
 Functions to perform grade calculations.
 
@@ -36,8 +36,6 @@ AVERAGE_DP = 2  # decimal places for averages
 
 GRADE_FUNCTIONS = {}
 
-#SPECIAL_HANDLERS = {}
-
 GRADE_NUMBER = {
     "1+": 15,
     "1": 14,
@@ -63,10 +61,9 @@ NUMBER_GRADE = {v: k for k, v in GRADE_NUMBER.items()}
 
 def GradeFunction(
     fname: str,
-    columns: dict[str, list[dict]],
     subject: dict,
     grades: dict[str, str],
-    raw_grades: dict[str, str],
+    raw_grades: Optional[dict[str, str]],
 ) -> tuple[str, str]:
     """Perform the given function to calculate the value of the field
     specified by <subject>.
@@ -79,23 +76,13 @@ def GradeFunction(
     except KeyError:
         REPORT("ERROR", UNKNOWN_GRADE_FUNCTION.format(name=fname))
         return []
-    return fn(grades, raw_grades, columns, subject)
-
-
-#def SpecialHandler(fname, **kargs) -> None:
-#    try:
-#        fn = SPECIAL_HANDLERS[fname]
-#    except KeyError:
-#        REPORT("ERROR", T["UNKNOWN_SPECIAL_FUNCTION"].format(name=fname))
-#        return
-#    fn(**kargs)
+    return fn(grades, subject, raw_grades)
 
 
 def ROUNDED_AVERAGE_I(
     grades: dict[str, str],
-    raw_grades:dict[str, str],
-    columns: dict[str, list[dict]],
     sdata: dict,
+    raw_grades: Optional[dict[str, str]],
 ) -> Optional[tuple[str, str]]:
     """Calculate the value of a "composite" subject from its component
     subject grades. This is using grades 1 – 6 (with +/-).
@@ -134,9 +121,8 @@ GRADE_FUNCTIONS["ROUNDED_AVERAGE_I"] = ROUNDED_AVERAGE_I
 
 def ROUNDED_AVERAGE_II(
     grades: dict[str, str],
-    raw_grades:dict[str, str],
-    columns: dict[str, list[dict]],
     sdata: dict,
+    raw_grades: Optional[dict[str, str]],
 ) -> Optional[tuple[str, str]]:
     """Calculate the value of a "composite" subject from its component
     subject grades. This is using grades 15 – 0.
@@ -172,9 +158,8 @@ GRADE_FUNCTIONS["ROUNDED_AVERAGE_II"] = ROUNDED_AVERAGE_II
 
 def AVERAGE_I(
     grades: dict[str, str],
-    raw_grades:dict[str, str],
-    columns: dict[str, list[dict]],
     sdata: dict,
+    raw_grades: Optional[dict[str, str]],
 ) -> Optional[tuple[str, str]]:
     """This calculates an average of a set of grades (1 – 6, ignoring
     +/-) to a number (AVERAGE_DP) of decimal places without rounding –
@@ -212,24 +197,6 @@ GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 
 # Abitur calculations -> report type (success, etc.)
 GRADE_FUNCTIONS["ABITUR_NIWA_RESULT"] = Abi_calc
-
-
-#def abi_extra_subjects(subjects):
-#    """Add grade slots for additional exam results in Abitur.
-#    It is important that the third field of each entry ("GROUP") is "X".
-#    This signals to the grade reader that the grades should not be
-#    regarded as "spurious" (no teacher) – otherwise they would be
-#    deleted and the subject regarded as "not taken".
-#    """
-#    nsid = 1000
-#    for sdata in sorted(subjects.values()):
-#        if sdata [3] in ('E', 'G'):
-#            name = sdata[2].split('*', 1)[0] + "*nach"
-#            sid = sdata[1].split('.', 1)[0] + ".x"
-#            subjects[sid] = [nsid, sid, name, 'X', None]
-#            nsid += 1
-#
-#SPECIAL_HANDLERS["ABI_WANI_SUBJECTS"] = abi_extra_subjects
 
 
 #TODO: Building reports

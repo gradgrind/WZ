@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2023-04-09
+Last updated:  2023-04-10
 
 Access grade data, read and build grade tables.
 
@@ -56,7 +56,7 @@ T = TRANSLATIONS("grades.grades_base")
 
 ### +++++
 
-#from typing import Optional
+from typing import Optional
 import datetime
 
 from core.base import class_group_split, Dates
@@ -73,9 +73,7 @@ from core.pupils import pupil_name, pupil_data
 from core.report_courses import get_pupil_grade_matrix
 from tables.spreadsheet import read_DataTable
 from tables.matrix import KlassMatrix
-from local.grade_processing import GradeFunction#, SpecialHandler
-
-NO_GRADE = "/"
+from local.grade_processing import GradeFunction
 
 ### -----
 
@@ -142,7 +140,7 @@ def get_group_data(occasion: str, class_group: str):
 
 
 class SubjectColumns(list):
-    """A custom representation of the column data ("subjects").
+    """A custom representation of the column data (subjects, etc.).
     It is a list, but with a look-up function ("get") for sid keys.
     Only indexing and the methods below are supported, using others
     might well make a mess ...
@@ -190,25 +188,15 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     subjects, pupils = get_pupil_grade_matrix(class_group, text_reports=False)
     group_data = get_group_data(occasion, class_group)
     klass, group = class_group_split(class_group)
-    ### Complete the "subjects" list, including "composite" subjects,
-    ### calculated fields and additional input fields.
+    ### Complete the columns list, including "normal" subjects, "composite"
+    ### subjects, calculated fields and additional input fields.
     extra_fields = group_data["EXTRA_FIELDS"]
-#TODO: Remove SUBJECT_FUNCTION from CONFIG/GRADES_BASE
-#    try:
-#        sfun = group_data["SUBJECT_FUNCTION"]
-#    except KeyError:
-#        pass
-#    else:
-#        SpecialHandler(sfun, subjects=subjects)
-
-    # print("\n????? subjects:\n", subjects)
-
     subject_list = SubjectColumns()
     column_lists = {
-        "subjects": subject_list,
-        "composites": SubjectColumns(),
-        "calculates": SubjectColumns(),
-        "inputs": SubjectColumns(),
+        "SUBJECT": subject_list,
+        "COMPOSITE": SubjectColumns(),
+        "CALCULATE": SubjectColumns(),
+        "INPUT": SubjectColumns(),
     }
     for sdata in sorted(subjects.values()):
         sid = sdata[1]
@@ -219,7 +207,6 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
         value = {
             "SID": sid,
             "NAME": sname,
-            "TYPE": "SUBJECT",
             "GROUP": zgroup,
         }
         subject_list.append(value)
@@ -288,11 +275,10 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
                 continue # Don't include this composite subject
             for cmpsid in component_list:
                 subject_list.get(cmpsid)["COMPOSITE"] = osid
-            column_lists["composites"].append(
+            column_lists["COMPOSITE"].append(
                 {
                     "SID": osid,
                     "NAME": odata["NAME"],
-                    "TYPE": "SUBJECT",
                     "FUNCTION": odata["FUNCTION"],
                     "GROUP": odata["GROUP"],
                     "PARAMETERS": {
@@ -305,12 +291,10 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
         if otype == "CALCULATE":
             if not component_list:
                 # Collect all non-component subjects
-                component_list = {
-                    item["SID"]
-                    for item in subject_list
-                    if "COMPOSITE" not in item
-                }
-                for item in column_lists["composites"]:
+                for item in subject_list:
+                    if "COMPOSITE" not in item:
+                        component_list.append(item["SID"])
+                for item in column_lists["COMPOSITE"]:
                     component_list.append(item["SID"])
                 if not component_list:
                     REPORT(
@@ -329,11 +313,10 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
                 parms.update(odata["PARAMETERS"])
             except KeyError:
                 pass
-            column_lists["calculates"].append(
+            column_lists["CALCULATE"].append(
                 {
                     "SID": osid,
                     "NAME": odata["NAME"],
-                    "TYPE": "CALCULATE",
                     "FUNCTION": odata["FUNCTION"],
                     "PARAMETERS": parms
                 }
@@ -341,11 +324,10 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
             continue
 
         if otype == "INPUT":
-            column_lists["inputs"].append(
+            column_lists["INPUT"].append(
                 {
                     "SID": osid,
                     "NAME": odata["NAME"],
-                    "TYPE": "INPUT",
                     "METHOD": odata["METHOD"],
                     "PARAMETERS": odata.get("PARAMETERS") or {}
                 }
@@ -441,6 +423,45 @@ def pupil_subject_grade_info(occasion, class_group, instance):
     table_info["DATE_GRADES"] = DATE_GRADES
     table_info["MODIFIED"] = MODIFIED
     return table_info
+
+
+def read_stored_grades(
+    occasion: str,
+    class_group: str,
+    instance: str = ""
+) -> list[tuple[dict, dict]]:
+    """Return an ordered list containing personal info and grade info
+    from the database for each pupil covered by the parameters.
+    """
+    fields = [
+        # "OCCASION",
+        # "CLASS_GROUP",
+        # "INSTANCE",
+        "PID",
+        "LEVEL",  # The level might have changed, so this field is relevant
+        "GRADE_MAP",
+    ]
+    flist, rlist = db_read_table(
+        "GRADES",
+        fields,
+        OCCASION=occasion,
+        CLASS_GROUP=class_group,
+        INSTANCE=instance,
+    )
+    plist = []
+    for row in rlist:
+        pid = row[0]
+        pdata = pupil_data(pid)  # this mapping is not cached => it is mutable
+        # Save current volatile field values
+        pdata["__CLASS__"] = pdata["CLASS"]
+        pdata["__LEVEL__"] = pdata["LEVEL"]
+        # Substitute these fields with data from the record
+        pdata["CLASS"] = class_group_split(class_group)[0]
+        pdata["LEVEL"] = row[1]
+        # Get grade (etc.) info as mapping
+        grade_map = read_pairs(row[2])
+        plist.append((pdata, dict(grade_map)))
+    return plist
 
 
 def prepare_pupil_list(table_info):
@@ -576,20 +597,25 @@ def complete_grademap(column_lists, grades, name, p_grade_tids=None):
     calculated anew (later).
     """
     grade_map = {}
-    for sdata in column_lists["subjects"]:
+    for sdata in column_lists["SUBJECT"]:
         sid = sdata["SID"]
-        if (p_grade_tids is None) or (sdata["GROUP"] == "X"):
-            # for "closed" data-sets, or "extra" subjects added
-            # automatically – without teachers
+#        if (p_grade_tids is None) or (sdata["GROUP"] == "X"):
+#            # for "closed" data-sets, or "extra" subjects added
+#            # automatically – without teachers
+        if p_grade_tids is None:
+            # for "closed" data-sets
             try:
                 grade_map[sid] = grades[sid]
             except KeyError:
-                grade_map[sid] = NO_GRADE
+                continue
         elif p_grade_tids.get(sid):
             grade_map[sid] = grades.get(sid) or ""
         else:
-            g = grades.get(sid)
-            if g and g != NO_GRADE:
+            try:
+                g = grades[sid]
+            except KeyError:
+                continue
+            if g:
                 REPORT(
                     "WARNING",
                     T["GRADE_WITH_NO_TEACHER"].format(
@@ -599,9 +625,7 @@ def complete_grademap(column_lists, grades, name, p_grade_tids=None):
                         pupil=name,
                     )
                 )
-            grade_map[sid] = NO_GRADE
-
-    for sdata in column_lists["inputs"]:
+    for sdata in column_lists["INPUT"]:
         sid = sdata["SID"]
         try:
             grade_map[sid] = grades[sid]
@@ -639,148 +663,92 @@ def complete_gradetable(table, db_pdata, db_grademap):
         pupil_name(db_pdata)   # just for messages
     )
     table["PUPIL_LIST"].append(db_pdata, grades)
+    # It cannot be assumed that all the subjects have grades – some
+    # will only appear after the calculations. Thus their grades will
+    # not (necessarily) be in <grades>. The calculations would need
+    # access to the raw grade from the database (<db_grademap>).
+    calculate_grades(table, db_pdata["PID"], db_grademap)
+    # The results are not used here.
 
-    # For the first pupil(s) it cannot be assumed that all the subjects are
-    # registered – some will only appear after the calculations. Thus their
-    # grades will not (necessarily) be in <grades>. The caluclations would
-    # need access to the raw grade from the database (<db_grademap>).
 
-    ## Now perform calculations
-    for slist in ("composites", "calculates"):
+def UpdatePupilGrades(table: dict, pid: str):
+    """Recalculate table row."""
+#TODO--
+    print("§UPDATE", pid, grades := table["PUPIL_LIST"].get(pid)[1])
+    return calculate_grades(table, pid, None)
+
+
+def calculate_grades(
+    table: dict,
+    pid: str,
+    old_grades:Optional[dict]
+) -> tuple[list[tuple[str, str]], Optional[str]]:
+    ## Save initial grade map so that changes can be determined
+    grades = table["PUPIL_LIST"].get(pid)[1]
+    grades0 = list(grades.items())
+    ## Perform calculations
+    column_lists = table["COLUMNS"]
+    for slist in ("COMPOSITE", "CALCULATE"):
         subjects = column_lists[slist]
         for sdata in subjects:
             fn = sdata["FUNCTION"]
-            # The function modifies <grades>, possibly also <subjects>
-            GradeFunction(fn, column_lists, sdata, grades, db_grademap)
+            # The function modifies <grades>
+            newsubjects = GradeFunction(fn, sdata, grades, old_grades)
+            # Any column additions?
+            ctset = set()
+            for ctype, cdata in newsubjects:
+                cl = column_lists[ctype]
+                cl.append(cdata)
+                ctset.add(ctype)
+#TODO--
+                print("§§§ added COLUMN:", ctype, cdata)
+            for ctype in ctset:
+                # Re-sort the column list
+                column_lists[ctype].sort(
+                    key=lambda k: (k["GROUP"], k["NAME"])
+                )
 
-    # Save grades if one or more of the base set (subjects and inputs)
-    # differs from the stored values. Empty and NO_GRADE values are not
-    # saved – the sid is simply not included. These will be reconstructed
-    # when the data is loaded using <FullGradeTable>, which calls this
-    # function for each pupil.
 
-    change = False
+
+    ## Collect changes to (existing) entries in the initial grade set
+    changes0 = []
+    for sid, g0 in grades0:
+        if grades.get(sid) != g0:
+            changes0.append((sid, g0))
+    ## Save grades if one or more of the base set (subjects and inputs)
+    ## differs from the stored values. Empty values are not saved (the
+    ## sid is simply not included in the saved string).
+    ## <FullGradeTable> (called before this function) adds missing
+    ## subject entries.
+    change = old_grades is None
     base_grades = {}
-    for slist in ("subjects", "inputs"):
+    for slist in ("SUBJECT", "INPUT"):
         subjects = column_lists[slist]
         for sdata in subjects:
             sid = sdata["SID"]
-            g0 = db_grademap.get(sid)
             g1 = grades.get(sid)
-            if g1:
-                if g1 == NO_GRADE:
-                    # There should be no entry in the db
-                    if g0 is not None:
-                        change = True
-                else:
+            if old_grades is None:
+                if g1:
+                    base_grades[sid] = g1
+            else:
+                g0 = old_grades.get(sid)
+                if g1:
                     base_grades[sid] = g1
                     if g1 != g0:
                         change = True
-            elif g0:
-                change = True
+                elif g0:
+                    change = True
 
-# Note that previously empty "inputs" will have acquired a default
+# Note that previously empty "INPUT" items will have acquired a default
 # value ... ideally a change should only be registered when the new
 # value differs from this, but this may be impractical ...
 
     if change:
-        # Rewrite database entry, ignore the result (timestamp)
-        update_grade_entry(table, pid, grades)
-
-
-#TODO: deprecated? See <complete_gradetable>
-def calculate_pid_grades(table, pid):
-    """
-    Calculate the evaluated cells of the pupil data from "left to
-    right" (lower to higher index).
-    A calculation may depend on the value in an evaluated cell, but
-    not on evaluated cells to the right (because of the order of
-    evaluation).
-    The set of grades should be complete before calling this function,
-    i.e. all subjects should have entries (such as is achieved by
-    calling <complete_grademap>).
-    There is also the possibility that a calculation function changes
-    the base "grade" values (those which should be stored in the
-    database). In this case the database should be updated.
-    """
-    pdata, grades = table["PUPIL_LIST"].get(pid)
-    subject_lists = table["COLUMNS"]
-#TODO
-    for slist in ("composites", "calculates"):
-        subjects = subject_lists[slist]
-        for i, sdata in enumerate(subjects):
-            fn = sdata["FUNCTION"]
-            # The function modifies <grades>, possibly also <subjects>
-            GradeFunction(fn, subjects, i, grades)
-
-
-
-def read_stored_grades(
-    occasion: str,
-    class_group: str,
-    instance: str = ""
-) -> list[tuple[dict, dict]]:
-    """Return an ordered list containing personal info and grade info
-    from the database for each pupil covered by the parameters.
-    """
-    fields = [
-        # "OCCASION",
-        # "CLASS_GROUP",
-        # "INSTANCE",
-        "PID",
-        "LEVEL",  # The level might have changed, so this field is relevant
-        "GRADE_MAP",
-    ]
-    flist, rlist = db_read_table(
-        "GRADES",
-        fields,
-        OCCASION=occasion,
-        CLASS_GROUP=class_group,
-        INSTANCE=instance,
-    )
-    plist = []
-    for row in rlist:
-        pid = row[0]
-        pdata = pupil_data(pid)  # this mapping is not cached => it is mutable
-        # Save current volatile field values
-        pdata["__CLASS__"] = pdata["CLASS"]
-        pdata["__LEVEL__"] = pdata["LEVEL"]
-        # Substitute these fields with data from the record
-        pdata["CLASS"] = class_group_split(class_group)[0]
-        pdata["LEVEL"] = row[1]
-        # Get grade (etc.) info as mapping
-        grade_map = read_pairs(row[2])
-        plist.append((pdata, dict(grade_map)))
-    return plist
-
-
-#TODO: use <update_grade_entry> ...
-def UpdatePupilGrades(table, pid):
-    # Recalculate row
-    changed_grades = calculate_pid_grades(table, pid)
-    # Save grades to database
-    grades = table["PUPIL_LIST"].get(pid)[1]
-    gstring = write_pairs_dict(grades)
-    OCCASION = table["OCCASION"]
-    CLASS_GROUP = table["CLASS_GROUP"]
-    INSTANCE = table["INSTANCE"]
-    if not db_update_field("GRADES",
-        "GRADE_MAP", gstring,
-        OCCASION=OCCASION,
-        CLASS_GROUP=CLASS_GROUP,
-        INSTANCE=INSTANCE,
-        PID=pid
-    ):
-        db_new_row("GRADES",
-            OCCASION=OCCASION,
-            CLASS_GROUP=CLASS_GROUP,
-            INSTANCE=INSTANCE,
-            PID=pid,
-            LEVEL=pupil_data(pid)["LEVEL"],
-            GRADE_MAP=gstring
-        )
-    timestamp = set_grade_update_time(table)
-    return changed_grades, timestamp
+        # Rewrite database entry, getting the timestamp
+        t = update_grade_entry(table, pid, base_grades)
+    else:
+        t = ""
+    return (changes0, t)
 
 
 def update_grade_entry(table: dict, pid: str, grades: dict[str, str]
@@ -982,7 +950,10 @@ def MakeGradeTable(table:dict, clear:bool=False) -> bytes:
     sidcol: list[tuple[str, int]] = []
     sid: str
     sdata: dict
+
 #TODO! was just a single list ...
+    assert(False)
+
     for sdata in table["COLUMNS"]:
         if sdata["TYPE"] == "SUBJECT" and "FUNCTION" not in sdata:
             # Add subject

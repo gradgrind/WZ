@@ -1,7 +1,7 @@
 """
 local/abi_wani_calc.py
 
-Last updated:  2023-04-09
+Last updated:  2023-04-10
 
 Handling Abitur qualifications in a Waldorf school in Niedersachsen.
 
@@ -42,6 +42,9 @@ COMPOSITES_NOT_SUPPORTED = (
 
 ### +++++
 
+from typing import Optional
+from core.basic_data import get_subjects
+
 COND_PRINT = {True: "Ja", False: "Nein"}
 
 GRADE_TEXT = {
@@ -50,15 +53,14 @@ GRADE_TEXT = {
     "8": "acht", "9": "neun"
 }
 
-NO_GRADE = "/"
-
 ### -----
 
 
 def sort_pupil_grades(
     grades: dict[str, str],
-    raw_grades:dict[str, str],
-    slist:list[tuple[str, str]],
+#    slist:list[tuple[str, str]],
+    components: list[str],
+    raw_grades: Optional[dict[str, str]],
 ) -> tuple[dict, dict, list[tuple[str,str]]]:
     """Sort the subjects and grades into the groups required for the
     calculations and certificate. This is based on the (necessary!)
@@ -68,34 +70,36 @@ def sort_pupil_grades(
         2 courses with compulsory oral examinations         (.m)
         2 courses without compulsory examination            (.n)
     """
-    gslots = {
+    XSLOTS = {
         # The '.'-suffixes of the subjects: [start index, number of slots]
+        # This must be dynamically defined because the values are changed.
         'e': [1, 3],
         'g': [4, 1],
         'm': [5, 2],
         'n': [7, 2]
     }
-#TODO: Do I need the COMPONENTS field? Why can't I just use the defined
-# columns?
-#    COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
     sidmap = {} # map field tag to subject-id
     sidindex = {} # map basic subject-id (before '.') to subject index
     empty_slots = 0
-    xsids = {}
     xsids_in = set()    # to check for new subjects with "Nachprüfung"
     xsids_out = []      # [(sid, name), ... ]
-    for sid, sname in slist:
+#    for sid, sname in slist:
+    subjects = get_subjects()
+    for sid in components:
+
         if sid.endswith(".x"):  # subject with "Nachprüfung"
             xsids_in.add(sid)
-            if sid not in xsids:
-                # default value for such a subject
-                xsids[sid] = NO_GRADE
+            continue    # the grade is dealt with later
+        try:
+            g = grades[sid]
+        except KeyError:
             continue
-        g = grades.get(sid) or ''
-        if g == NO_GRADE: continue
+#TODO--
+        print("GRADE:", sid, g, empty_slots)
+        sname = subjects.map(sid)
         try:
             s0, x = sid.rsplit('.', 1)
-            type_info = gslots[x]
+            type_info = XSLOTS[x]
         except ValueError:
             REPORT("ERROR", SID_WITHOUT_EXTENSION(sid=sid, name=sname))
             continue
@@ -125,20 +129,21 @@ def sort_pupil_grades(
             sn = f"{s0}.x"
             sidmap[tn] = sn
             try:
-                gn = raw_grades[sn]
-                if gn == NO_GRADE:  # actually, this shouldn't be possible
-                    gn = ''
+                gn = grades[sn]
             except KeyError:
-                gn = ''
+                assert(raw_grades is not None)
+                try:
+                    gn = raw_grades[sn]
+                except KeyError:
+                    gn = ''
             grades[tn] = gn
-            xsids[sn] = gn
+            grades[sn] = gn
             xsids_out.append((sn, f"{name0}*nach"))
-    for k, v in gslots.items():
+    for k, v in XSLOTS.items():
         if v[1] != 0:
             REPORT("ERROR", TOO_FEW_SUBJECTS.format(tag=k))
     if empty_slots:
         REPORT("ERROR", EMPTY_SLOTS.format(n=str(empty_slots)))
-    grades.update(xsids)
     newsids = [
         sn
         for sn in xsids_out
@@ -149,33 +154,50 @@ def sort_pupil_grades(
 
 def Abi_calc(
     grades: dict[str:str],
-    raw_grades:dict[str,str],
-    columns: dict[str, list[dict]],
     sdata: dict,
-):
+    raw_grades: Optional[dict[str, str]],
+) -> list[tuple[str, dict]]:
     """Perform the calculations to determine the result of the Abitur.
-    NOTE that the <subjects> list can be modified (extended) by this
-    function.
     The <grades> mapping has multiple entries modified (or added).
+    Return a list of additions to the columns lists:
+        [(column type, column data),  ... ]
     """
-    slist = [(s["SID"], s["NAME"]) for s in columns["subjects"]]
-    if columns["composites"]:
-        REPORT("ERROR", COMPOSITES_NOT_SUPPORTED.format(
-            names=", ".join(s["NAME"] for s in columns["composites"])
-        ))
-    sidmap, sidindex, newsids = sort_pupil_grades(grades, raw_grades, slist)
+    COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
+#TODO--
+    print("++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
+#    slist = [(s["SID"], s["NAME"]) for s in columns["SUBJECT"]]
+#    if columns["composites"]:
+#        REPORT("ERROR", COMPOSITES_NOT_SUPPORTED.format(
+#            names=", ".join(s["NAME"] for s in columns["composites"])
+#        ))
+#    sidmap, sidindex, newsids = sort_pupil_grades(grades, slist, raw_grades)
+    sidmap, sidindex, newsids = sort_pupil_grades(grades, COMPONENTS, raw_grades)
     ## Extend subject list if necessary ('.x' grades)
+    newsubjects = []
     for sid, sname in newsids:
-        columns["subjects"].append(
-            {
-                "SID": sid,
-                "NAME": sname,
-                "TYPE": "SUBJECT",
-                "GROUP": "X",
-            }
+#TODO--
+        print("newsid:", sid, sname)
+        COMPONENTS.append(sid)
+        newsubjects.append(
+            ("SUBJECT",
+                {
+                    "SID": sid,
+                    "NAME": sname,
+                    "GROUP": "X",
+                }
+            )
         )
+#        columns["SUBJECT"].append(
+#            {
+#                "SID": sid,
+#                "NAME": sname,
+#                "TYPE": "SUBJECT",
+#                "GROUP": "X",
+#            }
+#        )
     # Sort (again)
-    columns["subjects"].sort(key=lambda k: (k["GROUP"], k["NAME"]))
+#    columns["SUBJECT"].sort(key=lambda k: (k["GROUP"], k["NAME"]))
     ## Now do the calculations
     scaled = []
     ## Subjects 1 – 4
@@ -279,11 +301,10 @@ def Abi_calc(
         astr = "NA"
     sid = "REPORT_TYPE"
     og = grades.get(sid) or ""
-    if og == astr:
-        return None
-    else:
+    if og != astr:
         grades[sid] = astr
-        return (sid, og)
+    return newsubjects
+
 
 #TODO: clean up (I think it is functional)
 def fhs(fields, indexes, fhs_subjects):
