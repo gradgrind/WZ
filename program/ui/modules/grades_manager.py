@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-01-02
+Last updated:  2023-04-11
 
 Front-end for managing grade reports.
 
@@ -64,16 +64,18 @@ from core.db_access import open_database, db_values
 from core.base import class_group_split, Dates
 from core.basic_data import check_group
 from core.pupils import pupils_in_group, pupil_name
-from grades.gradetable import (
-    get_grade_config,
-    make_grade_table,
-    full_grade_table,
-    update_pupil_grades,
-    update_table_info,
-    load_from_file,
+from grades.grades_base import (
+    GetGradeConfig,
+    MakeGradeTable,
+    FullGradeTable,
+    FullGradeTableUpdate,
+    UpdatePupilGrades,
+    UpdateTableInfo,
+    LoadFromFile,
+    NO_GRADE,
 )
-from grades.makereports import make_reports
-from local.grade_functions import report_name
+from grades.make_grade_reports import MakeReports
+from local.grade_processing import ReportName
 
 from ui.ui_base import (
     QWidget,
@@ -221,7 +223,7 @@ class GradeManager(QWidget):
         self.pupil_data_table.signal_modified.connect(self.updated)
 
         # Various "controls" in the panel on the right
-        grade_config = get_grade_config()
+        grade_config = GetGradeConfig()
         self.info_fields = dict(grade_config["INFO_FIELDS"])
         formbox = QFormLayout()
         vboxr.addLayout(formbox)
@@ -307,16 +309,21 @@ class GradeManager(QWidget):
         gblayout.addWidget(pb_make_reports)
 
     def init_data(self):
-        self.__changes_enabled = False
+        self.suppress_callbacks = True
         # Set up "occasions" here, from config
         self.occasion_selector.clear()
-        occasion_info = get_grade_config()["OCCASIONS"]
+        ### The configuration data should be based first on the "occasion",
+        ### then the group – the other way round from in the config file.
         self.occasion2data = {}
-        for o, odata in occasion_info:
-            self.occasion2data[o] = odata
-            self.occasion_selector.addItem(o)
+        for g, infolist in GetGradeConfig()["GROUP_DATA"].items():
+            for o, data in infolist:
+                try:
+                    self.occasion2data[o][g] = data
+                except KeyError:
+                    self.occasion2data[o] = {g: data}
+                    self.occasion_selector.addItem(o)
         # Enable callbacks
-        self.__changes_enabled = True
+        self.suppress_callbacks = False
         self.class_group = None
         self.changed_occasion(self.occasion_selector.currentText())
 
@@ -324,7 +331,7 @@ class GradeManager(QWidget):
         self.modified_time.setText(timestamp)
 
     def changed_occasion(self, new_occasion: str):
-        if not self.__changes_enabled:
+        if self.suppress_callbacks:
             return
         print("NEW OCCASION:", new_occasion)
         # A change of occasion should preserve the class-group, if this
@@ -348,16 +355,16 @@ class GradeManager(QWidget):
                 continue
             groups.append(g)
         groups.sort(reverse=True)
-        self.__changes_enabled = False
+        self.suppress_callbacks = True
         self.class_selector.clear()
         self.class_selector.addItems(groups)
         self.class_selector.setCurrentText(self.class_group)  # no exception
         # Enable callbacks
-        self.__changes_enabled = True
+        self.suppress_callbacks = False
         self.changed_class(self.class_selector.currentText())
 
     def changed_class(self, new_class_group):
-        if not self.__changes_enabled:
+        if self.suppress_callbacks:
             print("Class change handling disabled:", new_class_group)
             return
         print("NEW GROUP:", new_class_group)
@@ -370,7 +377,7 @@ class GradeManager(QWidget):
         # self.pupil_list.clear()
         # self.pupil_list.addItems([pupil_name(p) for p in self.pupil_data_list])
 
-        self.__changes_enabled = False
+        self.suppress_callbacks = True
         try:
             instance_data = self.group_data["INSTANCE"]
         except KeyError:
@@ -389,7 +396,7 @@ class GradeManager(QWidget):
                     OCCASION=self.occasion,
                 )
                 self.instance_selector.set_list(instances, 1)
-        self.__changes_enabled = True
+        self.suppress_callbacks = False
         self.select_instance()
 
     def select_instance(self, instance=""):
@@ -402,10 +409,18 @@ class GradeManager(QWidget):
                 raise Bug(f"Instance mismatch: '{instance}' vs. '{__instance}'")
         else:
             instance = __instance
-        grade_table = full_grade_table(
+        grade_table = FullGradeTable(
             self.occasion, self.class_group, instance
         )
-        self.make_reports.setEnabled("REPORT_TYPE" in grade_table["ALL_SIDS"])
+        try:
+            grade_table["COLUMNS"]["INPUT"].get("REPORT_TYPE")
+            self.make_reports.setEnabled(True)
+        except KeyError:
+            try:
+                grade_table["COLUMNS"]["CALCULATE"].get("REPORT_TYPE")
+                self.make_reports.setEnabled(True)
+            except KeyError:
+                self.make_reports.setEnabled(False)
         self.instance = instance
         self.suppress_callbacks = True
         self.issue_date.setDate(
@@ -416,56 +431,44 @@ class GradeManager(QWidget):
         )
         self.suppress_callbacks = False
         self.pupil_data_table.setup(grade_table)
+        # Update if the stored dates needed adjustment to fit in range
+        self.grade_date_changed(self.grade_date.date())
+        self.issue_date_changed(self.issue_date.date())
+        # Ensure that the "last modified" field is set
         self.updated(grade_table["MODIFIED"])
 
     def issue_date_changed(self, qdate):
         if self.suppress_callbacks:
             return
-        timestamp = update_table_info(
-            "DATE_ISSUE",
-            qdate.toString(Qt.DateFormat.ISODate),
-            OCCASION=self.occasion,
-            CLASS_GROUP=self.class_group,
-            INSTANCE=self.instance,
-        )
-        self.pupil_data_table.set_modified_time(timestamp)
-        # TODO: Reload table?
-        # self.select_instance()
+        new_date = qdate.toString(Qt.DateFormat.ISODate)
+        if new_date != self.pupil_data_table.grade_table["DATE_ISSUE"]:
+            timestamp = UpdateTableInfo(
+                self.pupil_data_table.grade_table,
+                "DATE_ISSUE",
+                new_date,
+            )
+            self.updated(timestamp)
+            # TODO: Reload table? ... shouldn't be necessary
+            # self.select_instance()
 
     def grade_date_changed(self, qdate):
         if self.suppress_callbacks:
             return
-        timestamp = update_table_info(
-            "DATE_GRADES",
-            qdate.toString(Qt.DateFormat.ISODate),
-            OCCASION=self.occasion,
-            CLASS_GROUP=self.class_group,
-            INSTANCE=self.instance,
-        )
-        self.pupil_data_table.set_modified_time(timestamp)
-        # Reload table
-        self.select_instance()
+        new_date = qdate.toString(Qt.DateFormat.ISODate)
+        if new_date != self.pupil_data_table.grade_table["DATE_GRADES"]:
+            timestamp = UpdateTableInfo(
+                self.pupil_data_table.grade_table,
+                "DATE_GRADES",
+                new_date,
+            )
+            self.updated(timestamp)
+            # Reload table
+            self.select_instance()
 
     def do_make_input_table(self):
         table_data = self.pupil_data_table.grade_table
-        grades = {
-            pdata["PID"]: gmap
-            for pdata, gmap in table_data["GRADE_TABLE_PUPILS"]
-        }
-        xlsx_bytes = make_grade_table(
-            occasion=self.occasion,
-            class_group=self.class_group,
-            instance=self.instance,
-            DATE_ISSUE=table_data["DATE_ISSUE"],
-            DATE_GRADES=table_data["DATE_GRADES"],
-            grades=grades,
-        )
-        fname = report_name(
-            self.occasion,
-            self.class_group,
-            self.instance,
-            T["GRADES"]
-        ) + ".xlsx"
+        xlsx_bytes = MakeGradeTable(table_data)
+        fname = ReportName(table_data, T["GRADES"]) + ".xlsx"
         fpath = SAVE_FILE("Excel-Datei (*.xlsx)", start=fname, title=None)
         if not fpath:
             return
@@ -480,31 +483,28 @@ class GradeManager(QWidget):
             SHOW_ERROR("Data after closing date")
             return
         path = OPEN_FILE("Tabelle (*.xlsx *.ods *.tsv)")
-        pid2grades = load_from_file(
+        if not path:
+            return
+        pid2grades = LoadFromFile(
             filepath=path,
+            OCCASION=self.occasion,
+            CLASS_GROUP=self.class_group,
+            INSTANCE=self.instance,
+        )
+        grade_table = FullGradeTable(
             occasion=self.occasion,
             class_group=self.class_group,
             instance=self.instance,
         )
-        # Merge in pupil info
-        for pid, pinfo in pid2grades["__PUPILS__"].items():
-            pid2grades[pid].update(pinfo)
-        grade_table = full_grade_table(
-            occasion=self.occasion,
-            class_group=self.class_group,
-            instance=self.instance,
-            pupil_grades=pid2grades,
-        )
+        FullGradeTableUpdate(grade_table, pid2grades)
         self.pupil_data_table.setup(grade_table)
         self.updated(grade_table["MODIFIED"])
 
     def do_make_reports(self):
         PROCESS(
-            make_reports,
+            MakeReports,
             title=T["MAKE_REPORTS"],
-            occasion=self.occasion,
-            class_group=self.class_group,
-            instance=self.instance,
+            full_grade_table=self.pupil_data_table.grade_table,
             show_data=self.show_data.isChecked()
         )
 
@@ -515,105 +515,122 @@ class GradeTableView(GridViewAuto):
 
     def setup(self, grade_table):
         self.grade_table = grade_table
-        # ? ... What data needs to be available later?
-        subject_list = grade_table["SUBJECTS"]
-        component_list = grade_table["COMPONENTS"]
-        composite_list = grade_table["COMPOSITES"]
-        extras_list = grade_table["EXTRAS"]
-        all_sids = grade_table["ALL_SIDS"]
-        pupils_list = grade_table["GRADE_TABLE_PUPILS"]
-        grade_config_table = grade_table["GRADES"]
-        # grades_table["GRADE_ENTRY"] # partial path ("templates/...") to
-        # grade entry template (without data-type ensing)
-        # grades_table["PUPILS"] # current pupil list from database
-        # TODO: Do I need the latter entry?
+        pupils_list = grade_table["PUPIL_LIST"]
+        grade_config_table = grade_table["GRADE_VALUES"]
 
-        col2colour = []
-        click_handler = []
-        grade_click_handler = CellEditorTable(grade_config_table).activate
-        date_click_handler = CellEditorDate(empty_ok=True).activate
-        for sdata in subject_list:
-            col2colour.append(None)
-            click_handler.append(grade_click_handler)
-        for sdata in component_list:
-            col2colour.append(COMPONENT_COLOUR)
-            click_handler.append(grade_click_handler)
-        for sdata in composite_list:
-            col2colour.append(COMPOSITE_COLOUR)
-            click_handler.append(None)
-        nsubjects = len(col2colour)
-        for sdata in extras_list:
-            if "FUNCTION" in sdata:
-                col2colour.append(CALCULATED_COLOUR)
-                click_handler.append(None)
+        ### Collect column data
+        col2colour = []     # allows colouring of the columns
+        click_handler = []  # set the editor function for each column
+        column_widths = []  # as it says ...
+        column_headers = [] # [(sid, name),  ... ]
+        # Customized "extra-field" widths
+        custom_widths = GetGradeConfig().get("EXTRA_FIELD_WIDTHS")
+        grade_click_handler = CellEditorTable(grade_config_table)
+        date_click_handler = CellEditorDate(empty_ok=True)
+        ## Deal with the column types separately
+        # Collect column widths, colours, headers and click-handlers
+        column_data = grade_table["COLUMNS"]
+        for sdata in column_data["SUBJECT"]:
+            column_headers.append((sdata["SID"], sdata["NAME"]))
+            column_widths.append(GRADETABLE_SUBJECTWIDTH)
+            if "COMPOSITE" in sdata:
+                col2colour.append(COMPONENT_COLOUR)
+                click_handler.append(grade_click_handler)
             else:
                 col2colour.append(None)
-                handler_type = sdata["TYPE"]
-                if handler_type == "CHOICE":
-                    values = [[[v], ""] for v in sdata["VALUES"]]
-                    editor = CellEditorTable(values).activate
-                elif handler_type == "CHOICE_MAP":
-                    # print("%%%%%%%%%%%%%%", sdata)
-                    values = [[[v], text] for v, text in sdata["VALUES"]]
-                    # print("%%%%%%%%%%%%%%", values)
-                    editor = CellEditorTable(values).activate
-                elif handler_type == "TEXT":
-                    editor = CellEditorText().activate
-                elif handler_type == "GRADE":
-                    editor = grade_click_handler
-                elif handler_type == "DATE":
-                    editor = date_click_handler
-                else:
-                    # TODO?
-                    editor = None
-                click_handler.append(editor)
-
-        ### Set the basic grid parameters
-        # Check for customized "extra-field" widths
-        custom_widths = get_grade_config().get("EXTRA_FIELD_WIDTHS")
-        extra_widths = []
-        for sdata in extras_list:
+                click_handler.append(grade_click_handler)
+        for sdata in column_data["COMPOSITE"]:
+            column_headers.append((sdata["SID"], sdata["NAME"]))
+            column_widths.append(GRADETABLE_SUBJECTWIDTH)
+            col2colour.append(COMPOSITE_COLOUR)
+            click_handler.append(None)
+        for sdata in column_data["CALCULATE"]:
+            column_headers.append((sdata["SID"], sdata["NAME"]))
             try:
-                extra_widths.append(
-                    int(custom_widths[sdata["SID"]]) or GRADETABLE_SUBJECTWIDTH
+                column_widths.append(int(custom_widths[sdata["SID"]]))
+            except KeyError:
+                column_widths.append(GRADETABLE_EXTRAWIDTH)
+            except ValueError:
+                REPORT(
+                    "ERROR",
+                    T["BAD_CUSTOM_WIDTH"].format(
+                        sid = sdata["SID"],
+                        path=GetGradeConfig()["__PATH__"],
+                    )
                 )
-            except:
-                extra_widths.append(GRADETABLE_EXTRAWIDTH)
+                column_widths.append(GRADETABLE_EXTRAWIDTH)
+            col2colour.append(CALCULATED_COLOUR)
+            click_handler.append(None)
+        for sdata in column_data["INPUT"]:
+            column_headers.append((sdata["SID"], sdata["NAME"]))
+            try:
+                column_widths.append(int(custom_widths[sdata["SID"]]))
+            except KeyError:
+                column_widths.append(GRADETABLE_EXTRAWIDTH)
+            except ValueError:
+                REPORT(
+                    "ERROR",
+                    T["BAD_CUSTOM_WIDTH"].format(
+                        sid = sdata["SID"],
+                        path=GetGradeConfig()["__PATH__"],
+                    )
+                )
+                column_widths.append(GRADETABLE_EXTRAWIDTH)
+            method = sdata["METHOD"]
+            parms = sdata["PARAMETERS"]
+            if method == "CHOICE":
+                values = [[[v], ""] for v in parms["CHOICES"]]
+                editor = CellEditorTable(values)
+            elif method == "CHOICE_MAP":
+                values = [[[v], text] for v, text in parms["CHOICES"]]
+                editor = CellEditorTable(values)
+            elif method == "TEXT":
+                editor = CellEditorText()
+            elif method == "DATE":
+                editor = date_click_handler
+            else:
+                REPORT(
+                    "ERROR",
+                    T["UNKNOWN_INPUT_METHOD"].format(
+                        path=GetGradeConfig()["__PATH__"],
+                        group=grade_table["CLASS_GROUP"],
+                        occasion=grade_table["OCCASION"],
+                        sid=sdata["SID"],
+                        method=method
+                    )
+                )
+                editor = None
+            col2colour.append(None)
+            click_handler.append(editor)
         __rows = (GRADETABLE_HEADERHEIGHT,) + (GRADETABLE_ROWHEIGHT,) * len(
             pupils_list
         )
-        __cols = (
-            (
-                GRADETABLE_PUPILWIDTH,
-                GRADETABLE_LEVELWIDTH,
-            )
-            + (GRADETABLE_SUBJECTWIDTH,) * nsubjects
-            + tuple(extra_widths)
-        )
+        __cols = [
+            GRADETABLE_PUPILWIDTH,
+            GRADETABLE_LEVELWIDTH,
+        ] + column_widths
         self.init(__rows, __cols)
 
         self.grid_line_thick_v(2)
         self.grid_line_thick_h(1)
 
-        # The column headers
-        hheaders = dict(get_grade_config()["HEADERS"])
+        ### The column headers
+        hheaders = dict(GetGradeConfig()["HEADERS"])
         self.get_cell((0, 0)).set_text(hheaders["PUPIL"])
         self.get_cell((0, 1)).set_text(hheaders["LEVEL"])
         colstart = 2
         self.col0 = colstart
-        col = 0
         self.sid2col = {}
-        for sid, sdata in all_sids.items():
+        for col, sn in enumerate(column_headers):
             gridcol = col + colstart
-            self.sid2col[sid] = gridcol
+            self.sid2col[sn[0]] = gridcol
             cell = self.get_cell((0, gridcol))
             cell.set_verticaltext()
             cell.set_valign("b")
             cell.set_background(col2colour[col])
-            cell.set_text(sdata["NAME"])
-            col += 1
+            cell.set_text(sn[1])
 
-        # The rows
+        ### The data rows
         rowstart = 1
         self.row0 = rowstart
         row = 0
@@ -628,58 +645,117 @@ class GradeTableView(GridViewAuto):
             cell = self.get_cell((gridrow, 1))
             cell.set_text(pdata["LEVEL"])
 
-            col = 0
-            for sid in all_sids:
+            for col, sn in enumerate(column_headers):
                 cell = self.get_cell((gridrow, col + colstart))
                 cell.set_background(col2colour[col])
                 # ?
-                # This is not taking possible value delegates into account – which would
-                # allow the display of a text distinct from the actual value of the cell.
-                # At the moment it is not clear that I would need such a thing, but it
-                # might be useful to have it built in to the base functionality in base_grid.
-                # For editor types CHOICE_MAP it might come in handy, for instance.
-
-                # That is not quite the intended use of CHOICE_MAP – the "key"
-                # is displayed, but it is the "value" that is needed for further processing.
+                # This is not taking possible value delegates into
+                # account – which would allow the display of a text
+                # distinct from the actual value of the cell.
+                # At the moment it is not clear that I would need such
+                # a thing, but it might be useful to have it built in
+                # to the base functionality in base_grid.
+                # For editor types CHOICE_MAP it might come in handy,
+                # for instance ... though that is not quite the intended
+                # use of CHOICE_MAP – the "key" is displayed, but it is
+                # the "value" that is needed for further processing.
                 # For this it would be enough to set the "VALUE" property.
 
+                sid = sn[0]
                 cell.set_property("PID", pid)
                 cell.set_property("SID", sid)
-                cell.set_text(pgrades.get(sid, ""))
-                handler = click_handler[col]
-                if handler:
-                    cell.set_property("EDITOR", handler)
-                col += 1
+                try:
+                    cell.set_text(pgrades[sid])
+                except KeyError:
+                    cell.set_text(NO_GRADE)
+                else:
+                    if (handler := click_handler[col]):
+                        cell.set_property("EDITOR", handler)
             row += 1
 
         self.rescale()
 
     def cell_modified(self, properties: dict):
-        """Override base method in grid_base.GridView."""
+        """Override base method in grid_base.GridView.
+        A single cell is to be written.
+        """
         new_value = properties["VALUE"]
         pid = properties["PID"]
         sid = properties["SID"]
-        row = self.grade_table["PID2ROW"][pid]
-        grades = self.grade_table["GRADE_TABLE_PUPILS"][row][1]
+        grades = self.grade_table["PUPIL_LIST"].get(pid)[1]
         grades[sid] = new_value
         # Update this pupil's grades (etc.) in the database
-        changes, timestamp = update_pupil_grades(self.grade_table, pid)
+        changes, timestamp = UpdatePupilGrades(self.grade_table, pid)
         self.set_modified_time(timestamp)
         if changes:
             # Update changed display cells
+#TODO--
+            print("??? CHANGES", changes)
             row = self.pid2row[pid]
             for sid, oldval in changes:
-                self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
+                try:
+                    col = self.sid2col[sid]
+                except KeyError:
+                    continue
+                self.get_cell((row, col)).set_text(grades[sid])
 
+#?
     def set_modified_time(self, timestamp):
-        self.grade_table["MODIFIED"] = timestamp
+#        self.grade_table["MODIFIED"] = timestamp
         # Signal change
         self.signal_modified.emit(timestamp)
+
+    def write_to_row(self, row, col, values):
+        """Write a list of values to a position (<col>) in a given row.
+        This is called when pasting.
+        """
+        # Only write to cells when all are editable, and check the values!
+# Maybe just skip non-writable cells?
+        # Then do an UpdatePupilGrades ...
+        prow = row - self.row0
+        pupil_list = self.grade_table["PUPIL_LIST"]
+        if prow < 0 or prow >= len(pupil_list):
+            SHOW_ERROR(T["ROW_NOT_EDITABLE"])
+            return
+        for i in range(len(values)):
+            cell = self.get_cell((row, col + i))
+            try:
+                editor = cell.get_property("EDITOR")
+            except KeyError:
+                SHOW_ERROR(T["CELL_NOT_EDITABLE"].format(
+                    field=self.get_cell((0, col + i)).get_property("VALUE")
+                ))
+                return
+            try:
+                validator = editor.validator
+            except AttributeError:
+                pass
+            else:
+                if not validator(values[i]):
+                    SHOW_ERROR(T["INVALID_VALUE"].format(
+                        field=self.get_cell((0, col + i)).get_property("VALUE"),
+                        val=values[i]
+                    ))
+                    return
+        pdata, grades = pupil_list[prow]
+        for i in range(len(values)):
+            cell = self.get_cell((row, col + i))
+            sid = cell.get_property("SID")
+            grades[sid] = values[i]
+        # Update this pupil's grades (etc.) in the database
+        pid = pdata["PID"]
+        changes, timestamp = UpdatePupilGrades(self.grade_table, pid)
+        self.set_modified_time(timestamp)
+        super().write_to_row(row, col, values)
+        if changes:
+            # Update changed display cells
+            for sid, oldval in changes:
+                self.get_cell((row, self.sid2col[sid])).set_text(grades[sid])
 
     def export_pdf(self, fpath=None):
         titleheight = self.pt2px(GRADETABLE_TITLEHEIGHT)
         footerheight = self.pt2px(GRADETABLE_FOOTERHEIGHT)
-        info_fields = dict(get_grade_config()["INFO_FIELDS"])
+        info_fields = dict(GetGradeConfig()["INFO_FIELDS"])
         items = []
         cgroup = self.grade_table["CLASS_GROUP"]
         items.append(
@@ -721,7 +797,7 @@ class GradeTableView(GridViewAuto):
         if not fpath:
             fpath = SAVE_FILE(
                 "pdf-Datei (*.pdf)",
-                report_name(occasion, cgroup, instance, T["GRADES"]) + ".pdf"
+                ReportName(self.grade_table, T["GRADES"]) + ".pdf"
             )
             if not fpath:
                 return

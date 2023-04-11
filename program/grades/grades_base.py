@@ -667,8 +667,14 @@ def complete_gradetable(table, db_pdata, db_grademap, p_grade_tids=None):
     # The results are not used here.
 
 
-def UpdatePupilGrades(table: dict, pid: str):
-    """Recalculate table row."""
+def UpdatePupilGrades(table: dict, pid: str
+) -> tuple[list[tuple[str, str]], Optional[str]]:
+    """Recalculate table row.
+    <table> is the full grade table.
+    Return (changes, timestamp).
+    The changes are to (existing) entries in the initial grade set,
+    in the form [(sid, OLD value), ... ].
+    """
     # print("§UPDATE", pid, grades := table["PUPIL_LIST"].get(pid)[1])
     return calculate_grades(table, pid, None)
 

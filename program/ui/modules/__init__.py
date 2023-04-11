@@ -9,4 +9,5 @@ if not standalone:
     from .classes_manager import init; init()
     from .teachers_manager import init; init()
     from .course_editor import init; init()
+    from .grades_manager import init; init()
     from .timetable_editor import init; init()

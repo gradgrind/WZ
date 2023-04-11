@@ -161,7 +161,12 @@ def Abi_calc(
         [(column type, column data),  ... ]
     """
     COMPONENTS = sdata["PARAMETERS"]["COMPONENTS"]
-    sidmap, sidindex, newsids = sort_pupil_grades(grades, COMPONENTS, raw_grades)
+    sidmap, sidindex, newsids = sort_pupil_grades(
+        grades,
+        COMPONENTS,
+        raw_grades
+    )
+    grades["__SIDMAP__"] = sidmap
     ## Extend subject list if necessary ('.x' grades)
     newsubjects = []
     for sid, sname in newsids:
@@ -350,6 +355,11 @@ def fhs(fields, indexes, fhs_subjects):
     points20fail = points20 < 20
     points35fail = points35 < 35
     # print("&&&&&& fhs:", z, l5g3, l5e2, points20, points35)
+    fields["FHS_ZERO"] = COND_PRINT[not z]
+    fields["FHS_3UNDER5"] = COND_PRINT[not l5g3]
+    fields["FHS_2eUNDER5"] = COND_PRINT[not l5e2]
+    fields["FHS_20"] = COND_PRINT[not points20fail]
+    fields["FHS_35"] = COND_PRINT[not points35fail]
     if z or l5g3 or l5e2 or points20fail or points35fail:
         return False
     if points35 >= 97:
