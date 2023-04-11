@@ -77,19 +77,12 @@ from ui.ui_base import (
 from ui.grid_base import GridViewHFit as GridView
 # from ui.grid_base import GridView
 from ui.grid_base import StyleCache
-#TODO: migrate to grades_base
-#from grades.gradetable import (
-#    get_grade_config,
-#    full_grade_table,
-#    update_pupil_grades,
-#    update_table_info,
-#)
 from grades.grades_base import (
     GetGradeConfig,
     FullGradeTable,
+    UpdatePupilGrades,
 )
 
-from local.abi_wani_calc import abi_calc, NO_GRADE
 from ui.cell_editors import CellEditorTable, CellEditorDate
 
 ### -----
@@ -159,11 +152,13 @@ class AbiturManager(QWidget):
         formbox.addRow(T["GROUP"], self.group_selector)
 
         # Date fields
+#TODO
         firstday = QDate.fromString(
             CALENDAR["FIRST_DAY"], Qt.DateFormat.ISODate
         )
         lastday = QDate.fromString(CALENDAR["LAST_DAY"], Qt.DateFormat.ISODate)
         date_format = date2qt(CONFIG["DATEFORMAT"])
+
         self.modified_time = QLineEdit()
         self.modified_time.setReadOnly(True)
         formbox.addRow(T["MODIFIED_TIME"], self.modified_time)
@@ -198,21 +193,28 @@ class AbiturManager(QWidget):
         vboxr.addWidget(make_cert)
 
     def cell_changed(self, properties: dict):
-        print("\nTODO: cell modified", properties)
-        if self.current_pid:
-            new_value = properties["VALUE"]
-            sidmap = self.data["__SIDMAP__"]
-            grades = self.data["__GRADES__"]
-            tag = properties["TAG"]
-            sid = sidmap[tag]
-            self.data[tag] = new_value
+        if not self.current_pid:
+            return
+        new_value = properties["VALUE"]
+        grades = self.line_data[1]
+        tag = properties["TAG"]
+        # print("§§§ CHANGED:", tag, new_value)
+        if (sid := grades["__SIDMAP__"].get(tag)):
             grades[sid] = new_value
-            print("§ ->", grades)
-            self.recalculate()
-            # Update this pupil's grades (etc.) in the database
-            changes, timestamp = update_pupil_grades(self.grade_table, self.current_pid)
-            self.grade_table["MODIFIED"] = timestamp
-            self.modified_time.setText(timestamp)
+        grades[tag] = new_value
+        self.set_tile(tag, new_value)
+        # Update this pupil's grades (etc.) in the database
+        changes, timestamp = UpdatePupilGrades(
+            self.grade_table, self.current_pid
+        )
+        # Display updates
+        self.grade_table["MODIFIED"] = timestamp
+        self.modified_time.setText(timestamp)
+        for sid, g0 in changes:
+            print(" ..", sid, g0, (g := grades[sid]))
+            self.set_tile(sid, g)
+        self.tilemap["NO_FHS"].setVisible(gdata["REPORT_TYPE"] == "Abi")
+
 
     def init_data(self):
         gcon = GetGradeConfig()
@@ -295,8 +297,7 @@ class AbiturManager(QWidget):
                     tile.set_property("EDITOR", date_click_handler)
                     tile.set_property("DELEGATE", date_printer)
                 tile.set_property("TAG", key)
-        print("§§§ --->", sorted(self.tilemap))
-
+        # print("§§§ --->", sorted(self.tilemap))
         self.set_tile("SCHOOLYEAR", CALENDAR["SCHOOLYEAR_PRINT"])
         self.select_group(self.group_selector.currentText())
 
@@ -304,7 +305,6 @@ class AbiturManager(QWidget):
         if self.suppress_callbacks:
             print("Class change handling disabled:", group)
             return
-        print("§ SELECT GROUP", group)
         self.current_pid = None
         self.grade_table = FullGradeTable("Abitur", group, "")
         self.suppress_callbacks = True
@@ -316,49 +316,18 @@ class AbiturManager(QWidget):
         for item in self.pupil_data_list:
             self.pupil_list.addItem(pupil_name(item[0]))
         self.suppress_callbacks = False
+        # Select first (gui) list element ...
+        self.pupil_list.setCurrentRow(0)
 
     def select_pupil(self, index):
-#?
         self.line_data = self.pupil_data_list[index]
         pdata, gdata = self.line_data
-        print("\n1)", pdata)
-        print("2", gdata)
         self.current_pid = pdata["PID"]
         self.set_tile("PUPIL", pupil_name(pdata))
-        self.set_tile("DATE_END", gdata["DATE_END"])
-        for i in range(1,9):
-            tag = f"S{i}"
-
-#?
-            self.set_tile(tag, gdata[tag])
-#?
-        self.recalculate()
-
-
-
-
-
-
-    def recalculate(self):
-        print("\nPUPIL")
-        for k, v in self.data.items():
-            print(" ..", k, v)
-        for sid, g in calculate(self.data).items():
-            print("  CALC:", sid, g)
+        for sid, g in gdata.items():
+            print(" ..", sid, g)
             self.set_tile(sid, g)
-
-
-
-
-
-
-
-
-
-
-
-
-
+        self.tilemap["NO_FHS"].setVisible(gdata["REPORT_TYPE"] == "Abi")
 
     def set_tile(self, key, value):
         try:
@@ -373,7 +342,7 @@ class AbiturManager(QWidget):
         return self.tilemap[key].get_property("VALUE")
 
     def to_pdf(self):
-        pdata = self.data["__PUPIL__"]
+        pdata = self.line_data[0]
         sortname = pdata["SORT_NAME"]
         fpath = SAVE_FILE(
             T["PDF_FILE"],
