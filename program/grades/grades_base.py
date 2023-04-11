@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2023-04-10
+Last updated:  2023-04-11
 
 Access grade data, read and build grade tables.
 
@@ -21,10 +21,6 @@ Copyright 2023 Michael Towers
    limitations under the License.
 =-LICENCE========================================
 """
-
-#TODO: This should be a rewrite of "gradetables" with a more
-# understandable structure, possibly some increased flexibility to handle
-# local specialities (like Abitur!).
 
 # Bear in mind that a pupil's groups and "level" can change during a
 # school-year. Thus these fields are saved along with the grades when
@@ -68,12 +64,15 @@ from core.db_access import (
     db_update_field,
     write_pairs_dict,
 )
-from core.basic_data import SHARED_DATA#, get_subjects_with_sorting
+from core.basic_data import SHARED_DATA
 from core.pupils import pupil_name, pupil_data
 from core.report_courses import get_pupil_grade_matrix
 from tables.spreadsheet import read_DataTable
 from tables.matrix import KlassMatrix
 from local.grade_processing import GradeFunction
+
+NO_GRADE = "–"  # shown in cells which are not defined for a pupil ...
+# e.g. subjects not taken (NOT stored in the database)
 
 ### -----
 
@@ -190,7 +189,7 @@ def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     klass, group = class_group_split(class_group)
     ### Complete the columns list, including "normal" subjects, "composite"
     ### subjects, calculated fields and additional input fields.
-    extra_fields = group_data["EXTRA_FIELDS"]
+    extra_fields = group_data.get("EXTRA_FIELDS") or []
     subject_list = SubjectColumns()
     column_lists = {
         "SUBJECT": subject_list,
@@ -379,7 +378,6 @@ def pupil_subject_grade_info(occasion, class_group, instance):
     ###     {pid: (pdata, grade-map), ... }
     ### Note that CLASS and LEVEL fields are taken from the database
     ### GRADES record.
-#    db_pupil_grades = {
     table_info["STORED_GRADES"] = {
         pdata["PID"]: (pdata, grademap)
         for pdata, grademap in read_stored_grades(
@@ -403,15 +401,12 @@ def pupil_subject_grade_info(occasion, class_group, instance):
             )
         DATE_ISSUE, DATE_GRADES, MODIFIED = infolist[0]
     else:
-        # No entry in database, add a new one using "today" for initial
-        # date values
-        DATE_ISSUE = Dates.today()
+        # No entry in database, add a new one using last day of school
+        # year for initial date values – to ensure that the data will
+        # remain "open".
+        DATE_ISSUE = Dates.lastday(SCHOOLYEAR)
         DATE_GRADES = DATE_ISSUE
         MODIFIED = "–––––"
-#        if pdata_list:
-#            raise Bug("Stored grades but no entry in GRADES_INFO for"
-#                f" {class_group} / {occasion} / {instance}"
-#            )
         db_new_row("GRADES_INFO",
             CLASS_GROUP=class_group,
             OCCASION=occasion,
@@ -949,25 +944,19 @@ def MakeGradeTable(table:dict, clear:bool=False) -> bytes:
     sidcol: list[tuple[str, int]] = []
     sid: str
     sdata: dict
-
-#TODO! was just a single list ...
-    assert(False)
-
-    for sdata in table["COLUMNS"]:
-        if sdata["TYPE"] == "SUBJECT" and "FUNCTION" not in sdata:
-            # Add subject
-            sid = sdata["SID"]
-            col: int = gtable.nextcol()
-            sidcol.append((sid, col))
-            gtable.write(rowix[0], col, sid)
-            gtable.write(rowix[1], col, sdata["NAME"])
+    for sdata in table["COLUMNS"]["SUBJECT"]:
+        # Add subject
+        sid = sdata["SID"]
+        col: int = gtable.nextcol()
+        sidcol.append((sid, col))
+        gtable.write(rowix[0], col, sid)
+        gtable.write(rowix[1], col, sdata["NAME"])
     # Enforce minimum number of columns
     while col < 18:
         col = gtable.nextcol()
         gtable.write(rowix[0], col, "")
     # Delete excess columns
     gtable.delEndCols(col + 1)
-
     ### Add pupils and grades
     for pdata, pgrades in table["PUPIL_LIST"]:
         row = gtable.nextrow()
@@ -978,13 +967,8 @@ def MakeGradeTable(table:dict, clear:bool=False) -> bytes:
             try:
                 g = pgrades[sid]
             except KeyError:
-#TODO: Does this work? How?
                 gtable.write(row, col, NO_GRADE, protect=True)
             else:
-                assert(g != NO_GRADE)
-#            if g == NO_GRADE:
-#                gtable.write(row, col, NO_GRADE, protect=True)
-#            elif g and not clear:
                 gtable.write(row, col, g)
     # Delete excess rows
     row = gtable.nextrow()

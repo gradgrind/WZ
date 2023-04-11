@@ -1,7 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-04-10
+Last updated:  2023-04-11
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
 Fields in template files are replaced by the report information.
@@ -66,10 +66,7 @@ from core.base import Dates
 from core.pupils import pupil_name
 from template_engine.template_sub import Template
 from grades.grades_base import FullGradeTable, GetGradeConfig
-from local.grade_processing import ProcessGradeData, ReportName
-
-# Used to access string for "subject not taken" in grade configuration
-#NO_GRADE = "/"
+from local.grade_processing import ProcessGradeData, ReportName, NOGRADE
 
 ### -----
 
@@ -376,9 +373,6 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
                 )
                 return "?"
             return ""
-#TODO: use string from config for this occasion, etc.?
-# At present this config is not available here ...
-    NOGRADE = "––––––"
     # REPORT("OUT", repr(rptdata))
     for sid in subjects:
         try:
@@ -421,8 +415,6 @@ def sort_grade_keys(rptdata, subjects, tagmap, sgroups, grade_map):
             sid = sdata["SID"]
             try:
                 g = rptdata.pop(sid)
-#                if g == NO_GRADE:
-#                    continue
             except KeyError:
                 continue
             try:

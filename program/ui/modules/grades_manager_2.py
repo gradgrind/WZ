@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-04-10
+Last updated:  2023-04-11
 
 Front-end for managing grade reports.
 
@@ -24,8 +24,6 @@ Copyright 2023 Michael Towers
 =-LICENCE========================================
 """
 
-#TODO: This supersedes grades_manager.py and should replace it at some point.
-
 ##### Configuration #####################
 # Some sizes in points
 GRADETABLE_TITLEHEIGHT = 40
@@ -40,9 +38,6 @@ GRADETABLE_LEVELWIDTH = 50
 COMPONENT_COLOUR = "ffeeff"
 COMPOSITE_COLOUR = "eeffff"
 CALCULATED_COLOUR = "ffffcc"
-
-NO_GRADE = "–"  # shown in cells which are not defined for a pupil ...
-# e.g. subjects not taken
 
 #########################################
 
@@ -77,6 +72,7 @@ from grades.grades_base import (
     UpdatePupilGrades,
     UpdateTableInfo,
     LoadFromFile,
+    NO_GRADE,
 )
 from grades.make_grade_reports import MakeReports
 from local.grade_processing import ReportName
@@ -435,31 +431,39 @@ class GradeManager(QWidget):
         )
         self.suppress_callbacks = False
         self.pupil_data_table.setup(grade_table)
+        # Update if the stored dates needed adjustment to fit in range
+        self.grade_date_changed(self.grade_date.date())
+        self.issue_date_changed(self.issue_date.date())
+        # Ensure that the "last modified" field is set
         self.updated(grade_table["MODIFIED"])
 
     def issue_date_changed(self, qdate):
         if self.suppress_callbacks:
             return
-        timestamp = UpdateTableInfo(
-            self.pupil_data_table.grade_table,
-            "DATE_ISSUE",
-            qdate.toString(Qt.DateFormat.ISODate),
-        )
-        self.updated(timestamp)
-        # TODO: Reload table?
-        # self.select_instance()
+        new_date = qdate.toString(Qt.DateFormat.ISODate)
+        if new_date != self.pupil_data_table.grade_table["DATE_ISSUE"]:
+            timestamp = UpdateTableInfo(
+                self.pupil_data_table.grade_table,
+                "DATE_ISSUE",
+                new_date,
+            )
+            self.updated(timestamp)
+            # TODO: Reload table? ... shouldn't be necessary
+            # self.select_instance()
 
     def grade_date_changed(self, qdate):
         if self.suppress_callbacks:
             return
-        timestamp = UpdateTableInfo(
-            self.pupil_data_table.grade_table,
-            "DATE_GRADES",
-            qdate.toString(Qt.DateFormat.ISODate),
-        )
-        self.updated(timestamp)
-        # Reload table
-        self.select_instance()
+        new_date = qdate.toString(Qt.DateFormat.ISODate)
+        if new_date != self.pupil_data_table.grade_table["DATE_GRADES"]:
+            timestamp = UpdateTableInfo(
+                self.pupil_data_table.grade_table,
+                "DATE_GRADES",
+                new_date,
+            )
+            self.updated(timestamp)
+            # Reload table
+            self.select_instance()
 
     def do_make_input_table(self):
         table_data = self.pupil_data_table.grade_table

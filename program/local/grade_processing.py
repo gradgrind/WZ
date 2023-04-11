@@ -1,7 +1,7 @@
 """
 local/grade_processing.py
 
-Last updated:  2023-04-10
+Last updated:  2023-04-11
 
 Functions to perform grade calculations.
 
@@ -57,6 +57,8 @@ GRADE_NUMBER = {
 
 NUMBER_GRADE = {v: k for k, v in GRADE_NUMBER.items()}
 
+NOGRADE = "––––––"  # for empty subjects/grades in reports
+
 ### -----
 
 def GradeFunction(
@@ -94,11 +96,7 @@ def ROUNDED_AVERAGE_I(
     ilist = []
     for sid in COMPONENTS:
         try:
-            g = grades[sid]
-        except KeyError:
-            raise Bug(f"Grade for sid {sid} not available")
-        try:
-            ilist.append(GRADE_NUMBER[g])
+            ilist.append(GRADE_NUMBER[grades[sid]])
         except KeyError:
             pass
     if ilist:
@@ -132,10 +130,8 @@ def ROUNDED_AVERAGE_II(
     for sid in COMPONENTS:
         try:
             ilist.append(int(grades[sid]))
-        except ValueError:
+        except (ValueError, KeyError):
             pass
-        except KeyError:
-            raise Bug(f"Grade for sid {sid} not available")
     if ilist:
         s = sum(ilist)
         a = int(s / len(ilist) + 0.5)
@@ -166,10 +162,8 @@ def AVERAGE_I(
     for sid in COMPONENTS:
         try:
             ilist.append(int(grades[sid].rstrip('+-')))
-        except ValueError:
+        except (ValueError, KeyError):
             pass    # ignore non-grades
-        except KeyError:
-            raise Bug(f"Grade for sid {sid} not available")
     if ilist:
         s = sum(ilist)
         a = s / len(ilist)
@@ -205,7 +199,14 @@ def ReportName(grade_table, rtype):
 
 
 def ProcessGradeData(pdata, grade_info, grade_config):
-#TODO
+    try:
+        no_grade = grade_info["SYMBOLS"]["NOGRADE"]
+    except KeyError:
+        pass
+    else:
+        for k, v in pdata.items():
+            if v == NOGRADE:
+                pdata[k] = no_grade
     pdata["NOCOMMENT"] = "" if pdata.get("REMARKS") else "––––––––––"
     try:
         level = pdata["LEVEL"]
