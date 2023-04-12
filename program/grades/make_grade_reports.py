@@ -1,7 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-04-11
+Last updated:  2023-04-12
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
 Fields in template files are replaced by the report information.
@@ -57,11 +57,13 @@ if __name__ == "__main__":
     #    start.setup(os.path.join(basedir, 'TESTDATA'))
     start.setup(os.path.join(basedir, "DATA-2023"))
 
-T = TRANSLATIONS("grades.makereports")
+T = TRANSLATIONS("grades.make_grade_reports")
 
 ### +++++
 
+from typing import Optional, Any
 import re
+
 from core.base import Dates
 from core.pupils import pupil_name
 from template_engine.template_sub import Template
@@ -69,6 +71,56 @@ from grades.grades_base import FullGradeTable, GetGradeConfig
 from local.grade_processing import ProcessGradeData, ReportName, NOGRADE
 
 ### -----
+
+
+#TODO
+def get_template(full_grade_table: dict[str, Any], report_type: str
+) -> Optional[Template]:
+    """Return a <Template> instance for the given report type,
+    <report_type>.
+    """
+    column_lists = full_grade_table["COLUMNS"]
+#TODO: pids must be removed from error texts ... (not available here)
+    if not report_type:
+        #TODO: Is this possible? It should probably be skipped before
+        # calling this function!
+        REPORT(
+            "WARNING",
+            T["NO_REPORT_TYPE"].format(pids=", ".join(pid_list))
+        )
+        return None
+    try:
+        rtdata = column_lists["INPUT"].get("REPORT_TYPE")
+    except KeyError:
+        rtdata = column_lists["CALCULATE"].get("REPORT_TYPE")
+    for rt, tpath in rtdata["PARAMETERS"]["CHOICES"]:
+        if report_type == rt:
+            return Template(tpath)
+    REPORT(
+        "ERROR",
+        T["INVALID_REPORT_TYPE"].format(
+            rtype=report_type, pids=", ".join(pid_list)
+        ),
+    )
+    return None
+
+
+def get_subject_groups(full_grade_table: dict[str, Any]
+) -> dict[str, dict]:
+    """Divide the subjects (in <full_grade_table> into report-groups.
+    The report-group is the SORTING field of the subject's entry in
+    the database table SUBJECTS.
+    """
+    subject_groups = {}
+    column_lists = full_grade_table["COLUMNS"]
+    for stype in ("SUBJECT", "COMPOSITE"):
+        for sdata in column_lists[stype]:
+            if (group := sdata["GROUP"]):
+                try:
+                    subject_groups[group].append(sdata)
+                except KeyError:
+                    subject_groups[group] = [sdata]
+    return subject_groups
 
 
 def MakeReports(full_grade_table, show_data=False) -> list[str]:
@@ -97,15 +149,16 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
     # is a list of [key, path] pairs.
 
     ### Divide the subjects into groups
-    subject_groups = {}
-    column_lists = full_grade_table["COLUMNS"]
-    for stype in ("SUBJECT", "COMPOSITE"):
-        for sdata in column_lists[stype]:
-            if (group := sdata["GROUP"]):
-                try:
-                    subject_groups[group].append(sdata)
-                except KeyError:
-                    subject_groups[group] = [sdata]
+    subject_groups = get_subject_groups(full_grade_table)
+
+#    column_lists = full_grade_table["COLUMNS"]
+#    for stype in ("SUBJECT", "COMPOSITE"):
+#        for sdata in column_lists[stype]:
+#            if (group := sdata["GROUP"]):
+#                try:
+#                    subject_groups[group].append(sdata)
+#                except KeyError:
+#                    subject_groups[group] = [sdata]
     ### Divide the pupils according to report type
     rtypes = {}
     for pdata, grades in full_grade_table["PUPIL_LIST"]:
@@ -117,31 +170,37 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
         except KeyError:
             rtypes[rtype] = [pid]
     ### Build reports for each report-type separately
-    try:
-        rtdata = column_lists["INPUT"].get("REPORT_TYPE")
-    except KeyError:
-        rtdata = column_lists["CALCULATE"].get("REPORT_TYPE")
-    rtype_path = dict(rtdata["PARAMETERS"]["CHOICES"])
+#    try:
+#        rtdata = column_lists["INPUT"].get("REPORT_TYPE")
+#    except KeyError:
+#        rtdata = column_lists["CALCULATE"].get("REPORT_TYPE")
+#    rtype_path = dict(rtdata["PARAMETERS"]["CHOICES"])
     fplist = []
     for rtype, pid_list in rtypes.items():
-        try:
-            tpath = rtype_path[rtype]
-        except KeyError:
-            if rtype:
-                REPORT(
-                    "ERROR",
-                    T["INVALID_REPORT_TYPE"].format(
-                        rtype=rtype, pids=", ".join(pid_list)
-                    ),
-                )
-            else:
-                REPORT(
-                    "WARNING",
-                    T["NO_REPORT_TYPE"].format(pids=", ".join(pid_list))
-                )
+#        try:
+#            tpath = rtype_path[rtype]
+#        except KeyError:
+#            if rtype:
+#                REPORT(
+#                    "ERROR",
+#                    T["INVALID_REPORT_TYPE"].format(
+#                        rtype=rtype, pids=", ".join(pid_list)
+#                    ),
+#                )
+#            else:
+#                REPORT(
+#                    "WARNING",
+#                    T["NO_REPORT_TYPE"].format(pids=", ".join(pid_list))
+#                )
+#            continue
+#        # print(f"\nTEMPLATE: '{rtype}' for {pid_list}\n  {tpath}")
+#        template = Template(tpath)
+
+
+        if not (template := get_template(full_grade_table, rtype)):
             continue
-        # print(f"\nTEMPLATE: '{rtype}' for {pid_list}\n  {tpath}")
-        template = Template(tpath)
+
+
         gmaplist = collect_report_type_data(
             template, pid_list, subject_groups, full_grade_table, show_data
         )

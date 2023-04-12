@@ -124,7 +124,7 @@ grades.gradetable: {
     REMOVING_PUPIL_GRADES: "{name} ist nicht mehr in dieser Klasse/Gruppe: Die gespeicherten Noten werden gelöscht"
 }
 
-grades.makereports: {
+grades.make_grade_reports: {
     # Messages
     INVALID_REPORT_TYPE: "Ungültige Zeugnis-Art ({rtype}) für Schüler:\n  {pids}"
     NO_REPORT_TYPE: "Keine Zeugnis-Art für Schüler:\n  {pids}"
