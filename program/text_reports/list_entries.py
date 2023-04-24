@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
 ### +++++
 
-from tables.pdf_table import PdfCreator
+from tables.pdf_table import PdfCreator, Paragraph, getSampleStyleSheet
 from core.basic_data import (
     get_classes,
     get_teachers,
@@ -167,6 +167,12 @@ def pdf_teachers(teacher_map):
     classes = get_classes()
     teachers = get_teachers()
     teachers_list = []
+
+#???
+    styl = getSampleStyleSheet()["Normal"]
+#    styl.wordWrap = 'CJK'
+
+
     for tid in teachers.list_teachers():
         try:
             tdata = teacher_map[tid]
@@ -179,8 +185,13 @@ def pdf_teachers(teacher_map):
             except KeyError:
                 continue
             for s in sorted(tcdata):
-                tx = tcdata[s]
+#                tx = tcdata[s]
+
+#??? testing ...
+                tx = Paragraph("A somewhat longer text which should ...", styl)
+
                 tlist.append((cname, s, tx))
+
         tlist.append("")
         teachers_list.append((teachers.name(tid), [('', tlist)]))
     pdf = PdfCreator()

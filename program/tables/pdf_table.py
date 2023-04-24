@@ -1,7 +1,7 @@
 """
 tables/pdf_table.py
 
-Last updated:  2023-04-07
+Last updated:  2023-04-17
 
 Generate tabular reports as PDF files with multiple pages.
 
@@ -57,6 +57,9 @@ PAGESIZE = A4
 PAGESIZE_L = landscape(PAGESIZE)
 BASE_MARGIN = 20 * mm
 
+FONT = "Helvetica"
+FONTSIZE = 11
+
 ### -----
 
 
@@ -78,8 +81,8 @@ class MyDocTemplate(SimpleDocTemplate):
 
 
 tablestyle0 = [
-    ("FONT", (0, 0), (-1, -1), "Helvetica"),
-    ("FONTSIZE", (0, 0), (-1, -1), 12),
+    ("FONT", (0, 0), (-1, -1), FONT),
+    ("FONTSIZE", (0, 0), (-1, -1), FONTSIZE + 1),
     ("LINEABOVE", (0, -1), (-1, -1), 1, colors.lightgrey),
 ]
 
@@ -87,20 +90,21 @@ tablestyle = [
     #         ('ALIGN', (0, 1), (-1, -1), 'RIGHT'),
     ("LINEBELOW", (0, 0), (-1, 0), 1, colors.black),
     ("LINEBELOW", (0, -1), (-1, -1), 1, colors.black),
-    ("FONT", (0, 0), (-1, 0), "Helvetica-Bold"),
+    ("FONT", (0, 0), (-1, 0), f"{FONT}-Bold"),
     #         ('LINEABOVE', (0,-1), (-1,-1), 1, colors.black),
-    ("FONT", (0, 1), (-1, -1), "Helvetica"),
+    ("FONT", (0, 1), (-1, -1), FONT),
     #         ('BACKGROUND', (1, 1), (-2, -2), colors.white),
     ("TEXTCOLOR", (0, 0), (1, -1), colors.black),
-    ("FONTSIZE", (0, 0), (-1, -1), 11),
+    ("FONTSIZE", (0, 0), (-1, -1), FONTSIZE),
+    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
 ]
 
 
 class PdfCreator:
     def add_page_number(self, canvas, doc):
         canvas.saveState()
-        font_name = "Helvetica"
-        font_size = 11
+        font_name = FONT
+        font_size = FONTSIZE
         canvas.setFont(font_name, font_size)
         page_number_text = str(doc.page)
         w = stringWidth(page_number_text, font_name, font_size)
@@ -150,7 +154,8 @@ class PdfCreator:
         sample_style_sheet = getSampleStyleSheet()
         body_style = sample_style_sheet["BodyText"]
         # body_style = sample_style_sheet["Code"]
-        body_style.fontSize = 11
+        body_style.fontName = FONT
+        body_style.fontSize = FONTSIZE
         # body_style.leading = 14
         # body_style.leftIndent = 0
 
@@ -161,7 +166,7 @@ class PdfCreator:
         heading_style = sample_style_sheet["Heading1"]
         # print("????????????", heading_style.fontName)
         # heading_style = copy.deepcopy(body_style)
-        heading_style.fontName = "Helvetica-Bold"
+        heading_style.fontName = f"{FONT}-Bold"
         heading_style.fontSize = 14
         heading_style.spaceAfter = 24
 
@@ -188,6 +193,7 @@ class PdfCreator:
                     continue
                 lines.append("")
                 for sline in slist:
+                    print("  ---", sline)
                     r = len(lines)
                     if sline:
                         if sline[0].startswith("[["):
