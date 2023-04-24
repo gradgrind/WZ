@@ -1,12 +1,12 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2022-12-26
+Last updated:  2023-04-24
 
 Manage the substitution of "special" fields in an odt template.
 
 =+LICENCE=============================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ from minion2 import Minion, MinionError
 ### -----
 
 
-def merge_pdf(ifile_list, pad2sided=0):
+def merge_pdf(ifile_list: list[str], pad2sided: int=0) -> bytes:
     """Join the pdf-files in the input list <ifile_list> to produce a
     single pdf-file. The output is returned as a <bytes> object.
     The parameter <pad2sided> allows blank pages to be added
@@ -191,6 +191,39 @@ class Template:
                 )
         return md
 
+
+    def make_pdfs(self, data_list: list[dict], save_dir: str) -> list[str]:
+        """From each entry in the supplied list of data mappings produce
+        a pdf in the given directory, <save_dir>. The file names are
+        taken from the "SORT_NAME" field of each data mapping.
+        Return a list of the pdf-file names.
+        """
+        # "Intermediate" files (odt) are in the subdirectory "odt".
+        odt_dir = os.path.join(save_dir, "odt")
+        if not os.path.isdir(odt_dir):
+            os.makedirs(odt_dir)
+        odt_list = []
+        pdf_list = []
+        for datamap in data_list:
+            outfile = os.path.join(odt_dir, datamap["SORT_NAME"] + ".odt")
+            # Force removal of comment-metadata
+            odtBytes = self.make_odt_bytes(datamap, no_info=True)
+            # Save the <bytes>
+            with open(outfile, "bw") as fout:
+                fout.write(odtBytes)
+            odt_list.append(outfile)
+            pdf_list.append(datamap["SORT_NAME"] + ".pdf")
+        libre_office(odt_list, save_dir)
+        pdfs = []
+        for pf in pdf_list:
+            path = os.path.join(save_dir, pf)
+            if os.path.isfile(path):
+                pdfs.append(pf)
+            else:
+                REPORT("ERROR", T["MISSING_PDF"].format(fpath=path))
+        return pdfs
+
+
     def make_pdf(
         self, data_list, dir_name, working_dir=None, double_sided=0
     ):
@@ -238,6 +271,7 @@ class Template:
             raise TemplateError(
                 T["MISSING_PDFS"].format(spath=odt_dir, dpath=pdf_dir)
             )
+
         # Concatenate the pdf-files – possibly padding with empty pages –
         # to build the final result.
         # Get pad2sided from the template data (single-sided documents
@@ -257,6 +291,7 @@ class Template:
         else:
             return pdf_bytes
 
+#TODO: Maybe use make_pdfs instead?
     def make1pdf(self, datamap, file_path=None):
         """From the supplied data mapping produce a pdf of the
         corresponding report.

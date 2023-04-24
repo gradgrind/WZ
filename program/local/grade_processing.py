@@ -1,7 +1,7 @@
 """
 local/grade_processing.py
 
-Last updated:  2023-04-12
+Last updated:  2023-04-24
 
 Functions to perform grade calculations.
 
@@ -186,10 +186,11 @@ GRADE_FUNCTIONS["AVERAGE_I"] = AVERAGE_I
 GRADE_FUNCTIONS["ABITUR_NIWA_RESULT"] = Abi_calc
 
 
+#?
 def ReportName(grade_table, rtype):
     """Return a suitable file/folder name for a set of reports.
     """
-    if instance:= grade_table["INSTANCE"]:
+    if (instance := grade_table["INSTANCE"]):
         instance = '-' + instance
     occasion = grade_table["OCCASION"]
     group = grade_table["CLASS_GROUP"]
@@ -197,6 +198,9 @@ def ReportName(grade_table, rtype):
 
 
 def ProcessGradeData(pdata, grade_info, grade_config):
+    """Local tweaks needed to prepare the pupil's data for entry in
+    a grade template.
+    """
     try:
         no_grade = grade_info["SYMBOLS"]["NOGRADE"]
     except KeyError:

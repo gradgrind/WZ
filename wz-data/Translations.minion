@@ -126,8 +126,9 @@ grades.gradetable: {
 
 grades.make_grade_reports: {
     # Messages
-    INVALID_REPORT_TYPE: "Ungültige Zeugnis-Art ({rtype}) für Schüler:\n  {pids}"
-    NO_REPORT_TYPE: "Keine Zeugnis-Art für Schüler:\n  {pids}"
+    FOR_PUPILS:     "Für Schüler {plist}:\n  {message}"
+    INVALID_REPORT_TYPE: "ungültige Zeugnis-Art: {rtype}"
+    NO_REPORT_TYPE: "keine Zeugnis-Art angegeben"
     
     BAD_REPORT_TYPE: "Ungültiger Zeugnistyp: '{rtype}'"
     NO_SLOT:        "Kein Platz mehr für Fach mit Kürzel {sid} in Fachgruppe {tag}. Bisher: {done}"

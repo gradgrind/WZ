@@ -1,7 +1,7 @@
 """
 ui/abi_wani.py
 
-Last updated:  2023-04-09
+Last updated:  2023-04-24
 
 A "Page" for editing Abitur grades in a Waldorf school in Niedersachsen.
 
@@ -77,13 +77,13 @@ from ui.ui_base import (
 from ui.grid_base import GridViewHFit as GridView
 # from ui.grid_base import GridView
 from ui.grid_base import StyleCache
+from ui.cell_editors import CellEditorTable, CellEditorDate
 from grades.grades_base import (
     GetGradeConfig,
     FullGradeTable,
     UpdatePupilGrades,
 )
-
-from ui.cell_editors import CellEditorTable, CellEditorDate
+from grades.make_grade_reports import MakeReport
 
 ### -----
 
@@ -351,7 +351,12 @@ class AbiturManager(QWidget):
         self.abiview.export_pdf(fpath)
 
     def make_certificate(self):
-        print("TODO: make_certificate")
+        PROCESS(
+            MakeReport,
+            full_grade_table=self.grade_table,
+            pid=self.current_pid,
+            show_data=False #?
+        )
 
 
 class AbiturGradeView(GridView):
