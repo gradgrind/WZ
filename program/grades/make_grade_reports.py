@@ -1,7 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-04-24
+Last updated:  2023-04-25
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
 Fields in template files are replaced by the report information.
@@ -226,23 +226,63 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
         REPORT("INFO", T["PDF_FILE"].format(path=pdf_path))
     return fplist
 
-#!!!
+#TODO!!!
 # Separate the various components:
 # 1) get lists for different report types
 # 2) process each separately, offering save dialog for single pdf
-    if "todo!":
 
-        sdir = report_folder(full_grade_table, rtype)
-        save_dir = DATAPATH(f"GRADES/{sdir}")
+# This returned list could then be fed into merge_pdf, with pad2sided=1?
+# after fetching a file path, then save the file
+
+#NEW
+class MakeGroupReports:
+    def __init__(self, full_grade_table):
+        self.full_grade_table = full_grade_table
+        # Divide the subjects into groups
+        self.subject_groups = get_subject_groups(full_grade_table)
+
+    def split_report_types(self):
+        """Divide the pupils in the group according to report type.
+        """
+        rtypes = {}
+        for pdata, grades in self.full_grade_table["PUPIL_LIST"]:
+            pid = pdata["PID"]
+            # print("  ***", pupil_name(pdata), grades)
+            rtype = grades["REPORT_TYPE"]
+            try:
+                rtypes[rtype].append(pid)
+            except KeyError:
+                rtypes[rtype] = [pid]
+        self.report_types = rtypes
+
+    def gen_files(self, rtype, show_data=False):
+        pid_list = self.report_types[rtype]
+        template, error = get_template(self.full_grade_table, rtype)
+        if error:
+            pgdata = self.full_grade_table["PUPIL_LIST"]
+            plist = [pupil_name(pgdata.get(pid)[0]) for pid in pid_list]
+            REPORT("ERROR", T["FOR_PUPILS"].format(
+                plist = ", ".join(plist),
+                message=error
+            ))
+            continue
+        gmaplist = collect_report_type_data(
+            template,
+            pid_list,
+            self.subject_groups,
+            self.full_grade_table,
+            show_data
+        )
+        self.group_folder = report_folder(full_grade_table, rtype)
+#TODO: translation ... ?
+        save_dir = DATAPATH(f"GRADES/{self.group_folder}")
+
+#TODO!!!
 # This only when all group members are to be generated here:
         wipe_folder_contents(save_dir)
 
         # make_pdfs: data_list, save_dir
-        pdfs = template.make_pdfs(
-            gmaplist,
-#TODO: translation ... ?
-            (save_dir := DATAPATH(f"GRADES/{sdir}")),
-        )
+        pdfs = template.make_pdfs(gmaplist, save_dir)
         result = []
         for pdf in pdfs:
             REPORT("INFO", T["PDF_FILE"].format(
@@ -250,11 +290,6 @@ def MakeReports(full_grade_table, show_data=False) -> list[str]:
             ))
             result.append(pdf_path)
         return result
-
-# This returned list could then be fed into merge_pdf, with pad2sided=1?
-# after fetching a file path, then save the file
-
-
 
 
 def report_folder(full_grade_table: dict, rtype: str) -> str:
