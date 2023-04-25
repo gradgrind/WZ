@@ -74,8 +74,7 @@ from grades.grades_base import (
     LoadFromFile,
     NO_GRADE,
 )
-from grades.make_grade_reports import MakeReports
-from local.grade_processing import ReportName
+from grades.make_grade_reports import MakeGroupReports, report_name
 
 from ui.ui_base import (
     QWidget,
@@ -98,7 +97,6 @@ from ui.ui_base import (
     run,
     date2qt,
 )
-
 from ui.grid_base import GridViewAuto
 from ui.cell_editors import (
     CellEditorTable,
@@ -468,7 +466,7 @@ class GradeManager(QWidget):
     def do_make_input_table(self):
         table_data = self.pupil_data_table.grade_table
         xlsx_bytes = MakeGradeTable(table_data)
-        fname = ReportName(table_data, T["GRADES"]) + ".xlsx"
+        fname = report_name(table_data, T["GRADES"]) + ".xlsx"
         fpath = SAVE_FILE("Excel-Datei (*.xlsx)", start=fname, title=None)
         if not fpath:
             return
@@ -501,12 +499,21 @@ class GradeManager(QWidget):
         self.updated(grade_table["MODIFIED"])
 
     def do_make_reports(self):
-        PROCESS(
-            MakeReports,
-            title=T["MAKE_REPORTS"],
-            full_grade_table=self.pupil_data_table.grade_table,
-            show_data=self.show_data.isChecked()
-        )
+        mgr = MakeGroupReports(self.pupil_data_table.grade_table)
+        rtypes = mgr.split_report_types()
+        for rtype in rtypes:
+            PROCESS(
+                mgr.gen_files,
+                title=T["MAKE_REPORTS"],
+                rtype=rtype,
+                clean_folder=True,
+                show_data=self.show_data.isChecked()
+            )
+            fname = mgr.group_file_name()
+#TODO: save dialog
+            fpath = DATAPATH(f"GRADES/{fname}")
+            mgr.join_pdfs(fpath)
+            REPORT("INFO", f"Saved: {mgr.join_pdfs(fpath)}")
 
 
 class GradeTableView(GridViewAuto):
@@ -797,7 +804,7 @@ class GradeTableView(GridViewAuto):
         if not fpath:
             fpath = SAVE_FILE(
                 "pdf-Datei (*.pdf)",
-                ReportName(self.grade_table, T["GRADES"]) + ".pdf"
+                report_name(self.grade_table, T["GRADES"]) + ".pdf"
             )
             if not fpath:
                 return

@@ -62,6 +62,8 @@ core.report_courses: {
 
 template_engine.template_sub: {
     # Messages
+    PDF_FILE:       "Erstellte pdf-Datei:\n --> {path}"
+    ODT_FILE:       "Erstellte odt-Datei:\n --> {path}"
     MISSING_PDFS: "pdf-Erstellung schlug fehl:\n  von {spath}\n  nach {dpath}"
     MISSING_PDF: "pdf-Erstellung schlug fehl: {fpath}"
     BAD_FIELD_INFO: "Ungültige Feld-Info ({error}) in:\n  {path}"
@@ -144,7 +146,6 @@ grades.make_grade_reports: {
     MISSING_KEY:    "Zeugnis für {name}:\n  Kein Wert für Feld {key}"
     MISSING_SUBJECT_GROUP: "{pupil}: Fachgruppe „{tag}“ ist nicht bekannt"
     ALL_KEYS:       "Alle Felder des Dokuments {path}:\n{keys}"
-    PDF_FILE:       "Erstellte PDF-Datei:\n --> {path}"
     UNDEFINED_SYMBOL: "Das Element „{element}“ des Symbols „{symbol}“ ist nicht definiert oder ist fehlerhaft"
     UNDEFINED_FUNCTION: "Auswerten des Symbols „{symbol}“: Funktion „{fn}“ ist unbekannt"
     MISSING_DOC_MAPPING: "In Notenzeugnisvorlage {path},\n  Feld {field1} (in „MAPPINGS“): kein Wert für {value1}"

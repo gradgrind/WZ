@@ -1,7 +1,7 @@
 """
 ui/abi_wani.py
 
-Last updated:  2023-04-24
+Last updated:  2023-04-25
 
 A "Page" for editing Abitur grades in a Waldorf school in Niedersachsen.
 
@@ -83,7 +83,7 @@ from grades.grades_base import (
     FullGradeTable,
     UpdatePupilGrades,
 )
-from grades.make_grade_reports import MakeReport
+from grades.make_grade_reports import MakeGroupReports
 
 ### -----
 
@@ -351,11 +351,12 @@ class AbiturManager(QWidget):
         self.abiview.export_pdf(fpath)
 
     def make_certificate(self):
+        mgr = MakeGroupReports(self.grade_table)
+        rtype = mgr.one_pupil(self.current_pid)
         PROCESS(
-            MakeReport,
-            full_grade_table=self.grade_table,
-            pid=self.current_pid,
-            show_data=False #?
+            mgr.gen_files,
+            rtype=rtype,
+            clean_folder=False,
         )
 
 

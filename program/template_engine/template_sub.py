@@ -1,7 +1,7 @@
 """
 template_engine/template_sub.py
 
-Last updated:  2023-04-24
+Last updated:  2023-04-25
 
 Manage the substitution of "special" fields in an odt template.
 
@@ -88,24 +88,11 @@ def merge_pdf(ifile_list: list[str], pad2sided: int=0) -> bytes:
     return bstream.getvalue()
 
 
-def clean_dir(dpath, remove=False):
-    """If <remove> is true, remove the given folder and its (direct)
-    contents. Subfolders will raise an exception – they shouldn't exist.
-    If <remove> is false, ensure that the given folder exists and is empty.
-    """
-    if os.path.isdir(dpath):
-        for f in os.listdir(dpath):
-            os.remove(os.path.join(dpath, f))
-        if remove:
-            os.rmdir(dpath)
-    elif not remove:
-        os.makedirs(dpath)
-
-
-def libre_office(odt_list, pdf_dir):
+def libre_office(odt_list, pdf_dir, show_output=False):
     """Convert a list of odt-files to pdf-files.
     The input files are provided as a list of absolute paths,
     <pdf_dir> is the absolute path to the output folder.
+    If <show_output> is true, LibreOffice output will be displayed.
     """
     # Use LibreOffice to convert the odt-files to pdf-files.
     # If using the appimage, the paths MUST be absolute, so I use absolute
@@ -118,7 +105,8 @@ def libre_office(odt_list, pdf_dir):
     # instance (e.g. desktop) was running seems to be no longer the case,
     # at least on linux.
     def extern_out(line):
-        REPORT("OUT", line)
+        if show_output:
+            REPORT("OUT", line)
 
     rc, msg = run_extern(
         CONFIG["LIBREOFFICE"],
@@ -191,12 +179,20 @@ class Template:
                 )
         return md
 
-
-    def make_pdfs(self, data_list: list[dict], save_dir: str) -> list[str]:
+    def make_pdfs(
+        self,
+        data_list: list[dict],
+        save_dir: str,
+        show_run_messages: int=0
+    ) -> list[str]:
         """From each entry in the supplied list of data mappings produce
         a pdf in the given directory, <save_dir>. The file names are
         taken from the "SORT_NAME" field of each data mapping.
         Return a list of the pdf-file names.
+        <show_run_messages>:
+            0: no info messages
+            1: file creation (odt, pdf) messages
+            2: as 1, but also LibreOffice output (via "OUT")
         """
         # "Intermediate" files (odt) are in the subdirectory "odt".
         odt_dir = os.path.join(save_dir, "odt")
@@ -212,18 +208,72 @@ class Template:
             with open(outfile, "bw") as fout:
                 fout.write(odtBytes)
             odt_list.append(outfile)
+            if show_run_messages > 0:
+                REPORT("INFO", T["ODT_FILE"].format(path=outfile))
             pdf_list.append(datamap["SORT_NAME"] + ".pdf")
-        libre_office(odt_list, save_dir)
+        libre_office(
+            odt_list,
+            save_dir,
+            show_output=(show_run_messages > 1)
+        )
         pdfs = []
         for pf in pdf_list:
             path = os.path.join(save_dir, pf)
             if os.path.isfile(path):
                 pdfs.append(pf)
+                if show_run_messages > 0:
+                    REPORT("INFO", T["PDF_FILE"].format(path=path))
             else:
                 REPORT("ERROR", T["MISSING_PDF"].format(fpath=path))
         return pdfs
 
+    def make_doc(self, datamap):
+        """From the supplied data mapping produce a text document (odt)
+        of the corresponding report, returning the file content as <bytes>.
+        """
+        return self.make_odt_bytes(datamap)
 
+    def show(self, datamap, filename=None):
+        """The resulting file is shown in a viewer, at present only the
+        odt-file is generated and shown in LibreOffice. The file is
+        not saved anywhere (but could be within LibreOffice).
+        """
+        odtBytes = self.make_odt_bytes(datamap)
+        wdirTD = tempfile.TemporaryDirectory()
+        fpath = os.path.join(wdirTD.name, filename or "_TMP_")
+        _outfile = fpath + ".odt"
+        # Save the <bytes>
+        with open(_outfile, "bw") as fout:
+            fout.write(odtBytes)
+            # Open in external viewer
+            run_extern(CONFIG["LIBREOFFICE"], "--view", _outfile)
+        return None
+
+    def make_odt_bytes(self, datamap, no_info=False):
+        # TODO: Do something with <used> and <notsub>?
+        odtBytes, used, notsub = OdtFields.fillUserFields(
+            self.template_path, datamap, FIELD_INFO="" if no_info else None
+        )
+        return odtBytes
+
+
+#################### below here: deprecated? ####################
+
+def clean_dir(dpath, remove=False):
+    """If <remove> is true, remove the given folder and its (direct)
+    contents. Subfolders will raise an exception – they shouldn't exist.
+    If <remove> is false, ensure that the given folder exists and is empty.
+    """
+    if os.path.isdir(dpath):
+        for f in os.listdir(dpath):
+            os.remove(os.path.join(dpath, f))
+        if remove:
+            os.rmdir(dpath)
+    elif not remove:
+        os.makedirs(dpath)
+
+
+#TODO: Maybe use make_pdfs instead?
     def make_pdf(
         self, data_list, dir_name, working_dir=None, double_sided=0
     ):
@@ -333,35 +383,6 @@ class Template:
         else:
             with open(pdf_file, "rb") as fin:
                 return fin.read()
-
-    def make_doc(self, datamap):
-        """From the supplied data mapping produce a text document (odt)
-        of the corresponding report, returning the file content as <bytes>.
-        """
-        return self.make_odt_bytes(datamap)
-
-    def show(self, datamap, filename=None):
-        """The resulting file is shown in a viewer, at present only the
-        odt-file is generated and shown in LibreOffice. The file is
-        not saved anywhere (but could be within LibreOffice).
-        """
-        odtBytes = self.make_odt_bytes(datamap)
-        wdirTD = tempfile.TemporaryDirectory()
-        fpath = os.path.join(wdirTD.name, filename or "_TMP_")
-        _outfile = fpath + ".odt"
-        # Save the <bytes>
-        with open(_outfile, "bw") as fout:
-            fout.write(odtBytes)
-            # Open in external viewer
-            run_extern(CONFIG["LIBREOFFICE"], "--view", _outfile)
-        return None
-
-    def make_odt_bytes(self, datamap, no_info=False):
-        # TODO: Do something with <used> and <notsub>?
-        odtBytes, used, notsub = OdtFields.fillUserFields(
-            self.template_path, datamap, FIELD_INFO="" if no_info else None
-        )
-        return odtBytes
 
 
 # --#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#--#
