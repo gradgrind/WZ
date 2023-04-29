@@ -1,10 +1,10 @@
 """
-core/pupils.py - last updated 2022-12-29
+core/pupils.py - last updated 2023-04-28
 
 Manage pupil data.
 
 =+LICENCE=================================
-Copyright 2022 Michael Towers
+Copyright 2023 Michael Towers
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -105,20 +105,16 @@ def pupils_in_group(class_group, date=None):
     date will not be included.
     """
     k, g = class_group_split(class_group)
-    plist = get_pupils(k)
-    if g:
-        plist2 = []
-        for pdata in plist:
-            if g in pdata["GROUPS"].split():
-                if date:
-                    # Check exit date
-                    if exd := pdata.get("EXIT_D"):
-                        if exd < date:
-                            continue
-                plist2.append(pdata)
-        return plist2
-    else:
-        return plist
+    plist = []
+    for pdata in get_pupils(k):
+        if (not g) or g in pdata["GROUPS"].split():
+            if date:
+                # Check exit date
+                if exd := pdata.get("EXIT_D"):
+                    if exd < date:
+                        continue
+            plist.append(pdata)
+    return plist
 
 
 def pupil_name(pupil_data):

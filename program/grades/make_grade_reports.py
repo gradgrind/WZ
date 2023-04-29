@@ -1,7 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-04-25
+Last updated:  2023-04-29
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -63,9 +63,9 @@ T = TRANSLATIONS("grades.make_grade_reports")
 ### +++++
 
 from typing import Optional, Any
-import re, shutil
+import re
 
-from core.base import Dates
+from core.base import Dates, wipe_folder_contents
 from core.pupils import pupil_name
 from template_engine.template_sub import Template, merge_pdf
 from grades.grades_base import FullGradeTable, GetGradeConfig
@@ -110,21 +110,6 @@ def get_subject_groups(full_grade_table: dict[str, Any]
                 except KeyError:
                     subject_groups[group] = [sdata]
     return subject_groups
-
-
-def wipe_folder_contents(folder):
-    if os.path.isdir(folder):
-        for filename in os.listdir(folder):
-            file_path = os.path.join(folder, filename)
-            try:
-                if os.path.isfile(file_path) or os.path.islink(file_path):
-                    os.unlink(file_path)
-                elif os.path.isdir(file_path):
-                    shutil.rmtree(file_path)
-            except OSError as e:
-                raise Bug(f"Failed to delete {file_path}.\n  Reason: {e}")
-    else:
-        os.makedirs(folder)
 
 
 class MakeGroupReports:

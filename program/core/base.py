@@ -1,7 +1,7 @@
 """
 core/base.py
 
-Last updated:  2023-01-07
+Last updated:  2023-04-29
 
 Basic configuration and structural stuff.
 
@@ -27,7 +27,7 @@ NO_DATE = "*"  # an unspecified date
 
 ########################################################################
 
-import sys, os, re, builtins, datetime
+import sys, os, re, builtins, datetime, shutil
 from typing import Optional, Tuple
 
 if __name__ == "__main__":
@@ -336,6 +336,21 @@ def class_group_join(klass:str, group: Optional[str] = None) -> str:
     if group:
         return f"{klass}.{group}"
     return klass
+
+
+def wipe_folder_contents(folder):
+    if os.path.isdir(folder):
+        for filename in os.listdir(folder):
+            file_path = os.path.join(folder, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except OSError as e:
+                raise Bug(f"Failed to delete {file_path}.\n  Reason: {e}")
+    else:
+        os.makedirs(folder)
 
 
 # TODO:
