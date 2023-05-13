@@ -1,7 +1,7 @@
 """
 text_reports/list_entries.py
 
-Last updated:  2023-04-07
+Last updated:  2023-04-29
 
 Present list of reports to be written for teachers and classes.
 
@@ -185,13 +185,8 @@ def pdf_teachers(teacher_map):
             except KeyError:
                 continue
             for s in sorted(tcdata):
-#                tx = tcdata[s]
-
-#??? testing ...
-                tx = Paragraph("A somewhat longer text which should ...", styl)
-
+                tx = tcdata[s]
                 tlist.append((cname, s, tx))
-
         tlist.append("")
         teachers_list.append((teachers.name(tid), [('', tlist)]))
     pdf = PdfCreator()

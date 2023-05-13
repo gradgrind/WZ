@@ -1,7 +1,7 @@
 """
 local/grade_processing.py
 
-Last updated:  2023-04-25
+Last updated:  2023-05-13
 
 Functions to perform grade calculations.
 
@@ -23,8 +23,12 @@ Copyright 2023 Michael Towers
 """
 
 UNKNOWN_GRADE_FUNCTION = (
-    "In Konfigurationdatei GRADE_CONFIG: unbekannte"
+    "In Konfigurationdatei GRADES_BASE: unbekannte"
     " Notenberechnungsfunktion – „{name}“"
+)
+UNKNOWN_GSVM = (
+    "In Konfigurationdatei GRADES_BASE: unbekannte"
+    " Gleichstellungsvermerk – „{gs}“"
 )
 
 ### +++++
@@ -58,6 +62,24 @@ GRADE_NUMBER = {
 NUMBER_GRADE = {v: k for k, v in GRADE_NUMBER.items()}
 
 NOGRADE = "––––––"  # for empty subjects/grades in reports
+
+GSVM = {
+    "HS": ("Dieses Zeugnis ist dem Sekundarabschluss I –"
+            " Hauptschulabschluss gleichgestellt. Es vermittelt die"
+            " gleiche Berechtigung wie das Zeugnis über den"
+            " Sekundarabschluss I – Hauptschulabschluss."
+    ),
+    "RS": ("Dieses Zeugnis ist dem Sekundarabschluss I –"
+            " Realschulabschluss gleichgestellt. Es vermittelt die"
+            " gleiche Berechtigung wie das Zeugnis über den"
+            " Sekundarabschluss I – Realschulabschluss."
+    ),
+    "Erw": ("Dieses Zeugnis ist dem Erweiterten Sekundarabschluss I"
+            " gleichgestellt. Es vermittelt die"
+            " gleiche Berechtigung wie das Zeugnis über den"
+            " Erweiterten Sekundarabschluss I."
+    ),
+}
 
 ### -----
 
@@ -205,3 +227,14 @@ def ProcessGradeData(pdata, grade_info, grade_config):
         pass
     else:
         pdata["LEVEL"] = grade_config["LEVEL_MAP"].get(level) or level
+    if (gs := pdata.get("GSVM")):
+        pdata["GSVERMERK"] = "Gleichstellungsvermerk"
+        try:
+            pdata["GSVM"] = GSVM[gs]
+        except KeyError:
+            REPORT("ERROR", UNKNOWN_GSVM.format(gs=gs))
+            pdata["GSVM"] = "???"
+    try:
+        pdata["CYEAR"] = str(int(pdata["CLASS"][:2]))
+    except ValueError:
+        pdata["CYEAR"] = str(int(pdata["CLASS"][0]))
