@@ -213,7 +213,7 @@ class AbiturManager(QWidget):
         for sid, g0 in changes:
             print(" ..", sid, g0, (g := grades[sid]))
             self.set_tile(sid, g)
-        self.tilemap["NO_FHS"].setVisible(gdata["REPORT_TYPE"] == "Abi")
+        self.tilemap["NO_FHS"].setVisible(grades["REPORT_TYPE"] == "Abi")
 
 
     def init_data(self):

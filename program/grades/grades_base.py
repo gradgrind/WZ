@@ -1,7 +1,7 @@
 """
 grades/gradetable.py
 
-Last updated:  2023-04-11
+Last updated:  2023-06-16
 
 Access grade data, read and build grade tables.
 
@@ -611,15 +611,19 @@ def complete_grademap(column_lists, grades, name, p_grade_tids):
             except KeyError:
                 continue
             if g:
-                REPORT(
-                    "WARNING",
-                    T["GRADE_WITH_NO_TEACHER"].format(
-                        sid=sid,
-                        sname=sdata["NAME"],
-                        grade=grades[sid],
-                        pupil=name,
+#TODO: Warning – bodge!
+                if sid.endswith(".x"):
+                    grade_map[sid] = g
+                else:
+                    REPORT(
+                        "WARNING",
+                        T["GRADE_WITH_NO_TEACHER"].format(
+                            sid=sid,
+                            sname=sdata["NAME"],
+                            grade=grades[sid],
+                            pupil=name,
+                        )
                     )
-                )
     for sdata in column_lists["INPUT"]:
         sid = sdata["SID"]
         try:
