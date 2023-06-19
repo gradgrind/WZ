@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-04-11
+Last updated:  2023-06-19
 
 Front-end for managing grade reports.
 
@@ -502,18 +502,19 @@ class GradeManager(QWidget):
         mgr = MakeGroupReports(self.pupil_data_table.grade_table)
         rtypes = mgr.split_report_types()
         for rtype in rtypes:
-            PROCESS(
-                mgr.gen_files,
-                title=T["MAKE_REPORTS"],
-                rtype=rtype,
-                clean_folder=True,
-                show_data=self.show_data.isChecked()
-            )
-            fname = mgr.group_file_name()
+            if rtype:
+                PROCESS(
+                    mgr.gen_files,
+                    title=T["MAKE_REPORTS"],
+                    rtype=rtype,
+                    clean_folder=True,
+                    show_data=self.show_data.isChecked()
+                )
+                fname = mgr.group_file_name()
 #TODO: save dialog
-            fpath = DATAPATH(f"GRADES/{fname}")
-            mgr.join_pdfs(fpath)
-            REPORT("INFO", f"Saved: {mgr.join_pdfs(fpath)}")
+                fpath = DATAPATH(f"GRADES/{fname}")
+                mgr.join_pdfs(fpath)
+                REPORT("INFO", f"Saved: {mgr.join_pdfs(fpath)}")
 
 
 class GradeTableView(GridViewAuto):

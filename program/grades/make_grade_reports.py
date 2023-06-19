@@ -1,7 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-04-29
+Last updated:  2023-06-19
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -154,6 +154,7 @@ class MakeGroupReports:
         If <show_data> is true, additional debugging information will be
         displayed.
         """
+        print("§gen_files", repr(rtype), clean_folder, show_data)
         pid_list = self.report_types[rtype]
         template, error = get_template(self.full_grade_table, rtype)
         if error:
@@ -579,6 +580,25 @@ if __name__ == "__main__":
 
     from core.db_access import open_database
     open_database()
+
+    fgtable = FullGradeTable(occasion="2. Halbjahr", class_group="11G", instance="")
+    mgr = MakeGroupReports(fgtable)
+    rtypes = mgr.split_report_types()
+    print("§rtypes:", rtypes)
+    for rtype in rtypes:
+        if rtype:
+            PROCESS(
+                mgr.gen_files,
+                rtype=rtype,
+                clean_folder=True,
+#                show_data=True
+            )
+            fname = mgr.group_file_name()
+            fpath = DATAPATH(f"GRADES/{fname}")
+            mgr.join_pdfs(fpath)
+            REPORT("INFO", f"Saved: {fpath}")
+
+    quit(0)
 
     fgtable = FullGradeTable(occasion="Abitur", class_group="13", instance="")
     mgr = MakeGroupReports(fgtable)
