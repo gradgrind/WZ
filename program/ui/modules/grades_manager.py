@@ -371,7 +371,10 @@ class GradeManager(QWidget):
         self.class_group = new_class_group
         self.group_data = self.occasion_data[new_class_group]
 
-        self.pupil_data_list = pupils_in_group(new_class_group, date=None)
+#TODO: Is this used anywhere??? It has the corret order, unlike what appears
+# on the screen ...
+#        self.pupil_data_list = pupils_in_group(new_class_group, date=None)
+
         # self.pupil_list.clear()
         # self.pupil_list.addItems([pupil_name(p) for p in self.pupil_data_list])
 
@@ -410,6 +413,8 @@ class GradeManager(QWidget):
         grade_table = FullGradeTable(
             self.occasion, self.class_group, instance
         )
+#TODO: Here the pupil order can be wrong! (grade_table["PUPIL_LIST"])
+
         try:
             grade_table["COLUMNS"]["INPUT"].get("REPORT_TYPE")
             self.make_reports.setEnabled(True)

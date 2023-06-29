@@ -1,7 +1,7 @@
 """
 grades/make_grade_reports.py
 
-Last updated:  2023-06-19
+Last updated:  2023-06-28
 
 Generate the grade reports for a given group and "occasion" (term,
 semester, special, ...).
@@ -299,6 +299,7 @@ def collect_report_type_data(
         "SCHOOL": CONFIG["SCHOOL_NAME"],
         "SCHOOLBIG": CONFIG["SCHOOL_NAME"].upper(),
         "SCHOOLYEAR": CALENDAR["SCHOOLYEAR_PRINT"],
+        "CALENDAR": CALENDAR,
         "DATE_ISSUE": grade_info["DATE_ISSUE"],
         "DATE_GRADES": grade_info["DATE_GRADES"],
         "FUNCTIONS": {
@@ -520,7 +521,8 @@ def substitute_symbol(report_data_mapping:dict, symbol:str):
         tag = rem.group(2)
         taglist = tag.split("/")
         try:
-            item = report_data_mapping[taglist.pop(0)]
+            sym = taglist.pop(0)
+            item = report_data_mapping[sym]
             while not isinstance(item, str):
                 arg = taglist.pop(0)    # possible IndexError
                 if isinstance(item, dict):
@@ -581,7 +583,7 @@ if __name__ == "__main__":
     from core.db_access import open_database
     open_database()
 
-    fgtable = FullGradeTable(occasion="2. Halbjahr", class_group="11G", instance="")
+    fgtable = FullGradeTable(occasion="2. Halbjahr", class_group="12G.G", instance="")
     mgr = MakeGroupReports(fgtable)
     rtypes = mgr.split_report_types()
     print("§rtypes:", rtypes)
@@ -591,7 +593,7 @@ if __name__ == "__main__":
                 mgr.gen_files,
                 rtype=rtype,
                 clean_folder=True,
-#                show_data=True
+                show_data=True
             )
             fname = mgr.group_file_name()
             fpath = DATAPATH(f"GRADES/{fname}")

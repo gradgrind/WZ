@@ -92,6 +92,7 @@ grades.grades_base: {
     NO_GRADE_ENTRY_FILE: "Konfigurationsdatei {path}\n\nGROUP_DATA-Feld für Gruppe {group}, Anlass{occasion}:\n  Keine GRADE_ENTRY-Datei (Vorlage für Noteneingabetabelle) angegeben"
     NO_PUPIL_GRADES:    "Keine Schüler bzw. Noten: {report_info}"
     INVALID_EXTRA_FIELD: "Ungültiges „Extra-Feld“ {name}:\n  Gruppe {group}, Anlass {occasion}, Schüler-ID {sid} in Datei\n    {path}"
+    INVALID_GRADE: "In {filepath}:\n  Die Note für {pupil} im Fach {sid} ist ungültig: {grade}"
 }
 
 grades.gradetable: {

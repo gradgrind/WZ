@@ -1,7 +1,7 @@
 """
 local/grade_processing.py
 
-Last updated:  2023-05-13
+Last updated:  2023-06-27
 
 Functions to perform grade calculations.
 
@@ -80,6 +80,17 @@ GSVM = {
             " Erweiterten Sekundarabschluss I."
     ),
 }
+
+VSTZ = {
+    "Q12": ("Durch Konferenzbeschluss vom {DATE_GRADES} in die"
+            " Qualifikationsphase versetzt."
+    ),
+
+    "Q13": ("Durch Konferenzbeschluss vom {DATE_GRADES} in die"
+            " 13. Klasse versetzt."
+    ),
+}
+
 
 ### -----
 
@@ -220,6 +231,19 @@ def ProcessGradeData(pdata, grade_info, grade_config):
         for k, v in pdata.items():
             if v == NOGRADE:
                 pdata[k] = no_grade
+#TODO: Think of something better for WZ3, this is a megabodge!
+    if (q12 := pdata.get("Q12")):
+        pdata["REMARKS"] = VSTZ["Q12"].format(
+            DATE_GRADES=pdata["FUNCTIONS"]["DATE"](pdata["DATE_GRADES"])
+        )
+#TODO -> class 13
+#Q13: Q13 RS HS
+    if (q13 := pdata.get("Q13")) and q13 == "Q13":
+        pdata["REMARKS"] = VSTZ["Q13"].format(
+            DATE_GRADES=pdata["FUNCTIONS"]["DATE"](pdata["DATE_GRADES"])
+        )
+
+
     pdata["NOCOMMENT"] = "" if pdata.get("REMARKS") else "––––––––––"
     try:
         level = pdata["LEVEL"]

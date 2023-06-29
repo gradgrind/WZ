@@ -179,6 +179,13 @@ class PupilRows(list):
     def column(self, pid):
         return self.__map[pid]
 
+    def sort(self):
+        l2 = sorted(self, key=lambda x: x[0]["SORT_NAME"])
+        self.clear()
+        self.__map.clear()
+        for p, g in l2:
+            self.append(p, g)
+
 
 def grade_table_info(occasion: str, class_group: str, instance: str = ""):
     """Get subject, pupil and group report-information for the given
@@ -511,7 +518,9 @@ def prepare_pupil_list(table_info):
             # Update the grade map and add to pupil list
             complete_gradetable(table_info, db_pdata, db_grademap)
 
-        if not pdata_list:
+        if pdata_list:
+            pdata_list.sort()
+        else:
             REPORT("WARNING", T["NO_PUPIL_GRADES"].format(
                 report_info=f"{class_group} / {occasion} / {instance}"
             ))
@@ -1058,6 +1067,7 @@ def read_grade_table_file(
         # Check validity of grades
         for k, v in pdata.items():
             if v and v not in valid_grades:
+                print("§valid_grades:", valid_grades)
                 REPORT(
                     "ERROR",
                     T["INVALID_GRADE"].format(
