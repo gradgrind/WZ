@@ -1,7 +1,7 @@
 """
 ui/modules/grades_manager.py
 
-Last updated:  2023-06-19
+Last updated:  2023-07-06
 
 Front-end for managing grade reports.
 
@@ -413,8 +413,6 @@ class GradeManager(QWidget):
         grade_table = FullGradeTable(
             self.occasion, self.class_group, instance
         )
-#TODO: Here the pupil order can be wrong! (grade_table["PUPIL_LIST"])
-
         try:
             grade_table["COLUMNS"]["INPUT"].get("REPORT_TYPE")
             self.make_reports.setEnabled(True)
